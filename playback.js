@@ -26,4 +26,5 @@ const playEvent = (msg) => {
     }
 };
 
-playEvent(midimessages.shift()[1]);
+playEvent();
+setInterval(()=> output.sendMessage([0x91, 0x24, 127]), 600);
