@@ -26,4 +26,4 @@ const playEvent = (msg) => {
     }
 };
 
-playEvent();
+playEvent(midimessages.shift()[1]);
