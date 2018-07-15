@@ -12,6 +12,8 @@ output.openPort(outputIndex);
 
 const midimessages = JSON.parse(require('fs').readFileSync('recording.json'));
 
+let accumulatedDeltaTime = Date.now();
+
 const playEvent = (msg) => {
     if(msg) {
         output.sendMessage(msg);
@@ -22,8 +24,11 @@ const playEvent = (msg) => {
         const deltatime = evt[0];
         const nextmessage = evt[1];        
         
-        setTimeout(() => playEvent(nextmessage), deltatime * 1000);
+        accumulatedDeltaTime += deltatime * 1000;
+        setTimeout(() => playEvent(nextmessage), accumulatedDeltaTime - Date.now());
     }
+
+    
 };
 
 playEvent();
