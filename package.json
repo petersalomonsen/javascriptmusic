@@ -1,0 +1,5 @@
+{
+    "dependencies": {
+        "midi": "^0.9.5"
+    }
+}
