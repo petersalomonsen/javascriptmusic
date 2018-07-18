@@ -18,8 +18,8 @@ const noteStringToNoteNumberMap =
         return prev;
     }, {});
 
-const midimessages = [
-    [1, 'c3'],
+const drums = [
+    [0, 'c3'],
     [0, 'g#3'],
     [4, 'e3'],
     [0, 'g#3'],
@@ -30,6 +30,23 @@ const midimessages = [
     [0, 'g#3'],
     [3, 'c3']
 ].map(v => [v[0]*0.15, [0x91, noteStringToNoteNumberMap[v[1]], 127]]);
+
+const strings = [
+    [0, 'c3'],
+    [0, 'e3'],
+    [0, 'g3'],
+].map(v => [v[0]*0.15, [0x92, noteStringToNoteNumberMap[v[1]], 127]]);
+
+const mixtracks = (track1, track2) => {
+    const mixed = [];
+    let track1index = 0;
+    let track2index = 0;
+    while(track1index<track1.length || track2index<track2.length) {
+       
+    }
+    return mixed;
+};
+
 
 let accumulatedDeltaTime = Date.now();
 

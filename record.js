@@ -7,6 +7,7 @@ var input = new midi.input();
 let inputIndex;
 
 for(var n=0;n<input.getPortCount(); n++) {
+    console.log(input.getPortName(n));
     if(input.getPortName(n) === 'K-Board') {
         inputIndex = n;
     }
@@ -19,6 +20,7 @@ const midimessages = [];
 let previousTime = new Date().getTime();
 
 input.on('message', (deltatime, msg) => {
+    
         const now = new Date().getTime();
         midimessages.push([
             now - previousTime
