@@ -32,21 +32,33 @@ const drums = [
 ].map(v => [v[0]*0.15, [0x91, noteStringToNoteNumberMap[v[1]], 127]]);
 
 const strings = [
-    [0, 'c3'],
-    [0, 'e3'],
-    [0, 'g3'],
-].map(v => [v[0]*0.15, [0x92, noteStringToNoteNumberMap[v[1]], 127]]);
+    [4, 'c5'],
+    [4, 'g5'],
+    [4, 'd6'],
+].map(v => [v[0]*0.15, [0x90, noteStringToNoteNumberMap[v[1]], 60]]);
+
+const toTimed = (track) => track.reduce((prev, curr, ndx) => {
+    prev.push([
+        curr[0] + (prev.length>0 ? prev[prev.length-1][0]: 0), curr[1]
+    ]);
+    return prev;
+    }, 
+    []
+);
 
 const mixtracks = (track1, track2) => {
-    const mixed = [];
-    let track1index = 0;
-    let track2index = 0;
-    while(track1index<track1.length || track2index<track2.length) {
-       
-    }
-    return mixed;
+    const timed1 = toTimed(track1);
+    const timed2 = toTimed(track2);
+        
+    const mixed = timed1.concat(timed2);
+    mixed.sort((a, b) => a[0] - b[0]);
+
+    // console.log(mixed);
+    return mixed.map((t, ndx) => [t[0] - (ndx > 0 ? mixed[ndx-1][0] : 0), t[1]]);
 };
 
+const midimessages = mixtracks(drums, strings);
+midimessages[0][0] = 0.15;
 
 let accumulatedDeltaTime = Date.now();
 
