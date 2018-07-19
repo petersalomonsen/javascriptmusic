@@ -21,23 +21,31 @@ class  Pattern {
     }
 
     waitForBeat(beatNo) {   
-        beatNo += this.offset;     
+        
+        let timeout = Math.floor((((beatNo + this.offset) / global.bpm) * (60*1000)) - 
+                (Date.now() -
+                global.startTime)); 
+        
+        if(timeout<0) {
+            timeout = 0;
+        }
+
         return new Promise((resolve, reject) =>
             setTimeout(() => {
                 this.currentbeat = beatNo;
                 resolve();
             },
-                ((beatNo / global.bpm) * (60*1000)) - 
-                    (Date.now() -
-                    global.startTime)
+              timeout  
             )
         );
     }
 
     async playNote(note, duration) {
         this.output.sendMessage([0x90 + this.channel, noteStringToNoteNumberMap[note], this.velocity]);
+        
         await this.waitForBeat(this.currentbeat + duration);
-        this.output.sendMessage([0x90 + this.channel, noteStringToNoteNumberMap[note], 0]);
+        this.output.sendMessage([0x80 + this.channel, noteStringToNoteNumberMap[note], 0]);
+        
     }    
 }
 

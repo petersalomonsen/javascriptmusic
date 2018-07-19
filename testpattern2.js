@@ -25,13 +25,17 @@ const pattern1 = new class extends Pattern {
         
         while(true) {            
             this.playNote('c3', 1);
+            this.playNote('g#3', 1);
             await this.waitForBeat(1);
             
-            this.playNote('e3', 1);                
+            this.playNote('e3', 1); 
+            this.playNote('g#3', 1);
+            await this.waitForBeat(2);
+            this.playNote('g#3', 1);               
             await this.waitForBeat(2.5);
             this.playNote('c3', 1);
             await this.waitForBeat(3);
-            
+            this.playNote('g#3', 1);               
             this.playNote('e3', 1);   
             await this.waitForBeat(4); 
             this.offset+=4;            
@@ -44,13 +48,24 @@ const pattern2 = new class extends Pattern {
         super(output);
     }
     async play() {
-        this.velocity = 60;
-        this.playNote('e5', 2);
-        await this.waitForBeat(2);
-        this.playNote('g5', 2);
-        await this.waitForBeat(4);
-        this.playNote('b5', 2);
-        
+        this.channel = 2;
+        this.velocity = 50;
+        while(true) {   
+            await this.waitForBeat(0); 
+            this.playNote('c6', 0.5);
+            this.playNote('d#6', 0.5);
+            this.playNote('g6', 0.5);
+            await this.waitForBeat(1.3); 
+            this.playNote('c6', 0.5);
+            this.playNote('f6', 0.5);
+            this.playNote('g6', 0.5);
+            await this.waitForBeat(3); 
+            this.playNote('c6', 0.5);
+            this.playNote('d6', 0.5);
+            this.playNote('g6', 0.5);
+            await this.waitForBeat(8); 
+            this.offset+=8;      
+        }
     }
 };
 pattern1.play();
