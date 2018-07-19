@@ -68,6 +68,42 @@ const pattern2 = new class extends Pattern {
         }
     }
 };
+
+const pattern3 = new class extends Pattern {
+    constructor() {
+        super(output);
+    }
+    async play() {
+        this.channel = 3;
+        this.velocity = 100;
+        while(true) {   
+            await this.waitForBeat(0); 
+            this.playNote('c3', 0.5);
+            await this.waitForBeat(0.5); 
+            this.playNote('c4', 0.25);
+            await this.waitForBeat(2.5); 
+            this.playNote('c3', 0.25);
+            await this.waitForBeat(2.75); 
+            this.playNote('c4', 0.25);
+            await this.waitForBeat(3.5); 
+            this.playNote('c3', 0.15);
+            await this.waitForBeat(4); 
+            
+            this.playNote('c3', 0.5);
+            await this.waitForBeat(4.5); 
+            this.playNote('a#3', 0.25);
+            await this.waitForBeat(6.5); 
+            this.playNote('c3', 0.25);
+            await this.waitForBeat(6.75); 
+            this.playNote('a#3', 0.25);
+            await this.waitForBeat(7.5); 
+            this.playNote('c4', 0.5);
+
+            await this.waitForBeat(8); 
+            this.offset+=8;      
+        }
+    }
+};
 pattern1.play();
 pattern2.play();
-
+pattern3.play();
