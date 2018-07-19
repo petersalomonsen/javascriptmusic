@@ -11,10 +11,17 @@ class  Pattern {
     constructor(output) {
         this.currentbeat = 0;
         this.output = output;
+        this.channel = 0;
+        this.velocity = 100;
+        this.offset = 0;
     }
 
-    waitForBeat(beatNo) {
-        
+    setChannel(channel) {
+        this.channel = channel;
+    }
+
+    waitForBeat(beatNo) {   
+        beatNo += this.offset;     
         return new Promise((resolve, reject) =>
             setTimeout(() => {
                 this.currentbeat = beatNo;
@@ -28,9 +35,9 @@ class  Pattern {
     }
 
     async playNote(note, duration) {
-        this.output.sendMessage([0x90, noteStringToNoteNumberMap[note], 127]);
+        this.output.sendMessage([0x90 + this.channel, noteStringToNoteNumberMap[note], this.velocity]);
         await this.waitForBeat(this.currentbeat + duration);
-        this.output.sendMessage([0x90, noteStringToNoteNumberMap[note], 0]);
+        this.output.sendMessage([0x90 + this.channel, noteStringToNoteNumberMap[note], 0]);
     }    
 }
 

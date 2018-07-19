@@ -2,7 +2,7 @@ const Pattern = require('./pattern/pattern.class.js');
 
 const midi = require('midi');
 global.startTime = Date.now();
-global.bpm = 100;
+global.bpm = 120;
 
 // Set up a new output.
 const output = new midi.output();
@@ -18,16 +18,24 @@ const pattern1 = new class extends Pattern {
     constructor() {
         super(output);
     }
+
     async play() {
-        this.playNote('c5', 1);
-        await this.waitForBeat(1);
-        this.playNote('d5', 1);
-        await this.waitForBeat(2);
-        this.playNote('e5', 1);
-        await this.waitForBeat(3);
-        this.playNote('f5', 1);
-        await this.waitForBeat(4);
-        this.playNote('g5', 1);
+        this.setChannel(1);
+        this.velocity = 127;
+        
+        while(true) {            
+            this.playNote('c3', 1);
+            await this.waitForBeat(1);
+            
+            this.playNote('e3', 1);                
+            await this.waitForBeat(2.5);
+            this.playNote('c3', 1);
+            await this.waitForBeat(3);
+            
+            this.playNote('e3', 1);   
+            await this.waitForBeat(4); 
+            this.offset+=4;            
+        }
     }
 };
   
@@ -36,6 +44,7 @@ const pattern2 = new class extends Pattern {
         super(output);
     }
     async play() {
+        this.velocity = 60;
         this.playNote('e5', 2);
         await this.waitForBeat(2);
         this.playNote('g5', 2);
