@@ -2,7 +2,7 @@ const Pattern = require('./pattern/pattern.class.js');
 
 const midi = require('midi');
 global.startTime = Date.now();
-global.bpm = 120;
+global.bpm = 130;
 
 // Set up a new output.
 const output = new midi.output();
@@ -76,34 +76,85 @@ const pattern3 = new class extends Pattern {
     async play() {
         this.channel = 3;
         this.velocity = 100;
-        while(true) {   
-            await this.waitForBeat(0); 
-            this.playNote('c3', 0.5);
-            await this.waitForBeat(0.5); 
-            this.playNote('c4', 0.25);
-            await this.waitForBeat(2.5); 
-            this.playNote('c3', 0.25);
-            await this.waitForBeat(2.75); 
-            this.playNote('c4', 0.25);
-            await this.waitForBeat(3.5); 
-            this.playNote('c3', 0.15);
-            await this.waitForBeat(4); 
-            
-            this.playNote('c3', 0.5);
-            await this.waitForBeat(4.5); 
-            this.playNote('a#3', 0.25);
-            await this.waitForBeat(6.5); 
-            this.playNote('c3', 0.25);
-            await this.waitForBeat(6.75); 
-            this.playNote('a#3', 0.25);
-            await this.waitForBeat(7.5); 
-            this.playNote('c4', 0.5);
+        
+        await this.waitForBeat(0); 
+        this.playNote('c3', 0.5);
+        await this.waitForBeat(0.5); 
+        this.playNote('c4', 0.25);
+        await this.waitForBeat(2.5); 
+        this.playNote('c3', 0.25);
+        await this.waitForBeat(2.75); 
+        this.playNote('c4', 0.25);
+        await this.waitForBeat(3.5); 
+        this.playNote('c3', 0.15);
+        await this.waitForBeat(4); 
+        
+        this.playNote('c3', 0.5);
+        await this.waitForBeat(4.5); 
+        this.playNote('a#3', 0.25);
+        await this.waitForBeat(6.5); 
+        this.playNote('c3', 0.25);
+        await this.waitForBeat(6.75); 
+        this.playNote('a#3', 0.25);
+        await this.waitForBeat(7.5); 
+        this.playNote('c4', 0.5);
 
-            await this.waitForBeat(8); 
-            this.offset+=8;      
-        }
+        await this.waitForBeat(8); 
+            
+        
     }
 };
+
+const pattern4 = new class extends Pattern {
+    constructor() {
+        super(output);
+    }
+    async play() {
+        
+        this.channel = 3;
+        this.velocity = 100;
+            
+        
+        await this.waitForBeat(0); 
+        this.playNote('g#2', 0.5);
+        await this.waitForBeat(0.5); 
+        this.playNote('g#3', 0.25);
+        await this.waitForBeat(2.5); 
+        this.playNote('g#2', 0.25);
+        await this.waitForBeat(2.75); 
+        this.playNote('g#3', 0.25);
+        await this.waitForBeat(3.5); 
+        this.playNote('g#2', 0.15);
+        await this.waitForBeat(4); 
+        
+        this.playNote('g2', 0.5);
+        await this.waitForBeat(4.5); 
+        this.playNote('g3', 0.25);
+        await this.waitForBeat(6.5); 
+        this.playNote('g2', 0.25);
+        await this.waitForBeat(6.75); 
+        this.playNote('g3', 0.25);
+        await this.waitForBeat(7.5); 
+        this.playNote('g2', 0.5);
+
+        await this.waitForBeat(8);                     
+            
+        
+    }
+};
+
 pattern1.play();
 pattern2.play();
-pattern3.play();
+
+(async function() {
+    pattern4.offset = 8;
+    while(true) {
+        console.log('pattern 3');
+        await pattern3.play();
+        pattern3.offset += 16;
+        
+        console.log('pattern 4');
+        await pattern4.play();
+        pattern4.offset += 16;
+    }
+})();

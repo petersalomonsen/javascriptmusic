@@ -7,7 +7,7 @@ const noteStringToNoteNumberMap =
     }, {});
 
 
-class  Pattern {
+class Pattern {
     constructor(output) {
         this.currentbeat = 0;
         this.output = output;
