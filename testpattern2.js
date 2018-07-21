@@ -2,7 +2,7 @@ const Pattern = require('./pattern/pattern.class.js');
 
 const midi = require('midi');
 global.startTime = Date.now();
-global.bpm = 130;
+global.bpm = 120;
 
 // Set up a new output.
 const output = new midi.output();
@@ -163,6 +163,7 @@ pattern2.play();
     constructor() {
         super(output);
         this.stepsperbeat = 4;
+        this.offset = 16;
     }
     async play() {
         
