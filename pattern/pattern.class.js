@@ -14,10 +14,16 @@ class Pattern {
         this.channel = 0;
         this.velocity = 100;
         this.offset = 0;
+        this.stepsperbeat = 16;
     }
 
     setChannel(channel) {
         this.channel = channel;
+    }
+
+
+    waitForStep(stepno) {
+        return this.waitForBeat(stepno / this.stepsperbeat);
     }
 
     waitForBeat(beatNo) {   
@@ -39,6 +45,17 @@ class Pattern {
             )
         );
     }
+
+    toNoteNumber(note) {
+        return noteStringToNoteNumberMap[note];
+    }
+
+    async note(noteNumber, duration) {
+        this.output.sendMessage([0x90 + this.channel, noteNumber, this.velocity]);
+        
+        await this.waitForBeat(this.currentbeat + duration);
+        this.output.sendMessage([0x80 + this.channel, noteNumber, 0]);        
+    }    
 
     async playNote(note, duration) {
         this.output.sendMessage([0x90 + this.channel, noteStringToNoteNumberMap[note], this.velocity]);

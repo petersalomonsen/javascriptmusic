@@ -158,3 +158,27 @@ pattern2.play();
         pattern4.offset += 16;
     }
 })();
+
+(new class extends Pattern {
+    constructor() {
+        super(output);
+        this.stepsperbeat = 4;
+    }
+    async play() {
+        
+        const notes = [0, 2, 3, 7, 12, 7, 3, 2];
+        let ndx = 0;
+        while(true) {
+            await this.waitForStep(ndx++);
+            this.velocity = Math.floor(Math.random() * 64 + 16);
+            const note = this.toNoteNumber('c5') + notes[ndx%notes.length];
+            this.note(note, 1 / this.stepsperbeat);
+            (async () => {
+                await this.waitForStep(ndx + 2);
+                this.velocity = Math.floor(this.velocity * (2/3));
+                this.note(note+12, 1 / this.stepsperbeat * 2);
+            })();
+        };
+        
+    }
+}).play();
