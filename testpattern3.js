@@ -14,6 +14,17 @@ for(var n=0;n<output.getPortCount(); n++) {
 }
 output.openPort(outputIndex);
 
+const chord = (new class extends Pattern {
+    constructor() {
+        super(output);
+        this.channel = 2;
+        this.velocity = 127;
+    }
+    async play(notes, duration) {
+        this.waitForBeat(0);
+        notes.forEach(note => this.playNote(note, duration));    
+    };
+});
 const pattern = (new class extends Pattern {
     constructor() {
         super(output);
@@ -50,13 +61,23 @@ const pattern = (new class extends Pattern {
 });
 (async function() {
     while(true) {
+
+        chord.play(['c4','c6','d#6','g6'], 4);
         await pattern.play(0, 'c5');
         await pattern.play(0, 'c5');
+        
+        chord.play(['d4','a#5','d6'],  4);
+        chord.play(['f6'],  4);
         await pattern.play(2, 'a#4');
         await pattern.play(2, 'a#4');
+        
+        chord.play(['f4','g#6','c6'],  4);
         await pattern.play(0, 'f5');
         await pattern.play(0, 'f5');
+        
+        chord.play(['d#4','d#6','g6','a#6'], 4);
         await pattern.play(2, 'd#5');
         await pattern.play(2, 'd#5');
+        
     }
 })();

@@ -50,17 +50,29 @@ class Pattern {
         return noteStringToNoteNumberMap[note];
     }
 
+    async waitDuration(duration) {
+        const timeout = (duration*60*1000) / global.bpm; 
+        
+        return new Promise((resolve, reject) =>
+            setTimeout(() => {
+                resolve();
+            },
+              timeout  
+            )
+        );
+    }
+
     async note(noteNumber, duration) {
         this.output.sendMessage([0x90 + this.channel, noteNumber, this.velocity]);
         
-        await this.waitForBeat(this.currentbeat + duration);
+        await this.waitDuration(duration);
         this.output.sendMessage([0x80 + this.channel, noteNumber, 0]);        
     }    
 
     async playNote(note, duration) {
         this.output.sendMessage([0x90 + this.channel, noteStringToNoteNumberMap[note], this.velocity]);
         
-        await this.waitForBeat(this.currentbeat + duration);
+        await this.waitDuration(duration);
         this.output.sendMessage([0x80 + this.channel, noteStringToNoteNumberMap[note], 0]);
         
     }    
