@@ -8,7 +8,7 @@ global.bpm = 120;
 const output = new midi.output();
 let outputIndex;
 for(var n=0;n<output.getPortCount(); n++) {
-    if(output.getPortName(n) === 'virtual1') {
+    if(output.getPortName(n) === 'virtual1' || output.getPortName(n).indexOf("ZynAddSub")===0 ) {
         outputIndex = n;
     }
 }
