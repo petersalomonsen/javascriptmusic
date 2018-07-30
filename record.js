@@ -7,11 +7,13 @@ var input = new midi.input();
 let inputIndex;
 
 for(var n=0;n<input.getPortCount(); n++) {
-    console.log(input.getPortName(n));
-    if(input.getPortName(n) === 'K-Board') {
+    if(input.getPortName(n) === 'K-Board' || input.getPortName(n).indexOf('UM-1')===0) {
+              
         inputIndex = n;
     }
 }
+
+console.log("Opening",input.getPortName(inputIndex));
 // createReadStream also accepts an optional `input` param
 
 input.openPort(inputIndex);
@@ -37,16 +39,3 @@ process.on('SIGINT', function() {
     process.exit();
 
 });
-
-// Metronome
-
-const output = new midi.output();
-let outputIndex;
-for(var n=0;n<output.getPortCount(); n++) {
-    if(output.getPortName(n) === 'virtual1') {
-        outputIndex = n;
-    }
-}
-output.openPort(outputIndex);
-
-setInterval(()=> output.sendMessage([0x91, 0x24, 127]), 600);

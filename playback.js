@@ -4,7 +4,7 @@ const midi = require('midi');
 const output = new midi.output();
 let outputIndex;
 for(var n=0;n<output.getPortCount(); n++) {
-    if(output.getPortName(n) === 'virtual1') {
+    if(output.getPortName(n) === 'virtual1' || output.getPortName(n).indexOf("ZynAddSub")===0) {
         outputIndex = n;
     }
 }
@@ -32,4 +32,3 @@ const playEvent = (msg) => {
 };
 
 playEvent();
-setInterval(()=> output.sendMessage([0x91, 0x24, 127]), 600);
