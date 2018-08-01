@@ -1,29 +1,11 @@
 const Pattern = require('./pattern/pattern.class.js');
+const output = require('./midi/output.js');
+const RecordedPattern = require('./pattern/recordedpattern.class.js');
 
-const midi = require('midi');
 global.startTime = Date.now();
 global.bpm = 120;
 
-// Set up a new output.
-const output = new midi.output();
-let outputIndex;
-for(var n=0;n<output.getPortCount(); n++) {
-    if(output.getPortName(n) === 'virtual1' || output.getPortName(n).indexOf("ZynAddSub")===0 ) {
-        outputIndex = n;
-    }
-}
-output.openPort(outputIndex);
-
-
-process.on('SIGINT', function() {
-    console.log("Caught interrupt signal - all notes off");
-    for(let n=0;n<16;n++) {
-        output.sendMessage([0xb0 + n, 123, 0]);
-    }
-    
-    process.exit();
-
-});
+const midi = require('midi');
 
 const chord = (new class extends Pattern {
     constructor() {
@@ -70,6 +52,10 @@ const pattern = (new class extends Pattern {
         this.offset += notes.length / this.stepsperbeat;
     }
 });
+
+const recording1 = new RecordedPattern(output, require('./recordings/recording1.js'));
+recording1.play();
+
 (async function() {
     while(true) {
 
