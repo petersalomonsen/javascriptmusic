@@ -4,7 +4,7 @@ const midi = require('midi');
 const output = new midi.output();
 let outputIndex;
 for(var n=0;n<output.getPortCount(); n++) {
-    if(output.getPortName(n) === 'virtual1') {
+    if(output.getPortName(n) === 'virtual1' || output.getPortName(n).indexOf('ZynAddSubFX')===0) {
         outputIndex = n;
     }
 }
@@ -29,7 +29,7 @@ const midimessages = [
     [2, 'e3'],
     [0, 'g#3'],
     [3, 'c3']
-].map(v => [v[0]*0.15, [0x91, noteStringToNoteNumberMap[v[1]], 127]]);
+].map(v => [v[0]*0.17, [0x91, noteStringToNoteNumberMap[v[1]], 127]]);
 
 let accumulatedDeltaTime = Date.now();
 

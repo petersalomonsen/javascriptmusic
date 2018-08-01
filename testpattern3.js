@@ -14,6 +14,17 @@ for(var n=0;n<output.getPortCount(); n++) {
 }
 output.openPort(outputIndex);
 
+
+process.on('SIGINT', function() {
+    console.log("Caught interrupt signal - all notes off");
+    for(let n=0;n<16;n++) {
+        output.sendMessage([0xb0 + n, 123, 0]);
+    }
+    
+    process.exit();
+
+});
+
 const chord = (new class extends Pattern {
     constructor() {
         super(output);
