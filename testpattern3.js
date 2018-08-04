@@ -33,7 +33,8 @@ const pattern = (new class extends Pattern {
             [4, 5, 7, 12, 7, 5, 4, 0],
             [3, 5, 7, 12, 7, 5, 3, 0],
             [-5, 0, 2, 4, 7, 4, 2, 0],
-            [-5, 0, 2, 3, 7, 3, 2, 0]
+            [-5, 0, 2, 3, 7, 3, 2, 0],
+            [-5, 0, 5, 7, 5, 0, -5, 0]
         ];
 
         const notes = variations[variation];
@@ -54,11 +55,12 @@ const pattern = (new class extends Pattern {
 });
 
 const recording1 = new RecordedPattern(output, require('./recordings/recording1.js'));
-recording1.play();
+// recording1.play();
 
 (async function() {
     while(true) {
 
+        
         chord.play(['c4','c6','d#6','g6'], 4);
         await pattern.play(0, 'c5');
         await pattern.play(0, 'c5');
@@ -76,5 +78,24 @@ recording1.play();
         await pattern.play(2, 'd#5');
         await pattern.play(2, 'd#5');
         
+        chord.play(['g#4','d#6','g#6','c7'], 4);        
+        await pattern.play(1, 'g#5');
+        await pattern.play(1, 'g#5');
+
+        chord.play(['c4','g6','c7','d#7'], 4);
+     
+        await pattern.play(5, 'c6');
+        await pattern.play(5, 'c6');
+
+        chord.play(['a#3','f6','a#6','d#7'], 4);
+        await pattern.play(6, 'a#5');
+        await pattern.play(6, 'a#5');
+
+        chord.play(['a#3','f6','a#6','d7'], 4);
+
+        await pattern.play(4, 'a#5');
+        await pattern.play(4, 'a#5');
+
+
     }
 })();
