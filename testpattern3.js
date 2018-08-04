@@ -55,7 +55,7 @@ const pattern = (new class extends Pattern {
 });
 
 const recording1 = new RecordedPattern(output, require('./recordings/recording1.js'));
-// recording1.play();
+recording1.play();
 
 (async function() {
     while(true) {
@@ -66,7 +66,7 @@ const recording1 = new RecordedPattern(output, require('./recordings/recording1.
         await pattern.play(0, 'c5');
         
         chord.play(['d4','a#5','d6'],  4);
-        chord.play(['f6'],  4);
+        chord.play(['f6'],  8);
         await pattern.play(2, 'a#4');
         await pattern.play(2, 'a#4');
         
@@ -87,11 +87,12 @@ const recording1 = new RecordedPattern(output, require('./recordings/recording1.
         await pattern.play(5, 'c6');
         await pattern.play(5, 'c6');
 
-        chord.play(['a#3','f6','a#6','d#7'], 4);
+        chord.play(['a#3','f6','a#6'], 8);
+        chord.play(['d#7'], 4);
         await pattern.play(6, 'a#5');
         await pattern.play(6, 'a#5');
 
-        chord.play(['a#3','f6','a#6','d7'], 4);
+        chord.play(['d7'], 4);
 
         await pattern.play(4, 'a#5');
         await pattern.play(4, 'a#5');
