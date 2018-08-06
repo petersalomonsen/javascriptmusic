@@ -23,33 +23,44 @@ const Arpeggiator = new require('./pattern/playable/arpeggiato1.js');
 const pattern = new Arpeggiator(output);
 
 const recording1 = new RecordedPattern(output, require('./recordings/recording1.js'));
-recording1.play();
 
+
+const DrumPattern = require('./pattern/playable/drumpattern.js');
+const drums = new DrumPattern(output);
+const BasePattern = require('./pattern/playable/basepattern.js');
+const base = new BasePattern(output);
 (async function() {
+    recording1.play();
     while(true) {
-
         
+        
+                
         chord.play(['c4','c6','d#6','g6'], 4);
         await pattern.play(0, 'c5');
         await pattern.play(0, 'c5');
+        
         
         chord.play(['d4','a#5','d6'],  4);
         chord.play(['f6'],  8);
         await pattern.play(2, 'a#4');
         await pattern.play(2, 'a#4');
         
+        
         chord.play(['f4','g#6','c6'],  4);
         await pattern.play(0, 'f5');
         await pattern.play(0, 'f5');
+        
         
         chord.play(['d#4','d#6','g6','a#6'], 4);
         await pattern.play(2, 'd#5');
         await pattern.play(2, 'd#5');
         
+        
         chord.play(['g#4','d#6','g#6','c7'], 4);        
         await pattern.play(1, 'g#5');
         await pattern.play(1, 'g#5');
 
+        
         chord.play(['c4','g6','c7','d#7'], 4);
      
         await pattern.play(5, 'c6');
@@ -64,7 +75,7 @@ recording1.play();
 
         await pattern.play(4, 'a#5');
         await pattern.play(4, 'a#5');
-
+        
 
     }
 })();
