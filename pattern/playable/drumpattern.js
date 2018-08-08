@@ -4,44 +4,52 @@ const Pattern = require('../pattern.class.js');
 class DrumPattern extends Pattern {
     constructor(output) {
         super(output);
-        this.stepsperbeat = 4;
+        this.stepsperbeat = 6;
         this.offset = 0;
         this.channel = 1;
     }
 
-    async play() {                
+    async play() {           
+        this.offset = Math.round(global.currentBeat());      
+                        
         const rows = 
             [
-                [['c3', 100],['f#3', 40]],
+                [['c3', 100],['fg#3',80]],
                 [],
-                [['f#3', 30]],
+                [['g#3', 20]],
+                [['f#3', 80]],
                 [],
-                [['f#3',40], ['c#3',100]],
                 [],
-                [['f#3',30]],
-                [['c#3',60]],
-                [['f#3',60]],
+                [['c3',100],['g#3',80],['e3',100]],
                 [],
-                [['c3', 100],['f#3', 30],['c#3',40]],
                 [],
-                [['f#3',40], ['c#3',100]],
+                [['f#3', 80]],
                 [],
-                [['f#3',70]],
-                []
+                [['d#3',10]],
+                [['c3',100],['g#3',80]],
+                [],
+                [['g#3', 20]],
+                [['f#3', 80]],
+                [],
+                [['g#3', 20],['e3',30]],
+                [['c3',100],['g#3',80],['e3',100]],
+                [],
+                [['g#3', 10],['c#3',40]],
+                [['f#3', 80],['c#3',60]],
+                [],                
+                [['c3',30],['g#3', 20]]
             ];
             
                 
-        for(let ndx=0;ndx<rows.length;) {
-            await this.waitForStep(ndx++);
-            const row = rows[ndx%rows.length];
+        for(let ndx=0;ndx<rows.length;ndx++) {                        
+            await this.waitForStep(ndx);
+            const row = rows[ndx];
             
             row.forEach((note) => {
                 this.velocity = note[1];
-                this.note(this.toNoteNumber(note[0]), 1 / this.stepsperbeat);
-            });
-            
-        }
-        this.offset += rows.length / this.stepsperbeat;
+                this.note(this.toNoteNumber(note[0]), 0.5 / this.stepsperbeat);
+            });            
+        }        
     }
 }
 

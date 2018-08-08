@@ -4,6 +4,12 @@ const RecordedPattern = require('./pattern/recordedpattern.class.js');
 
 global.startTime = Date.now();
 global.bpm = 120;
+global.currentBeat = () =>
+    ((Date.now() -
+        global.startTime)/
+        (60*1000)
+) * global.bpm; 
+                        
 
 const midi = require('midi');
 
@@ -13,8 +19,8 @@ const chord = (new class extends Pattern {
         this.channel = 2;
         this.velocity = 127;
     }
-    async play(notes, duration) {
-        this.waitForBeat(0);
+    async play(notes, duration) {      
+        await this.waitForBeat(Math.round(global.currentBeat()));       
         notes.forEach(note => this.playNote(note, duration));    
     };
 });
@@ -31,10 +37,7 @@ const BasePattern = require('./pattern/playable/basepattern.js');
 const base = new BasePattern(output);
 (async function() {
     recording1.play();
-    while(true) {
-        
-        
-                
+    for(let n = 0; n<2; n++) {
         chord.play(['c4','c6','d#6','g6'], 4);
         await pattern.play(0, 'c5');
         await pattern.play(0, 'c5');
@@ -74,8 +77,28 @@ const base = new BasePattern(output);
         chord.play(['d7'], 4);
 
         await pattern.play(4, 'a#5');
-        await pattern.play(4, 'a#5');
-        
-
+        await pattern.play(4, 'a#5');                
     }
+        
+    drums.play();
+    
+    chord.play(['g#4','g#6','c7','d#7'], 4);
+    await chord.waitDuration(4);
+
+        
+    drums.play();
+        
+    chord.play(['c4','g6','c7','d#7'], 4);
+    await chord.waitDuration(4);
+
+    drums.play();
+    
+    chord.play(['a#3','a#6'], 8);
+    chord.play(['g6','d#7'], 4);
+    await chord.waitDuration(4);
+
+    drums.play();
+    
+    chord.play(['f6','d7'], 4);
+    await chord.waitDuration(4);    
 })();
