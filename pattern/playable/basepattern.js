@@ -1,4 +1,16 @@
 const Pattern = require('../pattern.class.js');
+const patterns = {
+    'basic': [        
+        [['c3', 100]],
+        [['c3', 100]],
+        [['c3', 100]],
+        [['c3', 100]], 
+        [],             
+        [['c3', 100]], 
+        [],             
+        [['c3', 100]]                
+    ]    
+};
 
 class BasePattern extends Pattern {
     constructor(output) {
@@ -8,27 +20,20 @@ class BasePattern extends Pattern {
         this.channel = 3;
     }
 
-    async play() {                
-        const rows = 
-            [
-                ['c3'],
-                [],
-                [],
-                ['g3'],
-                [],
-                ['a#3'],
-                ['c3'],
-                []
-            ];
+    async play(patternName, transpose) {           
+        this.offset = Math.round(global.currentBeat());      
+                        
+        const rows = patterns[patternName];
+                            
+        for(let ndx=0;ndx<rows.length;ndx++) {                        
+            await this.waitForStep(ndx);
+            const row = rows[ndx];
             
-                
-        for(let ndx=0;ndx<rows.length;) {
-            await this.waitForStep(ndx++);
-            const row = rows[ndx%rows.length];
-            row.forEach((note) => this.note(this.toNoteNumber(note), 1 / this.stepsperbeat));
-            
-        }
-        this.offset += rows.length / this.stepsperbeat;
+            row.forEach((note) => {
+                this.velocity = note[1];
+                this.note(this.toNoteNumber(note[0]) + transpose, 0.5 / this.stepsperbeat);
+            });            
+        }        
     }
 }
 

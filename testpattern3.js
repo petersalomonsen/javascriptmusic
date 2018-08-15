@@ -36,8 +36,8 @@ const drums = new DrumPattern(output);
 const BasePattern = require('./pattern/playable/basepattern.js');
 const base = new BasePattern(output);
 (async function() {
-    // recording1.play();
-    /*for(let n = 0; n<2; n++) {
+    recording1.play();
+    for(let n = 0; n<2; n++) {
         chord.play(['c4','c6','d#6','g6'], 4);
         await pattern.play(0, 'c5');
         await pattern.play(0, 'c5');
@@ -78,27 +78,34 @@ const base = new BasePattern(output);
 
         await pattern.play(4, 'a#5');
         await pattern.play(4, 'a#5');                
-    }*/
+    }
         
-    drums.play('baseandhihats');
-    
-    chord.play(['g#4','g#6','c7','d#7'], 4);
-    await chord.waitDuration(4);
-
+    for(let n=0; n<2; n++) {
+        base.velocity = 105;
+        base.play('basic', 8);
+        drums.play('baseandhihats');
         
-    drums.play('baseandhihats');
+        chord.velocity = 30;
+        chord.play(['g#4','g#6','c7','d#7'], 4);
+        await chord.waitDuration(4);
+
+            
+        base.play('basic', 12);
+        drums.play('baseandhihats');
+            
+        chord.play(['c4','g6','c7','d#7'], 4);
+        await chord.waitDuration(4);
+
+        base.play('basic', 3);
+        drums.play('baseandhihats');
         
-    chord.play(['c4','g6','c7','d#7'], 4);
-    await chord.waitDuration(4);
+        chord.play(['a#3','a#6'], 8);
+        chord.play(['g6','d#7'], 4);
+        await chord.waitDuration(4);
 
-    drums.play('baseandhihats');
-    
-    chord.play(['a#3','a#6'], 8);
-    chord.play(['g6','d#7'], 4);
-    await chord.waitDuration(4);
-
-    drums.play('baseandsnare');
-    
-    chord.play(['f6','d7'], 4);
-    await chord.waitDuration(4);    
+        drums.play('baseandsnare');
+        base.play('basic', 7);
+        chord.play(['f6','d7'], 4);
+        await chord.waitDuration(4);    
+    }
 })();
