@@ -39,7 +39,7 @@ const drums = new DrumPattern(output);
 const BasePattern = require('./pattern/playable/basepattern.js');
 const base = new BasePattern(output);
 (async function() {
-    /*recording1.play();
+    recording1.play();
     for(let n = 0; n<2; n++) {
         chord.play(['c4','c6','d#6','g6'], 4);
         await pattern.play(0, 'c5');
@@ -81,7 +81,7 @@ const base = new BasePattern(output);
 
         await pattern.play(4, 'a#5');
         await pattern.play(4, 'a#5');                
-    }*/
+    }
       
     recording3.play();
     for(let n=0; n<10; n++) {
