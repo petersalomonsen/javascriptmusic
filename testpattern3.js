@@ -1,6 +1,7 @@
 const Pattern = require('./pattern/pattern.class.js');
 const output = require('./midi/output.js');
 const RecordedPattern = require('./pattern/recordedpattern.class.js');
+const recorder = require('./midi/recorder.js');
 
 global.startTime = Date.now();
 global.bpm = 120;
@@ -29,14 +30,16 @@ const Arpeggiator = new require('./pattern/playable/arpeggiato1.js');
 const pattern = new Arpeggiator(output);
 
 const recording1 = new RecordedPattern(output, require('./recordings/recording1.js'));
+const recording3 = new RecordedPattern(output, require('./recordings/recording3.json'));
 
+// recorder('./recordings/recording3.json');
 
 const DrumPattern = require('./pattern/playable/drumpattern.js');
 const drums = new DrumPattern(output);
 const BasePattern = require('./pattern/playable/basepattern.js');
 const base = new BasePattern(output);
 (async function() {
-    recording1.play();
+    /*recording1.play();
     for(let n = 0; n<2; n++) {
         chord.play(['c4','c6','d#6','g6'], 4);
         await pattern.play(0, 'c5');
@@ -78,9 +81,10 @@ const base = new BasePattern(output);
 
         await pattern.play(4, 'a#5');
         await pattern.play(4, 'a#5');                
-    }
-        
-    for(let n=0; n<2; n++) {
+    }*/
+      
+    recording3.play();
+    for(let n=0; n<10; n++) {
         base.velocity = 105;
         base.play('basic', 8);
         drums.play('baseandhihats');
@@ -88,7 +92,6 @@ const base = new BasePattern(output);
         chord.velocity = 30;
         chord.play(['g#4','g#6','c7','d#7'], 4);
         await chord.waitDuration(4);
-
             
         base.play('basic', 12);
         drums.play('baseandhihats');

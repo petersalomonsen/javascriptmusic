@@ -29,6 +29,7 @@ module.exports = function(recordingFileName) {
                 now - previousTime
                 , msg]);
             previousTime = now;
+            console.log(msg);
     });
 
     global.shutdownhooks.push(() => {

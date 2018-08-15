@@ -1,7 +1,11 @@
+const fs = require('fs');
 module.exports = class RecordedPattern {
     constructor(output, midimessages) {
         this.output = output;
         
+        if(typeof midimessages === 'string') {
+            midimessages = JSON.parse(fs.readFileSync(midimessages));
+        }
         this.midimessages = midimessages;
     }
     
