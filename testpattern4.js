@@ -39,15 +39,21 @@ const drums = new DrumPattern(output);
 const BasePattern = require('./pattern/playable/basepattern.js');
 const base = new BasePattern(output);
 
-recorder('./recordings/recording2.json');
+recorder('./recordings/recording4.json');
 
 (async function() {
     try {
-        new RecordedPattern(output, JSON.parse(fs.readFileSync('./recordings/recording2.json'))).play();
+       new RecordedPattern(output, JSON.parse(fs.readFileSync('./recordings/recording2.json'))
+                    .map(e => {
+                        e[1][2] /= 3;
+                        return e;
+                    })).play();
+       new RecordedPattern(output, JSON.parse(fs.readFileSync('./recordings/recording3.json'))).play();
+       new RecordedPattern(output, JSON.parse(fs.readFileSync('./recordings/recording4.json'))).play();
     } catch(e) {}
     
     while(true) {        
-        await drums.play();
+        await drums.play('baseandhihats');
     }
    
 })();
