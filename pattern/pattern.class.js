@@ -6,6 +6,14 @@ const noteStringToNoteNumberMap =
         return prev;
     }, {});
 
+global.startTime = Date.now();
+global.bpm = 110;
+global.currentBeat = () =>
+    ((Date.now() -
+        global.startTime)/
+        (60*1000)
+) * global.bpm; 
+
 global.waitForBeat = (beatNo) => {           
         let timeout = Math.floor((((beatNo) / global.bpm) * (60*1000)) - 
                 (Date.now() -
