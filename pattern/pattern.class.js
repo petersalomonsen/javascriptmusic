@@ -6,6 +6,23 @@ const noteStringToNoteNumberMap =
         return prev;
     }, {});
 
+global.waitForBeat = (beatNo) => {           
+        let timeout = Math.floor((((beatNo) / global.bpm) * (60*1000)) - 
+                (Date.now() -
+                global.startTime)); 
+        
+        if(timeout<0) {
+            timeout = 0;
+        }
+
+        return new Promise((resolve, reject) =>
+            setTimeout(() => {                
+                resolve();
+            },
+              timeout  
+            )
+        );
+    };
 
 class Pattern {
     constructor(output) {
