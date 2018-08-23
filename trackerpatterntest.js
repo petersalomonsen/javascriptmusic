@@ -4,7 +4,7 @@ const TrackerPattern = require('./pattern/trackerpattern.class.js');
 const ch4 = new TrackerPattern(output, 3, 2);
 const ch2 = new TrackerPattern(output, 1, 4);
 const ch7 = new TrackerPattern(output, 6, 2);
-
+output.solo([1,3]);
 (async function() {
     let beat = 0;
     function drumbase() {

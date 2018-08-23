@@ -8,6 +8,22 @@ for(var n=0;n<output.getPortCount(); n++) {
         outputIndex = n;
     }
 }
+output._sendMessage = output.sendMessage;
+output.mute = (channels) => {
+    output.muted = channels;
+};
+output.solo = (channels) => {
+    output.soloed = channels;
+};
+output.sendMessage = (msg) => {
+    if(output.muted && output.muted.findIndex((channel) => (msg[0] & 0xf) === channel) > -1) {
+
+        // Muted - do nothing
+    } else if(!output.soloed || output.soloed.findIndex((channel) => (msg[0] & 0xf) === channel) > -1){
+        output._sendMessage(msg);
+    }
+};
+
 output.openPort(outputIndex);
 
 global.shutdownhooks = [
