@@ -4,7 +4,8 @@ const TrackerPattern = require('./pattern/trackerpattern.class.js');
 const ch4 = new TrackerPattern(output, 3, 2);
 const ch2 = new TrackerPattern(output, 1, 4);
 const ch7 = new TrackerPattern(output, 6, 2);
-output.solo([1,3]);
+const ch6 = new TrackerPattern(output, 5, 2);
+// output.solo([1,3, 5]);
 (async function() {
     let beat = 0;
     function drumbase() {
@@ -26,6 +27,14 @@ output.solo([1,3]);
         ]);
     }
         
+    ch6.play([
+        [0, c5(2/3, 100), pitchbend(0, 0x2000, 1/2, 8)],
+        [1/2, g5(1/4, 100)],
+        [2/2, f5(1/4, 100)],
+        [3/2, g5(2/3, 100), pitchbend(0x1000, 0x2000, 1/2, 8)]
+        
+    ]);
+    
     drumbase();
     ch7.play([
         [0, c4(), c5(), d5(), g5()]

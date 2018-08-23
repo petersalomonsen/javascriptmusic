@@ -87,6 +87,21 @@ class Pattern {
         );
     }
 
+    async pitchbend(start, target, duration, steps) {
+        const stepdiff = (target - start) / steps;
+        let currentValue = start;
+        for(let step = 0 ; step < steps; step++) {
+            
+            const rounded = Math.round(currentValue);
+            this.output.sendMessage([0xe0 + this.channel, 0x007f & rounded, (0x3f80 & rounded) >> 7 ]);
+
+            currentValue += stepdiff;
+            
+            await this.waitDuration( duration / steps);
+        }
+        this.output.sendMessage([0xe0 + this.channel, 0x007f & target, (0x3f80 & target) >> 7 ]);
+    }
+
     async note(noteNumber, duration) {
         this.output.sendMessage([0x90 + this.channel, noteNumber, this.velocity]);
         
