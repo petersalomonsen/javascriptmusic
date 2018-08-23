@@ -44,27 +44,27 @@ const ch6 = new TrackerPattern(output, 5, 2);
         
         drumbase();
         ch7.play([
-            [0, c4(), c5(), d5(), g5()]
+            [0, c4(), c5(), d5(), g5(), controlchange(10, 0, 127, 2, 16)]
             
         ]);
         await waitForBeat(beat+=4);    
         drumbase();
         ch7.play([
-            [0, as3(), as4(), c5(), f5()]
+            [0, as3(), as4(), c5(), f5(), controlchange(10, 127, 0, 2, 16)]
             
         ]);
         await waitForBeat(beat+=4);    
         drumbase();
         ch6.play(littlepat);
         ch7.play([
-            [0, a3(), a4(), c5(), f5()]
+            [0, a3(), a4(), c5(), f5(), controlchange(10, 0, 127, 2, 16)]
             
         ]);
         await waitForBeat(beat+=4);    
 
         drumbase();
         ch7.play([
-            [0, c4(), g4(), c5(), e5()]
+            [0, c4(), g4(), c5(), e5(), controlchange(10, 127, 0, 2, 16)]
             
         ]);
         await waitForBeat(beat+=4);    

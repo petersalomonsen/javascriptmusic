@@ -6,6 +6,7 @@ new Array(128).fill(null).map((v, ndx) =>
 ).forEach((note, ndx) => eval(`global.${note} = (duration, velocity, offset) => [${ndx}, duration, velocity, offset];`));
 
 global.pitchbend = (start, target, duration, steps) => (pattern) => pattern.pitchbend(start, target, duration, steps);
+global.controlchange = (controller, start, target, duration, steps) => (pattern) => pattern.controlchange(controller, start, target, duration, steps);
 
 class TrackerPattern extends Pattern {
     constructor(output, channel, stepsperbeat) {
