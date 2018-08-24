@@ -5,9 +5,9 @@ const ch4 = new TrackerPattern(output, 3, 2);
 const ch2 = new TrackerPattern(output, 1, 4);
 const ch7 = new TrackerPattern(output, 6, 2);
 const ch6 = new TrackerPattern(output, 5, 2);
-// output.solo([1,3, 5]);
+// output.solo([6]);
 (async function() {
-    let beat = 0;
+    
     function drumbase() {
         ch2.play([
             [0, c3(), gs3()],
@@ -39,34 +39,25 @@ const ch6 = new TrackerPattern(output, 5, 2);
         [7/2, g5(1/4, 100)],
     ];
 
-    for(let lp = 0; lp < 10 ; lp++) {
-        ch6.play(littlepat);
-        
-        drumbase();
-        ch7.play([
-            [0, c4(), c5(), d5(), g5(), controlchange(10, 0, 127, 2, 16)]
-            
-        ]);
-        await waitForBeat(beat+=4);    
-        drumbase();
-        ch7.play([
-            [0, as3(), as4(), c5(), f5(), controlchange(10, 127, 0, 2, 16)]
-            
-        ]);
-        await waitForBeat(beat+=4);    
-        drumbase();
-        ch6.play(littlepat);
-        ch7.play([
-            [0, a3(), a4(), c5(), f5(), controlchange(10, 0, 127, 2, 16)]
-            
-        ]);
-        await waitForBeat(beat+=4);    
+    new TrackerPattern()
+        .play([
+            [0, drumbase, () => ch7.play([
+                [0, c4(), c5(), d5(), g5(), controlchange(10, 0, 127, 2, 16), controlchange(7, 50, 127, 2, 16)]                
+                ])
+            ],
+            [4, drumbase, () => ch7.play([
+                [0, as3(), as4(), c5(), f5(), controlchange(10, 127, 0, 2, 16)]
+                ])
+            ],
+            [4, drumbase, () => ch7.play([
+                [0, a3(), a4(), c5(), f5(), controlchange(10, 0, 127, 2, 16)]
+                ])
+            ],
+            [4, drumbase, () => ch7.play([
+                [0, c4(), g4(), c5(), e5(), controlchange(10, 127, 0, 2, 16)]
+                ])
+            ]
+        ], 1);
 
-        drumbase();
-        ch7.play([
-            [0, c4(), g4(), c5(), e5(), controlchange(10, 127, 0, 2, 16)]
-            
-        ]);
-        await waitForBeat(beat+=4);    
-    }
+    
 })();

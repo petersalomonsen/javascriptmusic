@@ -15,12 +15,24 @@ class TrackerPattern extends Pattern {
         this.stepsperbeat = stepsperbeat;
     }
 
-    async play(rows) {           
+    async play(rows, rowbeatcolumnmode) {           
         this.offset = Math.round(global.currentBeat());                              
-                            
+                      
+        let rowbeat = 0;
+
         for(let ndx=0;ndx<rows.length;ndx++) {
             const cols = rows[ndx];
-            const rowbeat = cols[0];
+            
+            switch(rowbeatcolumnmode) {
+                case 1:
+                    rowbeat += cols[0];                    
+                    break;
+                case 2:
+                    rowbeat += 1 / this.stepsperbeat;                    
+                    break;
+                default:
+                    rowbeat = cols[0];
+            }
             
             for(let colndx = 1; colndx < cols.length; colndx++) {
                 const col = cols[colndx];
