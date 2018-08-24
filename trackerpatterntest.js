@@ -39,11 +39,22 @@ const ch6 = new TrackerPattern(output, 5, 2);
         [7/2, g5(1/4, 100)],
     ];
 
-    new TrackerPattern()
-        .play([
+    const littlepat2 = [
+        [0, c6(2/3, 100), pitchbend(0, 0x2000, 1/2, 8)],
+        [1/2, as5(1/4, 100)],
+        [2/2, g5(1/4, 100)],
+        [3/2, fs5(2/3, 100), pitchbend(0x1000, 0x2000, 1/2, 8)],
+        [4/2, f5(1/4, 100)],
+        [5/2, e5(1/4, 100)],
+        [6/2, c5(1/4, 100)],
+        [6.5/2, fs5(1/4, 60)],
+        [7/2, g5(1/4, 100)]
+    ];
+
+    const intro = () => new TrackerPattern().play([
             [0, drumbase, () => ch7.play([
                 [0, c4(), c5(), d5(), g5(), controlchange(10, 0, 127, 2, 16), controlchange(7, 50, 127, 2, 16)]                
-                ])
+                ]), () => ch6.play(littlepat)
             ],
             [4, drumbase, () => ch7.play([
                 [0, as3(), as4(), c5(), f5(), controlchange(10, 127, 0, 2, 16)]
@@ -51,12 +62,20 @@ const ch6 = new TrackerPattern(output, 5, 2);
             ],
             [4, drumbase, () => ch7.play([
                 [0, a3(), a4(), c5(), f5(), controlchange(10, 0, 127, 2, 16)]
-                ])
+                ]), () => ch6.play(littlepat2)
             ],
             [4, drumbase, () => ch7.play([
                 [0, c4(), g4(), c5(), e5(), controlchange(10, 127, 0, 2, 16)]
                 ])
             ]
+        ], 1);
+
+    new TrackerPattern()
+        .play([
+            [0, intro],
+            [16, intro],
+            [16, intro],
+            [16, intro]
         ], 1);
 
     
