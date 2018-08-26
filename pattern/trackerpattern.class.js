@@ -23,15 +23,8 @@ class TrackerPattern extends Pattern {
         for(let ndx=0;ndx<rows.length;ndx++) {
             const cols = rows[ndx];
             
-            switch(rowbeatcolumnmode) {
-                case 1:
-                    rowbeat += cols[0];                    
-                    break;
-                case 2:
-                    rowbeat += 1 / this.stepsperbeat;                    
-                    break;
-                default:
-                    rowbeat = cols[0];
+            if(!rowbeatcolumnmode) {
+                rowbeat = cols[0];
             }
             
             for(let colndx = 1; colndx < cols.length; colndx++) {
@@ -49,7 +42,11 @@ class TrackerPattern extends Pattern {
                     this.velocity = velocity;
                     this.note(note, duration);
                 }
-            };            
+            };   
+            
+            if(rowbeatcolumnmode===1) {
+                rowbeat += cols[0];
+            }
         }        
     }
 }

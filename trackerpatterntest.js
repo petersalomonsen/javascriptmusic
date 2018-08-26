@@ -52,7 +52,7 @@ const ch6 = new TrackerPattern(output, 5, 2);
     ];
 
     const intro = () => new TrackerPattern().play([
-            [0, drumbase, () => ch7.play([
+            [4, drumbase, () => ch7.play([
                 [0, c4(), c5(), d5(), g5(), controlchange(10, 0, 127, 2, 16), controlchange(7, 50, 127, 2, 16)]                
                 ]), () => ch6.play(littlepat)
             ],
@@ -72,7 +72,7 @@ const ch6 = new TrackerPattern(output, 5, 2);
 
     new TrackerPattern()
         .play([
-            [0, intro],
+            [16, intro],
             [16, intro],
             [16, intro],
             [16, intro]
