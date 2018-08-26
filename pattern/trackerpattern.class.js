@@ -9,10 +9,11 @@ global.pitchbend = (start, target, duration, steps) => (pattern) => pattern.pitc
 global.controlchange = (controller, start, target, duration, steps) => (pattern) => pattern.controlchange(controller, start, target, duration, steps);
 
 class TrackerPattern extends Pattern {
-    constructor(output, channel, stepsperbeat) {
+    constructor(output, channel, stepsperbeat, defaultvelocity = 100) {
         super(output);            
         this.channel = channel;
         this.stepsperbeat = stepsperbeat;
+        this.defaultvelocity = defaultvelocity;
     }
 
     async play(rows, rowbeatcolumnmode) {           
@@ -30,12 +31,13 @@ class TrackerPattern extends Pattern {
             for(let colndx = 1; colndx < cols.length; colndx++) {
                 const col = cols[colndx];
                 if(typeof col === 'function' ) {
-                    await this.waitForBeat(rowbeat);                    
+                    await this.waitForBeat(rowbeat);     
+                    this.velocity = this.defaultvelocity;               
                     col(this);
                 } else {
                     const note = col[0];
                     const duration = col[1] ? col[1] : 1 / this.stepsperbeat;
-                    const velocity = col[2] ? col[2] : this.velocity;
+                    const velocity = col[2] ? col[2] : this.defaultvelocity;
                     const offset = col[3] ? col[3] : 0;
 
                     await this.waitForBeat(rowbeat + offset);                                

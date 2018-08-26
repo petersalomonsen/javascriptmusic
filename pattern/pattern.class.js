@@ -114,6 +114,7 @@ class Pattern {
             
             await this.waitDuration( duration / steps);
         }
+        console.log(this.channel, controller, target);
         this.output.sendMessage([0xb0 + this.channel, controller, 0x7f & target]);
     }
 
