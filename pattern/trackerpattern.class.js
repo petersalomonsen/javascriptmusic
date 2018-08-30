@@ -49,7 +49,8 @@ class TrackerPattern extends Pattern {
             if(rowbeatcolumnmode===1) {
                 rowbeat += cols[0];
             }
-        }        
+        }   
+        await this.waitForBeat(rowbeat);      
     }
 }
 

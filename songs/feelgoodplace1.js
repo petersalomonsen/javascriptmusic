@@ -14,6 +14,7 @@ ch7.play([[0,
         controlchange(7, 100, 80)]
     ]);
  // output.mute([5]);
+const ch5 = new TrackerPattern(output, 4, 8);
 const ch6 = new TrackerPattern(output, 5, 2);
 ch6.play([[
     0,controlchange(7, 127, 127)
@@ -35,11 +36,31 @@ const ch8 = new TrackerPattern(output, 7, 2);
         [21 / 6, c3(1, 80), fs3()],
     ]);
     
+    const drumpattern2 = () => ch2.play([
+        [0, c3(1, 100), gs3()],
+        [3/6, fs3()],
+        [5 / 6, gs3()],
+        [6/6, c3(), gs3(), e3(1, 127)],
+        [9/6, fs3(1/6, 100)],
+        [12 / 6, c3(), cs3()],        
+        [15 / 6, fs3()],
+        [17 / 6, c3(0.5, 50)],
+        [18 / 6, c3(1, 100), e3(1, 127), gs3()],
+        [21 / 6, c3(1, 80), fs3()],
+    ]);
+    
     const strings = () => ch7.play([
         [0, a4(), d5(), fs5()],
         [3/2, g4(), c5(), e5()],
         [8/2, b4(), e5(), g5()],
         [11/2, a4(), d5(), fs5()]
+    ]);
+
+    const strings2 = () => ch7.play([
+        [0, g3(3/2), b4(3/2), d5(3/2), g5(3/2)],
+        [3/2, f3(5/2), c5(5/2), e5(5/2), g5(5/2)],
+        [8/2, d3(3/2), c5(3/2), f5(3/2), a5(3/2)],
+        [11/2, c3(5/2), c5(5/2), e5(5/2), g5(5/2)]
     ]);
 
     const bass = () => ch8.play([
@@ -56,6 +77,21 @@ const ch8 = new TrackerPattern(output, 7, 2);
        [ 4 + 21/6, c4(3/6, 110)]       
     ]);
 
+    const bass2 = () => ch8.play([
+        [0, g3(3/6, 110)],
+        [ 4/4, g4(1/6, 110)],
+        [ 7/4, f3(1/6, 110)],  
+        [ 10/4, f4(1/6, 110)],
+        [ 16/4, d3(3/6, 110)],
+        [ 20/4, d4(1/6, 110)],
+        [ 23/4, c3(1/6, 110)],
+        [ 24/4 + 2/6, c4(1/6, 110)],
+        [ 24/4 + 3/6, c3(1/6, 110)],
+        [ 24/4 + 5/6, cs4(1/12, 110)],
+        [ 24/4 + 6/6, d4(1/6, 110)],
+        [ 24/4 + 9/6, f4(1/6, 110)]
+     ]);
+ 
     const melody = () => ch6.play([
         [0, d5(1/4), controlchange(10, 64, 20, 1/4, 4)],
         [3/4, d5(1/4)],
@@ -67,16 +103,30 @@ const ch8 = new TrackerPattern(output, 7, 2);
         [14 / 4, e5()],
     ]);
 
-    new TrackerPattern()
-        .play([
-            [4, drumpattern, strings, bass, melody],
-            [4, drumpattern, melody],
-            [4, drumpattern, strings, bass, melody],
-            [4, drumpattern, melody],
-            [4, drumpattern, strings, bass],
-            [4, drumpattern],
-            [4, drumpattern, strings, bass],
-            [4, drumpattern]
-        ], 1);
-
+    const melody2 = () => ch5.play([
+        [3/4, d5()],
+        [4/4, g5()],
+        [5/4, a5()],
+        [6/4, b5()],
+        [7/4, c6(1), pitchbend(0x1000, 0x2000, 1/4, 8)],
+        [9/4, b5()],
+        [10/4, a5()],
+    ]);
+    while(true) {
+        await new TrackerPattern()
+            .play([
+                [4, drumpattern, strings, bass, melody],
+                [4, drumpattern, melody],
+                [4, drumpattern, strings, bass, melody],
+                [4, drumpattern, melody],
+                [4, drumpattern, strings, bass],
+                [4, drumpattern],
+                [4, drumpattern, strings, bass],
+                [4, drumpattern],
+                [4, drumpattern2, bass2, strings2],
+                [4, drumpattern2],
+                [4, drumpattern2, bass2, strings2, melody2],
+                [4, drumpattern2]
+            ], 1);
+    }
 })();
