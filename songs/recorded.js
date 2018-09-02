@@ -1,7 +1,7 @@
 const output = require('../midi/output.js');
 const TrackerPattern = require('../pattern/trackerpattern.class.js');
 const recorder = require('../midi/recorder.js');
-const RecordedPattern = require('../pattern/recordedpattern.class.js');
+const RecordConverter = require('../pattern/recordconverter.js');
 global.bpm = 100;
 
 const ch2 = new TrackerPattern(output, 1, 4);
@@ -9,7 +9,10 @@ ch2.play([
     controlchange(0, 7, 90, 90)
 ]);
 
-const take1 = new RecordedPattern(output, require('../recordings/take1.json'));
+const take1 = new RecordConverter(require('../recordings/take1.json'));
+
+const ch1 = new TrackerPattern(output, 0, 4);
+
 (async function() {
 
     const drumpattern = () => ch2.play([
@@ -38,8 +41,9 @@ const take1 = new RecordedPattern(output, require('../recordings/take1.json'));
         [21 / 6, c3(1, 80), fs3()],
     ]);
     
-    recorder('./recordings/take1.json');
-    take1.play();
+    // recorder('./recordings/take1.json');
+    take1.quantize(4);
+    ch1.play(take1.trackerPatternData);
     while(true) {
         await new TrackerPattern()
             .play([

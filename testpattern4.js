@@ -39,7 +39,7 @@ const drums = new DrumPattern(output);
 const BasePattern = require('./pattern/playable/basepattern.js');
 const base = new BasePattern(output);
 
-recorder('./recordings/recording4.json');
+// recorder('./recordings/recording4.json');
 
 (async function() {
     try {
