@@ -104,6 +104,7 @@ const ch8 = new TrackerPattern(output, 7, 2);
     ]);
 
     const melody2 = () => ch5.play([
+        [0, controlchange(7, 100, 100)],
         [3/4, d5()],
         [4/4, g5()],
         [5/4, a5()],
@@ -111,6 +112,8 @@ const ch8 = new TrackerPattern(output, 7, 2);
         [7/4, c6(1), pitchbend(0x1000, 0x2000, 1/4, 8)],
         [9/4, b5()],
         [10/4, a5()],
+        [12/4, g5()],
+        [13/4, d6(1),  pitchbend(0x1000, 0x2000, 1/4, 8)]
     ]);
     while(true) {
         await new TrackerPattern()
