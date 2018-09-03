@@ -1,6 +1,9 @@
 const output = require('../midi/output.js');
 const TrackerPattern = require('../pattern/trackerpattern.class.js');
-
+const Recorder = require('../midi/recorder.class.js');
+const recorder = new Recorder('songs');
+const fs = require('fs');
+const RecordedPattern = require('../pattern/recordedpattern.class.js');
 global.bpm = 100;
 
 const ch4 = new TrackerPattern(output, 3, 2);
@@ -115,21 +118,25 @@ const ch8 = new TrackerPattern(output, 7, 2);
         [12/4, g5()],
         [13/4, d6(1),  pitchbend(0x1000, 0x2000, 1/4, 8)]
     ]);
+
+    const fgtake1 = new RecordedPattern(output, JSON.parse(fs.readFileSync('songs/fgtake1.json')));
     while(true) {
+        recorder.start();
         await new TrackerPattern()
             .play([
-                [4, drumpattern, strings, bass, melody],
+                /*[4, drumpattern, strings, bass, melody],
                 [4, drumpattern, melody],
                 [4, drumpattern, strings, bass, melody],
                 [4, drumpattern, melody],
                 [4, drumpattern, strings, bass],
                 [4, drumpattern],
                 [4, drumpattern, strings, bass],
-                [4, drumpattern],
-                [4, drumpattern2, bass2, strings2],
+                [4, drumpattern],*/
+                [4, drumpattern2, bass2, strings2, () => fgtake1.play()],
                 [4, drumpattern2],
-                [4, drumpattern2, bass2, strings2, melody2],
+                [4, drumpattern2, bass2, strings2],
                 [4, drumpattern2]
-            ], 1);
-    }
+            ], 1);        
+        recorder.save();        
+    }   
 })();

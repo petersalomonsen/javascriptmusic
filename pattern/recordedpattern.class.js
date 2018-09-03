@@ -7,6 +7,7 @@ module.exports = class RecordedPattern {
             midimessages = JSON.parse(fs.readFileSync(midimessages));
         }
         this.midimessages = midimessages;
+        this.playIndex = 0;
     }
     
     play(msg) {
@@ -14,10 +15,11 @@ module.exports = class RecordedPattern {
             this.output.sendMessage(msg);
         } else {
             this.accumulatedDeltaTime = Date.now();
+            this.playIndex = 0;
         }
 
-        if(this.midimessages.length>0) {
-            const evt = this.midimessages.shift();
+        if(this.playIndex < this.midimessages.length) {
+            const evt = this.midimessages[this.playIndex++];
             const deltatime = evt[0];
             const nextmessage = evt[1];        
             
