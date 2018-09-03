@@ -124,14 +124,16 @@ const ch8 = new TrackerPattern(output, 7, 2);
         recorder.start();
         await new TrackerPattern()
             .play([
-                /*[4, drumpattern, strings, bass, melody],
+                [4, drumpattern, strings, bass, melody],
                 [4, drumpattern, melody],
                 [4, drumpattern, strings, bass, melody],
                 [4, drumpattern, melody],
                 [4, drumpattern, strings, bass],
                 [4, drumpattern],
                 [4, drumpattern, strings, bass],
-                [4, drumpattern],*/
+                [4, drumpattern],
+                [4, drumpattern2, bass2, strings2],
+                [4, drumpattern2],
                 [4, drumpattern2, bass2, strings2, () => fgtake1.play()],
                 [4, drumpattern2],
                 [4, drumpattern2, bass2, strings2],
