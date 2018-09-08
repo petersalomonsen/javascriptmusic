@@ -1,7 +1,7 @@
 const output = require('../midi/output.js');
 const TrackerPattern = require('../pattern/trackerpattern.class.js');
 const Recorder = require('../midi/recorder.class.js');
-const recorder = new Recorder('songs');
+const recorder = new Recorder(4, output);
 const fs = require('fs');
 const RecordedPattern = require('../pattern/recordedpattern.class.js');
 global.bpm = 100;

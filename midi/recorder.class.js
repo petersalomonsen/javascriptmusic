@@ -1,8 +1,6 @@
 const midi = require('midi');
 const fs = require('fs');
 
-// create a readable stream
-const stream1 = midi.createReadStream();
 const input = new midi.input();
 
 let inputIndex;
@@ -22,18 +20,25 @@ if(inputIndex >= 0) {
 class Recorder {
     
 
-    constructor() {
+    constructor(channel = -1, output) {
         this.folder = 'recordings';
         this.takeNo = 1;
         this.midimessages = [];        
 
-        input.on('message', (deltatime, msg) => {            
+        
+        input.on('message', (deltatime, msg) => {    
             const now = new Date().getTime();
+            if(channel > -1) {
+                msg[0] = (msg[0] & 0xf0) + channel;
+            }
             this.midimessages.push([
                 (now - this.previousTime) / 1000
                 , msg]);
-                console.log(msg);
-            this.previousTime = now;            
+            console.log(msg);
+            this.previousTime = now;         
+            if(output) {
+                output.sendMessage(msg);
+            }
         });
     }
 
@@ -44,7 +49,9 @@ class Recorder {
 
     save() {
         if(this.midimessages.length > 0) {
-            fs.writeFile(`${this.folder}/recording_take${this.takeNo}.json`, JSON.stringify(this.midimessages));
+            const filename = `${this.folder}/recording_take${this.takeNo}.json`;
+            fs.writeFile(filename, JSON.stringify(this.midimessages), 
+                (filename) => console.log('saved', filename));
             console.log('Recording ended take', this.takeNo);
             this.takeNo ++;
         }        
