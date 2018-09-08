@@ -13,10 +13,11 @@ for(let n=0;n<input.getPortCount(); n++) {
         inputIndex = n;
     }
 }
+if(inputIndex >= 0) {
+    console.log("Opening",input.getPortName(inputIndex));        
+    input.openPort(inputIndex);
+}
 
-console.log("Opening",input.getPortName(inputIndex));        
-
-input.openPort(inputIndex);
 
 class Recorder {
     
