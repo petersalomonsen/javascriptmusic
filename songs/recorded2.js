@@ -1,7 +1,8 @@
 const output = require('../midi/output.js');
 const TrackerPattern = require('../pattern/trackerpattern.class.js');
 const Recorder = require('../midi/recorder.class.js');
-const recorder = new Recorder(5, output);
+const recorder = new Recorder(0, output);
+const RecordedPattern = require('../pattern/recordedpattern.class');
 
 global.bpm = 100;
 
@@ -12,6 +13,7 @@ ch2.play([
 
 
 const ch1 = new TrackerPattern(output, 0, 4);
+const recording = new RecordedPattern(output, 'recordings/recording_take2.json');
 
 (async function() {
 
@@ -41,14 +43,17 @@ const ch1 = new TrackerPattern(output, 0, 4);
         [21 / 6, c3(1, 80), fs3()],
     ]);
     
+    global.startTime = Date.now();
     while(true) {
+        recording.play();
         recorder.start();
-        await new TrackerPattern()
-            .play([
+        const trackerpattern = new TrackerPattern();
+        
+        await trackerpattern.play([
                 [4, drumpattern],
                 [4, drumpattern],
                 [4, drumpattern],
-                [4, drumpattern]
+                [4, drumpattern, () => countdown(4)]
             ], 1);
         recorder.save();
     }

@@ -4,7 +4,12 @@ module.exports = class RecordedPattern {
         this.output = output;
         
         if(typeof midimessages === 'string') {
-            midimessages = JSON.parse(fs.readFileSync(midimessages));
+            try {
+                midimessages = JSON.parse(fs.readFileSync(midimessages));
+            } catch(e) {
+                console.log('Unable to open',midimessages,e);
+                midimessages = [];
+            }
         }
         this.midimessages = midimessages;
         this.playIndex = 0;

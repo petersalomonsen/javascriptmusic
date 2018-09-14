@@ -15,7 +15,7 @@ class TrackerPattern extends Pattern {
         this.stepsperbeat = stepsperbeat;
         this.defaultvelocity = defaultvelocity;
     }
-
+    
     async play(rows, rowbeatcolumnmode) {           
         this.offset = Math.round(global.currentBeat());                              
                       

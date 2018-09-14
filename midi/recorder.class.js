@@ -34,7 +34,7 @@ class Recorder {
             this.midimessages.push([
                 (now - this.previousTime) / 1000
                 , msg]);
-            console.log(msg);
+            // console.log(msg);
             this.previousTime = now;         
             if(output) {
                 output.sendMessage(msg);

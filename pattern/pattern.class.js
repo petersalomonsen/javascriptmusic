@@ -32,6 +32,15 @@ global.waitForBeat = (beatNo) => {
         );
     };
 
+global.countdown = async (counter) => {
+    let beat = Math.round(global.currentBeat());                              
+    while(counter>0) {
+        console.log(counter--);
+        beat++;
+        await global.waitForBeat(beat);     
+    }
+}
+
 class Pattern {
     constructor(output) {
         this.currentbeat = 0;
