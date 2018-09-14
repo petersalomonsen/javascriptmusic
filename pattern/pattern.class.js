@@ -120,7 +120,8 @@ class Pattern {
             this.output.sendMessage([0xb0 + this.channel, controller, rounded]);
             
             currentValue += stepdiff;
-            
+        
+            console.log(this.channel, controller, target);
             await this.waitDuration( duration / steps);
         }
         console.log(this.channel, controller, target);

@@ -21,6 +21,10 @@ class TrackerPattern extends Pattern {
                       
         let rowbeat = 0;
 
+        
+        if(typeof rows[0]==='function') {            
+            rows = [[0].concat(rows)];
+        }
         for(let ndx=0;ndx<rows.length;ndx++) {
             const cols = rows[ndx];
             
