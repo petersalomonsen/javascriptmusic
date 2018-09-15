@@ -7,21 +7,26 @@ const RecordedPattern = require('../pattern/recordedpattern.class.js');
 global.bpm = 100;
 
 const ch4 = new TrackerPattern(output, 3, 2);
+
+
 const ch2 = new TrackerPattern(output, 1, 4);
 ch2.play([
-    controlchange(0, 7, 90, 90)
+    controlchange(7, 110, 110)
 ]);
 const ch7 = new TrackerPattern(output, 6, 2);
 ch7.play([[0, 
         controlchange(10, 64, 64),
-        controlchange(7, 100, 80)]
+        controlchange(7, 80, 80)]
     ]);
  // output.mute([5]);
 const ch5 = new TrackerPattern(output, 4, 8);
+ch5.play([
+    controlchange(7, 100, 100)
+]);
 const ch6 = new TrackerPattern(output, 5, 2);
-ch6.play([[
-    0,controlchange(7, 127, 127)
-]],0);
+ch6.play([
+    controlchange(7, 127, 127)
+]);
 const ch8 = new TrackerPattern(output, 7, 2);
 
 (async function() {
