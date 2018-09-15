@@ -16,12 +16,12 @@ ch2.play([
 const ch7 = new TrackerPattern(output, 6, 2);
 ch7.play([[0, 
         controlchange(10, 64, 64),
-        controlchange(7, 80, 80)]
+        controlchange(7, 70, 70)]
     ]);
  // output.mute([5]);
 const ch5 = new TrackerPattern(output, 4, 8);
 ch5.play([
-    controlchange(7, 100, 100)
+    controlchange(7, 110, 110)
 ]);
 const ch6 = new TrackerPattern(output, 5, 2);
 ch6.play([
