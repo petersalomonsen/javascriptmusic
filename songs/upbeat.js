@@ -52,7 +52,7 @@ base.play([controlchange(7, 110, 110)]);
         
         await new TrackerPattern()
             .play([
-                [2, drumpattern, basepattern, () => strings.play([[0, c4(2), e4(2)]]),
+                [2, drumpattern, basepattern, () => strings.play([[0, c5(2), e5(2)]]),
                     () => lead.play([
                         [0, b6(1/4)],
                         [1/2, b6(1/4)],
@@ -62,7 +62,7 @@ base.play([controlchange(7, 110, 110)]);
                         [2 + 3/4, d7(1/4)]
                     ])
                 ],
-                [2, () => strings.play([[0, d4(2), fs4(2)]]),
+                [2, () => strings.play([[0, d5(2), fs5(2)]]),
                     () => lead.play([
                         [2 + -1/4, b6(1/4)],
                         [2 + 1/2, b6(1/4)],
@@ -74,8 +74,8 @@ base.play([controlchange(7, 110, 110)]);
                         [2 + 3 + 1/4, g6(1/4)]
                 ])
                 ],
-                [2, drumpattern, () => strings.play([[0, e4(2), g4(2)]])],
-                [2, () => strings.play([[0, b3(2), d4(2)]])]
+                [2, drumpattern, () => strings.play([[0, e5(2), g5(2)]])],
+                [2, () => strings.play([[0, b4(2), d5(2)]])]
             ], 1);         
     }   
 })();
