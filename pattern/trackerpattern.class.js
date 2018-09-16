@@ -39,6 +39,27 @@ class TrackerPattern extends Pattern {
         this.defaultvelocity = defaultvelocity;
     }
     
+    async steps(stepsperbeat, events) {
+        this.offset = Math.round(global.currentBeat());                              
+        for(let step=0;step < events.length; step++) {
+            let beat = step / stepsperbeat;
+            const event = events[step];
+            if(event.constructor && event.constructor.name === 'AsyncFunction') {
+                event(this, beat);                
+            } else if(event.constructor && event.constructor.name === 'Function') {
+                (async () => {        
+                    const waitforbeat = beat;                                    
+                    await this.waitForBeat(beat); 
+                                      
+                    event(this, beat);
+                })();
+            } else if(event.length) {
+                // Array
+            }
+        }
+        await this.waitForBeat(events.length / stepsperbeat);  
+    }
+
     async play(rows, rowbeatcolumnmode) {           
         this.offset = Math.round(global.currentBeat());                              
                       

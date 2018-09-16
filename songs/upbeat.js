@@ -55,12 +55,8 @@ base.play([controlchange(7, 110, 110)]);
         [4 + 3 + 1/2, b3(1/4)]
     ]);    
     while(true) {  
-        const kickbeat = () => drums.play([
-            [0, c3],
-            [1, c3],
-            [2, c3()],
-            [3, c3()]
-        ]);      
+        const kickbeat = () => drums.steps(1, [c3, c3, c3, c3]);
+                 
         const ddbase = () => base.play([
             [0, g3()],
             [1 + 3/4, g4()],
