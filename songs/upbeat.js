@@ -4,14 +4,14 @@ global.bpm = 120;
 
 const drums = new TrackerPattern(output, 1, 4);
 drums.play([
-    controlchange(7, 110, 110)
+    controlchange(7, 120, 120)
 ]);
 
 const strings = new TrackerPattern(output, 6, 4);
-strings.play([controlchange(7, 65, 65)]);
+strings.play([controlchange(7, 50, 50), controlchange(10, 20, 20)]);
 
 const lead = new TrackerPattern(output, 8, 4);
-lead.play([controlchange(7, 105, 105)]);
+lead.play([controlchange(7, 100, 100), controlchange(10, 90, 90)]);
 
 const base = new TrackerPattern(output, 7, 4);
 base.play([controlchange(7, 110, 110)]);
@@ -47,9 +47,11 @@ base.play([controlchange(7, 110, 110)]);
         [4 + 2 + 3/4, b3(1/4)],
         [4 + 3, b4(1/4)],
         [4 + 3 + 1/2, b3(1/4)]
-    ]);
-    while(true) {
-        
+    ]);    
+    while(true) {        
+        /*await new TrackerPattern().play([
+            [2, () => strings.play([g4(2), d5(2)])]
+        ], 1);*/
         await new TrackerPattern()
             .play([
                 [2, drumpattern, basepattern, () => strings.play([[0, c5(2), e5(2)]]),
