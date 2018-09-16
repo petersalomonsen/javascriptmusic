@@ -1,15 +1,24 @@
 const Pattern = require('./pattern.class.js');
 
-// Note functions
+// Note functions - can be called with and without parameter (also without parantheses)
 new Array(128).fill(null).map((v, ndx) => 
     (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
-).forEach((note, ndx) => global[note] = (duration, velocity, offset) => async (pattern, rowbeat) => {    
-    await pattern.waitForBeat(rowbeat + (offset ? offset : 0));          
-    pattern.velocity = velocity ? velocity : pattern.defaultvelocity;
-    if(!duration) {
-        duration = 1 / pattern.stepsperbeat;
-    }    
-    pattern.note(ndx, duration);
+).forEach((note, ndx) => global[note] = (duration, velocity, offset) => {
+    const noteFunc = async (pattern, rowbeat) => {    
+        await pattern.waitForBeat(rowbeat + (offset ? offset : 0));          
+        
+        pattern.velocity = velocity && typeof duration !== 'object'? velocity : pattern.defaultvelocity;
+        if(!duration || typeof duration === 'object') {
+            duration = 1 / pattern.stepsperbeat;
+        }    
+        pattern.note(ndx, duration);
+    };
+
+    if(typeof duration === 'object') {
+        return noteFunc(duration, velocity);
+    } else {
+        return noteFunc;
+    }
 });
 
 global.pitchbend = (start, target, duration, steps) => async (pattern, rowbeat) => {
@@ -50,9 +59,10 @@ class TrackerPattern extends Pattern {
                 if(col.constructor.name === 'AsyncFunction') {
                     col(this, rowbeat);                
                 } else {
-                    (async () => {                        
+                    (async () => {        
+                        const waitforbeat = rowbeat;                                    
                         await this.waitForBeat(rowbeat);                        
-                        col(this, rowbeat);
+                        col(this, waitforbeat);
                     })();
                 }
             };   
