@@ -56,7 +56,13 @@ base.play([controlchange(7, 110, 110)]);
     ]);    
     while(true) {  
         const kickbeat = () => drums.steps(1, [c3, c3, c3, c3]);
-                 
+        const introbeat2 = () => drums.steps(4, [
+            [c3, gs3], gs3(0,30), gs3, gs3(0,30),
+            [c3, gs3], gs3(0,30), gs3, [gs3(0,30), d3(1/8, 127)],
+            [c3, gs3], [gs3(0,30), d3(1/8, 127)], gs3, gs3(0,30),
+            [c3, gs3], gs3(0,30), gs3, gs3(0,30)
+        ]);
+
         const ddbase = () => base.play([
             [0, g3()],
             [1 + 3/4, g4()],
@@ -65,11 +71,13 @@ base.play([controlchange(7, 110, 110)]);
             [3 , d4(1/4)],
             [3 + 1/2, f4(1/4)]
         ]);
-        await new TrackerPattern().play([[4, kickbeat]], 1);
+        
         // recorder.start();
         
         await new TrackerPattern().play([
-            [4, () => upbeatintrolead.play(), kickbeat, ddbase,
+            [4, () => upbeatintrolead.play(), 
+                kickbeat, 
+                ddbase,
                 () => strings.play([g4(8), d5(8), b5(8)]),
             ],
             [4, kickbeat, ddbase],
@@ -77,14 +85,14 @@ base.play([controlchange(7, 110, 110)]);
                 () => strings.play([f4(8), c5(8), a5(8)]),
             ],
             [4, kickbeat, ddbase],
-            [4, kickbeat, ddbase,
+            [4, introbeat2, ddbase,
                 () => strings.play([g4(8), d5(8), b5(8)]),
             ],
-            [4, kickbeat, ddbase],
-            [4, kickbeat, ddbase,
+            [4, introbeat2, ddbase],
+            [4, introbeat2, ddbase,
                 () => strings.play([f4(8), c5(8), a5(8)]),
             ],
-            [4, kickbeat, ddbase]
+            [4, introbeat2, ddbase]
         ], 1);
         // recorder.save();
 

@@ -44,17 +44,27 @@ class TrackerPattern extends Pattern {
         for(let step=0;step < events.length; step++) {
             let beat = step / stepsperbeat;
             const event = events[step];
-            if(event.constructor && event.constructor.name === 'AsyncFunction') {
+            if(event && event.constructor && event.constructor.name === 'AsyncFunction') {
                 event(this, beat);                
-            } else if(event.constructor && event.constructor.name === 'Function') {
+            } else if(event && event.constructor && event.constructor.name === 'Function') {
                 (async () => {        
                     const waitforbeat = beat;                                    
                     await this.waitForBeat(beat); 
                                       
                     event(this, beat);
                 })();
-            } else if(event.length) {
+            } else if(event && event.length) {
                 // Array
+                for (let evt of event) {
+                    if(evt.constructor.name === 'AsyncFunction') {
+                        evt(this, beat);
+                    } else {
+                        const waitforbeat = beat;                                    
+                        await this.waitForBeat(beat); 
+                                        
+                        evt(this, beat);
+                    }
+                }
             }
         }
         await this.waitForBeat(events.length / stepsperbeat);  
