@@ -57,10 +57,10 @@ base.play([controlchange(7, 110, 110)]);
     while(true) {  
         const kickbeat = () => drums.steps(1, [c3, c3, c3, c3]);
         const introbeat2 = () => drums.steps(4, [
-            [c3, gs3(0,60)], gs3(0,30), gs3(0,60), gs3(0,30),
-            [c3, gs3(0,60)], gs3(0,30), gs3(0,60), [gs3(0,30), d3(1/8, 127)],
-            [c3, gs3(0,60)], [gs3(0,30), d3(1/8, 127)], gs3(0,60), gs3(0,30),
-            [c3, gs3(0,60)], gs3(0,30), gs3(0,60), gs3(0,30)
+            [c3, gs3(1/8,50)], gs3(1/8,20), gs3(1/8,50), gs3(1/8,20),
+            [c3, gs3(1/8,50)], gs3(1/8,20), gs3(1/8,50), [gs3(1/8,20), d3(1/8, 110)],
+            [c3, gs3(1/8,50)], [gs3(1/8,20), d3(1/8, 110)], gs3(1/8,50), gs3(1/8,20),
+            [c3, gs3(1/8,50), ds3(1, 60)], gs3(1/8,20), gs3(1/8,50), gs3(1/8,20)
         ]);
 
         const ddbase = () => base.play([
@@ -84,7 +84,7 @@ base.play([controlchange(7, 110, 110)]);
             [4, kickbeat, ddbase,
                 () => strings.play([f4(8), c5(8), a5(8)]),
             ],
-            [4, () => drums.steps(4, [c3,,,,c3,,,d3,c3,d3,,,[c3,d3],,,d3(1/4, 80)]), ddbase],
+            [4, () => drums.steps(4, [c3,,,,c3,,,d3,c3,d3(1/4, 110),,,[c3,d3(1/4, 110),ds3(1/4, 70)],,,d3(1/4, 90)]), ddbase],
             [4, introbeat2, ddbase,
                 () => strings.play([g4(8), d5(8), b5(8)]),
             ],
