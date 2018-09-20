@@ -129,11 +129,20 @@ base.play([controlchange(7, 110, 110)]);
         await chorus();
         await new TrackerPattern().play([
             [2, () => base.steps(4, [a2,,,a3,,a3(1/16),a2]), kickbeat,
-                () => lead2.steps(4,
-                    [[d6(2), pitchbend(0x1000, 0x2000, 1/14, 8)],,,,
+                 () => lead2.steps(4,
+                    [[d6(2), pitchbend(0x1000, 0x2000, 1/8, 8)],,,,
                       c6, b5, a5, g5, d5(2),,,,,,,,
-                      e5,,g5,,g5,,a5,,b5,,d6,,c6,b5,a5,g6
-                    ])
+                      e5,,g5(1/4,80),,g5,,a5(1/4,80),,b5,,[d6(1/2, 90),
+                        b5(1/2, 90), pitchbend(0,0x2000,1/8, 8)],,
+                        [a5(1/4,90),c6(1/4,90)],
+                        [b5(1/8, 100), g5(1/8, 100)],[a5,d5],g6(1/32, 80)
+                    ]),
+                () => strings.play([
+                    [0, a4, c5],
+                    [2, b4, d5],
+                    [4, d5, g5],
+                    [6, d5, fs5,  a5]
+                ])
             ],
             [2, () => base.steps(4, [b2,,,b3,,b3(1/16),b2])],
             [2, () => base.steps(4, [c3,,c4,,g5(1/16),c4(1/8),g3(1/16),c4(1/32)]), kickbeat],
