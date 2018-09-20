@@ -19,6 +19,7 @@ const lead = new TrackerPattern(output, 8, 4);
 lead.play([controlchange(7, 100, 100), controlchange(10, 90, 90)]);
 
 const lead2 = new TrackerPattern(output, 5, 4);
+lead2.play([controlchange(7, 105, 105), controlchange(10, 90, 90)]);
 const base = new TrackerPattern(output, 7, 4);
 base.play([controlchange(7, 110, 110)]);
 
@@ -74,7 +75,7 @@ base.play([controlchange(7, 110, 110)]);
                 
         // recorder.start();
         
-        await new TrackerPattern().play([
+        const intro = async () => new TrackerPattern().play([
             [4, () => upbeatintrolead.play(), 
                 kickbeat, 
                 ddbase,
@@ -94,8 +95,9 @@ base.play([controlchange(7, 110, 110)]);
             ],
             [4, introbeat2, ddbase]
         ], 1);
+        await intro();
         // recorder.save();
-
+        
         const chorus = async () => new TrackerPattern()
             .play([
                 [2, drumpattern, basepattern, () => strings.play([[0, c5(2), e5(2)]]),
@@ -125,5 +127,17 @@ base.play([controlchange(7, 110, 110)]);
             ], 1);    
         await chorus();
         await chorus();
+        await new TrackerPattern().play([
+            [2, () => base.steps(4, [a2,,,a3,,a3(1/16),a2]), kickbeat,
+                () => lead2.steps(4,
+                    [[d6(2), pitchbend(0x1000, 0x2000, 1/14, 8)],,,,
+                      c6, b5, a5, g5, d5(2),,,,,,,,
+                      e5,,g5,,g5,,a5,,b5,,d6,,c6,b5,a5,g6
+                    ])
+            ],
+            [2, () => base.steps(4, [b2,,,b3,,b3(1/16),b2])],
+            [2, () => base.steps(4, [c3,,c4,,g5(1/16),c4(1/8),g3(1/16),c4(1/32)]), kickbeat],
+            [2, () => base.steps(4, [d3,,d4,d3,,d3(1/32),d4,d3(1/32)])]
+        ],1);
     }
 })();
