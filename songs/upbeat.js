@@ -278,10 +278,10 @@ const lead3 = new TrackerPattern(output, 11, 4);
         ],1);
         
         
-        //await intro();
+        await intro();
         
-        //await chorus();
-        //await chorus();
+        await chorus();
+        await chorus();
         await chargeup();
         
         await new TrackerPattern().play([
@@ -326,6 +326,10 @@ const lead3 = new TrackerPattern(output, 11, 4);
             ] 
         ], 1)
         await realchorus();        
+        await realchorus();
+
+        realchoruslead();
+        await realchorus();
         await realchorus();
 
         realchoruslead();
