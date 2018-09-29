@@ -3,10 +3,11 @@ const TrackerPattern = require('../pattern/trackerpattern.class.js');
 global.bpm = 120;
 
 const Recorder = require('../midi/recorder.class.js');
-const recorder = new Recorder(10, output);
+const recorder = new Recorder(11, output);
 
 const RecordedPattern = require('../pattern/recordedpattern.class.js');
 const upbeatintrolead = new RecordedPattern(output, 'songs/upbeatintrolead.json');
+const upbeatchorus = new RecordedPattern(output, 'songs/upbeatchorus.json');
 const drums = new TrackerPattern(output, 1, 4);
 drums.play([
     controlchange(7, 120, 120)
@@ -238,12 +239,21 @@ base.play([controlchange(7, 110, 110)]);
         ],1);
         
         
-        //await intro();
+        await intro();
         
-       // await chorus();
-       // await chorus();
+        await chorus();
+        await chorus();
         await chargeup();
+        
         await realchorus();
+        
         await realchorus();
+
+        new TrackerPattern().play([[0, () => upbeatchorus.play()]], 1);
+        await realchorus();
+        
+        await realchorus();
+        
+
     }
 })();

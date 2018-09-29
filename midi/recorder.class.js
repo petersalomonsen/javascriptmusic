@@ -43,6 +43,7 @@ class Recorder {
     }
 
     start() {        
+        console.log("recording start");
         this.midimessages = [];
         this.previousTime = new Date().getTime();
     }
