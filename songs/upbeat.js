@@ -194,7 +194,7 @@ const lead3 = new TrackerPattern(output, 11, 4);
                           e5,,g5(1/4,80),,g5,,a5(1/4,80),,b5,,[d6(1/2, 90),
                             b5(1/2, 90), pitchbend(0,0x2000,1/8, 8)],,
                             [a5(1/4,90),c6(1/4,90)],
-                            [b5(1/8, 100), g5(1/8, 100)],[a5,d5],g6(1/32, 80)
+                            [b5(1/8, 100), g5(1/8, 100)],[a5,d5],e6(1/8, 80)
                         ]),
                     () => strings.play([
                         [0, a4, c5],
@@ -281,11 +281,22 @@ const lead3 = new TrackerPattern(output, 11, 4);
         //await intro();
         
         //await chorus();
-        await chorus();
+        //await chorus();
         await chargeup();
         
         await new TrackerPattern().play([
             [16, 
+                () => lead2.steps(1, [
+                    [c6(4, 90), g6(4, 90)],
+                    ,
+                    ,
+                    ,
+                    [g5(4, 70), d6(4, 70)],
+                    ,
+                    ,
+                    ,
+                    e5(4, 70)
+                ]),
                 () => drums.steps(1,[
                     [c3, ds3]
                     ,
@@ -306,7 +317,7 @@ const lead3 = new TrackerPattern(output, 11, 4);
                     c3(1,100),
                 ]),
                 () => pad.steps(1/4,[
-                    [c4(4), c5(4),e5(4),g5(4), c6(4), g6(4)],
+                    [a4(4), c5(4),e5(4),g5(4), c6(4), g6(4)],
                     [e4(4), e5(4),g5(4),b5(4), e6(4), b6(4)],
                     [g4(4), g5(4),b5(4),d6(4), g6(4), d7(4)],
                     [c4(4), c5(4),g5(4),c6(4), g6(4), e7(4)]
