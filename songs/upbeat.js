@@ -18,6 +18,8 @@ drums.play([
     controlchange(7, 120, 120)
 ]);
 
+const pad = new TrackerPattern(output, 2, 4);
+pad.play([controlchange(7, 100, 100), controlchange(10, 40, 40)]);
 const strings = new TrackerPattern(output, 6, 4);
 strings.play([controlchange(7, 50, 50), controlchange(10, 20, 20)]);
 
@@ -279,10 +281,44 @@ const lead3 = new TrackerPattern(output, 11, 4);
         //await intro();
         
         //await chorus();
-        //await chorus();
-        //await chargeup();
-        realchoruslead();
+        await chorus();
+        await chargeup();
+        
+        await new TrackerPattern().play([
+            [16, 
+                () => drums.steps(1,[
+                    [c3, ds3]
+                    ,
+                    ,
+                    ,
+                    ,
+                    ,
+                    ,
+                    ,
+                    ,
+                    c3(1,30),
+                    c3(1,40),
+                    c3(1,50),
+                    c3(1,60),
+                    c3(1,70),
+                    c3(1,80),
+                    c3(1,90),
+                    c3(1,100),
+                ]),
+                () => pad.steps(1/4,[
+                    [c4(4), c5(4),e5(4),g5(4), c6(4), g6(4)],
+                    [e4(4), e5(4),g5(4),b5(4), e6(4), b6(4)],
+                    [g4(4), g5(4),b5(4),d6(4), g6(4), d7(4)],
+                    [c4(4), c5(4),g5(4),c6(4), g6(4), e7(4)]
+                ]),
+               realchoruslead
+            ] 
+        ], 1)
         await realchorus();        
+        await realchorus();
+
+        realchoruslead();
+        await realchorus();
         await realchorus();
     }
 })();
