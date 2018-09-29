@@ -39,6 +39,28 @@ base.play([controlchange(7, 110, 110)]);
         [3 + 3/4, c3(1, 60)]
     ]);
 
+    const drumpattern2 = () => drums.play([
+        [0, c3(1, 110), gs3(1, 80)],
+        [1/2, gs3(1, 30)],
+        [1, c3(1, 110), d3(1, 120), gs3(1, 80)],
+        [1 + 1/2, gs3(1, 40)],
+        [2, gs3(1, 80), c3(1, 110)],        
+        [2 + 1/2, gs3(1, 40)],
+        [3,  d3(1, 120), gs3(1, 80)],
+        [3 + 1/4, c3(1, 110)],
+        [3 + 1/2, fs3(1, 60)],
+        [3 + 3/4, c3(1, 60)],
+        [4 + 0, c3(1, 110), gs3(1, 80)],
+        [4 + 1/2, gs3(1, 30)],
+        [4 + 1, c3(1, 110), d3(1, 120), gs3(1, 80)],
+        [4 + 1 + 1/2, gs3(1, 40)],
+        [4 + 2, gs3(1, 80), c3(1, 110)],        
+        [4 + 2 + 1/2, gs3(1, 40)],
+        [4 + 3,  c3(1, 110), d3(1, 120), gs3(1, 80)],        
+        [4 + 3 + 1/2, fs3(1, 80), d3(1/16, 100)],
+        [4 + 3 + 3/4, c3(1, 60), d3(1/16, 120)]
+    ]);
+
     const basepattern = () => base.play([
         [0, c3(1)],
         [1, c4(1/4)],
@@ -125,7 +147,7 @@ base.play([controlchange(7, 110, 110)]);
             ], 1);    
         
         const chargeup = async () => new TrackerPattern().play([
-                [2, () => base.steps(4, [a2,,,a3,,a3(1/16),a2]), kickbeat,
+                [2, () => base.steps(4, [a2,,,a3,,a3(1/16),a2]), drumpattern2,
                      () => lead2.steps(4,
                         [[d6(2), pitchbend(0x1000, 0x2000, 1/8, 8)],,,,
                           c6, b5, a5, g5, d5(2),,,,,,,,
@@ -142,7 +164,7 @@ base.play([controlchange(7, 110, 110)]);
                     ])
                 ],
                 [2, () => base.steps(4, [b2,,,b3,,b3(1/16),b2])],
-                [2, () => base.steps(4, [c3,,c4,,g5(1/16),c4(1/8),g3(1/16),c4(1/32)]), kickbeat],
+                [2, () => base.steps(4, [c3,,c4,,g5(1/16),c4(1/8),g3(1/16),c4(1/32)])],
                 [2, () => base.steps(4, [d3,,d4,d3,,d3(1/32),d4,d3(1/32)])]
             ],1);
 
@@ -216,10 +238,10 @@ base.play([controlchange(7, 110, 110)]);
         ],1);
         
         
-        await intro();
+        //await intro();
         
-        await chorus();
-        await chorus();
+       // await chorus();
+       // await chorus();
         await chargeup();
         await realchorus();
         await realchorus();
