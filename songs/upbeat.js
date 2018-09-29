@@ -1,5 +1,6 @@
 const output = require('../midi/output.js');
 const TrackerPattern = require('../pattern/trackerpattern.class.js');
+const RecordConverter = require('../pattern/recordconverter.js');
 global.bpm = 120;
 
 const Recorder = require('../midi/recorder.class.js');
@@ -8,6 +9,10 @@ const recorder = new Recorder(11, output);
 const RecordedPattern = require('../pattern/recordedpattern.class.js');
 const upbeatintrolead = new RecordedPattern(output, 'songs/upbeatintrolead.json');
 const upbeatchorus = new RecordedPattern(output, 'songs/upbeatchorus.json');
+
+const take1 = new RecordConverter('songs/upbeatchorus.json');
+console.log(take1.trackerPatternData);
+
 const drums = new TrackerPattern(output, 1, 4);
 drums.play([
     controlchange(7, 120, 120)
@@ -23,6 +28,9 @@ const lead2 = new TrackerPattern(output, 5, 4);
 lead2.play([controlchange(7, 105, 105), controlchange(10, 90, 90)]);
 const base = new TrackerPattern(output, 7, 4);
 base.play([controlchange(7, 110, 110)]);
+
+const lead3 = new TrackerPattern(output, 11, 4);
+
 
 (async function() {
 
@@ -78,6 +86,35 @@ base.play([controlchange(7, 110, 110)]);
         [4 + 3, b4(1/4)],
         [4 + 3 + 1/2, b3(1/4)]
     ]);    
+
+    const realchoruslead = () => lead3.play([
+        [ 0, e5(3/8, 127) ],
+        [ 3/4, e5(3/8, 127) ],
+        [ 1 + 3/8, b5(1/8, 127) ],
+        [ 1 + 1/2, c6(1/2, 127) ],
+        [ 2, b5(1, 127) ],
+        [ 3, g5(1/2, 127) ],
+        [ 4, b5(1/2, 127) ],
+        [ 4 + 3/4, b5(0.3639999999999999, 127) ],
+        [ 5 + 3/8, b5(0.18200000000000038, 127) ],
+        [ 5 + 4/8, c6(0.40000000000000036, 127) ],
+        [ 6, b5(0.9319999999999996, 127) ],
+        [ 7, g5(0.6079999999999995, 127) ],
+        [ 8, e5(0.516, 127) ],
+        [ 8 + 3/4, e5(0.5199999999999996, 127) ],
+        [ 9 + 3/8, b5(0.20400000000000063, 127) ],
+        [ 9 + 4/8, c6(0.48600000000000065, 127) ],
+        [ 10, b5(0.9359999999999999, 127) ],
+        [ 11, g5(0.5860000000000003, 127) ],
+        [ 11 + 7/8, d6(0.14199999999999946, 127) ],
+        [ 12, e6(0.5180000000000007, 127) ],
+        [ 12 + 1/2, d6(0.5800000000000001, 127) ],
+        [ 13, b5(0.3879999999999999, 127) ],
+        [ 13 + 1/2, a5(0.22600000000000087, 127) ],
+        [ 13 + 6/8, b5(0.25200000000000067, 127) ],
+        [ 13 + 7/8, a5(0.18200000000000038, 127) ],
+        [ 14, g5(0.5879999999999992, 127) ]]);
+
     while(true) {  
         const kickbeat = () => drums.steps(1, [c3, c3, c3, c3]);
         const introbeat2 = () => drums.steps(4, [
@@ -239,21 +276,13 @@ base.play([controlchange(7, 110, 110)]);
         ],1);
         
         
-        await intro();
+        /*await intro();
         
         await chorus();
         await chorus();
-        await chargeup();
-        
+        await chargeup();*/
+        realchoruslead();
+        await realchorus();        
         await realchorus();
-        
-        await realchorus();
-
-        new TrackerPattern().play([[0, () => upbeatchorus.play()]], 1);
-        await realchorus();
-        
-        await realchorus();
-        
-
     }
 })();

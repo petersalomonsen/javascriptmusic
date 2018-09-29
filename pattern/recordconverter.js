@@ -1,3 +1,4 @@
+const fs = require('fs');
 
 const noteNumberArray = new Array(128).fill(null).map((v, ndx) => 
 (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
@@ -47,13 +48,22 @@ function quantize(notes, stepsperbeat) {
 }
 
 function toTrackerPattern(notes) {
-    return notes.map(note => [
-        note[3], [note[1], note[4], note[2]]
-    ]);
+    return 'const playpattern = () => instrument.play([' + 
+            notes.map(note => `[ ${note[3]}, ${noteNumberArray[note[1]]}(${note[4]}, ${note[2]}) ]`)
+                .join(',\n')
+                + ']);';
 }
 
 class RecordConverter {
     constructor(recordeddata) {
+        if(typeof recordeddata === 'string') {
+            try {
+                recordeddata = JSON.parse(fs.readFileSync(recordeddata));
+            } catch(e) {
+                console.log('Unable to open',recordeddata,e);
+                recordeddata = [];
+            }
+        }
         this.recordeddata = recordeddata;
         this.notes = extractNotes(recordeddata);
         this.notesByBeat = convertToBeats(this.notes, global.bpm);
