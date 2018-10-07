@@ -6,12 +6,7 @@ global.bpm = 120;
 const Recorder = require('../midi/recorder.class.js');
 const recorder = new Recorder(11, output);
 
-const RecordedPattern = require('../pattern/recordedpattern.class.js');
-const upbeatintrolead = new RecordedPattern(output, 'songs/upbeatintrolead.json');
-const upbeatchorus = new RecordedPattern(output, 'songs/upbeatchorus.json');
-
-const take1 = new RecordConverter('songs/upbeatchorus.json');
-console.log(take1.trackerPatternData);
+const upbeatintrolead = require('./upbeatintrolead.js')
 
 const drums = new TrackerPattern(output, 1, 4);
 drums.play([
@@ -22,7 +17,7 @@ const pad = new TrackerPattern(output, 2, 4);
 pad.play([controlchange(7, 105, 105), controlchange(10, 72, 72)]);
 
 const strings = new TrackerPattern(output, 6, 4);
-strings.play([controlchange(7, 63, 63), controlchange(10, 35, 35)]);
+strings.play([controlchange(7, 60, 60), controlchange(10, 35, 35)]);
 
 const lead = new TrackerPattern(output, 8, 4);
 lead.play([controlchange(7, 105, 105), controlchange(10, 90, 90)]);
@@ -34,6 +29,9 @@ base.play([controlchange(7, 120, 120)]);
 
 const lead3 = new TrackerPattern(output, 11, 4);
 lead3.play([controlchange(7, 117, 117)]);
+
+const subdelaylead = new TrackerPattern(output, 10, 4);
+subdelaylead.play([controlchange(7, 127, 127), controlchange(10, 75, 75)]);
 
 (async function() {
 
@@ -137,7 +135,7 @@ lead3.play([controlchange(7, 117, 117)]);
             
     
     const intro = async () => new TrackerPattern().play([
-        [4, () => upbeatintrolead.play(), 
+        [4, () => upbeatintrolead(subdelaylead), 
             kickbeat, 
             ddbase,
             () => strings.play([g4(8), d5(8), b5(8)]),
