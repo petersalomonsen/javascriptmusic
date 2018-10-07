@@ -19,20 +19,21 @@ drums.play([
 ]);
 
 const pad = new TrackerPattern(output, 2, 4);
-pad.play([controlchange(7, 100, 100), controlchange(10, 40, 40)]);
+pad.play([controlchange(7, 105, 105), controlchange(10, 72, 72)]);
+
 const strings = new TrackerPattern(output, 6, 4);
-strings.play([controlchange(7, 60, 60), controlchange(10, 35, 35)]);
+strings.play([controlchange(7, 63, 63), controlchange(10, 35, 35)]);
 
 const lead = new TrackerPattern(output, 8, 4);
-lead.play([controlchange(7, 100, 100), controlchange(10, 90, 90)]);
+lead.play([controlchange(7, 105, 105), controlchange(10, 90, 90)]);
 
 const lead2 = new TrackerPattern(output, 5, 4);
-lead2.play([controlchange(7, 115, 115), controlchange(10, 90, 90)]);
+lead2.play([controlchange(7, 120, 120), controlchange(10, 90, 90)]);
 const base = new TrackerPattern(output, 7, 4);
 base.play([controlchange(7, 120, 120)]);
 
 const lead3 = new TrackerPattern(output, 11, 4);
-lead3.play([controlchange(7, 115, 115)]);
+lead3.play([controlchange(7, 117, 117)]);
 
 (async function() {
 
@@ -279,10 +280,10 @@ lead3.play([controlchange(7, 115, 115)]);
         
         await delayPlay();
         
-       /*await intro();
+        await intro();
         
         await chorus();
-        await chorus();*/
+        await chorus();
         await chargeup();
         
         await new TrackerPattern().play([
