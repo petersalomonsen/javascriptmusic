@@ -32,6 +32,16 @@ global.waitForBeat = (beatNo) => {
         );
     };
 
+/**
+ * Wait before starting play so that initialization can finish
+ * @param {*} delay (default is 100 ms)
+ */
+global.delayPlay = async (delay) => {
+    global.startTime = new Date().getTime() + (delay ? delay : 100);
+    global.delayPlay = async () => console.log('delay play only has effect once');
+    await waitForBeat(0);
+}
+
 global.countdown = async (counter) => {
     let beat = Math.round(global.currentBeat());                              
     while(counter>0) {

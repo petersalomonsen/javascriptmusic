@@ -277,8 +277,9 @@ const lead3 = new TrackerPattern(output, 11, 4);
             ]
         ],1);
         
+        await delayPlay();
         
-        await intro();
+       await intro();
         
         await chorus();
         await chorus();
@@ -307,10 +308,10 @@ const lead3 = new TrackerPattern(output, 11, 4);
                     ,
                     ,
                     ,
-                    c3(1,30),
-                    c3(1,40),
-                    c3(1,50),
-                    c3(1,60),
+                    ,
+                    ,
+                    ,
+                    ,
                     c3(1,70),
                     c3(1,80),
                     c3(1,90),
