@@ -23,12 +23,13 @@ const lead = new TrackerPattern(output, 8, 4);
 lead.play([controlchange(7, 105, 105), controlchange(10, 90, 90)]);
 
 const lead2 = new TrackerPattern(output, 5, 4);
-lead2.play([controlchange(7, 120, 120), controlchange(10, 90, 90)]);
+lead2.play([controlchange(7, 120, 120), controlchange(11, 100, 100), controlchange(10, 90, 90)]);
+
 const base = new TrackerPattern(output, 7, 4);
-base.play([controlchange(7, 120, 120)]);
+base.play([controlchange(7, 120, 120), controlchange(11, 80, 80)]);
 
 const lead3 = new TrackerPattern(output, 11, 4);
-lead3.play([controlchange(7, 117, 117)]);
+lead3.play([controlchange(7, 117, 117), controlchange(11, 90, 90)]);
 
 const subdelaylead = new TrackerPattern(output, 10, 4);
 subdelaylead.play([
