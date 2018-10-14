@@ -343,7 +343,25 @@ subdelaylead.play([
         await realchorus();
 
         await new TrackerPattern().play([
-            [4, drumpattern2, () => lead3.steps(4, [
+            [4, () => drums.steps(4, [c3,,,,[c3,e3],,,d3(1/16,90),c3,,,d3(1/16,60),[c3,e3]]),
+            () => drums.steps(4, [
+                    gs3(1/8,30),
+                    gs3(1/8,30),
+                    gs3(1/8,80),
+                    gs3(1/8,30),
+                    gs3(1/8,30),
+                    gs3(1/8,80),
+                    gs3(1/8,30),
+                    gs3(1/8,30),                        
+                    gs3(1/8,80),
+                    gs3(1/8,30),
+                    gs3(1/8,30),
+                    fs3(1/8,40),                        
+                    gs3(1/8,30),
+                    gs3(1/8,30),
+                    fs3(1/8,40),
+                    gs3(1/8,30)                        
+                ]), () => lead3.steps(4, [
                 e6,
                 d6,
                 ,b5,
