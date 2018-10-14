@@ -29,7 +29,7 @@ const base = new TrackerPattern(output, 7, 4);
 base.play([controlchange(7, 120, 120), controlchange(11, 80, 80)]);
 
 const lead3 = new TrackerPattern(output, 11, 4);
-lead3.play([controlchange(7, 117, 117), controlchange(11, 90, 90)]);
+lead3.play([controlchange(7, 117, 117), controlchange(11, 100, 100)]);
 
 const subdelaylead = new TrackerPattern(output, 10, 4);
 subdelaylead.play([
@@ -339,6 +339,37 @@ subdelaylead.play([
 
         realchoruslead();
         await realchorus();
+        
         await realchorus();
+
+        await new TrackerPattern().play([
+            [4, drumpattern2, () => lead3.steps(4, [
+                e6,
+                d6,
+                ,b5,
+                ,a5,
+                ,g5,
+                ,g5,
+                e5,
+                ,g5,
+                ,a5
+                ]),
+            () => base.steps(4, [
+                a3,,,
+                b4,,
+                b4,b3,,
+                c4,,
+                c5,c4(1/32),
+                d4,,
+                d5
+            ]),
+            () => lead.steps(1, [
+                [e6(1,60),a6(1,60),c7(1,60)],
+                [d6(1,60),g6(1,60),b6(1,60)],
+                [c6(1,60),e6(1,60),g6(1,60)],
+                [a5(1,60),d6(1,60),fs6(1,60)]
+            ])
+        ]
+        ], 1);
     }
 })();
