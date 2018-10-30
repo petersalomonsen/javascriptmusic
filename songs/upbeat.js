@@ -33,8 +33,8 @@ lead3.play([controlchange(7, 117, 117), controlchange(11, 100, 100)]);
 
 const subdelaylead = new TrackerPattern(output, 10, 4);
 subdelaylead.play([
-    controlchange(7, 90, 90),
-    controlchange(11, 64, 64),
+    controlchange(7, 110, 110),
+    controlchange(11, 110, 110),
     controlchange(10, 75, 75)]);
 
 (async function() {
