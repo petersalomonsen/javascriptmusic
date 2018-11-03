@@ -20,10 +20,10 @@ const strings = new TrackerPattern(output, 6, 4);
 strings.play([controlchange(7, 55), controlchange(10, 35)]);
 
 const lead = new TrackerPattern(output, 8, 4);
-lead.play([controlchange(7, 110), controlchange(10, 80)]);
+lead.play([controlchange(7, 105), controlchange(10, 70)]);
 
 const lead2 = new TrackerPattern(output, 5, 4);
-lead2.play([controlchange(7, 120), controlchange(11, 110), controlchange(10, 90)]);
+lead2.play([controlchange(7, 120), controlchange(11, 110), controlchange(10, 80)]);
 
 const base = new TrackerPattern(output, 7, 4);
 base.play([controlchange(7, 70), controlchange(11, 65)]);
@@ -362,7 +362,7 @@ subdelaylead.play([
                     fs3(1/8,40),
                     gs3(1/8,30)                        
                 ]), () => lead3.steps(4, [
-                e6,
+                e6(1/4, 110),
                 d6,
                 ,b5,
                 ,a5,
