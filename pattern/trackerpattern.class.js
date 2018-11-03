@@ -28,7 +28,7 @@ global.pitchbend = (start, target, duration, steps) => async (pattern, rowbeat) 
 
 global.controlchange = (controller, start, target, duration, steps) => async (pattern, rowbeat) => {
     await pattern.waitForBeat(rowbeat);
-    pattern.controlchange(controller, start, target, duration, steps)
+    pattern.controlchange(controller, start, target ? target : start, duration, steps)
 };
 
 class TrackerPattern extends Pattern {
