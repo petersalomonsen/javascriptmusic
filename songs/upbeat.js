@@ -13,6 +13,9 @@ drums.play([
     controlchange(7, 120, 120)
 ]);
 
+const rhodes = new TrackerPattern(output, 0, 4);
+rhodes.play([controlchange(7, 110), controlchange(10, 40), controlchange(11, 102)]);
+
 const pad = new TrackerPattern(output, 2, 4);
 pad.play([controlchange(7, 105, 105), controlchange(10, 72, 72)]);
 
@@ -158,6 +161,31 @@ subdelaylead.play([
         ],
         [4, introbeat2, ddbase]
     ], 1);
+
+    const intro2 = async () => new TrackerPattern().play([
+        [4, () => upbeatintrolead(subdelaylead), 
+            kickbeat, 
+            ddbase,
+            () => strings.play([g4(8), d5(8), b5(8)]),
+        ],        
+        [4, kickbeat, ddbase],        
+        [3.5, kickbeat, ddbase,
+            () => strings.play([f4(8), c5(8), a5(8)]),
+        ],
+        [0.5, () => rhodes.steps(4, [
+            d5, g5, a5, d6, g5, a5, d6, g6,
+            d6, g6, a6, d7, g6, a6, d7, g7
+            ])],
+        [4, () => drums.steps(4, [c3,,,,c3,,,d3,c3,d3(1/4, 110),,,[c3,d3(1/4, 110),ds3(1/4, 70)],,,d3(1/4, 90)]), ddbase],
+        [4, introbeat2, ddbase,
+            () => strings.play([g4(8), d5(8), b5(8)]),
+        ],
+        [4, introbeat2, ddbase],
+        [4, introbeat2, ddbase,
+            () => strings.play([f4(8), c5(8), a5(8)]),
+        ],
+        [4, introbeat2, ddbase]
+    ], 1);
     // recorder.save();
     
     const chorus = async () => new TrackerPattern()
@@ -280,14 +308,14 @@ subdelaylead.play([
     ],1);
     
     await delayPlay();
-    
-    while(true) {  
         
-        await intro();
+    while(true) {                  
+        await intro2();
         
         await chorus();
         await chorus();
         await chargeup();
+        
         
         await new TrackerPattern().play([
             [16, 
