@@ -354,7 +354,7 @@ subdelaylead.play([
         ]
     ],1);
     
-    await delayPlay();
+    await waitForFixedStartTime();
         
     while(true) {                  
         await intro();

@@ -42,6 +42,21 @@ global.delayPlay = async (delay) => {
     await waitForBeat(0);
 }
 
+global.waitForFixedStartTime = async (startTime) => {
+    if(!startTime) {
+        const startTimeArgIndex = process.argv.findIndex(arg => arg === '--starttime');
+        if(startTimeArgIndex > -1) {
+            startTime = parseInt(process.argv[startTimeArgIndex +1 ]);
+            console.log('Will start playin at ', new Date(startTime));
+        } else {
+            startTime = new Date().getTime() + 100;
+        }
+    }
+    global.startTime = startTime;
+    global.delayPlay = async () => console.log('delay play only has effect once');
+    await waitForBeat(0);
+}
+
 global.countdown = async (counter) => {
     let beat = Math.round(global.currentBeat());                              
     while(counter>0) {
