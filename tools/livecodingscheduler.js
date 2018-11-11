@@ -8,12 +8,12 @@ const rl = readline.createInterface({
   
 let livereloadchild = null;
 
-function enableLiveRestart() {        
+function enableLiveRestart(beatInterval = 4) {        
     if(process.argv.findIndex(arg => arg === '--livereloadchild') > -1) {            
         return false;
     } else {
         rl.question('Press enter to restart at next beat', () => {
-            const nextBeat = Math.floor(global.currentBeat()) + 1;
+            const nextBeat = (Math.floor(global.currentBeat() / beatInterval) * beatInterval) + beatInterval;
             const nextBeatStartTime = global.beatToTime(nextBeat);
             
             if(livereloadchild) {
