@@ -14,6 +14,8 @@ global.currentBeat = () =>
         (60*1000)
 ) * global.bpm; 
 
+global.beatToTime = (beatNo) => ((beatNo / global.bpm) * 60 * 1000) + global.startTime;
+
 global.waitForBeat = (beatNo) => {           
         let timeout = Math.floor((((beatNo) / global.bpm) * (60*1000)) - 
                 (Date.now() -
@@ -146,10 +148,8 @@ class Pattern {
             
             currentValue += stepdiff;
         
-            console.log(this.channel, controller, target);
             await this.waitDuration( duration / steps);
         }
-        console.log(this.channel, controller, target);
         this.output.sendMessage([0xb0 + this.channel, controller, 0x7f & target]);
     }
 

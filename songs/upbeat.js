@@ -3,6 +3,11 @@ const TrackerPattern = require('../pattern/trackerpattern.class.js');
 const RecordConverter = require('../pattern/recordconverter.js');
 global.bpm = 120;
 
+if(require('../tools/livecodingscheduler').enableLiveRestart()) {
+    console.log('livereload');
+    return;
+}
+
 const Recorder = require('../midi/recorder.class.js');
 const recorder = new Recorder(11, output);
 
