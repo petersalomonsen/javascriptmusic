@@ -19,7 +19,7 @@ drums.play([
 ]);
 
 const rhodes = new TrackerPattern(output, 0, 4);
-rhodes.play([controlchange(7, 110), controlchange(10, 40), controlchange(11, 102)]);
+rhodes.play([controlchange(7, 95), controlchange(10, 40), controlchange(11, 100)]);
 
 const pad = new TrackerPattern(output, 2, 4);
 pad.play([controlchange(7, 105, 105), controlchange(10, 72, 72)]);
@@ -359,9 +359,66 @@ subdelaylead.play([
         ]
     ],1);
     
+    const realchorus2 = async () => new TrackerPattern().play([
+        [
+            4, () => base.steps(4, [a3,,a3(1/16,50),a4,a5(1/16,60),a4(1/16),b3, , e4, , e5(1/16), e5(1/16,40), fs4, , g4,g5(1/16,40)]),        
+            () => lead.steps(4, [
+                [c5(1/2),c6(1/2), e6(1/2)]
+                ,
+                ,
+                ,[c5(1/2), c6(1/2), e6(1/2)]
+                ,
+                ,[c6(1/8,70), c7(1/8,70), e7(1/8,70)]
+                ,[d5(1/2), d6(1/2), fs6(1/2)]
+                ,
+                ,[e5, e6, g6]
+            ]),
+            () => drums.steps(6,[
+                c3,,,
+                gs3,,,
+                c3(1,100),,,
+                gs3,,,
+                [c3(1,100)],,,
+                fs3,,,
+                [c3(1,100), d3(1,127)],,,
+                [fs3],,,
+                c3(1,100),,,
+                fs3,,,
+                c3(1,100),,,
+                fs3,,,  
+                c3,,,
+                gs3,,,
+                [c3(1,100), d3(1,127)],,,
+                gs3,,d3(1,70),
+                [c3(1,100)],,,
+                fs3,,,
+                c3(1,100),,,
+                [fs3],,,
+                c3(1,100),,,
+                fs3,,,
+                c3(1,100),,,
+                fs3,,,              
+            ])
+        ],
+        [
+            4, () => base.steps(4, [g4,,g5(1/16,50),g5,g4(1/16,60),g4(1/16),d3, , c4, , c5(1/16), b5(1/16,40), b4, , g4,b5(1/16,40)]),            
+            () => lead.steps(4, [
+                [g5(1/2),g6(1/2), b6(1/2)]
+                ,
+                ,
+                ,[g5(1/2), g6(1/2), b6(1/2)]
+                ,
+                ,[g6(1/8,70), g7(1/8,70), b7(1/8,70)]
+                ,[d5(1/2), d6(1/2), fs6(1/2)]
+                ,
+                ,[c5, e6, g6]
+            ])
+        ]
+    ],1);
+    
     await waitForFixedStartTime();
         
-    while(true) {                  
+    while(true) {                
         await intro();
         
         await chorus();
@@ -468,7 +525,7 @@ subdelaylead.play([
             ])
         ]
         ], 1);
-        await intro2();
+        await intro2(); 
         await chorus_second_time();
         await chorus_second_time();
         rhodes.steps(2, [
@@ -552,5 +609,17 @@ subdelaylead.play([
                realchoruslead
             ] 
         ], 1);  
+        await realchorus2();
+        await realchorus2();
+
+        realchoruslead();
+        await realchorus2();
+        await realchorus2();
+
+        realchoruslead();
+        await realchorus2();
+        
+        await realchorus2();
+       
     }
 })();
