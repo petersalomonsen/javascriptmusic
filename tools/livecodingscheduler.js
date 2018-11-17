@@ -25,7 +25,7 @@ function enableLiveRestart(beatInterval = 4) {
             }
             livereloadchild = cp.fork(process.argv[1], ['--livereloadchild', '--starttime', nextBeatStartTime],
                 {
-                    silent: true
+                    stdio: ['pipe', 'inherit', 'inherit','ipc']
                 }
             );
             setTimeout(() => enableLiveRestart(), 0);
