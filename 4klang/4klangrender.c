@@ -1,8 +1,7 @@
 #include <stdio.h>
 
-extern void _4klang_render_(void*);
+extern void _4klang_render(void*) __attribute__ ((stdcall));
 
-#define USE_SECTIONS
 #define SAMPLE_RATE	44100
 #define MAX_INSTRUMENTS	9
 #define MAX_VOICES 1
@@ -16,10 +15,19 @@ extern void _4klang_render_(void*);
 #define DEF_LFO_NORMALIZE 0.0000453515
 #define	MAX_SAMPLES	(SAMPLES_PER_TICK*MAX_TICKS)
 
-float buf[MAX_SAMPLES];
+
+float buf[MAX_SAMPLES*2];
 
 int main() {
-    _4klang_render_(buf);
     
-    // printf("hello %lu\n", sizeof(buf));
+    _4klang_render(buf);
+    
+    printf("hello %lu\n", sizeof(buf));
+    printf("hello %f\n", buf[200]);
+    FILE *fp;
+ 
+    fp = fopen("out.raw", "wb");
+    fwrite(buf, sizeof(buf), 1, fp);
+    fclose(fp);
+
 }
