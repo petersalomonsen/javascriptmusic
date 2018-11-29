@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-extern void _4klang_render_(void);
+extern void _4klang_render_(void*);
 
 #define USE_SECTIONS
 #define SAMPLE_RATE	44100
@@ -16,10 +16,10 @@ extern void _4klang_render_(void);
 #define DEF_LFO_NORMALIZE 0.0000453515
 #define	MAX_SAMPLES	(SAMPLES_PER_TICK*MAX_TICKS)
 
-float buf[MAX_SAMPLES*2];
+float buf[MAX_SAMPLES];
 
 int main() {
-    _4klang_render_();
+    _4klang_render_(buf);
     
     // printf("hello %lu\n", sizeof(buf));
 }

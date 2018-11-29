@@ -1456,7 +1456,7 @@ section .text
 ; //	the entry point for the synth
 ; //----------------------------------------------------------------------------------------
 %ifdef USE_SECTIONS
-export_func	_4klang_render@4
+export_func	_4klang_render_
 %else
 export_func	_4klang_render
 %endif
