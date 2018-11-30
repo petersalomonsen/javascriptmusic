@@ -1722,9 +1722,10 @@ go4k_render_nogroove:
 	inc		ecx
 %ifdef AUTHORING
 	mov		dword[__4klang_current_tick], ecx
-%endif
+%else
 	cmp		ecx, dword MAX_TICKS
 	jl		go4k_render_tickloop
+%endif
 %ifdef GO4K_USE_BUFFER_RECORDINGS	
 	pop		ecx
 %endif	
