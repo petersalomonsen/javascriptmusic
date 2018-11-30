@@ -1722,6 +1722,10 @@ go4k_render_nogroove:
 	pop		ecx	
 	inc		ecx
 %ifdef AUTHORING
+	cmp		ecx, dword MAX_TICKS
+	jl		store_tick
+	xor		ecx, ecx
+store_tick:
 	mov		dword[__4klang_current_tick], ecx
 %else
 	cmp		ecx, dword MAX_TICKS

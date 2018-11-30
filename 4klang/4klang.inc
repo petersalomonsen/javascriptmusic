@@ -1,3 +1,4 @@
+%include "notes.inc"
 ; //----------------------------------------------------------------------------------------
 ; //	useful macros
 ; //----------------------------------------------------------------------------------------
@@ -17,7 +18,7 @@
 %define	MAX_VOICES 1
 %define	HLD	1 ;	// can be adjusted to give crinkler	some other possibilities
 %define	BPM	100
-%define	MAX_PATTERNS 62
+%define	MAX_PATTERNS 1
 %define	PATTERN_SIZE_SHIFT 4
 %define	PATTERN_SIZE (1	<< PATTERN_SIZE_SHIFT)
 %define	MAX_TICKS (MAX_PATTERNS*PATTERN_SIZE)
@@ -570,48 +571,8 @@ section	.g4kmuc1 data align=1
 section .data align=1
 %endif
 go4k_patterns
-	db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	
-	db	76,	HLD, HLD, HLD, 0, 0, 0,	0, 79, HLD,	HLD, HLD, 0, 0,	0, 0, 
-	db	69,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 0, 0, 0,	0, 0, 0, 0,	0, 
-	db	76,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	81,	HLD, HLD, HLD, 0, 0, 0,	0, 79, HLD,	HLD, HLD, 0, 0,	0, 0, 
-	db	84,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 0, 0, 0,	0, 0, 0, 0,	0, 
-	db	76,	HLD, HLD, HLD, 0, 0, 0,	0, 88, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, 
-	db	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	0, 0, 0, 0,	
-	db	76,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 0, 0, 0,	0, 0, 0, 0,	0, 
-	db	52,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	57,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	60,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	64,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	69,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	72,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	40,	52,	HLD, 64, HLD, 40, 52, 64, 52, HLD, HLD,	HLD, 0,	0, 0, 0, 
-	db	57,	0, 0, 57, 0, 0,	69,	0, 0, 69, 0, 0,	57,	HLD, HLD, HLD, 
-	db	52,	64,	0, 57, 0, 69, 48, 0, 48, HLD, HLD, HLD,	0, 0, 0, 0,	
-	db	40,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 
-	db	40,	52,	HLD, 40, HLD, 40, 40, 40, 52, HLD, HLD,	HLD, 0,	0, 0, 0, 
-	db	40,	0, 0, 52, 0, 0,	40,	0, 52, 40, 0, 52, 0, 40, 0,	0, 
-	db	45,	0, 0, 57, 0, 0,	45,	0, 57, 45, 0, 57, 0, 45, 0,	0, 
-	db	48,	0, 0, 60, 0, 0,	48,	0, 60, 48, 0, 60, 0, 48, 0,	0, 
-	db	40,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 0, 0, 0,	0, 
-	db	45,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 0, 0, 0,	0, 
-	db	36,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, 0, 0, 0,	0, 
-	db	0, 0, 0, 0,	60,	HLD, 0,	0, 0, 0, 0,	0, 60, HLD,	0, 0, 
-	db	60,	HLD, 0,	0, 0, 0, 60, HLD, 0, 0,	60,	HLD, 60, HLD, 0, 0,	
-	db	0, 0, 0, 0,	60,	HLD, 0,	0, 0, 0, 0,	0, 60, HLD,	60,	HLD, 
-	db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	60,	HLD, 0,	0, 
-	db	60,	HLD, 60, HLD, 0, 0,	60,	HLD, 0,	0, 0, 0, 60, HLD, 0, 0,	
-	db	0, 0, 60, HLD, 0, 0, 0,	0, 60, HLD,	0, 0, 0, 0,	0, 0, 
-	db	0, 0, 60, HLD, 0, 0, 0,	0, 60, HLD,	0, 0, 60, HLD, 0, 0, 
-	db	0, 0, 0, 60, HLD, 0, 0,	0, 0, 0, 0,	0, 60, HLD,	0, 0, 
-	db	0, 0, 0, 60, HLD, 0, 0,	0, 0, 60, HLD, 60, 60, HLD,	0, 0, 
-	db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	84,	0, 0, 0, 
-	db	91,	0, 0, 88, 0, 0,	76,	0, 81, 0, 0, 0,	0, 0, 0, 0,	
-	db	81,	0, 0, 84, 0, 0,	86,	0, 88, 0, 0, 0,	0, 0, 0, 0,	
-	db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	93,	0, 0, 0, 
-	db	81,	0, 0, 84, 0, 0,	86,	0, 81, 0, 0, 0,	0, 0, 0, 0,	
-	db	84,	0, 0, 86, 0, 0,	88,	0, 0, 91, 0, 0,	84,	0, 0, 0, 
-	db	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	HLD, HLD, HLD, HLD,	
+	times 16 db 0
+	db	d4,	0,	0, d5, 0, d5, d4, 0, f4, HLD,	f5, HLD,	g4, HLD, g5, HLD,	
 go4k_patterns_end
 ; //----------------------------------------------------------------------------------------
 ; // Pattern Index List
@@ -622,15 +583,15 @@ section	.g4kmuc2 data align=1
 section .data
 %endif
 go4k_pattern_lists
-Instrument0List		db	0, 0, 0, 0,	0, 0, 0, 0,	1, 2, 3, 0,	4, 5, 6, 7,	0, 0, 0, 0,	0, 0, 0, 0,	1, 2, 3, 0,	4, 5, 6, 7,	0, 0, 0, 0,	0, 0, 0, 0,	1, 2, 3, 0,	4, 5, 6, 7,	1, 2, 3, 0,	4, 5, 6, 7,	8, 2, 9, 0,	0, 0,
-Instrument1List		db	9, 7, 10, 7, 11, 7,	12,	7, 9, 7, 10, 7,	11,	7, 12, 7, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 12, 7, 13, 7,	14,	7, 3, 7, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 12, 7, 0, 0,
-Instrument2List		db	15,	0, 16, 0, 17, 0, 18, 0,	19,	0, 16, 0, 17, 0, 18, 0,	20,	20,	21,	21,	22,	22,	20,	20,	20,	20,	21,	21,	22,	22,	20,	20,	23,	15,	24,	16,	25,	17,	18,	0, 20, 20, 21, 21, 22, 22, 20, 20, 20, 20, 21, 21, 22, 22, 20, 20, 20, 20, 0, 0, 0,	0,
-Instrument3List		db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	0, 0, 0, 0,	0, 0, 0, 0,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	26,	0, 0, 0, 0,	0,
-Instrument4List		db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	27,	26,	27,	26,	27,	26,	27,	28,	27,	26,	27,	26,	27,	26,	27,	28,	27,	29,	27,	29,	27,	29,	27,	29,	27,	26,	27,	26,	27,	26,	27,	28,	27,	26,	27,	26,	27,	26,	27,	28,	27,	26,	27,	0, 0, 0,
-Instrument5List		db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	30,	31,	30,	32,	30,	31,	30,	32,	30,	31,	30,	32,	30,	31,	30,	32,	30,	31,	30,	32,	30,	31,	30,	0, 30, 31, 30, 32, 30, 31, 30, 32, 30, 31, 30, 32, 30, 31, 30, 32, 30, 31, 30, 32, 0, 0,
-Instrument6List		db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	33,	34,	33,	33,	0, 0, 0, 0,
-Instrument7List		db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 35, 36, 0,	37,	38,	36,	0, 39, 35, 36, 0, 37, 38, 40, 0, 0,	0, 0, 0, 0,	0, 0, 0,
-Instrument8List		db	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	0, 0, 0, 0,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	11,	41,	41,	41,	41,	0,
+Instrument0List		db	0
+Instrument1List		db	0
+Instrument2List		db	1
+Instrument3List		db	0
+Instrument4List		db	0
+Instrument5List		db	0
+Instrument6List		db	0
+Instrument7List		db	0
+Instrument8List		db	0
 go4k_pattern_lists_end
 ; //----------------------------------------------------------------------------------------
 ; // Instrument	Commands

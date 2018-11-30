@@ -21,7 +21,7 @@ float buf[SAMPLES_PER_TICK * 2];
 int main() {
     FILE *fp;
  
-    _4klang_current_tick = 256;
+    _4klang_current_tick = 0;
 
     fp = fdopen(fileno(stdout), "wb");
     for(int n=0;n<MAX_TICKS;n++) {
