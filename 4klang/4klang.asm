@@ -1461,7 +1461,11 @@ export_func	_4klang_render_
 export_func	_4klang_render
 %endif
 	pushad
+%ifdef AUTHORING
+	mov		ecx, dword[__4klang_current_tick]
+%else
 	xor		ecx, ecx
+%endif
 %ifdef GO4K_USE_BUFFER_RECORDINGS		
 	push	ecx
 %endif	

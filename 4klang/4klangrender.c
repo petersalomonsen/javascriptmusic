@@ -16,15 +16,18 @@ extern void _4klang_render(void*) __attribute__ ((stdcall));
 #define	MAX_SAMPLES	(SAMPLES_PER_TICK*MAX_TICKS)
 
 
-float buf[MAX_SAMPLES*2];
+float buf[SAMPLES_PER_TICK * 2];
 
 int main() {
     
-    _4klang_render(buf);
+    
     
     FILE *fp;
  
     fp = fdopen(fileno(stdout), "wb");
-    fwrite(buf, sizeof(buf), 1, fp);
+    for(int n=0;n<MAX_TICKS;n++) {
+        _4klang_render(buf);
+        fwrite(buf, sizeof(buf), 1, fp);
+    }
     fclose(fp);
 }
