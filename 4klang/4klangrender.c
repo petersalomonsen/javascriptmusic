@@ -22,12 +22,9 @@ int main() {
     
     _4klang_render(buf);
     
-    printf("hello %lu\n", sizeof(buf));
-    printf("hello %f\n", buf[200]);
     FILE *fp;
  
-    fp = fopen("out.raw", "wb");
+    fp = fdopen(fileno(stdout), "wb");
     fwrite(buf, sizeof(buf), 1, fp);
     fclose(fp);
-
 }
