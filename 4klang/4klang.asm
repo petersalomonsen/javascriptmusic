@@ -84,10 +84,14 @@ go4k_synth_commands		dd	0
 						dd	_go4kPAN_func@0
 						dd	_go4kOUT_func@0
 						dd	_go4kACC_func@0		
+%ifdef	GO4K_USE_GLITCH						
+						dd	_go4kGLITCH_func@0
+%else
 						dd	_go4kFLD_func@0
-%ifdef	GO4K_USE_FSTG						
-						dd	_go4kFSTG_func@0
 %endif						
+%ifdef	GO4K_USE_FSTG
+						dd	_go4kFSTG_func@0
+%endif
 
 %ifdef USE_SECTIONS						
 section		.g4kdat2	data	align=1
@@ -748,27 +752,28 @@ go4kDST_func_do:
 %endif
 	movzx	eax, byte [VAL-1]				; // get type flag
 %ifdef	GO4K_USE_DST_SH
-	fld		dword [edx+go4kDST_val.snhfreq]	; //	snh		in
+	fld		dword [edx+go4kDST_val.snhfreq]	; //	snh		in		(inr)
 %ifdef 	GO4K_USE_DST_MOD_SH	
-	fadd	dword [WRK+go4kDST_wrk.sm]		; // 	snh'	in
+	fadd	dword [WRK+go4kDST_wrk.sm]		; // 	snh'	in		(inr)
 %endif
 	fmul	st0, st0						; // square the input so we never get negative and also have a smoother behaviour in the lower frequencies
 	fchs
-	fadd	dword [WRK+go4kDST_wrk.snhphase]; // 	snh'	in
+	fadd	dword [WRK+go4kDST_wrk.snhphase]; // 	snh'	in		(inr)
 	fst		dword [WRK+go4kDST_wrk.snhphase]
-	fldz									; //	0		snh'	in
-	fucomip	st1								; //	0		snh'	in
+	fldz									; //	0		snh'	in		(inr)
+	fucomip	st1								; //	snh'	in		(inr)
+	fstp    dword [esp-4]					; //	in		(inr)
 	jc		short go4kDST_func_hold			
-	fld1									; //	1		snh'	in
-	faddp	st1, st0						; //	1+snh'	in
-	fstp	dword [WRK+go4kDST_wrk.snhphase]; // 	in
+	fld1									; //	1		in		(inr)
+	fadd	dword [esp-4]					; //	1+snh'	in		(inr)
+	fstp	dword [WRK+go4kDST_wrk.snhphase]; // 	in		(inr)
 %endif	
 ; // calc pregain and postgain	
 %ifdef GO4K_USE_DST_STEREO
-	test	al, byte STEREO					; // outr	inl
+	test	al, byte STEREO					
 	jz		short go4kDST_func_mono
 	fxch	st1								; // 	inr		inl
-	fld		dword [edx+go4kDST_val.drive]	; // 	drive		inr		inl
+	fld		dword [edx+go4kDST_val.drive]	; // 	drive	inr		inl
 %ifdef GO4K_USE_DST_MOD_DM	
 	fadd	dword [WRK+go4kDST_wrk.dm]
 %endif
@@ -779,26 +784,26 @@ go4kDST_func_do:
 	fxch	st1								; // 	inl		outr
 go4kDST_func_mono:	
 %endif	
-	fld		dword [edx+go4kDST_val.drive]	; // 	drive		in
+	fld		dword [edx+go4kDST_val.drive]	; // 	drive	in		(outr)
 %ifdef GO4K_USE_DST_MOD_DM	
 	fadd	dword [WRK+go4kDST_wrk.dm]
 %endif
-	call	go4kWaveshaper					; // out
+	call	go4kWaveshaper					; // 	out		(outr)
 %ifdef	GO4K_USE_DST_SH		
-	fst		dword [WRK+go4kDST_wrk.out]		; // out'
+	fst		dword [WRK+go4kDST_wrk.out]		; // 	out'	(outr)
 %endif	
-	ret										; // out'
-%ifdef	GO4K_USE_DST_SH	
-go4kDST_func_hold:	
-	fstp	st0								; // in
-	fstp	st0
+	ret										; // 	out'	(outr)
+%ifdef	GO4K_USE_DST_SH
+go4kDST_func_hold:							; //	in		(inr)
+	fstp	st0								; // 	(inr)
 %ifdef GO4K_USE_DST_STEREO
-	test	al, byte STEREO					; // outr	inl
-	jz		short go4kDST_func_monohold
-	fld		dword [WRK+go4kDST_wrk.out2]	; // out2
+	test	al, byte STEREO					
+	jz		short go4kDST_func_monohold		; // 	(inr)
+	fstp	st0								; // 	
+	fld		dword [WRK+go4kDST_wrk.out2]	; // 	outr
 go4kDST_func_monohold:	
 %endif	
-	fld		dword [WRK+go4kDST_wrk.out]		; // out
+	fld		dword [WRK+go4kDST_wrk.out]		; // 	out		(outr)
 	ret
 %endif	
 
@@ -979,9 +984,9 @@ go4kDLL_func_buffer_nowrap2:
 	loopne	go4kDLL_func_loop	
 	fstp	st0									;//	out'
 	;// process a dc filter to prevent heavy offsets in reverb
-	;// we're using the dc filter variables from the next delay line here, but doesnt hurt anyway				
 %ifdef GO4K_USE_DLL_DC_FILTER
 ; 	y(n) = x(n) - x(n-1) + R * y(n-1) 
+	sub		WRK, go4kDLL_wrk.size
 	fld		dword [WRK+go4kDLL_wrk.dcout]		;//	dco			out'
 	fmul	dword [c_dc_const]					;//	dcc*dco		out'
 	fsub	dword [WRK+go4kDLL_wrk.dcin]		;//	dcc*dco-dci	out'
@@ -994,6 +999,129 @@ go4kDLL_func_buffer_nowrap2:
 %endif	
 	fst		dword [WRK+go4kDLL_wrk.dcout]
 %endif
+	popad
+	ret
+%endif
+
+
+%ifdef USE_SECTIONS	
+section		.g4kcodu	code	align=1
+%else
+section .text
+%endif
+; //----------------------------------------------------------------------------------------
+; //	GLITCH Tick
+; //----------------------------------------------------------------------------------------
+; // IN		:		WRK	= unit workspace
+; // IN		:		VAL	= unit values
+; // IN		:		ecx	= global workspace
+; // OUT	:		
+; // DIRTY	:		eax
+; //----------------------------------------------------------------------------------------
+export_func	go4kGLITCH_func@0
+%ifdef GO4K_USE_GLITCH
+	push	5
+	call	go4kTransformValues
+	pushad	
+		
+	mov		edi, WRK
+	mov		WRK, dword [_go4k_delay_buffer_ofs]	;// ebp is current delay
+	
+;	mov		eax, dword [edx+go4kGLITCH_val.active]
+;	or		eax, dword [edi+go4kGLITCH_wrk2.am]
+;	test 	eax, eax
+;	je		go4kGLITCH_func_notactive			;//	out
+	
+	fld		dword [edx+go4kGLITCH_val.active]	;// a		in
+	fadd	dword [edi+go4kGLITCH_wrk2.am]		;// a'		in	
+	; // check for activity
+	fldz										;//	0		a'		in
+	fucomip	st1									;//	a'		in
+	fstp	st0									;//	in	
+	jnc		go4kGLITCH_func_notactive		;//	out
+	
+	;// check for first call and init if so init (using slizesize slot)
+	mov		eax, dword [WRK+go4kGLITCH_wrk.slizesize]
+	and		eax, eax
+	jnz		go4kGLITCH_func_process
+		mov		dword [WRK+go4kGLITCH_wrk.index], eax
+		mov		dword [WRK+go4kGLITCH_wrk.store], eax			
+		movzx	ebx, byte [VAL-(go4kGLITCH_val.size-go4kGLITCH_val.slicesize)/4]	;// slicesize index
+		movzx	eax, word [_go4k_delay_times+ebx*2]									;// fetch slicesize
+		push	eax
+		fld1	
+		fild	dword [esp]
+		fstp	dword [WRK+go4kGLITCH_wrk.slizesize]		
+		fstp	dword [WRK+go4kGLITCH_wrk.slicepitch]
+		pop		eax
+go4kGLITCH_func_process:	
+	;// fill buffer until full
+	mov 	eax, dword [WRK+go4kGLITCH_wrk.store]
+	cmp		eax, MAX_DELAY
+	jae		go4kGLITCH_func_filldone		
+		fst		dword [WRK+eax*4+go4kDLL_wrk.buffer]	;//	in	
+		inc		dword [WRK+go4kGLITCH_wrk.store]	
+go4kGLITCH_func_filldone:	
+	;// save input
+	push	eax
+	fstp	dword [esp]									;//	-	
+	
+	;// read from buffer
+	push	eax
+	fld		dword [WRK+go4kGLITCH_wrk.index]			;//	idx		
+	fist	dword [esp]
+	pop 	eax
+	fld		dword [WRK+eax*4+go4kDLL_wrk.buffer]		;//	out 	idx				
+	fxch												;//	idx 	out		
+	;// progress readindex with current play speed
+	fadd	dword [WRK+go4kGLITCH_wrk.slicepitch]		;//	idx' 	out		
+	fst		dword [WRK+go4kGLITCH_wrk.index]			
+	
+	;// check for slice done
+	fld		dword [WRK+go4kGLITCH_wrk.slizesize]		;//	size	idx' 	out	
+	fxch												;//	idx'	size 	out	
+	fucomip	st1											;//	idx' 	out	
+	fstp	st0											;//	out		
+	jc	go4kGLITCH_func_process_done
+		;// reinit for next loop
+		xor 	eax, eax
+		mov		dword [WRK+go4kGLITCH_wrk.index], eax
+		
+		fld		dword [edx+go4kGLITCH_val.dsize]
+		fadd	dword [edi+go4kGLITCH_wrk2.sm]
+		fsub	dword [c_0_5]
+		fmul	dword [c_0_5]
+		call _Power@0				
+		fmul	dword [WRK+go4kGLITCH_wrk.slizesize]
+		fstp	dword [WRK+go4kGLITCH_wrk.slizesize]
+		
+		fld		dword [edx+go4kGLITCH_val.dpitch]
+		fadd	dword [edi+go4kGLITCH_wrk2.pm]
+		fsub	dword [c_0_5]
+		fmul	dword [c_0_5]
+		call _Power@0				
+		fmul	dword [WRK+go4kGLITCH_wrk.slicepitch]
+		fstp	dword [WRK+go4kGLITCH_wrk.slicepitch]		
+go4kGLITCH_func_process_done:
+		
+	;// dry wet mix
+	fld		dword [edx+go4kGLITCH_val.dry]				;// dry		out
+	fadd	dword [edi+go4kGLITCH_wrk2.dm]				;// dry'	out
+	fld1												;// 1 		dry'	out
+	fsub	st1											;// 1-dry'	dry'	out
+	fmulp	st2											;// dry'	out'
+	fmul	dword [esp]									;// in'		out'
+	faddp	st1, st0									;// out'
+	
+	pop		eax
+	jmp		go4kGLITCH_func_leave					
+go4kGLITCH_func_notactive:
+	;// mark as uninitialized again (using slizesize slot)
+	xor 	eax,eax
+	mov		dword [WRK+go4kGLITCH_wrk.slizesize], eax	
+go4kGLITCH_func_leave:
+	add		WRK, go4kDLL_wrk.size				;// go to next delay
+	mov		dword [_go4k_delay_buffer_ofs], WRK	;// store next delay offset
 	popad
 	ret
 %endif
@@ -1456,12 +1584,12 @@ section .text
 ; //	the entry point for the synth
 ; //----------------------------------------------------------------------------------------
 %ifdef USE_SECTIONS
-export_func	_4klang_render_
+export_func	_4klang_render@4
 %else
 export_func	_4klang_render
 %endif
 	pushad
-%ifdef AUTHORING
+	%ifdef AUTHORING
 	mov		ecx, dword[__4klang_current_tick]
 %else
 	xor		ecx, ecx
