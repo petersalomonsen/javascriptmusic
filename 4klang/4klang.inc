@@ -572,8 +572,11 @@ section .data align=1
 %endif
 go4k_patterns
 	times 16 db 0
-	db	d4,	f4,	0, d5, 0, d5, d4, 0, f4, HLD,	f5, HLD,	g4, HLD, g5, HLD,	
-	db	c3,	0,	0, 0, c3, 0, 0, 0, c3, 0, 0, 0,	c3, 0, 0, 0,	
+	db	d4,	f3,	0, d5, 0, d5, d4, 0, f4, HLD,	f5, HLD,	g4, HLD, g5, g3,	; base
+	db	c3,	0,	0, 0, c3, 0, 0, 0, c3, 0, 0, 0,	c3, 0, 0, 0,		; bassdrum
+	db	c3,	0,	c3, c7, c3, 0, c3, 0, c7, 0, c3, 0,	c7, 0, c3, 0,	 ; hihat
+	db	0,	0,	0, 0, c4, 0, 0, 0, 0, 0, 0, 0,	c4, 0, 0, 0,	     ; snare
+	db	0,	0,	a6, 0, c7, 0, d7, 0, f7, e7, 0, c7,	0, a6, 0, 0,	 ; lead
 go4k_patterns_end
 ; //----------------------------------------------------------------------------------------
 ; // Pattern Index List
@@ -586,12 +589,12 @@ section .data
 go4k_pattern_lists
 Instrument0List		db	0
 Instrument1List		db	0
-Instrument2List		db	1
-Instrument3List		db	0
-Instrument4List		db	2
-Instrument5List		db	0
+Instrument2List		db	1 ; base
+Instrument3List		db	4 ; snare
+Instrument4List		db	2 ; bd
+Instrument5List		db	3 ; hihat
 Instrument6List		db	0
-Instrument7List		db	0
+Instrument7List		db	5 ; lead
 Instrument8List		db	0
 go4k_pattern_lists_end
 ; //----------------------------------------------------------------------------------------
