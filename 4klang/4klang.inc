@@ -572,7 +572,7 @@ section .data align=1
 %endif
 go4k_patterns
 	times 16 db 0
-	db	d4,	0,	0, d5, 0, d5, d4, 0, f4, HLD,	f5, HLD,	g4, HLD, g5, HLD,	
+	db	d4,	f4,	0, d5, 0, d5, d4, 0, f4, HLD,	f5, HLD,	g4, HLD, g5, HLD,	
 	db	c3,	0,	0, 0, c3, 0, 0, 0, c3, 0, 0, 0,	c3, 0, 0, 0,	
 go4k_patterns_end
 ; //----------------------------------------------------------------------------------------
