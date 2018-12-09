@@ -83,13 +83,11 @@ go4k_synth_commands		dd	0
 						dd	_go4kFST_func@0
 						dd	_go4kPAN_func@0
 						dd	_go4kOUT_func@0
-						dd	_go4kACC_func@0		
+						dd	_go4kACC_func@0
+						dd	_go4kFLD_func@0
 %ifdef	GO4K_USE_GLITCH						
-						dd	_go4kFLD_func@0
 						dd	_go4kGLITCH_func@0
-%else
-						dd	_go4kFLD_func@0
-%endif						
+%endif 				; Peter Salomonsen removed the else _go4kFLD_func@0 for backwards compatibility with songs not using the GLITCH func
 %ifdef	GO4K_USE_FSTG
 						dd	_go4kFSTG_func@0
 %endif
@@ -1590,8 +1588,8 @@ export_func	_4klang_render@4
 export_func	_4klang_render
 %endif
 	pushad
-	%ifdef AUTHORING
-	mov		ecx, dword[__4klang_current_tick]
+%ifdef SINGLE_TICK_RENDERING
+	mov		ecx, dword[__4klang_current_tick] ; get stored current tick
 %else
 	xor		ecx, ecx
 %endif
@@ -1722,13 +1720,14 @@ go4k_render_nogroove:
 	pop		ecx	
 	inc		ecx
 %ifdef AUTHORING
-	cmp		ecx, dword MAX_TICKS
-	jl		store_tick
-	xor		ecx, ecx
-store_tick:
 	mov		dword[__4klang_current_tick], ecx
-%else
+%endif
 	cmp		ecx, dword MAX_TICKS
+%ifdef SINGLE_TICK_RENDERING
+	jl		no_loop_yet
+	mov		dword[__4klang_current_tick], 0	; loop if at MAX_TICKS
+no_loop_yet:
+%else 
 	jl		go4k_render_tickloop
 %endif
 %ifdef GO4K_USE_BUFFER_RECORDINGS	

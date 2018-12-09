@@ -13,8 +13,9 @@
 ; //	basic defines for the song/synth
 ; //----------------------------------------------------------------------------------------
 %define AUTHORING
+%define SINGLE_TICK_RENDERING
 %define	SAMPLE_RATE	44100
-%define	MAX_INSTRUMENTS	9
+%define	MAX_INSTRUMENTS	10
 %define	MAX_VOICES 1
 %define	HLD	1 ;	// can be adjusted to give crinkler	some other possibilities
 %define	BPM	100
@@ -577,6 +578,7 @@ go4k_patterns
 	db	c3,	0,	c3, c7, c3, 0, c3, 0, c7, 0, c3, 0,	c7, 0, c3, 0,	 ; hihat
 	db	0,	0,	0, 0, c4, 0, 0, 0, 0, 0, 0, 0,	c4, 0, 0, 0,	     ; snare
 	db	0,	0,	a6, 0, c7, 0, d7, 0, f7, e7, 0, c7,	0, a6, 0, 0,	 ; lead
+	db	d6, HLD, HLD, HLD, d5, HLD, c5, d6, HLD, f6, f6,  0, f6, HLD, HLD, HLD	 ; dub
 go4k_patterns_end
 ; //----------------------------------------------------------------------------------------
 ; // Pattern Index List
@@ -596,6 +598,7 @@ Instrument5List		db	3 ; hihat
 Instrument6List		db	0
 Instrument7List		db	5 ; lead
 Instrument8List		db	0
+Instrument9List		db	6
 go4k_pattern_lists_end
 ; //----------------------------------------------------------------------------------------
 ; // Instrument	Commands
@@ -738,6 +741,23 @@ GO4K_BEGIN_CMDDEF(Instrument8)
 	db GO4K_FSTG_ID
 	db GO4K_FSTG_ID
 	db GO4K_FOP_ID
+GO4K_END_CMDDEF
+GO4K_BEGIN_CMDDEF(Instrument9)
+        db GO4K_ENV_ID
+        db GO4K_DST_ID
+        db GO4K_FST_ID
+        db GO4K_FST_ID
+        db GO4K_VCO_ID
+        db GO4K_VCO_ID
+        db GO4K_FOP_ID
+        db GO4K_VCO_ID
+        db GO4K_FOP_ID
+        db GO4K_FOP_ID
+        db GO4K_VCO_ID
+        db GO4K_FST_ID
+        db GO4K_VCF_ID
+        db GO4K_PAN_ID
+        db GO4K_OUT_ID
 GO4K_END_CMDDEF
 ;//	global commands
 GO4K_BEGIN_CMDDEF(Global)
@@ -892,6 +912,23 @@ GO4K_BEGIN_PARAMDEF(Instrument8)
 	GO4K_FSTG	AMOUNT(72),DEST(2*go4k_instrument.size*MAX_VOICES+10*MAX_UNIT_SLOTS*4+4*4+go4k_instrument.workspace)
 	GO4K_FSTG	AMOUNT(66),DEST(1*go4k_instrument.size*MAX_VOICES+10*MAX_UNIT_SLOTS*4+4*4+go4k_instrument.workspace)
 	GO4K_FOP	OP(FOP_POP)
+GO4K_END_PARAMDEF
+GO4K_BEGIN_PARAMDEF(Instrument9)
+        GO4K_ENV   ATTAC(72),DECAY(72),SUSTAIN(0),RELEASE(32),GAIN(128)
+        GO4K_DST   DRIVE(123), SNHFREQ(128), FLAGS(0)
+        GO4K_FST   AMOUNT(76),DEST(4*MAX_UNIT_SLOTS+1+FST_SET)
+        GO4K_FST   AMOUNT(120),DEST(0*MAX_UNIT_SLOTS+2+FST_SET)
+        GO4K_VCO   TRANSPOSE(64),DETUNE(64),PHASE(32),GATES(0),COLOR(128),SHAPE(96),GAIN(128),FLAGS(TRISAW)
+        GO4K_VCO   TRANSPOSE(78),DETUNE(64),PHASE(32),GATES(0),COLOR(128),SHAPE(96),GAIN(128),FLAGS(TRISAW)
+        GO4K_FOP   OP(FOP_MULP)
+        GO4K_VCO   TRANSPOSE(64),DETUNE(64),PHASE(0),GATES(0),COLOR(128),SHAPE(64),GAIN(128),FLAGS(TRISAW)
+        GO4K_FOP   OP(FOP_MULP)
+        GO4K_FOP   OP(FOP_MULP)
+        GO4K_VCO   TRANSPOSE(64),DETUNE(64),PHASE(0),GATES(0),COLOR(128),SHAPE(64),GAIN(128),FLAGS(SINE|LFO)
+        GO4K_FST   AMOUNT(128),DEST(12*MAX_UNIT_SLOTS+4+FST_SET+FST_POP)
+        GO4K_VCF   FREQUENCY(0),RESONANCE(128),VCFTYPE(LOWPASS)
+        GO4K_PAN   PANNING(64)
+        GO4K_OUT   GAIN(80), AUXSEND(2)
 GO4K_END_PARAMDEF
 ;//	global parameters
 GO4K_BEGIN_PARAMDEF(Global)
