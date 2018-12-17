@@ -580,6 +580,8 @@ go4k_patterns
 	db	0,	a6,	0, a6, 0, g6, 0, a6, 0, c7, b6, 0, 0, g6, 0, 0,	 ; lead
 	db	0,	d7,	0, d7, 0, c7, 0, b6, 0, c7, b6, 0, 0, g6, 0, 0,	 ; lead
 	db	d6, HLD, HLD, HLD, d5, HLD, c5, d6, HLD, f6, f6,  0, f6, HLD, HLD, HLD	 ; dub
+	db  d5, a5, c6, d6, c6, a5, g5, a5, d5, a5, f6, e6, c6, e6, d6, a5,
+	db  a6, d6, 0, a6, d6, 0, a6, d6, 0, 0, a5, 0, 0, d5, 0, 0
 go4k_patterns_end
 ; //----------------------------------------------------------------------------------------
 ; // Pattern Index List
@@ -590,14 +592,14 @@ section	.g4kmuc2 data align=1
 section .data
 %endif
 go4k_pattern_lists
-Instrument0List		db	0,0
-Instrument1List		db	0,0
-Instrument2List		db	1,1 ; base
+Instrument0List		db	0, 0; 8,9
+Instrument1List		db	0,0; Choir
+Instrument2List		db	0, 0; 1,1 ; base
 Instrument3List		db	4,4 ; snare
 Instrument4List		db	2,2 ; bd
 Instrument5List		db	3,3 ; hihat
 Instrument6List		db	0,0
-Instrument7List		db	5,6 ; lead
+Instrument7List		db	0, 0; 5,6 ; lead
 Instrument8List		db	0,0
 Instrument9List		db	0,0
 Instrument10List	db	7,7
