@@ -19,7 +19,7 @@
 %define	MAX_VOICES 1
 %define	HLD	1 ;	// can be adjusted to give crinkler	some other possibilities
 %define	BPM	100
-%define	MAX_PATTERNS 1
+%define	MAX_PATTERNS 2
 %define	PATTERN_SIZE_SHIFT 4
 %define	PATTERN_SIZE (1	<< PATTERN_SIZE_SHIFT)
 %define	MAX_TICKS (MAX_PATTERNS*PATTERN_SIZE)
@@ -578,7 +578,7 @@ go4k_patterns
 	db	c3,	0,	c3, 0, c3, 0, c3, 0, c7, 0, c3, 0,	c7, 0, c3, 0,	 ; hihat
 	db	0,	0,	0, 0, c4, 0, 0, 0, 0, 0, 0, 0,	c4, 0, 0, 0,	     ; snare
 	db	0,	a6,	0, a6, 0, g6, 0, a6, 0, c7, b6, 0, 0, g6, 0, 0,	 ; lead
-	db	0,	d7,	0, d7, 0, c7, 0, bs6, 0, c7, b6, 0, 0, g6, 0, 0,	 ; lead
+	db	0,	d7,	0, d7, 0, c7, 0, b6, 0, c7, b6, 0, 0, g6, 0, 0,	 ; lead
 	db	d6, HLD, HLD, HLD, d5, HLD, c5, d6, HLD, f6, f6,  0, f6, HLD, HLD, HLD	 ; dub
 go4k_patterns_end
 ; //----------------------------------------------------------------------------------------
@@ -597,10 +597,10 @@ Instrument3List		db	4,4 ; snare
 Instrument4List		db	2,2 ; bd
 Instrument5List		db	3,3 ; hihat
 Instrument6List		db	0,0
-Instrument7List		db	5,7 ; lead
+Instrument7List		db	5,6 ; lead
 Instrument8List		db	0,0
 Instrument9List		db	0,0
-Instrument10List	db	6,0
+Instrument10List	db	7,7
 go4k_pattern_lists_end
 ; //----------------------------------------------------------------------------------------
 ; // Instrument	Commands
