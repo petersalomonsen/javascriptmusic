@@ -15,7 +15,7 @@
 %define AUTHORING
 %define SINGLE_TICK_RENDERING
 %define	SAMPLE_RATE	44100
-%define	MAX_INSTRUMENTS	10
+%define	MAX_INSTRUMENTS	11
 %define	MAX_VOICES 1
 %define	HLD	1 ;	// can be adjusted to give crinkler	some other possibilities
 %define	BPM	100
@@ -573,11 +573,12 @@ section .data align=1
 %endif
 go4k_patterns
 	times 16 db 0
-	db	d4,	f3,	0, d5, 0, d5, d4, 0, f4, HLD,	f5, HLD,	g4, HLD, g5, g3,	; base
+	db	d3,	HLD, HLD, 0, 0, 0, c4, 0, 0, d5, 0, 0, 0, a4, 0, 0,	; base
 	db	c3,	0,	0, 0, c3, 0, 0, 0, c3, 0, 0, 0,	c3, 0, 0, 0,		; bassdrum
-	db	c3,	0,	c3, c7, c3, 0, c3, 0, c7, 0, c3, 0,	c7, 0, c3, 0,	 ; hihat
+	db	c3,	0,	c3, 0, c3, 0, c3, 0, c7, 0, c3, 0,	c7, 0, c3, 0,	 ; hihat
 	db	0,	0,	0, 0, c4, 0, 0, 0, 0, 0, 0, 0,	c4, 0, 0, 0,	     ; snare
-	db	0,	0,	a6, 0, c7, 0, d7, 0, f7, e7, 0, c7,	0, a6, 0, 0,	 ; lead
+	db	0,	a6,	0, a6, 0, g6, 0, a6, 0, c7, b6, 0, 0, g6, 0, 0,	 ; lead
+	db	0,	d7,	0, d7, 0, c7, 0, bs6, 0, c7, b6, 0, 0, g6, 0, 0,	 ; lead
 	db	d6, HLD, HLD, HLD, d5, HLD, c5, d6, HLD, f6, f6,  0, f6, HLD, HLD, HLD	 ; dub
 go4k_patterns_end
 ; //----------------------------------------------------------------------------------------
@@ -589,16 +590,17 @@ section	.g4kmuc2 data align=1
 section .data
 %endif
 go4k_pattern_lists
-Instrument0List		db	0
-Instrument1List		db	0
-Instrument2List		db	1 ; base
-Instrument3List		db	4 ; snare
-Instrument4List		db	2 ; bd
-Instrument5List		db	3 ; hihat
-Instrument6List		db	0
-Instrument7List		db	5 ; lead
-Instrument8List		db	0
-Instrument9List		db	6
+Instrument0List		db	0,0
+Instrument1List		db	0,0
+Instrument2List		db	1,1 ; base
+Instrument3List		db	4,4 ; snare
+Instrument4List		db	2,2 ; bd
+Instrument5List		db	3,3 ; hihat
+Instrument6List		db	0,0
+Instrument7List		db	5,7 ; lead
+Instrument8List		db	0,0
+Instrument9List		db	0,0
+Instrument10List	db	6,0
 go4k_pattern_lists_end
 ; //----------------------------------------------------------------------------------------
 ; // Instrument	Commands
@@ -756,6 +758,27 @@ GO4K_BEGIN_CMDDEF(Instrument9)
         db GO4K_VCO_ID
         db GO4K_FST_ID
         db GO4K_VCF_ID
+        db GO4K_PAN_ID
+        db GO4K_OUT_ID
+GO4K_END_CMDDEF
+GO4K_BEGIN_CMDDEF(Instrument10)
+        db GO4K_ENV_ID
+        db GO4K_VCO_ID
+        db GO4K_VCO_ID
+        db GO4K_FOP_ID
+        db GO4K_FOP_ID
+        db GO4K_VCF_ID
+        db GO4K_DST_ID
+        db GO4K_VCO_ID
+        db GO4K_FST_ID
+        db GO4K_FOP_ID
+        db GO4K_ENV_ID
+        db GO4K_FST_ID
+        db GO4K_FST_ID
+        db GO4K_FST_ID
+        db GO4K_FOP_ID
+        db GO4K_DLL_ID
+        db GO4K_DLL_ID
         db GO4K_PAN_ID
         db GO4K_OUT_ID
 GO4K_END_CMDDEF
@@ -929,6 +952,27 @@ GO4K_BEGIN_PARAMDEF(Instrument9)
         GO4K_VCF   FREQUENCY(0),RESONANCE(128),VCFTYPE(LOWPASS)
         GO4K_PAN   PANNING(64)
         GO4K_OUT   GAIN(80), AUXSEND(2)
+GO4K_END_PARAMDEF
+GO4K_BEGIN_PARAMDEF(Instrument10)
+        GO4K_ENV        ATTAC(0),DECAY(0),SUSTAIN(64),RELEASE(64),GAIN(128)
+        GO4K_VCO        TRANSPOSE(64),DETUNE(64),PHASE(0),GATES(0),COLOR(128),SHAPE(127),GAIN(128),FLAGS(TRISAW)
+        GO4K_VCO        TRANSPOSE(64),DETUNE(80),PHASE(32),GATES(0),COLOR(128),SHAPE(127),GAIN(128),FLAGS(TRISAW)
+        GO4K_FOP        OP(FOP_ADDP)
+        GO4K_FOP        OP(FOP_MULP)
+        GO4K_VCF        FREQUENCY(48),RESONANCE(4),VCFTYPE(LOWPASS)
+        GO4K_DST        DRIVE(127), SNHFREQ(128), FLAGS(0)
+        GO4K_VCO        TRANSPOSE(64),DETUNE(64),PHASE(0),GATES(0),COLOR(64),SHAPE(64),GAIN(128),FLAGS(SINE)
+        GO4K_FST        AMOUNT(68),DEST(1*MAX_UNIT_SLOTS+1+FST_SET)
+        GO4K_FOP        OP(FOP_POP)
+        GO4K_ENV        ATTAC(0),DECAY(0),SUSTAIN(128),RELEASE(128),GAIN(128)
+        GO4K_FST        AMOUNT(70),DEST(1*MAX_UNIT_SLOTS+1+FST_SET)
+        GO4K_FST        AMOUNT(58),DEST(2*MAX_UNIT_SLOTS+1+FST_SET)
+        GO4K_FST        AMOUNT(48),DEST(5*MAX_UNIT_SLOTS+4+FST_SET)
+        GO4K_FOP        OP(FOP_MULP)
+        GO4K_DLL        PREGAIN(72),DRY(0),FEEDBACK(32),DAMP(109),FREQUENCY(0),DEPTH(0),DELAY(9),COUNT(8) ; ERROR
+        GO4K_DLL        PREGAIN(16),DRY(128),FEEDBACK(32),DAMP(109),FREQUENCY(0),DEPTH(0),DELAY(17),COUNT(1) ; ERROR
+        GO4K_PAN        PANNING(64)
+        GO4K_OUT        GAIN(48), AUXSEND(8)
 GO4K_END_PARAMDEF
 ;//	global parameters
 GO4K_BEGIN_PARAMDEF(Global)

@@ -44,7 +44,7 @@ int main() {
             break;
         }
 
-        fprintf(stderr,"\nRender %d %d\n",n,_4klang_current_tick);
+        // fprintf(stderr,"\nRender %d %d\n",n,_4klang_current_tick);
         _4klang_render(buf);
         
         fwrite(buf, sizeof(buf), 1, fp);

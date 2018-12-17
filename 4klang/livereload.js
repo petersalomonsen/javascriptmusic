@@ -10,7 +10,7 @@ const startChild = () => {
     });
     childfinishedpromise = new Promise(resolve =>
         livereloadchild.on('exit', () => resolve())
-    );
+    )
 };
 
 let reloadinprogress = false;
@@ -20,15 +20,18 @@ fs.watchFile('./4klang.inc', async (curr, prev) => {
     }
     reloadinprogress = true;
 
-    
     const previousLiveReloadChild = livereloadchild;                                   
-    cp.execSync('yasm -f macho 4klang.asm');
-    cp.execSync('gcc -Wl,-no_pie -m32 4klang.o 4klangrender.c -o 4klangrender');
-    previousLiveReloadChild.kill('SIGUSR1');
-    await childfinishedpromise;
+    try {
+        cp.execSync('yasm -f macho 4klang.asm');
+        cp.execSync('gcc -Wl,-no_pie -m32 4klang.o 4klangrender.c -o 4klangrender');
+        previousLiveReloadChild.kill('SIGUSR1');
+        await childfinishedpromise;
     
-    startChild();
-    console.error('RELOAD');
+        startChild();
+        console.error('RELOAD');
+    } catch(e) {
+        console.error('Failed to reload');
+    }
     reloadinprogress = false;
 });
 
