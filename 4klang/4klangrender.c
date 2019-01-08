@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
+#include "4klang.h"
 
 #ifdef __linux
 extern void __4klang_render(void*) __attribute__ ((stdcall));
@@ -12,21 +13,8 @@ extern void _4klang_render(void*) __attribute__ ((stdcall));
 extern int _4klang_current_tick;
 #endif
 
-#define	SAMPLE_RATE	44100
-#define	MAX_INSTRUMENTS	9
-#define	MAX_VOICES 1
-#define	HLD	1 ;	// can be adjusted to give crinkler	some other possibilities
-#define	BPM	100
-#define	MAX_PATTERNS 96
-#define	PATTERN_SIZE_SHIFT 4
-#define	PATTERN_SIZE (1	<< PATTERN_SIZE_SHIFT)
-#define	MAX_TICKS (MAX_PATTERNS*PATTERN_SIZE)
-#define	SAMPLES_PER_TICK (SAMPLE_RATE*4*60/(BPM*16))
-#define	DEF_LFO_NORMALIZE 0.000038
-#define	MAX_SAMPLES	(SAMPLES_PER_TICK*MAX_TICKS)
-#define SINGLE_TICK_RENDERING
-
 #ifdef SINGLE_TICK_RENDERING
+#include <time.h>
 volatile sig_atomic_t keep_going = 1;
 float buf[SAMPLES_PER_TICK * 2];
 
@@ -48,6 +36,7 @@ int main() {
     signal(SIGUSR1, sig_handler);
     _4klang_current_tick = 0;
 
+    time_t starttime = time(NULL);
     for(int n=0;n<MAX_TICKS;n++) {
         if(
             ((n % 16) == 0) &&
@@ -55,10 +44,16 @@ int main() {
             break;
         }
 
-        // fprintf(stderr,"\nRender %d / %d\n",_4klang_current_tick, MAX_TICKS);
+        
+
+        time_t elapsed = time(NULL) - starttime;
+        
+//         fprintf(stderr,"\nRender %d / %d, %ld\n",_4klang_current_tick, MAX_TICKS, elapsed);
         _4klang_render(buf);
         
         fwrite(buf, sizeof(buf), 1, fp);
+
+        
     }
 #else
     _4klang_render(buf);

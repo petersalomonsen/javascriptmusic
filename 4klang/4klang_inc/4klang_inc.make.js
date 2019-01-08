@@ -1,11 +1,21 @@
+const fs = require('fs');
+
 global.hld = 1;
 global.bpm = 100;
 global.pattern_size_shift = 4;
+global.looptimes = 1;
+
 const instrumentPatternListArr = [];
 const patternsMap = {};
 
 const instrumentsArr = [];
 const instrumentIndexMap = {};
+const soloMap = {};
+const muteMap = {};
+
+let onlyPlayPatternsEnabled = false;
+let playPatternsList = [];
+
 let currentPatternPosition = 0;
 
 const patternsize = () => (1 << pattern_size_shift);
@@ -13,6 +23,8 @@ const ticksperbeat = () => patternsize() / 4;
 
 let globalparamdefs;
 let globalcmddefs;
+
+let patternAutoNameCount = 0;
 
 global.setGlobalParamDefs = (defs) => {
 	globalparamdefs = defs.trim();
@@ -32,7 +44,17 @@ GO4K_FOP	OP(FOP_ADDP2)
 GO4K_OUT	GAIN(128), AUXSEND(0)
 `);
 
+global.soloInstrument = (name) => {
+	soloMap[name] = true;
+};
+
+global.muteInstrument = (name) => {
+	muteMap[name] = true;
+};
 global.addInstrument = (name, instrument) => {
+	if(muteMap[name] || Object.keys(soloMap).length > 0 && !soloMap[name]) {
+		return;
+	}
 	instrumentIndexMap[name] = instrumentsArr.length;
 	instrumentsArr.push(instrument.split('\n')
     .map(l => l.trim())
@@ -41,17 +63,37 @@ global.addInstrument = (name, instrument) => {
 	instrumentPatternListArr.push([]);
 };
 
+global.GO4K_FSTG = (amount,instrindex,unitindex,slot,type='FST_SET') => {
+	return `GO4K_FSTG\t`+
+		`AMOUNT(${amount}),`+
+		`DEST((${instrindex}*go4k_instrument.size*MAX_VOICES/4)`+
+		`+(${unitindex}*MAX_UNIT_SLOTS+${slot})+(go4k_instrument.workspace/4)`+
+		`+${type})`;
+};
+
 global.addPattern = (name, pattern) => {	
+	if(!name) {
+		patternAutoNameCount++;
+		name = `.PATTERN${patternAutoNameCount}`
+	}
 	if(pattern.length > patternsize()) {
 		for(let n=0;n<pattern.length; n+=patternsize()) {
 			addPattern(name + '_' + Math.floor(n / patternsize()), pattern.slice(n, n + patternsize()));			
 		}
 	} else {
+		for(let n=0;n<patternsize(); n++) {
+			if(pattern[n] === undefined) {
+				pattern[n] = 0;
+			} else if(typeof pattern[n] === 'function') {
+				pattern[n] = pattern[n]();
+			}
+		}
 		patternsMap[name] = pattern;
 	}
+	return name;
 };
 
-global.playPatterns = (patterns, incrementPosition = 1) => {		
+const playPatternsFunc = (patterns, incrementPosition = 1) => {		
 	Object.keys(patterns).forEach(instrumentName => {
 		const instrumentIndex = instrumentIndexMap[instrumentName];
 		if(instrumentIndex === undefined) {
@@ -67,7 +109,7 @@ global.playPatterns = (patterns, incrementPosition = 1) => {
 			}			
 		} else if(patternsMap[patternName]!==undefined) {
 			instrPatternList[currentPatternPosition] = patterns[instrumentName];
-		} else {
+		} else if(patternName) {
 			console.error('Unknown pattern '+patternName);
 		}
 	});
@@ -84,56 +126,114 @@ global.playPatterns = (patterns, incrementPosition = 1) => {
 	}
 };
 
+global.playPatterns = (patterns, incrementPosition = 1) => { 
+	if(onlyPlayPatternsEnabled) {
+		return;
+	}
+	playPatternsList.push(() => playPatternsFunc(patterns, incrementPosition));
+};
+global.onlyplayPatterns = (patterns, incrementPosition = 1) => { 
+	if(!onlyPlayPatternsEnabled) {
+		playPatternsList = [];
+	}
+	onlyPlayPatternsEnabled = true;
+	playPatternsList.push(() => playPatternsFunc(patterns, incrementPosition));
+};
+global.playFromHere = () => { 
+	playPatternsList = [];	
+};
+global.loopHere = () => {
+	onlyPlayPatternsEnabled = true;
+};
+
+global.repeatSection = (times, func, initial=0) => {
+	for(let n=initial;n<times;n++) {
+		func(n);
+	}
+}
 new Array(128).fill(null).map((v, ndx) => 
     (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
 ).forEach((note, ndx) => global[note] = (duration, velocity) => {
 	if(duration) {
-		return new Array(duration * ticksperbeat()).fill(null).map((v, n) => n===0 ? ndx : hld);
+		return () => new Array(duration * ticksperbeat()).fill(null).map((v, n) => n===0 ? ndx : hld);
 	} else {
 		return ndx;
 	}
 });
 
-global.pattern = (stepsperbeat, notearray) => {
+global.pattern = (stepsperbeat, notearray, channels = 1) => {
 	const inc = ticksperbeat() / stepsperbeat;
 
-	const ret = [];
-	for(let n = 0;n < notearray.length; n++) {
-		const note = notearray[n];
-		
-		if(Array.isArray(note)) {
-			for(let en = 0; en < note.length ; en++) {
-				ret[(n*inc) + en] = note[en];
-			}						
-		} else if(note !== undefined) {
-			ret[n*inc] = note;
-		}
+	const channelPatterns = [];
+	
+	for(let n=0;n<channels;n++) {
+		channelPatterns.push([]);
 	}
-	return ret;
+	
+	let pattern = channelPatterns[0];
+
+	for(let n = 0;n < notearray.length; n++) {
+		const notefunc = notearray[n];
+		
+		const quantizedpos = Math.round(n*inc);
+
+		const processNote = (note) => {
+			if(note && note.constructor && note.constructor.name === 'Function') {			
+				const notearr = note();
+				if(Array.isArray(notearr)) {
+					for(let en = 0; en < notearr.length ; en++) {
+						pattern[quantizedpos + en] = notearr[en];
+					}
+				} else {
+					pattern[quantizedpos] = note;
+				}
+			} else if(note !== undefined) {
+				pattern[quantizedpos] = note;
+			}
+		};
+
+		if(Array.isArray(notefunc) && channels > 1) {
+			for(let c = 0;c<notefunc.length;c++) {
+				pattern = channelPatterns[c];
+				processNote(notefunc[c]);
+			}			
+			pattern = channelPatterns[0];
+		} else {
+			processNote(notefunc);
+		}				
+	}
+	if(channels === 1) {
+		return pattern;
+	} else {
+		return channelPatterns;
+	}	
 };
 
 module.exports = {	
 	makeVierKlangInc: () => {
+		playPatternsList.forEach((playFunc) => playFunc());
 		let instrparamdefs = ``;
 		let instrcmddefs = ``;
 		let instrumentPatternLists = ``;
 		const patternNameToIndexMap = { '0': 0 };
-		Object.keys(patternsMap).forEach((patternName, ndx) =>
-			patternNameToIndexMap[patternName] = ndx+1);
+		const patternStringMap = {};
+		patternStringMap[new Array(patternsize()).fill(0).join(', ')] = 0;
 		
 		let patterns = '';
-		Object.keys(patternsMap).forEach(patternName => {
-			const patternArr = patternsMap[patternName];
-			
-			for(let n=0;n<patternsize(); n++) {
-				if(patternArr[n] === undefined) {
-					patternArr[n] = 0;
-				} else if(typeof patternArr[n] === 'function') {
-					patternArr[n] = patternArr[n]();
-				}
+		let patternNo = 1;
+		Object.keys(patternsMap).forEach((patternName) => {
+			const patternString = patternsMap[patternName].join(', ');
+			if(patternStringMap[patternString] !== undefined) {
+				patternNameToIndexMap[patternName] = patternStringMap[patternString];
+				// console.log('Reusing pattern', patternName, patternString);
+			} else {
+				patternStringMap[patternString] = patternNo;
+				patternNameToIndexMap[patternName] = patternNo;
+				patterns += 'db ' + patternString + '\n';
+				patternNo++;
 			}
-			patterns += 'db ' + patternArr.join(', ') + '\n';
 		});
+		// console.log('Number of patterns', patternNo);
 
 		let max_patterns = 0;
 		
@@ -171,7 +271,18 @@ module.exports = {
 			instrcmddefs += `GO4K_END_CMDDEF\n`;
 		});
 
-return `
+		const vierklangh = `#define	SAMPLE_RATE	44100
+#define	BPM	${global.bpm}
+#define	MAX_INSTRUMENTS	${instrumentsArr.length}
+#define	MAX_PATTERNS ${max_patterns * looptimes}
+#define	PATTERN_SIZE_SHIFT ${pattern_size_shift}
+#define	PATTERN_SIZE (1	<< PATTERN_SIZE_SHIFT)
+#define	MAX_TICKS (MAX_PATTERNS*PATTERN_SIZE)
+#define	SAMPLES_PER_TICK (SAMPLE_RATE*4*60/(BPM*PATTERN_SIZE))
+#define	MAX_SAMPLES	(SAMPLES_PER_TICK*MAX_TICKS)
+#define SINGLE_TICK_RENDERING`;
+
+const vierklanginc = `
 %include "notes.inc"
 ; //----------------------------------------------------------------------------------------
 ; //	useful macros
@@ -828,5 +939,7 @@ _go4k_delay_times
 	dw 11025
 %endif
 `;
+	fs.writeFileSync('4klang.h', vierklangh);
+	fs.writeFileSync('4klang.inc', vierklanginc);
 }
 };
