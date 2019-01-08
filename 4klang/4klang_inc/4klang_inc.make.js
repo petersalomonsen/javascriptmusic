@@ -11,6 +11,27 @@ let currentPatternPosition = 0;
 const patternsize = () => (1 << pattern_size_shift);
 const ticksperbeat = () => patternsize() / 4;
 
+let globalparamdefs;
+let globalcmddefs;
+
+global.setGlobalParamDefs = (defs) => {
+	globalparamdefs = defs.trim();
+	globalcmddefs = '';
+	globalparamdefs.split(/\n/).forEach(line => 
+		globalcmddefs += ('\tdb ' + line.trim().split(/\s/)[0] + '_ID\n')
+	);
+};
+
+setGlobalParamDefs(`GO4K_ACC	ACCTYPE(AUX)
+GO4K_DLL	PREGAIN(55),DRY(70),FEEDBACK(100),DAMP(64),FREQUENCY(0),DEPTH(0),DELAY(0),COUNT(8)
+GO4K_FOP	OP(FOP_XCH)
+GO4K_DLL	PREGAIN(55),DRY(70),FEEDBACK(100),DAMP(64),FREQUENCY(0),DEPTH(0),DELAY(8),COUNT(8)
+GO4K_FOP	OP(FOP_XCH)
+GO4K_ACC	ACCTYPE(OUTPUT)
+GO4K_FOP	OP(FOP_ADDP2)
+GO4K_OUT	GAIN(128), AUXSEND(0)
+`);
+
 global.addInstrument = (name, instrument) => {
 	instrumentIndexMap[name] = instrumentsArr.length;
 	instrumentsArr.push(instrument.split('\n')
@@ -149,6 +170,7 @@ module.exports = {
 			);
 			instrcmddefs += `GO4K_END_CMDDEF\n`;
 		});
+
 return `
 %include "notes.inc"
 ; //----------------------------------------------------------------------------------------
@@ -755,14 +777,7 @@ go4k_synth_instructions
 ${instrcmddefs}
 ;//	global commands
 GO4K_BEGIN_CMDDEF(Global)
-	db GO4K_ACC_ID
-	db GO4K_DLL_ID
-	db GO4K_FOP_ID
-	db GO4K_DLL_ID
-	db GO4K_FOP_ID
-	db GO4K_ACC_ID
-	db GO4K_FOP_ID
-	db GO4K_OUT_ID
+	${globalcmddefs}
 GO4K_END_CMDDEF
 go4k_synth_instructions_end
 ; //----------------------------------------------------------------------------------------
@@ -777,14 +792,7 @@ go4k_synth_parameter_values
 ${instrparamdefs}
 ;//	global parameters
 GO4K_BEGIN_PARAMDEF(Global)
-	GO4K_ACC	ACCTYPE(AUX)
-	GO4K_DLL	PREGAIN(30),DRY(70),FEEDBACK(100),DAMP(64),FREQUENCY(0),DEPTH(0),DELAY(0),COUNT(8)
-	GO4K_FOP	OP(FOP_XCH)
-	GO4K_DLL	PREGAIN(30),DRY(70),FEEDBACK(100),DAMP(64),FREQUENCY(0),DEPTH(0),DELAY(8),COUNT(8)
-	GO4K_FOP	OP(FOP_XCH)
-	GO4K_ACC	ACCTYPE(OUTPUT)
-	GO4K_FOP	OP(FOP_ADDP2)
-	GO4K_OUT	GAIN(128), AUXSEND(0)
+	${globalparamdefs}
 GO4K_END_PARAMDEF
 go4k_synth_parameter_values_end
 ; //----------------------------------------------------------------------------------------
