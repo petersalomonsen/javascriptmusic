@@ -7,7 +7,7 @@ global.looptimes = 1;
 
 const instrumentPatternListArr = [];
 const patternsMap = {};
-
+const instrumentGroupMap = {};
 const instrumentsArr = [];
 const instrumentIndexMap = {};
 const soloMap = {};
@@ -71,6 +71,18 @@ global.GO4K_FSTG = (amount,instrindex,unitindex,slot,type='FST_SET') => {
 		`+${type})`;
 };
 
+global.pp = (stepsperbeat, patterndata, channels = 1) => {
+	const channelpatterns = pattern(stepsperbeat, patterndata, channels);
+	if(channels === 1) {	
+		return addPattern(null, channelpatterns);
+	} else {
+		for(let n=0;n<channels;n++) {
+			channelpatterns[n] = addPattern(null, channelpatterns[n]);
+		}
+		return channelpatterns;
+	}
+};
+
 global.addPattern = (name, pattern) => {	
 	if(!name) {
 		patternAutoNameCount++;
@@ -93,7 +105,19 @@ global.addPattern = (name, pattern) => {
 	return name;
 };
 
+global.addInstrumentGroup = (groupName, instrumentNames) => instrumentGroupMap[groupName] = instrumentNames;
+
 const playPatternsFunc = (patterns, incrementPosition = 1) => {		
+	Object.keys(patterns).forEach(groupName => {
+		if(instrumentGroupMap[groupName]) {
+			const groupInstruments = instrumentGroupMap[groupName];
+			const groupPatterns = patterns[groupName];
+			for(let n=0;n<patterns[groupName].length;n++) {
+				patterns[groupInstruments[n]] = groupPatterns[n];
+			}
+			delete patterns[groupName];
+		}
+	});
 	Object.keys(patterns).forEach(instrumentName => {
 		const instrumentIndex = instrumentIndexMap[instrumentName];
 		if(instrumentIndex === undefined) {
@@ -126,11 +150,23 @@ const playPatternsFunc = (patterns, incrementPosition = 1) => {
 	}
 };
 
-global.playPatterns = (patterns, incrementPosition = 1) => { 
+global.logCurrentSongTime = () => {
+	const elapsedTicks = (currentPatternPosition * patternsize());
+	const elapsedBeats = elapsedTicks / ticksperbeat();
+	const minutes = elapsedBeats / bpm;
+	console.error(currentPatternPosition, Math.floor(minutes) + ':' + Math.floor((minutes * 60) % 60));
+};
+
+global.playPatterns = (patterns, incrementPosition = 1, logPosition = false) => { 
 	if(onlyPlayPatternsEnabled) {
 		return;
 	}
-	playPatternsList.push(() => playPatternsFunc(patterns, incrementPosition));
+	playPatternsList.push(() => {
+		if(logPosition) {
+			logCurrentSongTime();
+		}
+		playPatternsFunc(patterns, incrementPosition);
+	});
 };
 global.onlyplayPatterns = (patterns, incrementPosition = 1) => { 
 	if(!onlyPlayPatternsEnabled) {
@@ -209,17 +245,17 @@ global.pattern = (stepsperbeat, notearray, channels = 1) => {
 	}	
 };
 
+const patternNameToIndexMap = { '0': 0 };
+let max_patterns = 0;
+
 module.exports = {	
-	makeVierKlangInc: () => {
+	generatePatterns: () => {
 		playPatternsList.forEach((playFunc) => playFunc());
-		let instrparamdefs = ``;
-		let instrcmddefs = ``;
-		let instrumentPatternLists = ``;
-		const patternNameToIndexMap = { '0': 0 };
+
 		const patternStringMap = {};
 		patternStringMap[new Array(patternsize()).fill(0).join(', ')] = 0;
 		
-		let patterns = '';
+		let patterns = [];
 		let patternNo = 1;
 		Object.keys(patternsMap).forEach((patternName) => {
 			const patternString = patternsMap[patternName].join(', ');
@@ -229,13 +265,17 @@ module.exports = {
 			} else {
 				patternStringMap[patternString] = patternNo;
 				patternNameToIndexMap[patternName] = patternNo;
-				patterns += 'db ' + patternString + '\n';
+				patterns.push(patternsMap[patternName]);				
+
 				patternNo++;
 			}
 		});
-		// console.log('Number of patterns', patternNo);
-
-		let max_patterns = 0;
+		return patterns;
+	},
+	generateInstrumentPatternLists: () => {
+		let instrumentPatternLists = [];
+		
+		
 		
 		instrumentPatternListArr.forEach((instrumentPatternList, ndx) => {
 			if(instrumentPatternList.length > max_patterns) {
@@ -251,15 +291,32 @@ module.exports = {
 			}
 			if(instrumentPatternList.length < max_patterns) {
 				for(let ndx = instrumentPatternList.length; ndx < max_patterns; ndx++) {
-					instrumentPatternList.push('0');
+					instrumentPatternList.push(0);
 				}
 			}
 			
-			instrumentPatternLists += `Instrument${n}List		db	${
-				instrumentPatternList.map(patternName => patternNameToIndexMap[patternName]).join(', ')
-			};\n`;
+			instrumentPatternLists.push(instrumentPatternList.map(patternName => patternNameToIndexMap[patternName]));
 		}
+		return instrumentPatternLists;
+	},
+	makeVierKlangInc: () => {
+		let patterns = '';
+	
+		module.exports.generatePatterns().forEach(pattern =>
+			patterns += 'db ' + pattern.join(', ') + '\n'					
+		);
+		// console.log('Number of patterns', patternNo);
 
+		let instrumentPatternLists = ``;
+		module.exports.generateInstrumentPatternLists().forEach((instrumentPatternList, n) =>
+			instrumentPatternLists += `Instrument${n}List		db	${
+				instrumentPatternList.join(', ')
+			};\n`
+		);
+
+		let instrparamdefs = ``;
+		let instrcmddefs = ``;
+		
 		instrumentsArr.forEach((instrString, instrIndex) => {
 			instrparamdefs += (`GO4K_BEGIN_PARAMDEF(Instrument${instrIndex})\n` +
 			`	${instrString}\n` +
@@ -321,7 +378,7 @@ const vierklanginc = `
 ; //----------------------------------------------------------------------------------------
 ; //	some defines for unit usage, which reduce synth	code size
 ; //----------------------------------------------------------------------------------------
-;%define 	GO4K_USE_16BIT_OUTPUT			; // removing this will output to 32bit floating point buffer
+${process.platform==='win32' ? '' : ';'}%define 	GO4K_USE_16BIT_OUTPUT			; // removing this will output to 32bit floating point buffer
 ;%define	GO4K_USE_GROOVE_PATTERN			; // removing this skips groove pattern code
 %define		GO4K_USE_UNDENORMALIZE			; // removing this skips denormalization code in the units
 %define		GO4K_CLIP_OUTPUT				; // removing this skips clipping code for the final output

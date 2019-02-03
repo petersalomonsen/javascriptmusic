@@ -1,0 +1,13 @@
+const pitchstep: f64 = 1.0004513695322617; // Math.pow(2, (1/128) / 12);
+const c0: f64 = 8.175798915643707; // Math.pow(2, -69 / 12);
+let pitchtable = memory.allocate(128*128*4);
+let pitch: f64 = c0;
+
+for(let n: usize=0;n<(128*128);n++) {    
+    store<f32>(pitchtable + (n*4), pitch as f32);
+    pitch *= pitchstep;
+}
+
+export function notefreq(note: f32): f32 {
+    return load<f32>(pitchtable + (((note * 128) as usize) * 4));
+}

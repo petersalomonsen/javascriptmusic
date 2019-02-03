@@ -1,4 +1,7 @@
 4klang.o
 4klangrender
-out.raw
-out.wav
+*.raw
+*.wav
+*.exe
+_pie
+yasm.exe

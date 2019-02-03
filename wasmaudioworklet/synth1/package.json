@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "asbuild": "asc assembly/index.ts -b build/index.wasm -Oz"
+  },
+  "dependencies": {
+    "assemblyscript": "git+https://github.com/AssemblyScript/assemblyscript.git"
+  }
+}

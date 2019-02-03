@@ -1,0 +1,1 @@
+export const SAMPLERATE: f32 = 44100;

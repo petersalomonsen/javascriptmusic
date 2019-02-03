@@ -1,15 +1,33 @@
 // The code in the main global scope.
-window.startaudio = async () => {        
-    const bytes = await fetch('test.wasm').then(response =>
+
+let audioworkletnode;
+
+window.startaudio = async () => { 
+           
+    const bytes = await fetch('synth1/build/index.wasm').then(response =>
         response.arrayBuffer()
     );
       
+    const song = JSON.parse(await fetch('synth1/songs/testsong.json').then(response =>
+        response.text()
+    ));
     let context = new AudioContext();
+
     await context.audioWorklet.addModule('testprocessors.js');
-    let testprocessor = new AudioWorkletNode(context, 'my-worklet-processor');
-    console.log(testprocessor);
+    audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
+        {outputChannelCount: [2]});
+    
     // testprocessor.port.onmessage = (d) => console.log(d.data);
-    testprocessor.port.start();
-    testprocessor.port.postMessage({ topic: "wasm", wasm: bytes},bytes);
-    testprocessor.connect(context.destination);
+    audioworkletnode.port.start();
+    audioworkletnode.port.postMessage({ topic: "wasm", wasm: bytes, song: song});
+    audioworkletnode.connect(context.destination);
+};
+
+window.stopaudio = async () => {
+    audioworkletnode.disconnect();
+}
+
+window.restartaudio = async () => {
+    await stopaudio();
+    await startaudio();
 };

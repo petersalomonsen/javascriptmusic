@@ -20,11 +20,11 @@ GO4K_FOP        OP(FOP_XCH)
 GO4K_VCF        FREQUENCY(96),RESONANCE(128),VCFTYPE(BANDPASS)
 GO4K_FOP        OP(FOP_ADDP)
 GO4K_FOP        OP(FOP_MULP)
-GO4K_DLL        PREGAIN(64),DRY(128),FEEDBACK(64),DAMP(64),FREQUENCY(0),DEPTH(0),DELAY(17),COUNT(1) ; ERROR
+GO4K_DLL        PREGAIN(64),DRY(128),FEEDBACK(90),DAMP(64),FREQUENCY(0),DEPTH(0),DELAY(17),COUNT(1) ; ERROR
 GO4K_PAN        PANNING(80)
-GO4K_OUT        GAIN(65), AUXSEND(80)`;
+GO4K_OUT        GAIN(65), AUXSEND(100)`;
 
-const pad = `GO4K_ENV        ATTAC(85),DECAY(128),SUSTAIN(100),RELEASE(80),GAIN(50)
+const pad = (pan) => `GO4K_ENV        ATTAC(85),DECAY(128),SUSTAIN(100),RELEASE(80),GAIN(50)
 GO4K_VCO        TRANSPOSE(16),DETUNE(64),PHASE(0),GATES(85),COLOR(64),SHAPE(64),GAIN(128),FLAGS(TRISAW|LFO)
 GO4K_FST        AMOUNT(80),DEST(13*MAX_UNIT_SLOTS+4+FST_SET)
 GO4K_FST        AMOUNT(48),DEST(9*MAX_UNIT_SLOTS+4+FST_SET)
@@ -43,8 +43,8 @@ GO4K_VCF        FREQUENCY(96),RESONANCE(128),VCFTYPE(LOWPASS)
 GO4K_FOP        OP(FOP_ADDP)
 GO4K_FOP        OP(FOP_MULP)
 GO4K_DLL        PREGAIN(112),DRY(64),FEEDBACK(64),DAMP(64),FREQUENCY(56),DEPTH(48),DELAY(17),COUNT(1)
-GO4K_PAN        PANNING(40)
-GO4K_OUT        GAIN(34), AUXSEND(20)`;
+GO4K_PAN        PANNING(${pan})
+GO4K_OUT        GAIN(30), AUXSEND(20)`;
 
 const lead = `
 
@@ -62,11 +62,11 @@ GO4K_FOP        OP(FOP_MULP)
 GO4K_VCO        TRANSPOSE(32),DETUNE(64),PHASE(64),GATES(0x80),COLOR(127),SHAPE(64),GAIN(50),FLAGS(SINE|LFO)
 GO4K_FST        AMOUNT(104),DEST(10*MAX_UNIT_SLOTS+4+FST_SET)
 GO4K_FOP        OP(FOP_POP)
-GO4K_VCF        FREQUENCY(80),RESONANCE(128),VCFTYPE(LOWPASS)
+GO4K_VCF        FREQUENCY(75),RESONANCE(120),VCFTYPE(LOWPASS)
 
-GO4K_DLL        PREGAIN(64),DRY(90),FEEDBACK(50),DAMP(64),FREQUENCY(56),DEPTH(48),DELAY(17),COUNT(1)
-GO4K_PAN		PANNING(64)
-GO4K_OUT        GAIN(31), AUXSEND(55)`;
+GO4K_DLL        PREGAIN(64),DRY(100),FEEDBACK(70),DAMP(64),FREQUENCY(56),DEPTH(48),DELAY(17),COUNT(2)
+GO4K_PAN		PANNING(50)
+GO4K_OUT        GAIN(16), AUXSEND(50)`;
 
 const bass = `GO4K_ENV        ATTAC(16),DECAY(64),SUSTAIN(96),RELEASE(86),GAIN(80)
 GO4K_ENV        ATTAC(16),DECAY(72),SUSTAIN(64),RELEASE(70),GAIN(100)
@@ -94,8 +94,8 @@ GO4K_FST	AMOUNT(80),DEST(6*MAX_UNIT_SLOTS+1)
 GO4K_FOP	OP(FOP_POP)
 GO4K_VCO	TRANSPOSE(46),DETUNE(64),PHASE(0),GATES(0),COLOR(64),SHAPE(64),GAIN(128),FLAGS(TRISAW)
 GO4K_FOP	OP(FOP_MULP)
-GO4K_PAN	PANNING(64)
-GO4K_OUT	GAIN(10), AUXSEND(2)`;
+GO4K_PAN	PANNING(68)
+GO4K_OUT	GAIN(12), AUXSEND(2)`;
 
 const snare = `GO4K_ENV	ATTAC(0),DECAY(72),SUSTAIN(0),RELEASE(72),GAIN(25)
 GO4K_FST	AMOUNT(128),DEST(0*MAX_UNIT_SLOTS+2+FST_SET)
@@ -113,7 +113,7 @@ GO4K_FOP	OP(FOP_ADDP)
 GO4K_FOP	OP(FOP_ADDP)
 GO4K_FOP	OP(FOP_MULP)
 GO4K_VCF	FREQUENCY(22),RESONANCE(32),VCFTYPE(HIGHPASS)
-GO4K_PAN	PANNING(64)
+GO4K_PAN	PANNING(56)
 GO4K_OUT	GAIN(5), AUXSEND(2)`;
 
 const hihat = `GO4K_ENV	ATTAC(0),DECAY(64),SUSTAIN(0),RELEASE(0),GAIN(61)
@@ -125,9 +125,9 @@ GO4K_OUT	GAIN(30), AUXSEND(1)`;
 
 addInstrument('flute', flute);
 addInstrument('bass', bass);
-addInstrument('pad1', pad);
-addInstrument('pad2', pad);
-addInstrument('pad3', pad);
+addInstrument('pad1', pad(30));
+addInstrument('pad2', pad(60));
+addInstrument('pad3', pad(90));
 addInstrument('lead', lead);
 addInstrument('kick', kick);
 addInstrument('snare', snare);
@@ -321,6 +321,7 @@ for(let n = 0; n<2; n++) {
 		snare: 'snare1',
 		hihat: 'hihat'	
 	});
+	
 	playPatterns({
 		kick: 'kick',
 		snare: 'snare1',
@@ -452,7 +453,7 @@ for(let n = 0; n<2; n++) {
 		kick: 'kick2',
 		hihat: 'hihat'
 	});
-
+	
 	playPatterns({
 		bass: 'bass3',
 		pad1: 'pad3_1',
@@ -475,14 +476,15 @@ for(let n = 0; n<2; n++) {
 		flute: 'flute3',
 		hihat: 'hihat',
 		snare: 'snare1'
-	});
+	}, 1, true);
+	
 	playPatterns({	
 		kick: 'kick',
 		flute: 'flute3',
 		hihat: 'hihat',
 		snare: 'snare1'
 	});
-
+	
 	playPatterns({
 		bass: 'bass3',
 		pad1: 'pad3_1',
@@ -494,8 +496,9 @@ for(let n = 0; n<2; n++) {
 		hihat: 'hihat',
 		snare: 'snare1'
 	});
+	// Clipping occured here
 	playPatterns({	
-		kick: 'kick',
+		kick: pp(4,[,,,, ,,,,c4, ,,,, ]),
 		flute: 'flute3',
 		hihat: 'hihat',
 		snare: 'snare1'
@@ -536,6 +539,4 @@ playPatterns({
 	pad3: 'pad1_3'
 },4);
 
-
-
-fs.writeFileSync('4klang.inc', incMake4k.makeVierKlangInc());
+incMake4k.makeVierKlangInc();
