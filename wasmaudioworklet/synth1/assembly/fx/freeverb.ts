@@ -8,7 +8,7 @@ import { AllPass } from './allpass';
 import { SAMPLERATE as SAMPLERATE_f32 } from '../environment';
 import { StereoSignal } from '../synth/stereosignal.class';
 
-const SAMPLERATE = SAMPLERATE_f32 as usize;
+let SAMPLERATE = SAMPLERATE_f32 as usize;
 const FIXED_GAIN: f32 = 0.015;
 
 const SCALE_WET: f32 = 3.0;

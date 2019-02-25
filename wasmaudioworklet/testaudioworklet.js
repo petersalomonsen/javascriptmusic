@@ -19,7 +19,7 @@ window.startaudio = async () => {
     
     // testprocessor.port.onmessage = (d) => console.log(d.data);
     audioworkletnode.port.start();
-    audioworkletnode.port.postMessage({ topic: "wasm", wasm: bytes, song: song});
+    audioworkletnode.port.postMessage({ topic: "wasm", samplerate: context.sampleRate, wasm: bytes, song: song});
     audioworkletnode.connect(context.destination);
 };
 

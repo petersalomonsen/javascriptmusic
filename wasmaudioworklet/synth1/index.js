@@ -1,6 +1,9 @@
 const fs = require("fs");
 const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/index.wasm"));
 const imports = { 
+  environment: {
+    SAMPLERATE: 44100
+  },
   env: {
     abort(msgPtr, filePtr, line, column) {
       throw new Error(`index.ts: abort at [${ line }:${ column }]`);

@@ -18,7 +18,7 @@ const ticksPerBeat: f32 = 4;
 const bpm: f32 = 120;
 
 const ticksPerSec = ticksPerBeat * bpm / 60;
-const ticksPerSample = ticksPerSec / SAMPLERATE;
+let ticksPerSample = ticksPerSec / SAMPLERATE;
 
 let previousPatternNoteIndex: usize = -1;
 

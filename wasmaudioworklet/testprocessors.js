@@ -2,14 +2,6 @@ let instance;
 let membuffer;
 
 let gain = 0.5;
-const imports = { 
-  environment: { random: Math.random, pow: Math.pow },
-  env: {
-    abort(msgPtr, filePtr, line, column) {
-      throw new Error(`index.ts: abort at [${ line }:${ column }]`);
-    }
-  } 
-};
 
 const loadSong = (song) => {
   const patternsptr = instance.allocatePatterns(song.patterns.length + 1);
@@ -42,7 +34,9 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.port.onmessage = async (msg) => {
-        instance = (await WebAssembly.instantiate(msg.data.wasm, imports)).instance.exports;
+        instance = (await WebAssembly.instantiate(msg.data.wasm, {
+          environment: { SAMPLERATE: msg.data.samplerate }
+        })).instance.exports;
         membuffer = new Uint8Array(instance.memory.buffer);
   
         loadSong(msg.data.song);
