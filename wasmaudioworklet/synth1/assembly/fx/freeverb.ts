@@ -45,7 +45,7 @@ const ALLPASS_TUNING_R3: usize = 341 + STEREO_SPREAD;
 const ALLPASS_TUNING_L4: usize = 225;
 const ALLPASS_TUNING_R4: usize = 225 + STEREO_SPREAD;
 
-@inline function adjust_length(length: usize, sr: usize): usize {
+function adjust_length(length: usize, sr: usize): usize {
     return ((length as f32) * (sr as f32) / SAMPLERATE_f32) as usize;
 }
 

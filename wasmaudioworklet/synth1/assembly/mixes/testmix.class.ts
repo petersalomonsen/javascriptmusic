@@ -8,8 +8,9 @@ import { Kick } from "../instruments/kick.class";
 import { Snare } from "../instruments/snare.class";
 import { DriveLead } from "../instruments/drivelead.class";
 import { allocateInstrumentNoteBuffer, getNote } from "../control/instrumentnotebuffer";
+import { Hihat } from "../instruments/hihat.class";
 
-export const NUM_INSTRUMENTS = 8;
+export const NUM_INSTRUMENTS = 9;
 allocateInstrumentNoteBuffer(NUM_INSTRUMENTS);
 
 let flute = new TestInstrument();
@@ -20,6 +21,7 @@ let pad2 = new Pad();
 let pad3 = new Pad();
 let kick = new Kick();
 let snare = new Snare();
+let hihat = new Hihat();
 
 let freeverb = new Freeverb();
 let reverbline = new StereoSignal();
@@ -36,6 +38,7 @@ export let signal: StereoSignal = new StereoSignal();
     kick.note = getNote(5);
     snare.note = getNote(6);
     drivelead.note = getNote(7);
+    hihat.note = getNote(8);
 }
 
 let freq: f32 = 50;
@@ -44,7 +47,7 @@ let freq: f32 = 50;
     mainline.right = 0;
     reverbline.left = 0;
     reverbline.right = 0;
-      
+    
     flute.next();
     mainline.addStereoSignal(flute.signal, 0.7, 0.4);
     reverbline.addStereoSignal(flute.signal, 0.3, 0.4);
@@ -62,6 +65,11 @@ let freq: f32 = 50;
     pad3.next(); 
     mainline.addStereoSignal(pad3.signal, 0.6, 0.6);
     reverbline.addStereoSignal(pad3.signal, 0.4, 0.6);
+
+    drivelead.next();
+    mainline.addStereoSignal(drivelead.signal, 1.0, 0.4);
+    reverbline.addStereoSignal(drivelead.signal, 0.5, 0.6);
+    
     
     kick.next();
     mainline.addStereoSignal(kick.signal, 1.5, 0.5);
@@ -71,9 +79,10 @@ let freq: f32 = 50;
     mainline.addStereoSignal(snare.signal, 1.0, 0.5);
     reverbline.addStereoSignal(snare.signal, 0.1, 0.5);
     
-    drivelead.next();
-    mainline.addStereoSignal(drivelead.signal, 1.0, 0.4);
-    reverbline.addStereoSignal(drivelead.signal, 0.5, 0.6);
+    
+    hihat.next();
+    mainline.addStereoSignal(hihat.signal, 1.0, 0.5);
+    reverbline.addStereoSignal(hihat.signal, 0.1, 0.5);
     
     freeverb.tick(reverbline);
     

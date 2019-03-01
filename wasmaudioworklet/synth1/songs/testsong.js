@@ -19,6 +19,8 @@ addInstrument('kick', '');
 addInstrument('snare', '');
 addInstrumentGroup('drums', ['kick', 'snare']);
 addInstrument('drivelead', '');
+addInstrument('hihat', '');
+
 
 playPatterns({
 	drivelead: pp(4, [
@@ -48,6 +50,16 @@ playPatterns({
 		a2,,a2,as2,
 		,,,,
 		c3,,c4
+	]),
+	hihat: pp(4, [
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
 	]),
 	drums: pp(4,[
 		50,,,,
@@ -98,6 +110,16 @@ playPatterns({
 		,20,50,,
 		[,50],,,,
 	],2),
+	hihat: pp(4, [
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+		60,,20,,
+	]),
 	pads: pp(4, [
 		[as4,d5,f5],,,[as4,d5,f5],
 		,,[as4,d5,g5],,
