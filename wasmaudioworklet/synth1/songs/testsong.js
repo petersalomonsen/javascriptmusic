@@ -1,4 +1,4 @@
-const vierklang = require('../../../4klang/4klang_inc/4klang_inc.make.js');
+const vierklang = require('../../../4klang/4klang_inc/pattern_tools.js');
 
 global.bpm = 120;
 global.pattern_size_shift = 4;
@@ -238,7 +238,7 @@ for(var n=0;n<2;n++) {
 	},2);
 }
 
-// playFromHere();
+playFromHere();
 
 playPatterns({
 	lead1: pp(4, [
@@ -285,8 +285,20 @@ playPatterns({
 	drivelead: pp(4, [
 		c4,d4,f4,g4,
 		a4(1),,c5,a4,
-		,,g4,f4,
-		g4,a4,g4,f4
+		,,,,
+		,,,,
+		d5(1),,c5,,
+		a4,,g4,a4(2),
+		,,,,
+		,,,,
+		c4,d4,f4,g4,
+		a4(1),,c5,a4,
+		,,,,
+		,,,,
+		c5,,d5,,
+		f5,,g5,a5(1),
+		,,g5,f5,
+		g5,a5,g5,f5
 	]),
 },2);
 
