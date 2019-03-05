@@ -238,7 +238,7 @@ for(var n=0;n<2;n++) {
 	},2);
 }
 
-playFromHere();
+// playFromHere();
 
 playPatterns({
 	lead1: pp(4, [
