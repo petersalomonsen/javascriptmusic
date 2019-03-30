@@ -1,1 +1,1 @@
-songs/lazygrooves/4klang.inc.js
+songs/new.inc.js
