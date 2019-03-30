@@ -29,5 +29,11 @@ https://www.youtube.com/watch?v=zHrbLSjKmxQ
 
 Also experimenting with synthesizing music in webassembly using AssemblyScript in the [wasmaudioworklet/synth1](wasmaudioworklet/synth1) folder.
 
+You can see a live demo here: https://petersalomonsen.com/webassemblymusic/test1/
+
+And there are some videos that can be seen here:
+
+https://www.youtube.com/watch?v=ThkIgYcvkMU&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7
+
 
 This is all very much work in progress. More stuff coming soon....
