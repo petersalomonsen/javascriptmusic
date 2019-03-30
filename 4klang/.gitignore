@@ -1,4 +1,6 @@
 4klang.o
+4klang.inc
+4klang.h
 4klangrender
 *.raw
 *.wav

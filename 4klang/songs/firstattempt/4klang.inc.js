@@ -1,5 +1,5 @@
-const incMake4k = require('./4klang_inc/4klang_inc.make.js');
-const instrmap = require('./instruments/instrumentmap.js');
+const incMake4k = require('../../4klang_inc/4klang_inc.make.js');
+const instrmap = require('../../instruments/instrumentmap.js');
 const fs = require('fs');
 
 const flute = `GO4K_ENV        ATTAC(48),DECAY(80),SUSTAIN(64),RELEASE(64),GAIN(40)

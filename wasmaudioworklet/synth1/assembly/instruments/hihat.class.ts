@@ -30,7 +30,11 @@ export class Hihat {
     }
 
     next(): void {        
-        let env: f32 = this.envelope.next();        
+        let env: f32 = this.envelope.next();   
+        if(env === 0) {
+            this.signal.clear();
+            return;
+        }     
         let osc: f32 = this.noise.next();        
         let signal = this.velocity * env * osc;
         

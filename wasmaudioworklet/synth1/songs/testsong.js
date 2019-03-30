@@ -7,7 +7,7 @@ global.pattern_size_shift = 4;
 /*soloInstrument('pad1');
 soloInstrument('pad2');
 soloInstrument('pad3');*/
-// soloInstrument('lead');
+// soloInstrument('lead1');
 
 addInstrument('lead1', '');
 addInstrument('bass', '');
@@ -354,4 +354,4 @@ module.exports = {
     instrumentPatternLists: instrumentPatternLists
 }
 
-require('fs').writeFileSync('testsong.json', JSON.stringify(module.exports));
+// require('fs').writeFileSync('testsong.json', JSON.stringify(module.exports));

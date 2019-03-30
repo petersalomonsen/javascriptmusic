@@ -34,36 +34,40 @@ const songlength = song.instrumentPatternLists[0].length;
 // console.error('song length', songlength);
 // console.error('patternlists', song.instrumentPatternLists);
 // console.error('patterns', song.patterns);
-var instrumentpatternslistptr = instance.allocateInstrumentPatternList(songlength);  
+var instrumentpatternslistptr = instance.allocateInstrumentPatternList(songlength, song.instrumentPatternLists.length);  
 
 for(let instrIndex = 0;
       instrIndex < song.instrumentPatternLists.length; 
       instrIndex++) {
   for(let n=0;n<songlength;n++) {
     membuffer[instrIndex*songlength + n + instrumentpatternslistptr] =
-      song.instrumentPatternLists[instrIndex][n];
-      
+      song.instrumentPatternLists[instrIndex][n];      
   }
 }
 
 const gain = 0.2;
 
-const FRAMES = 8192;
-const buffer = new Uint8Array(FRAMES * 4 * 2);
-const instancebufferptr = instance.allocateSampleBuffer(FRAMES);
-const instancebuffer = new Float32Array(instance.memory.buffer, instancebufferptr, FRAMES * 2);
+const INSTANCE_FRAMES = 128;
+const BUFFERS = 32;
+const buffer = new Uint8Array(INSTANCE_FRAMES * BUFFERS * 4 * 2);
+const instancebufferptr = instance.allocateSampleBuffer(INSTANCE_FRAMES);
+const instancebuffer = new Float32Array(instance.memory.buffer, instancebufferptr, INSTANCE_FRAMES * 2);
 
 const dv = new DataView(buffer.buffer);  
 
 async function writeoutput() {
   while(true) {
     
-    instance.fillSampleBuffer();
-    
-    for(let n=0;n<FRAMES * 2;n ++ ) {
-      dv.setFloat32(n * 4, instancebuffer[n] * gain, true);
+    for(let b = 0; b<BUFFERS; b++) {
+      instance.fillSampleBuffer();
+      const bufoffset = b * INSTANCE_FRAMES * 4 * 2;
+
+      for(let n=0;n<INSTANCE_FRAMES;n ++ ) {
+        dv.setFloat32(bufoffset + n * 4 * 2, instancebuffer[n] * gain, true);
+        dv.setFloat32(bufoffset + n * 4 * 2 + 4, instancebuffer[n + INSTANCE_FRAMES] * gain, true);
+      }
     }
-    
+
     if(!process.stdout.write(buffer)) {      
       await new Promise(resolve => process.stdout.once('drain', () => resolve()));
     }

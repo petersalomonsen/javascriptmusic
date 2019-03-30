@@ -33,14 +33,17 @@ export class DriveLead {
 
     next(): void {        
         let ret: f32 = this.envelope.next();
+        if(ret===0) {
+            this.signal.clear();
+            return;
+        }
         ret *= this.sawoscillator.next();
         ret = this.shaper.process(ret);
         
 
         this.signal.left = this.signal.right / 1.2;
         this.signal.right = this.signal.left / 1.2;
-        this.signal.addMonoSignal(ret, 0.6, 0.5);
-        
+        this.signal.addMonoSignal(ret, 0.6, 0.5);        
     } 
 }
   

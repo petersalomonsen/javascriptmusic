@@ -34,7 +34,10 @@ export class Snare {
 
     next(): void {        
         let env: f32 = this.envelope.next();
-
+        if(env === 0) {
+            this.signal.clear();
+            return;
+        }
         this.sawoscillator.frequency = 20.0 + (env * 200.0);
         
         let osc1: f32 = this.sawoscillator.next() + this.noise.next();

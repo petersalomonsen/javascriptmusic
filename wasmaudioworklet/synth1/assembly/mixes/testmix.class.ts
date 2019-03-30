@@ -1,5 +1,5 @@
 import { StereoSignal } from "../synth/stereosignal.class";
-import { SAMPLERATE } from "../environment";
+
 import { Freeverb } from "../fx/freeverb";
 import { TestInstrument } from "../instruments/testinstrument.class";
 import { SawBass } from "../instruments/sawbass.class";
@@ -7,11 +7,8 @@ import { Pad } from "../instruments/pad.class";
 import { Kick } from "../instruments/kick.class";
 import { Snare } from "../instruments/snare.class";
 import { DriveLead } from "../instruments/drivelead.class";
-import { allocateInstrumentNoteBuffer, getNote } from "../control/instrumentnotebuffer";
-import { Hihat } from "../instruments/hihat.class";
 
-export const NUM_INSTRUMENTS = 9;
-allocateInstrumentNoteBuffer(NUM_INSTRUMENTS);
+import { Hihat } from "../instruments/hihat.class";
 
 let flute = new TestInstrument();
 let drivelead = new DriveLead();
@@ -29,61 +26,83 @@ let mainline = new StereoSignal();
 
 export let signal: StereoSignal = new StereoSignal();
 
-@inline export function instrumentNotesUpdated(): void {
-    flute.note = getNote(0);
-    bass.note = getNote(1);
-    pad1.note = getNote(2);
-    pad2.note = getNote(3);
-    pad3.note = getNote(4);
-    kick.note = getNote(5);
-    snare.note = getNote(6);
-    drivelead.note = getNote(7);
-    hihat.note = getNote(8);
+export function setChannelValue(channel: usize, value: f32): void {
+    switch(channel) {
+        case 0:
+            flute.note = value;
+            break;
+        case 1:
+            bass.note = value;
+            break;
+        case 2:
+            pad1.note = value;
+            break;
+        case 3:
+            pad2.note = value;
+            break;
+        case 4:
+            pad3.note = value;
+            break;
+        case 5:
+            kick.note = value;
+            break;
+        case 6:
+            snare.note = value;
+            break;
+        case 7:
+            drivelead.note = value;
+            break;
+        case 8:
+            hihat.note = value;
+            break;
+    }
+    
 }
 
 let freq: f32 = 50;
-@inline export function mixernext(): void {  
+export function mixernext(): void {  
     mainline.left = 0;
     mainline.right = 0;
     reverbline.left = 0;
     reverbline.right = 0;
     
     flute.next();
+    pad1.next(); 
+    pad2.next();
+    pad3.next(); 
+    kick.next();
+    snare.next();
+    hihat.next();
+    bass.next(); 
+    drivelead.next();
+
     mainline.addStereoSignal(flute.signal, 0.7, 0.4);
     reverbline.addStereoSignal(flute.signal, 0.3, 0.4);
     
-    bass.next(); 
-    mainline.addStereoSignal(bass.signal, 1, 0.6);
-    reverbline.addStereoSignal(bass.signal, 0.1, 0.6);
-    
-    pad1.next(); 
     mainline.addStereoSignal(pad1.signal, 0.6, 0.5);
     reverbline.addStereoSignal(pad1.signal, 0.4, 0.5);
-    pad2.next(); 
+
     mainline.addStereoSignal(pad2.signal, 0.6, 0.4);
     reverbline.addStereoSignal(pad2.signal, 0.4, 0.4);
-    pad3.next(); 
+
     mainline.addStereoSignal(pad3.signal, 0.6, 0.6);
     reverbline.addStereoSignal(pad3.signal, 0.4, 0.6);
 
-    drivelead.next();
-    mainline.addStereoSignal(drivelead.signal, 1.0, 0.4);
-    reverbline.addStereoSignal(drivelead.signal, 0.5, 0.6);
-    
-    
-    kick.next();
     mainline.addStereoSignal(kick.signal, 1.5, 0.5);
     reverbline.addStereoSignal(kick.signal, 0.1, 0.5);
     
-    snare.next();
     mainline.addStereoSignal(snare.signal, 1.0, 0.5);
     reverbline.addStereoSignal(snare.signal, 0.1, 0.5);
-    
-    
-    hihat.next();
+   
     mainline.addStereoSignal(hihat.signal, 1.0, 0.5);
     reverbline.addStereoSignal(hihat.signal, 0.1, 0.5);
-    
+
+    mainline.addStereoSignal(bass.signal, 1, 0.6);
+    reverbline.addStereoSignal(bass.signal, 0.1, 0.6);
+
+    mainline.addStereoSignal(drivelead.signal, 1.0, 0.4);
+    reverbline.addStereoSignal(drivelead.signal, 0.5, 0.6);
+
     freeverb.tick(reverbline);
     
     signal.left = mainline.left + reverbline.left;

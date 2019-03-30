@@ -16,7 +16,6 @@ let playPatternsList = [];
 
 let currentPatternPosition = 0;
 
-global.patternsize = 1 << pattern_size_shift;
 const ticksperbeat = () => patternsize / 4;
 
 let globalparamdefs;
@@ -24,6 +23,10 @@ let globalcmddefs;
 
 let patternAutoNameCount = 0;
 
+global.calculatePatternSize = () => {
+	global.patternsize = 1 << pattern_size_shift;
+};
+calculatePatternSize();
 global.soloInstrument = (name) => {
 	soloMap[name] = true;
 };
@@ -32,9 +35,6 @@ global.muteInstrument = (name) => {
 	muteMap[name] = true;
 };
 global.addInstrument = (name, instrument) => {
-	if(muteMap[name] || Object.keys(soloMap).length > 0 && !soloMap[name]) {
-		return;
-	}
 	instrumentIndexMap[name] = instrumentsArr.length;
 	instrumentsArr.push(instrument.split('\n')
     .map(l => l.trim())
@@ -97,8 +97,13 @@ const playPatternsFunc = (patterns, incrementPosition = 1) => {
 			return;
 		}
 		const instrPatternList = instrumentPatternListArr[instrumentIndex];
-		const patternName = patterns[instrumentName];
+		let patternName = patterns[instrumentName];
 
+		if(muteMap[instrumentName] || Object.keys(soloMap).length > 0 && !soloMap[instrumentName]) {
+			console.log('muted', instrumentName);
+			patternName = undefined;
+		}
+	
 		if(patternsMap[patternName]===undefined && patternsMap[patternName + '_0']) {			
 			for(let patternIndex = 0; patternsMap[patternName + '_' + patternIndex] !== undefined; patternIndex++) {
 				instrPatternList[currentPatternPosition + patternIndex] = patternName + '_' + patternIndex;

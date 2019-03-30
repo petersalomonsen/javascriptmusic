@@ -16,11 +16,11 @@ export class TestInstrument {
     readonly signal: StereoSignal = new StereoSignal();
 
     set note(note: f32) {        
-        if(note > 1) {            
+        if(note!==this.note && note > 1) {            
             this.envelope.attack();            
             this.sineoscillator.frequency = notefreq(note);
             this.sineoscillator2.frequency = notefreq(note + 12);
-        } else {
+        } else if(note===0) {
             this.envelope.release();
         }
         this._note = note;
@@ -30,12 +30,16 @@ export class TestInstrument {
         return this._note;
     }
 
-    next(): void {        
+    next(): void {                
         let env: f32 = this.envelope.next();
-        let osc1 = env * this.sineoscillator.next();
-        let osc2 = env * this.sineoscillator2.next();
-        this.signal.left = osc1 * 0.8 + osc2 * 0.2;
-        this.signal.right = osc1 * 0.2 + osc2 * 0.8;
+        if(env === 0) {
+            this.signal.clear();            
+        } else {
+            let osc1 = env * this.sineoscillator.next();
+            let osc2 = env * this.sineoscillator2.next();
+            this.signal.left = osc1 * 0.8 + osc2 * 0.2;
+            this.signal.right = osc1 * 0.2 + osc2 * 0.8;
+        }
 
         let delay1 = this.delayline.read();
         let delay2 = this.delayline.read();

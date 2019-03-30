@@ -35,6 +35,10 @@ export class SawBass {
 
     next(): void {        
         let env: f32 = this.envelope.next();
+        if(env === 0) {
+            this.signal.clear();
+            return;
+        }
         // this.signal.clear();
         this.signal.left /= 1.03; // feedback
         this.signal.right /= 1.03; // feedback

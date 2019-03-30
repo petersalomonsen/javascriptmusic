@@ -38,6 +38,10 @@ export class Pad {
 
     next(): void {        
         let env: f32 = this.envelope.next();
+        if(env === 0) {
+            this.signal.clear();
+            return;
+        }
         let osc1: f32 = this.sawoscillator.next();
         let osc2: f32 = this.sawoscillator2.next();
         let osc3: f32 = this.sawoscillator3.next();

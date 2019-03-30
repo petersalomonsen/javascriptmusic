@@ -1,7 +1,8 @@
-const incMake4k = require('./4klang_inc/4klang_inc.make.js');
+const incMake4k = require('../../4klang_inc/4klang_inc.make.js');
 
 global.bpm = 280;
 global.pattern_size_shift = 3;
+calculatePatternSize();
 // global.looptimes = 100;
 
 
