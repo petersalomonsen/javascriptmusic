@@ -40,15 +40,6 @@ export class TestInstrument {
             this.signal.left = osc1 * 0.8 + osc2 * 0.2;
             this.signal.right = osc1 * 0.2 + osc2 * 0.8;
         }
-
-        let delay1 = this.delayline.read();
-        let delay2 = this.delayline.read();
-        
-        this.delayline2.write_and_advance(delay1 * 0.3);
-        this.delayline.write_and_advance(this.signal.left * 0.5 + delay2 * 0.3);
-        
-        this.signal.left += delay2;
-        this.signal.right += delay1; 
     } 
 }
   

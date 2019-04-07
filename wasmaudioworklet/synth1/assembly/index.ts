@@ -9,6 +9,7 @@ const PATTERN_LENGTH: f32 = (1 << PATTERN_SIZE_SHIFT) as f32;
 
 let NUM_INSTRUMENTS: i32;
 
+let holdChannelValuesBufferPtr: usize;
 let currentChannelValuesBufferPtr: usize;
 let patternsPtr: usize;
 let instrumentPatternListsPtr: usize;
@@ -50,6 +51,10 @@ export function toggleSongPlay(status: boolean): void {
   playOrPause = status;
 }
 
+export function isPlaying(): boolean {
+  return playOrPause;
+}
+
 function updateInstrumentNotes(): void {
   if(!playOrPause) {
     return;
@@ -75,15 +80,29 @@ function updateInstrumentNotes(): void {
         n * songlength +
         patternIndex);
     
-    let channelValue: f32 = (load<u8>(patternsPtr + (instrumentPatternIndex << PATTERN_SIZE_SHIFT) 
-        + patternNoteIndex)) as f32
+    let channelValue: f32 = load<u8>(patternsPtr + (instrumentPatternIndex << PATTERN_SIZE_SHIFT)
+        + patternNoteIndex) as f32;
     
-    if(currentChannelValuesBufferPtr) {
-      store<f32>(currentChannelValuesBufferPtr + n*4, channelValue);
+    let holdChannelValue: f32 = load<f32>(holdChannelValuesBufferPtr + n * 4);
+    if(holdChannelValue > 0 && channelValue !== 1 && channelValue !== holdChannelValue) {
+      // Hold value
+      channelValue = 1;
+      store<u8>(patternsPtr + (instrumentPatternIndex << PATTERN_SIZE_SHIFT)
+        + patternNoteIndex, 1 as u8);
     }
 
-    setChannelValue(n, channelValue);
+    // 1 means HOLD value - no change to the visualizer     
+    if(channelValue !== 1) {   
+      // For external visualizer to monitor channel values currently been played by the sequencer            
+      store<f32>(currentChannelValuesBufferPtr + n*4, channelValue);
+      setChannelValue(n, channelValue);
+    }    
   }
+}
+
+export function recordChannelValue(channel: usize, value: f32): void {
+  store<f32>(holdChannelValuesBufferPtr + channel * 4, value);
+  setChannelValue(channel, value);
 }
 
 export function allocatePatterns(numpatterns: i32): usize {
@@ -94,6 +113,8 @@ export function allocatePatterns(numpatterns: i32): usize {
 export function allocateInstrumentPatternList(songpatternslength: i32, numinstruments: i32): usize {
   NUM_INSTRUMENTS = numinstruments;
   songlength = songpatternslength;
+  currentChannelValuesBufferPtr = memory.allocate(NUM_INSTRUMENTS * 4);
+  holdChannelValuesBufferPtr = memory.allocate(NUM_INSTRUMENTS * 4);
   instrumentPatternListsPtr = memory.allocate(songpatternslength * NUM_INSTRUMENTS);
   return instrumentPatternListsPtr;
 }
@@ -105,9 +126,6 @@ export function allocateSampleBuffer(frames: usize): usize {
 }
 
 export function getCurrentChannelValuesBufferPtr(): usize {
-  if(!currentChannelValuesBufferPtr) {
-    currentChannelValuesBufferPtr = memory.allocate(NUM_INSTRUMENTS * 4);
-  }
   return currentChannelValuesBufferPtr;
 }
 

@@ -24,15 +24,15 @@ addInstrument('hihat', '');
 for (var n=0;n<2;n++) {
 	playPatterns({
 		drivelead: pp(4, [
-			a5(8),,,,
+			a5,,,,
 			,,,,
 			,,,,
 			,,as5,c6,
-			g5(4),,,,
+			g5,,,,
 			,,,,
 			,,,,
 			,,f5,e5,
-			f5(2),,,d5(2)
+			f5,,,d5
 		]),
 		lead1: pp(4, [
 			a6(1),,,f6,
@@ -284,19 +284,19 @@ playPatterns({
 	],3),
 	drivelead: pp(4, [
 		c4,d4,f4,g4,
-		a4(1),,c5,a4,
+		a4,,c5,a4,
 		,,,,
 		,,,,
-		d5(1),,c5,,
-		a4,,g4,a4(2),
+		d5,,c5,,
+		a4,,g4,a4,
 		,,,,
 		,,,,
 		c4,d4,f4,g4,
-		a4(1),,c5,a4,
+		a4,,c5,a4,
 		,,,,
 		,,,,
 		c5,,d5,,
-		f5,,g5,a5(1),
+		f5,,g5,a5,
 		,,g5,f5,
 		g5,a5,g5,f5
 	]),
@@ -354,4 +354,4 @@ module.exports = {
     instrumentPatternLists: instrumentPatternLists
 }
 
-// require('fs').writeFileSync('testsong.json', JSON.stringify(module.exports));
+require('fs').writeFileSync('testsong.json', JSON.stringify(module.exports));

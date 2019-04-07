@@ -9,6 +9,7 @@ let instrumentpatternslist;
 let songlength;
 let patternsize;
 let availablePatternIndex;
+
 const loadSong = (song) => {
   patternsize = song.patterns[0].length;
 
@@ -76,12 +77,14 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
           console.log('toggle song play', msg.data.toggleSongPlay);
           instance.toggleSongPlay(msg.data.toggleSongPlay);
         }
-        if(msg.data.channel!==undefined && msg.data.note!==undefined) {
-          // Play note
-          instance.setChannelValue(msg.data.channel,msg.data.note);
-          
-          if(msg.data.note > 0 ) {
+        if(msg.data.channel!==undefined && msg.data.note!==undefined) {                              
+          if(!instance.isPlaying()) {
+            // Just play note
+            instance.setChannelValue(msg.data.channel,msg.data.note);
+          } else {
             // Record data to pattern
+            instance.recordChannelValue(msg.data.channel,msg.data.note);
+
             const tick = instance.getTick();
             const patternIndex = Math.floor(tick / patternsize);  
             const patternNoteIndex = Math.round(tick) % patternsize;
@@ -92,7 +95,9 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
               patternNo = (availablePatternIndex ++);
               instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
             }
-            patternsbuffer[patternNo * patternsize + patternNoteIndex]  = msg.data.note;
+            if(msg.data.note > 0) {
+              patternsbuffer[patternNo * patternsize + patternNoteIndex]  = msg.data.note;
+            }
 
             // send pattern back to main thread for storing
             this.port.postMessage({
