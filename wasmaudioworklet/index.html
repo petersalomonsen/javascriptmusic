@@ -1,8 +1,8 @@
 <!doctype html>
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="testaudioworklet.js" type="module"></script>
     <style>
       body {
@@ -21,7 +21,17 @@
         border-radius: 3px;
         margin: 3px;
         user-select: none;
-      }     
+      } 
+      #editor {
+        position: absolute;
+        top: 120px;
+        right: 0;
+        bottom: 10px;
+        left: 0;
+    }    
+    input::placeholder {
+      color: #ccc;
+    }
     </style>
 </head>
 <body>
@@ -31,7 +41,7 @@
     <button onclick="stopaudio()">stop synth</button>
     
     <button onclick="clearPattern()">Clear pattern</button>
-    
+    <button onclick="insertRecording()">Insert recording</button>
     <label>
       Instrument <br />
       <select id="midichannelmappingselection" onchange="currentMidiChannelMapping=this.value">
@@ -42,33 +52,31 @@
         <option value="snare">Snare</option>
         <option value="hihat">Hihat</option>
         <option value="drivelead">Lead</option>
+        <option value="squarelead">SquareLead</option>
       </select>
-    </label>
-
-    <label>
-        Song <br />
-        <select id="songselection" onchange="restartaudio()">
-          <option value="localstoragesongcache_default">.cached</option>
-          <option value="testsong">Testsong</option>
-          <option value="kickbeat">Kickbeat</option>
-        </select>
     </label>
 
     <label class="checkboxlabel">
       <input id="toggleSongPlayCheckbox" type="checkbox" checked onclick="toggleSongPlay(this.checked)" /> play song
     </label>
+    <input id="vkeyboardinputelement" placeholder="Virtual keyboard" />
   </div>
   <br />
-  <canvas id="glCanvas" style="width: 100%; height: 200px"></canvas>
+  <div id="editor"></div>
   <script>
-    window.resizeGlCanvas = function() {
-        document.getElementById('glCanvas').style.height =
-          (window.innerHeight - document.getElementById('glCanvas').offsetTop - 30) + 'px';
-    };
-
-    window.onresize = window.resizeGlCanvas;
-    window.resizeGlCanvas();
+    window.visualizeNoteOn = function() {}
   </script>
-  <script src="visualizer/notemeter.js"></script>
+  <canvas id="glCanvas" style="position: absolute;
+        bottom: 0px;
+        top: 0px;
+        left: 0px;
+        right: 0px;
+        width: 100%;
+        height: 100%;
+        z-index: -10"></canvas>
+  <script src="visualizer/80sgrid.js"></script>  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.3/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script src="editorcontroller.js" type="module"></script>
+  
 </body>
 </html>

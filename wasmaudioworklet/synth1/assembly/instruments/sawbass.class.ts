@@ -5,7 +5,7 @@ import { StereoSignal } from '../synth/stereosignal.class';
 import { Envelope } from '../synth/envelope.class';
 import { SawOscillator } from '../synth/sawoscillator.class';
 import { Noise } from '../synth/noise.class';
-import { BiQuadFilter } from '../synth/biquad';
+import { BiQuadFilter, FilterType, Q_BUTTERWORTH } from '../synth/biquad';
 import { notefreq } from '../synth/note';
 
 
@@ -15,8 +15,15 @@ export class SawBass {
     readonly sawoscillator: SawOscillator = new SawOscillator();
     readonly sawoscillator2: SawOscillator = new SawOscillator();
     readonly filter: BiQuadFilter = new BiQuadFilter();
+    readonly hpfilterl: BiQuadFilter = new BiQuadFilter();
+    readonly hpfilterr: BiQuadFilter = new BiQuadFilter();
     
     readonly signal: StereoSignal = new StereoSignal();
+
+    constructor() {
+        this.hpfilterl.update_coeffecients(FilterType.HighPass, SAMPLERATE, 35, Q_BUTTERWORTH);
+        this.hpfilterr.update_coeffecients(FilterType.HighPass, SAMPLERATE, 35, Q_BUTTERWORTH);
+    }
 
     set note(note: f32) {        
         if(note > 1) {            
@@ -43,10 +50,10 @@ export class SawBass {
         this.signal.left /= 1.03; // feedback
         this.signal.right /= 1.03; // feedback
         this.signal.addMonoSignal(
-            this.sawoscillator.next() * env, 0.3, 0.3
+            this.hpfilterl.process(this.sawoscillator.next() * env), 0.3, 0.3
         );
         this.signal.addMonoSignal(
-            this.sawoscillator2.next() * env, 0.3, 0.7
+            this.hpfilterr.process(this.sawoscillator2.next() * env), 0.3, 0.7
         );
     } 
 }

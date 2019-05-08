@@ -1,41 +1,21 @@
 // The code in the main global scope.
 
 let audioworkletnode;
-window.recordedmidi = [];
 
-const localstoragesongcache_default = 'localstoragesongcache_default';
-window.onload = () => {
-    if(!localStorage.getItem(localstoragesongcache_default)) {
-        document.querySelector('#songselection').value = 'testsong';
-    }
-}
+window.recordedmidi = [];
 
 window.startaudio = async () => {          
     const bytes = await fetch('synth1/build/index.wasm').then(response =>
         response.arrayBuffer()
     );
-      
-    const songid = document.querySelector('#songselection').value;  
-    let song;
-    if(!songid || songid.indexOf('localstoragesongcache_') === 0) {
-        
-        console.log('getting song from localstorage', songid);
-        song = JSON.parse(localStorage.getItem(songid));
-        if(!song) {
-            song = {"patterns":[[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]],"instrumentPatternLists":[[0],[0],[0],[0],[0],[1],[0],[0],[0]]};
-        }
-    } else {
-        song = JSON.parse(await fetch('synth1/songs/'+songid+'.json').then(response =>
-            response.text()
-        ));
-    }
-    
+          
+    let song = compileSong();
     let context = new AudioContext();
 
     await context.audioWorklet.addModule('testprocessors.js');
     audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
         {outputChannelCount: [2]});
-    
+    window.audioworkletnode = audioworkletnode;
     audioworkletnode.port.start();
     audioworkletnode.port.postMessage({ topic: "wasm", 
         samplerate: context.sampleRate, 
@@ -61,19 +41,25 @@ window.startaudio = async () => {
             };
         }
         if(msg.data.patternData) {
-            song.patterns[msg.data.recordedPatternNo - 1] = msg.data.patternData;
-            song.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] = msg.data.recordedPatternNo;
-            localStorage.setItem(localstoragesongcache_default, JSON.stringify(song));
+            window.recordedSongData.patterns[msg.data.recordedPatternNo - 1] = msg.data.patternData;
+            window.recordedSongData.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] =
+                            msg.data.recordedPatternNo;
+
+            // localStorage.setItem(localstoragesongcache_default, JSON.stringify(song));
         }
     };
     audioworkletnode.connect(context.destination);
+    window.getNoteStatusInterval = setInterval(() =>
+        audioworkletnode.port.postMessage({ getNoteStatus: true }), 50);
 };
 
 window.stopaudio = async () => {
     if(audioworkletnode) {
+        
         new Array(128).fill(0).map((n,ndx) => ndx).forEach(n => visualizeNoteOn(n, 0));
         audioworkletnode.disconnect();
         audioworkletnode = null;
+        clearInterval(window.getNoteStatusInterval);
     }
 }
 
@@ -138,7 +124,8 @@ const midichannelmappings = {
     'kick': 5,
     'snare': 6,
     'hihat': 8,
-    'drivelead': 7
+    'drivelead': 7,
+    'squarelead': 9
 };
 
 window.currentMidiChannelMapping = 'bell';
@@ -189,15 +176,38 @@ window.upperkeyboardkeys = ["KeyQ","Digit2","KeyW","Digit3","KeyE","KeyR","Digit
 
 let basenote = 48;
 
-window.onkeydown = (k) => {
+const vkeyboardinputelement = document.getElementById('vkeyboardinputelement');
+const noteNames = new Array(128).fill(null).map((v, ndx) => 
+    (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
+);
+const keysDown = {};
+const updateVirtualKeyBoardInputValue = () => {
+    vkeyboardinputelement.value = Object.keys(keysDown).map(note => noteNames[note]).join(',');
+};
+
+vkeyboardinputelement.onblur = () => {
+    Object.keys(keysDown).forEach(note => {
+        processNoteMessage(note, 0);
+        delete keysDown[note];
+    });
+    updateVirtualKeyBoardInputValue();
+};
+
+vkeyboardinputelement.onkeydown = (k) => {
     let upperkeyboardindex = upperkeyboardkeys.findIndex(code => code === k.code);
     let lowerkeyboardindex = lowerkeyboardkeys.findIndex(code => code === k.code);
     if(upperkeyboardindex >= 0) {
         k.preventDefault();
-        processNoteMessage(basenote + 12 + upperkeyboardindex, 100);
+        const note = basenote + 12 + upperkeyboardindex;
+        processNoteMessage(note, 100);
+        keysDown[note] = true;
+        updateVirtualKeyBoardInputValue();
     } else if(lowerkeyboardindex >= 0) {
         k.preventDefault();
-        processNoteMessage(basenote + lowerkeyboardindex, 100);
+        const note = basenote + lowerkeyboardindex;
+        processNoteMessage(note, 100);
+        keysDown[note] = true;
+        updateVirtualKeyBoardInputValue();
     } else if(k.code === 'ArrowRight') {
         k.preventDefault();
         if(basenote<108) {
@@ -211,15 +221,21 @@ window.onkeydown = (k) => {
     }
 };
 
-window.onkeyup = (k) => {
+vkeyboardinputelement.onkeyup = (k) => {
     let upperkeyboardindex = upperkeyboardkeys.findIndex(code => code === k.code);
     let lowerkeyboardindex = lowerkeyboardkeys.findIndex(code => code === k.code);
     if(upperkeyboardindex >= 0) {
         k.preventDefault();
-        processNoteMessage(basenote + 12 + upperkeyboardindex, 0);
+        const note = basenote + 12 + upperkeyboardindex;
+        processNoteMessage(note, 0);
+        delete keysDown[note];
+        updateVirtualKeyBoardInputValue();
     } else if(lowerkeyboardindex >= 0) {
         k.preventDefault();
-        processNoteMessage(basenote + lowerkeyboardindex, 0);
+        const note = basenote + lowerkeyboardindex;
+        processNoteMessage(note, 0);
+        delete keysDown[note];
+        updateVirtualKeyBoardInputValue();
     } 
     
 };

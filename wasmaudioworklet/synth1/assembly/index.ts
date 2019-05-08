@@ -21,7 +21,7 @@ let patternIndexf32: f32 = 0;
 let patternIndex: usize = 0;  
 let patternNoteIndex: usize = -1;
 
-let tick: f32 = 0;
+let tick: f64 = 0;
 const ticksPerBeat: f32 = 4;
 const bpm: f32 = 120;
 
@@ -30,7 +30,7 @@ let ticksPerSample = ticksPerSec / SAMPLERATE;
 
 let playOrPause: boolean = true;
 
-export function getTick(): f32 {
+export function getTick(): f64 {
   return tick;
 }
 
@@ -65,7 +65,7 @@ function updateInstrumentNotes(): void {
     tick -= (songlengthf32 * PATTERN_LENGTH);    
   }
 
-  patternIndexf32 = (tick / PATTERN_LENGTH);
+  patternIndexf32 = (tick / PATTERN_LENGTH) as f32;
   patternIndex = patternIndexf32 as usize;  
   let newPatternNoteIndex: usize = ((patternIndexf32 - (patternIndex as f32)) * PATTERN_LENGTH) as usize;;
 

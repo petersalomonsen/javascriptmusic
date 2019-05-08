@@ -11,8 +11,11 @@ import { DriveLead } from "../instruments/drivelead.class";
 import { Hihat } from "../instruments/hihat.class";
 import { DelayLine } from "../fx/delayline";
 import { SAMPLERATE } from "../environment";
+import { SquareLead } from "../instruments/squarelead.class";
 
-const gain: f32 = 0.5;
+import { TriBandStereoCompressor } from "../fx/tribandstereocompressor";
+
+const gain: f32 = 0.21;
 
 let flute = new TestInstrument();
 let drivelead = new DriveLead();
@@ -23,6 +26,7 @@ let pad3 = new Pad();
 let kick = new Kick();
 let snare = new Snare();
 let hihat = new Hihat();
+let squarelead = new SquareLead();
 
 let freeverb = new Freeverb();
 
@@ -32,6 +36,8 @@ let delayRight: DelayLine = new DelayLine(SAMPLERATE * 0.5 as usize);
 let echoline = new StereoSignal();
 let reverbline = new StereoSignal();
 let mainline = new StereoSignal();
+
+let tribandstereocompressor = new TriBandStereoCompressor(15,500,8000,19000);
 
 export let signal: StereoSignal = new StereoSignal();
 
@@ -64,11 +70,13 @@ export function setChannelValue(channel: usize, value: f32): void {
         case 8:
             hihat.note = value;
             break;
+        case 9:
+            squarelead.note = value;
+            break;
     }
     
 }
 
-let freq: f32 = 50;
 export function mixernext(): void {  
     mainline.clear()
     reverbline.clear();
@@ -83,33 +91,35 @@ export function mixernext(): void {
     hihat.next();
     bass.next(); 
     drivelead.next();
+    squarelead.next();
 
-    mainline.addStereoSignal(flute.signal, 0.7, 0.4);
-    echoline.addStereoSignal(flute.signal, 0.5, 0.5);
+    mainline.addStereoSignal(flute.signal, 0.7, 0.0);
+    echoline.addStereoSignal(flute.signal, 0.6, 1.0);
     
-    mainline.addStereoSignal(pad1.signal, 0.6, 0.5);
-    reverbline.addStereoSignal(pad1.signal, 0.4, 0.5);
+    mainline.addStereoSignal(pad1.signal, 0.58, 0.25);
+    echoline.addStereoSignal(pad1.signal, 0.35, 0.25); 
+    mainline.addStereoSignal(pad2.signal, 0.58, 0.5);
+    echoline.addStereoSignal(pad2.signal, 0.30, 0.5);
+    mainline.addStereoSignal(pad3.signal, 0.58, 0.75);
+    echoline.addStereoSignal(pad3.signal, 0.30, 0.75);
 
-    mainline.addStereoSignal(pad2.signal, 0.6, 0.4);
-    reverbline.addStereoSignal(pad2.signal, 0.4, 0.4);
-
-    mainline.addStereoSignal(pad3.signal, 0.6, 0.6);
-    reverbline.addStereoSignal(pad3.signal, 0.4, 0.6);
-
-    mainline.addStereoSignal(kick.signal, 1.5, 0.5);
-    reverbline.addStereoSignal(kick.signal, 0.1, 0.5);
+    mainline.addStereoSignal(kick.signal, 1.6, 0.5);
+    reverbline.addStereoSignal(kick.signal, 0.05, 0.0);
     
-    mainline.addStereoSignal(snare.signal, 1.0, 0.5);
-    reverbline.addStereoSignal(snare.signal, 0.1, 0.5);
+    mainline.addStereoSignal(snare.signal, 0.38, 0.6);
+    echoline.addStereoSignal(snare.signal, 0.1, 0.4);
    
-    mainline.addStereoSignal(hihat.signal, 1.0, 0.5);
-    reverbline.addStereoSignal(hihat.signal, 0.1, 0.5);
+    mainline.addStereoSignal(hihat.signal, 0.7, 0.4);
+    reverbline.addStereoSignal(hihat.signal, 0.05, 0.6);
 
-    mainline.addStereoSignal(bass.signal, 1, 0.6);
-    reverbline.addStereoSignal(bass.signal, 0.1, 0.6);
+    mainline.addStereoSignal(bass.signal, 1.2, 0.5);
+    reverbline.addStereoSignal(bass.signal, 0.1, 0.0);
 
-    mainline.addStereoSignal(drivelead.signal, 0.45, 0.4);
-    echoline.addStereoSignal(drivelead.signal, 0.45, 0.6);
+    mainline.addStereoSignal(drivelead.signal, 0.17, 0.4);
+    echoline.addStereoSignal(drivelead.signal, 0.4, 0.6);
+
+    mainline.addStereoSignal(squarelead.signal,0.6, 0.6);
+    echoline.addStereoSignal(squarelead.signal, 0.6, 0.0);
 
     echoline.left += delayRight.read() * 0.5;
     echoline.right += delayLeft.read() * 0.5;
@@ -120,7 +130,11 @@ export function mixernext(): void {
     reverbline.addStereoSignal(echoline, 0.5, 0.5);
     
     freeverb.tick(reverbline);
-    
-    signal.left = gain * (mainline.left + echoline.left + reverbline.left);
-    signal.right = gain * (mainline.right + echoline.right + reverbline.right);
+        
+    let left = gain * (mainline.left + echoline.left + reverbline.left);
+    let right = gain * (mainline.right + echoline.right + reverbline.right);
+
+    tribandstereocompressor.process(left,right,0.3, 0.3, 0.5 , 2.0, 0.80, 0.9);
+    signal.left = tribandstereocompressor.stereosignal.left;
+    signal.right = tribandstereocompressor.stereosignal.right;
 }

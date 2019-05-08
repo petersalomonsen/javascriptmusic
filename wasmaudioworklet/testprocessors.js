@@ -119,27 +119,26 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
             patternsbuffer[patternNo * patternsize + n]  = 0; 
           }
         }
+
+        if(msg.data.getNoteStatus) {
+          if(channelvaluesbuffer) {
+            let checksum = 0;
+            for(let n=0;n<channelvaluesbuffer.length;n++) {
+              checksum += channelvaluesbuffer[n];
+            }
+            
+            if(checksum > 0 && channelvalueschecksum !== checksum) {
+              this.port.postMessage({channelvalues: channelvaluesbuffer});
+            }
+            channelvalueschecksum = checksum;
+          }
+        }
     };
     this.port.start();
     
   }  
 
   process(inputs, outputs, parameters) {
-    // --- Update notestatus
-    
-    if(channelvaluesbuffer) {
-      let checksum = 0;
-      for(let n=0;n<channelvaluesbuffer.length;n++) {
-        checksum += channelvaluesbuffer[n];
-      }
-      
-      if(checksum > 0 && channelvalueschecksum !== checksum) {
-        this.port.postMessage({channelvalues: channelvaluesbuffer});
-      }
-      channelvalueschecksum = checksum;
-    }
-    // ----
-
     const output = outputs[0];
     
     if(instance) {

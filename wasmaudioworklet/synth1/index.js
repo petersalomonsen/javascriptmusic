@@ -1,4 +1,6 @@
 const fs = require("fs");
+require('../pattern_tools.js');
+
 const compiled = new WebAssembly.Module(fs.readFileSync(__dirname + "/build/index.wasm"));
 const imports = { 
   environment: {
@@ -17,7 +19,13 @@ const instance = module.exports;
 
 var membuffer = new Uint8Array(instance.memory.buffer);
   
-const song = require('./songs/testsong.js');
+const songsource = fs.readFileSync('./songs/livetest1.js').toString();
+
+eval(songsource);
+
+const patterns = generatePatterns();
+const instrumentPatternLists = generateInstrumentPatternLists();
+const song = {instrumentPatternLists: instrumentPatternLists, patterns: patterns};
 
 const patternsptr = instance.allocatePatterns(song.patterns.length + 1);
 const patternsize = song.patterns[0].length;
@@ -45,8 +53,6 @@ for(let instrIndex = 0;
   }
 }
 
-const gain = 0.2;
-
 const INSTANCE_FRAMES = 128;
 const BUFFERS = 32;
 const buffer = new Uint8Array(INSTANCE_FRAMES * BUFFERS * 4 * 2);
@@ -57,19 +63,24 @@ const dv = new DataView(buffer.buffer);
 
 async function writeoutput() {
   while(true) {
-    
+    let previousTick = instance.getTick();
     for(let b = 0; b<BUFFERS; b++) {
       instance.fillSampleBuffer();
       const bufoffset = b * INSTANCE_FRAMES * 4 * 2;
 
       for(let n=0;n<INSTANCE_FRAMES;n ++ ) {
-        dv.setFloat32(bufoffset + n * 4 * 2, instancebuffer[n] * gain, true);
-        dv.setFloat32(bufoffset + n * 4 * 2 + 4, instancebuffer[n + INSTANCE_FRAMES] * gain, true);
+        dv.setFloat32(bufoffset + n * 4 * 2, instancebuffer[n], true);
+        dv.setFloat32(bufoffset + n * 4 * 2 + 4, instancebuffer[n + INSTANCE_FRAMES], true);
       }
     }
 
     if(!process.stdout.write(buffer)) {      
       await new Promise(resolve => process.stdout.once('drain', () => resolve()));
+    }
+
+    if(instance.getTick() < previousTick) {
+      // Song finished
+      return;
     }
   }
 }

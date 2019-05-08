@@ -9,7 +9,7 @@ export class Hihat {
     private _note: f32;
     private velocity: f32;
 
-    readonly envelope: Envelope = new Envelope(0.0, 0.1, 0, 0.1);    
+    readonly envelope: Envelope = new Envelope(0.0, 0.08, 0, 0.1);    
     readonly noise: Noise = new Noise();
     
     readonly filter: BiQuadFilter = new BiQuadFilter();
@@ -36,10 +36,10 @@ export class Hihat {
             return;
         }     
         let osc: f32 = this.noise.next();        
-        let signal = this.velocity * env * osc;
+        let signal = this.velocity * 2 * env * osc;
         
         this.filter.update_coeffecients(FilterType.HighPass, SAMPLERATE, 
-            12000, Q_BUTTERWORTH);
+            10000 + 2000 * env, Q_BUTTERWORTH);
 
         signal = this.filter.process(signal);
 
