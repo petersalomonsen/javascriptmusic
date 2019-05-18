@@ -15,7 +15,8 @@ import { SquareLead } from "../instruments/squarelead.class";
 
 import { TriBandStereoCompressor } from "../fx/tribandstereocompressor";
 
-const gain: f32 = 0.21;
+const gain: f32 = 0.15;
+const ENABLE_MULTIBAND_COMPRESSOR = false;
 
 let flute = new TestInstrument();
 let drivelead = new DriveLead();
@@ -134,7 +135,12 @@ export function mixernext(): void {
     let left = gain * (mainline.left + echoline.left + reverbline.left);
     let right = gain * (mainline.right + echoline.right + reverbline.right);
 
-    tribandstereocompressor.process(left,right,0.3, 0.3, 0.5 , 2.0, 0.80, 0.9);
-    signal.left = tribandstereocompressor.stereosignal.left;
-    signal.right = tribandstereocompressor.stereosignal.right;
+    if (ENABLE_MULTIBAND_COMPRESSOR) {
+        tribandstereocompressor.process(left,right,0.3, 0.3, 0.5 , 2.0, 0.80, 0.9);
+        signal.left = tribandstereocompressor.stereosignal.left;
+        signal.right = tribandstereocompressor.stereosignal.right;
+    } else {
+        signal.left = left;
+        signal.right = right;
+    }
 }
