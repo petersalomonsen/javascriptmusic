@@ -1,0 +1,87 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="testaudioworklet.js" type="module"></script>
+    <style>
+      body {
+        background-color: black;
+        color: green;
+        font-family: monospace;
+        padding: 10px;
+      }
+      button, input, select, .checkboxlabel {
+        font-family: monospace;
+        background-color: green;
+        color: white;
+        padding: 10px;
+        font-size: 16px;
+        border-color: green;
+        border-radius: 3px;
+        margin: 3px;
+        user-select: none;
+      } 
+      #editorarea {
+        position: absolute;
+        top: 120px;
+        right: 0;
+        bottom: 10px;
+        left: 0;
+        display: flex;  
+    }    
+    input::placeholder {
+      color: #ccc;
+    }
+    </style>
+</head>
+<body>
+  <p>webassembly music experiment - (c) 2019 peter salomonsen</p>  
+  <div style="display: flex; align-items: bottom;">
+    <button onclick="restartaudio()">start synth</button>
+    <button onclick="stopaudio()">stop synth</button>
+    
+    <button onclick="clearPattern()">Clear pattern</button>
+    <button onclick="insertRecording()">Insert recording</button>
+    <label>
+      Instrument <br />
+      <select id="midichannelmappingselection" onchange="currentMidiChannelMapping=this.value">
+        <option value="bell">Bell</option>
+        <option value="bass">Base</option>
+        <option value="polyphonicpads">Pads</option>
+        <option value="kick">Kick</option>
+        <option value="snare">Snare</option>
+        <option value="hihat">Hihat</option>
+        <option value="drivelead">Lead</option>
+        <option value="squarelead">SquareLead</option>
+      </select>
+    </label>
+
+    <label class="checkboxlabel">
+      <input id="toggleSongPlayCheckbox" type="checkbox" checked onclick="toggleSongPlay(this.checked)" /> play song
+    </label>
+    <input id="vkeyboardinputelement" placeholder="Virtual keyboard" />
+  </div>
+  <br />
+  <div id="editorarea">
+    <div><iframe class="iframe" scrolling="no" frameborder="no" src="https://w.soundcloud.com/player/?url=https://soundcloud.com/magikair/infinite-energy&amp;auto_play=false&amp;buying=true&amp;liking=true&amp;download=true&amp;sharing=true&amp;show_artwork=true&amp;show_comments=true&amp;show_playcount=true&amp;show_user=true&amp;hide_related=false&amp;visual=true&amp;start_track=0&amp;callback=true"></iframe></div>
+    <div id="editor" style="width: 100%; height: 100%"></div>
+  </div>
+  <script>
+    window.visualizeNoteOn = function() {}
+  </script>
+  <canvas id="glCanvas" style="position: absolute;
+        bottom: 0px;
+        top: 0px;
+        left: 0px;
+        right: 0px;
+        width: 100%;
+        height: 100%;
+        z-index: -10"></canvas>
+  <script src="visualizer/80sgrid.js"></script>  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.3/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script src="editorcontroller.js" type="module"></script>
+  <script src="https://w.soundcloud.com/player/api.js"></script>
+  <script src="soundcloudplayalong.js" type="module"></script>
+</body>
+</html>

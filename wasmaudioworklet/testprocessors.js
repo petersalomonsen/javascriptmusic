@@ -46,6 +46,8 @@ const loadSong = (song) => {
   channelvaluesbuffer = new Float32Array(instance.memory.buffer, 
           instance.getCurrentChannelValuesBufferPtr(),
           song.instrumentPatternLists.length);
+
+  instance.setBPM(song.BPM ? song.BPM : 120);
 }
 
 class MyWorkletProcessor extends AudioWorkletProcessor {
@@ -132,6 +134,9 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
             }
             channelvalueschecksum = checksum;
           }
+        }
+        if(msg.data.songPositionMillis) {
+          instance.setMilliSecondPosition(msg.data.songPositionMillis);
         }
     };
     this.port.start();

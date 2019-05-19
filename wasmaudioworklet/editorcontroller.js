@@ -70,7 +70,7 @@ window.compileSong = function() {
     eval(songsource);
     const patterns = generatePatterns();
     const instrumentPatternLists = generateInstrumentPatternLists();
-    const song = {instrumentPatternLists: instrumentPatternLists, patterns: patterns};
+    const song = {instrumentPatternLists: instrumentPatternLists, patterns: patterns, BPM: window.bpm};
     // Use as recording buffer
     window.recordedSongData = {
         instrumentPatternLists: song.instrumentPatternLists.map(pl => new Array(pl.length).fill(0)),

@@ -17,21 +17,37 @@ let sampleBufferPtr: usize;
 let sampleBufferFrames: usize;
 let songlength: usize = 0;
 
-let patternIndexf32: f32 = 0;
+let patternIndexf64: f64 = 0;
 let patternIndex: usize = 0;  
 let patternNoteIndex: usize = -1;
 
 let tick: f64 = 0;
-const ticksPerBeat: f32 = 4;
-const bpm: f32 = 120;
+let ticksPerBeat: f32 = 4;
+let bpm: f32 = 120;
 
-const ticksPerSec = ticksPerBeat * bpm / 60;
+let ticksPerSec = ticksPerBeat * bpm / 60;
 let ticksPerSample = ticksPerSec / SAMPLERATE;
 
 let playOrPause: boolean = true;
 
+export function setBPM(BPM: f32): void {
+  bpm = BPM;
+  ticksPerSec = ticksPerBeat * BPM / 60;
+  ticksPerSample = ticksPerSec / SAMPLERATE;
+}
+
 export function getTick(): f64 {
   return tick;
+}
+
+export function setMilliSecondPosition(millis: f64): void {
+  let newtick: f64 = millis * ticksPerSec / 1000;
+  let ticklength = songlength as f64 * PATTERN_LENGTH;
+
+  newtick -= (floor(newtick / ticklength) * ticklength);
+  if(abs(newtick - tick) > 1) {
+    tick = newtick;
+  }
 }
 
 export function getPatternIndex(): usize {
@@ -59,15 +75,15 @@ function updateInstrumentNotes(): void {
   if(!playOrPause) {
     return;
   }
-  let songlengthf32: f32 = songlength as f32;
+  let songlengthf64: f64 = songlength as f64;
 
-  if((tick / PATTERN_LENGTH) > songlengthf32) {
-    tick -= (songlengthf32 * PATTERN_LENGTH);    
+  if((tick / PATTERN_LENGTH) > songlengthf64) {
+    tick -= (songlengthf64 * PATTERN_LENGTH);    
   }
 
-  patternIndexf32 = (tick / PATTERN_LENGTH) as f32;
-  patternIndex = patternIndexf32 as usize;  
-  let newPatternNoteIndex: usize = ((patternIndexf32 - (patternIndex as f32)) * PATTERN_LENGTH) as usize;;
+  patternIndexf64 = (tick / PATTERN_LENGTH) as f64;
+  patternIndex = patternIndexf64 as usize;  
+  let newPatternNoteIndex: usize = ((patternIndexf64 - (patternIndex as f64)) * PATTERN_LENGTH) as usize;
 
   if(newPatternNoteIndex===patternNoteIndex) {
     return;

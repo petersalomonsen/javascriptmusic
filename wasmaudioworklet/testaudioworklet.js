@@ -1,10 +1,15 @@
 // The code in the main global scope.
 
 let audioworkletnode;
-
+let playing = false;
 window.recordedmidi = [];
 
-window.startaudio = async () => {          
+window.startaudio = async () => {
+    if(playing) {
+        return;
+    }
+    playing = true;
+  
     const bytes = await fetch('synth1/build/index.wasm').then(response =>
         response.arrayBuffer()
     );
@@ -61,6 +66,7 @@ window.stopaudio = async () => {
         audioworkletnode = null;
         clearInterval(window.getNoteStatusInterval);
     }
+    playing = false;
 }
 
 window.restartaudio = async () => {
@@ -71,6 +77,12 @@ window.restartaudio = async () => {
 window.toggleSongPlay = (status) => {
     if(audioworkletnode) {        
         audioworkletnode.port.postMessage({ toggleSongPlay: status});
+    }
+};
+
+window.setSongPositionMillis = (songPositionMillis) => {
+    if(audioworkletnode) {        
+        audioworkletnode.port.postMessage({ songPositionMillis: songPositionMillis});
     }
 };
 
