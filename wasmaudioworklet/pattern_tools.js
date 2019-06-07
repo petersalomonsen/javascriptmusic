@@ -66,6 +66,10 @@ global.pp = (stepsperbeat, patterndata, channels = 1) => {
 	}
 };
 
+global.getPatternByName = (patternName) => {
+	return patternsMap[patternName];
+};
+
 global.addPattern = (name, pattern) => {	
 	if(!name) {
 		patternAutoNameCount++;

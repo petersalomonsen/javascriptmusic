@@ -1,9 +1,10 @@
 {
   "scripts": {
-    "asbuild": "asc assembly/index.ts -b build/index.wasm -Oz",
-    "fastbuild": "asc assembly/index.ts -b build/index.wasm --sourceMap -t build/index.wat"
+    "asbuild": "asc --runtime stub assembly/index.ts -b build/index.wasm -Oz",
+    "fastbuild": "asc --runtime stub assembly/index.ts -b build/index.wasm --sourceMap -t build/index.wat"
   },
-  "dependencies": {
-    "assemblyscript": "git+https://github.com/AssemblyScript/assemblyscript.git"
+  "dependencies": {},
+  "devDependencies": {
+    "assemblyscript": "github:AssemblyScript/assemblyscript"
   }
 }

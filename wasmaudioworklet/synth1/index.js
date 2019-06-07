@@ -19,7 +19,7 @@ const instance = module.exports;
 
 var membuffer = new Uint8Array(instance.memory.buffer);
   
-const songsource = fs.readFileSync('./songs/livetest1.js').toString();
+const songsource = fs.readFileSync('./songs/goodtimes.js').toString();
 
 eval(songsource);
 
@@ -52,6 +52,8 @@ for(let instrIndex = 0;
       song.instrumentPatternLists[instrIndex][n];      
   }
 }
+
+instance.setBPM(global.bpm ? global.bpm : 120);
 
 const INSTANCE_FRAMES = 128;
 const BUFFERS = 32;

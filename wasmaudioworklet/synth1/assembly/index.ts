@@ -1,8 +1,6 @@
 // The entry file of your WebAssembly module.
-import './memory/allocator';
 import { SAMPLERATE } from './environment';
-import { mixernext, signal, setChannelValue } from './mixes/testmix.class';
-export { setChannelValue } from './mixes/testmix.class';
+import { mixernext, signal, setChannelValue } from './mixes/goodtimes.mix';
 
 export const PATTERN_SIZE_SHIFT:usize = 4;
 const PATTERN_LENGTH: f32 = (1 << PATTERN_SIZE_SHIFT) as f32;
@@ -122,22 +120,23 @@ export function recordChannelValue(channel: usize, value: f32): void {
 }
 
 export function allocatePatterns(numpatterns: i32): usize {
-  patternsPtr = memory.allocate(numpatterns << PATTERN_SIZE_SHIFT);
+  // Need to make this way of allocating better, but was a quick fix after this https://github.com/AssemblyScript/assemblyscript/pull/592
+  patternsPtr = changetype<usize>(new ArrayBuffer(numpatterns << PATTERN_SIZE_SHIFT));
   return patternsPtr;
 }
 
 export function allocateInstrumentPatternList(songpatternslength: i32, numinstruments: i32): usize {
   NUM_INSTRUMENTS = numinstruments;
   songlength = songpatternslength;
-  currentChannelValuesBufferPtr = memory.allocate(NUM_INSTRUMENTS * 4);
-  holdChannelValuesBufferPtr = memory.allocate(NUM_INSTRUMENTS * 4);
-  instrumentPatternListsPtr = memory.allocate(songpatternslength * NUM_INSTRUMENTS);
+  currentChannelValuesBufferPtr = changetype<usize>(new ArrayBuffer(NUM_INSTRUMENTS * 4));
+  holdChannelValuesBufferPtr = changetype<usize>(new ArrayBuffer(NUM_INSTRUMENTS * 4));
+  instrumentPatternListsPtr = changetype<usize>(new ArrayBuffer(songpatternslength * NUM_INSTRUMENTS));
   return instrumentPatternListsPtr;
 }
 
 export function allocateSampleBuffer(frames: usize): usize {
   sampleBufferFrames = frames;
-  sampleBufferPtr = memory.allocate(frames * 2 * 4);
+  sampleBufferPtr = changetype<usize>(new ArrayBuffer(frames * 2 * 4));
   return sampleBufferPtr;
 }
 

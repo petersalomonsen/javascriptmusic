@@ -11,7 +11,7 @@ export class DelayLine {
     constructor(private numsamples: usize) {    
         this.numsamplesf64 = numsamples as f64;   
         this.length = numsamples * 4 as usize;
-        this.bufferPointer = memory.allocate(this.length);   
+        this.bufferPointer = changetype<usize>(new ArrayBuffer(this.length));   
     }
 
     read(): f32 {

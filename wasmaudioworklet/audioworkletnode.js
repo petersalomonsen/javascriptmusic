@@ -17,7 +17,7 @@ window.startaudio = async () => {
     let song = compileSong();
     let context = new AudioContext();
 
-    await context.audioWorklet.addModule('testprocessors.js');
+    await context.audioWorklet.addModule('audioworkletprocessor.js');
     audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
         {outputChannelCount: [2]});
     window.audioworkletnode = audioworkletnode;

@@ -57,7 +57,10 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
     this.port.onmessage = async (msg) => {
         if(msg.data.wasm) {
           instance = (await WebAssembly.instantiate(msg.data.wasm, {
-            environment: { SAMPLERATE: msg.data.samplerate }
+            environment: { SAMPLERATE: msg.data.samplerate },
+            env: {
+              abort: () => console.log(abort)
+            }
           })).instance.exports;
           membuffer = new Uint8Array(instance.memory.buffer);
           
