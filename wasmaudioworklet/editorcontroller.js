@@ -5,6 +5,14 @@ document.getElementById('editor').style.backgroundColor = 'rgba(0,0,0,0.5)';
 const global = window;
 let pattern_tools_src;
 
+window.onkeydown = (k) => {
+    if((event.ctrlKey || event.metaKey) && event.which == 83) {
+        compileAndPostSong();
+        event.preventDefault();
+        return false;
+    }
+};
+
 async function initEditor() {
     const storedsongcode = localStorage.getItem('storedsongcode');
     if(storedsongcode) {

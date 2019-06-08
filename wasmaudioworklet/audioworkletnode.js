@@ -1,5 +1,9 @@
 // The code in the main global scope.
 
+if(typeof AudioWorkletNode !== 'function') {
+    alert('Your browser does not support AudioWorklet. Switch to a browser that does.');
+}
+
 let audioworkletnode;
 let playing = false;
 window.recordedmidi = [];

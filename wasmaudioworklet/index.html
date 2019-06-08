@@ -4,55 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="audioworkletnode.js" type="module"></script>
-    <style>
-      body {
-        background-color: black;
-        color: green;
-        font-family: monospace;
-        padding: 10px;
-      }
-      button, input, select, .checkboxlabel {
-        font-family: monospace;
-        background-color: green;
-        color: white;
-        padding: 10px;
-        font-size: 16px;
-        border-color: green;
-        border-radius: 3px;
-        margin: 3px;
-        user-select: none;
-      } 
-      #editor {
-        position: absolute;
-        top: 50px;
-        right: 0;
-        bottom: 20px;
-        left: 0;
-    }    
-    input::placeholder {
-      color: #ccc;
-    }
-    .footer {
-      position: absolute;
-      bottom: 0px;
-      left: 0px;
-      right: 0px;
-      height: 20px;
-      width: 100%;
-      padding-top: 3px;
-      padding-left: 20px;
-      background-color: green;
-      color: white;
-    }
-    .toolbar {
-      position: absolute;
-      top: 0px;
-      left: 0px;
-      right: 0px;
-      display: flex;
-      width: 100%;
-    }
-    </style>
+    <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
   <div class="toolbar">
@@ -75,7 +27,7 @@
       </select>
     </label>
 
-    <label class="checkboxlabel">
+    <label class="checkboxlabel" style="padding: 5px;">
       <input id="toggleSongPlayCheckbox" type="checkbox" checked onclick="toggleSongPlay(this.checked)" /> play song
     </label>
     <input id="vkeyboardinputelement" placeholder="Virtual keyboard" />

@@ -1,0 +1,51 @@
+body {
+    background-color: black;
+    color: green;
+    font-family: monospace;
+    padding: 10px;
+    overflow: hidden;
+}
+button, input, select, .checkboxlabel {
+    font-family: monospace;
+    background-color: green;
+    color: white;
+    padding: 3px;
+    font-size: 16px;
+    
+    border-color: darkslategray;
+    white-space: nowrap;
+    border-radius: 3px;
+    margin: 2px;
+    user-select: none;
+} 
+#editor {
+    position: fixed;
+    top: 50px;
+    right: 0;
+    bottom: 20px;
+    left: 0;
+}    
+input::placeholder {
+    color: #ccc;
+}
+.footer {
+    position: fixed;
+    bottom: 0px;
+    left: 0px;
+    right: 0px;
+    height: 20px;
+    width: 100%;
+    padding-top: 3px;
+    padding-left: 20px;
+    background-color: green;
+    color: white;
+}
+.toolbar {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    right: 0px;
+    display: flex;
+    overflow-x: auto;
+    width: 100%;
+}
