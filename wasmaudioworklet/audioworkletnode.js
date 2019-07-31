@@ -1,26 +1,28 @@
 // The code in the main global scope.
 
-if(typeof AudioWorkletNode !== 'function') {
-    alert('Your browser does not support AudioWorklet. Switch to a browser that does.');
-}
 
 let audioworkletnode;
 let playing = false;
 window.recordedmidi = [];
 
+/**
+ * Should be called from UI event for Safari / iOS
+ */
 window.startaudio = async () => {
     if(playing) {
         return;
     }
     playing = true;
   
+    const context = new AudioContext();
+    context.resume(); // For Safari iOS
+    
     const bytes = await fetch('synth1/build/index.wasm').then(response =>
         response.arrayBuffer()
     );
           
-    let song = compileSong();
-    let context = new AudioContext();
-
+    const song = compileSong();
+    
     await context.audioWorklet.addModule('audioworkletprocessor.js');
     audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
         {outputChannelCount: [2]});
@@ -60,6 +62,8 @@ window.startaudio = async () => {
     audioworkletnode.connect(context.destination);
     window.getNoteStatusInterval = setInterval(() =>
         audioworkletnode.port.postMessage({ getNoteStatus: true }), 50);
+    document.getElementById('startaudiobutton').style.display = 'none';
+    document.getElementById('stopaudiobutton').style.display = 'block';
 };
 
 window.stopaudio = async () => {
@@ -71,12 +75,9 @@ window.stopaudio = async () => {
         clearInterval(window.getNoteStatusInterval);
     }
     playing = false;
+    document.getElementById('startaudiobutton').style.display = 'block';
+    document.getElementById('stopaudiobutton').style.display = 'none';
 }
-
-window.restartaudio = async () => {
-    await stopaudio();
-    await startaudio();
-};
 
 window.toggleSongPlay = (status) => {
     if(audioworkletnode) {        
@@ -185,7 +186,9 @@ async function startmidi() {
     }
 }
 
-startmidi();
+if(typeof navigator.requestMIDIAccess === 'function') {
+    startmidi();
+}
 
 window.lowerkeyboardkeys = ["KeyZ","KeyS","KeyX","KeyD","KeyC","KeyV","KeyG","KeyB","KeyH","KeyN","KeyJ","KeyM","Comma","KeyL","Period","Semicolon","Slash"];
 window.upperkeyboardkeys = ["KeyQ","Digit2","KeyW","Digit3","KeyE","KeyR","Digit5","KeyT","Digit6","KeyY","Digit7","KeyU","KeyI","Digit9","KeyO","Digit0","KeyP","BracketLeft"];

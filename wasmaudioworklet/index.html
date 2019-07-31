@@ -3,14 +3,17 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="audioworkletpolyfill.js"></script>
     <script src="audioworkletnode.js" type="module"></script>
-    <link rel="stylesheet" type="text/css" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.css">
+    <link rel="stylesheet" type="text/css" href="codemirror-monokai.css">    
+    <link rel="stylesheet" type="text/css" href="style.css">    
 </head>
 <body>
   <div class="toolbar">
-    <button onclick="restartaudio()">start synth</button>
-    <button onclick="stopaudio()">stop synth</button>
-    
+    <button id="startaudiobutton" onclick="startaudio()" style="width: 50px;">&#x25B6;</button>
+    <button id="stopaudiobutton" onclick="stopaudio()" style="width: 50px; display: none">&#9724;</button>
+    <button id="savesongbutton">&#x1f4be;</button>
     <button onclick="clearPattern()">Clear pattern</button>
     <button onclick="insertRecording()">Insert recording</button>
     <label>
@@ -50,7 +53,8 @@
     webassembly music experiment - (c) 2019 peter salomonsen
   </div>
   <script src="visualizer/80sgrid.js"></script>  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.3/ace.js" type="text/javascript" charset="utf-8"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.js" type="text/javascript" charset="utf-8"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/mode/javascript/javascript.js" type="text/javascript" charset="utf-8"></script>
   <script src="editorcontroller.js" type="module"></script>
   
 </body>

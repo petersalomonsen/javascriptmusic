@@ -5,7 +5,7 @@ const fs = require('fs');
 
 http.createServer( (request, response) => {
     
-    let path = request.url.substring(1);
+    let path = request.url.substring(1).split('?')[0];
   
     if(path === '') {
         path = 'index.html';

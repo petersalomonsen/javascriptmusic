@@ -40,8 +40,6 @@ let mainline = new StereoSignal();
 
 let tribandstereocompressor = new TriBandStereoCompressor(15,500,8000,19000);
 
-export let signal: StereoSignal = new StereoSignal();
-
 export function setChannelValue(channel: usize, value: f32): void {
     switch(channel) {
         case 0:
@@ -78,7 +76,7 @@ export function setChannelValue(channel: usize, value: f32): void {
     
 }
 
-export function mixernext(): void {  
+export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usize): void {  
     mainline.clear()
     reverbline.clear();
     echoline.clear();
@@ -137,10 +135,13 @@ export function mixernext(): void {
 
     if (ENABLE_MULTIBAND_COMPRESSOR) {
         tribandstereocompressor.process(left,right,0.3, 0.3, 0.5 , 2.0, 0.80, 0.9);
-        signal.left = tribandstereocompressor.stereosignal.left;
-        signal.right = tribandstereocompressor.stereosignal.right;
+        left = tribandstereocompressor.stereosignal.left;
+        right = tribandstereocompressor.stereosignal.right;
     } else {
-        signal.left = left;
-        signal.right = right;
+        left = left;
+        right = right;
     }
+
+    store<f32>(leftSampleBufferPtr, left);
+    store<f32>(rightSampleBufferPtr, right);    
 }

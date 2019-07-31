@@ -1,9 +1,13 @@
-var editor = ace.edit("editor");
-editor.setTheme("ace/theme/monokai");
-editor.session.setMode("ace/mode/javascript");
-document.getElementById('editor').style.backgroundColor = 'rgba(0,0,0,0.5)';
+const editor = CodeMirror(document.getElementById("editor"), {
+    value: "",
+    mode:  "javascript",
+    theme: "monokai"
+});
+
 const global = window;
 let pattern_tools_src;
+
+document.getElementById('savesongbutton').onclick = () => compileAndPostSong();
 
 window.onkeydown = (k) => {
     if((event.ctrlKey || event.metaKey) && event.which == 83) {
@@ -14,17 +18,26 @@ window.onkeydown = (k) => {
 };
 
 async function initEditor() {
-    const storedsongcode = localStorage.getItem('storedsongcode');
-    if(storedsongcode) {
-        editor.session.setValue(storedsongcode);
-    } else {
-        editor.session.setValue(await fetch('emptysong.js').then(r => r.text()));
+    let storedsongcode = localStorage.getItem('storedsongcode');
+    
+    const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
+
+    if(gistparam) {
+        const gistid = gistparam.split('=')[1];
+        
+        const gist = await fetch(`https://api.github.com/gists/${gistid}`).then(r => r.json());
+        const songfilename = Object.keys(gist.files).find(filename => filename.endsWith('.js'));
+        storedsongcode = gist.files[songfilename].content;
+        console.log(`loaded from gist ${gistid}: ${songfilename}`);
     }
-    editor.commands.addCommand({
-        name: 'save',
-        bindKey: {win: "Ctrl-S", "mac": "Cmd-S"},
-        exec: compileAndPostSong
-    });
+
+    if(storedsongcode) {
+        editor.doc.setValue(storedsongcode);
+    } else {
+        editor.doc.setValue(await fetch('emptysong.js').then(r => r.text()));
+    }
+    CodeMirror.commands.save = compileAndPostSong;
+    
     window.insertRecording = () => {
         const recorded = window.recordedSongData;
         
@@ -72,7 +85,7 @@ async function initEditor() {
 }
 
 window.compileSong = function() {
-    const songsource = editor.session.getValue();
+    const songsource = editor.doc.getValue();
     localStorage.setItem('storedsongcode', songsource);
     eval(pattern_tools_src);
     eval(songsource);

@@ -38,6 +38,8 @@ input::placeholder {
     padding-top: 3px;
     padding-left: 20px;
     background-color: green;
+    overflow: hidden;
+    white-space: nowrap;
     color: white;
 }
 .toolbar {
@@ -48,4 +50,8 @@ input::placeholder {
     display: flex;
     overflow-x: auto;
     width: 100%;
+}
+
+.CodeMirror {
+    height: 100%;
 }

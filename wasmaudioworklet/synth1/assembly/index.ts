@@ -1,8 +1,9 @@
 // The entry file of your WebAssembly module.
 import { SAMPLERATE } from './environment';
-import { mixernext, signal, setChannelValue } from './mixes/goodtimes.mix';
+import { mixernext, setChannelValue } from './mixes/goodtimes.mix';
+export { setChannelValue } from './mixes/goodtimes.mix';
 
-export const PATTERN_SIZE_SHIFT:usize = 4;
+export const PATTERN_SIZE_SHIFT: usize = 4;
 const PATTERN_LENGTH: f32 = (1 << PATTERN_SIZE_SHIFT) as f32;
 
 let NUM_INSTRUMENTS: i32;
@@ -92,7 +93,7 @@ function updateInstrumentNotes(): void {
   for(let n=0;n<NUM_INSTRUMENTS;n++) {    
     let instrumentPatternIndex = load<u8>(instrumentPatternListsPtr +
         n * songlength +
-        patternIndex);
+        patternIndex) as usize;
     
     let channelValue: f32 = load<u8>(patternsPtr + (instrumentPatternIndex << PATTERN_SIZE_SHIFT)
         + patternNoteIndex) as f32;
@@ -147,9 +148,7 @@ export function getCurrentChannelValuesBufferPtr(): usize {
 export function fillSampleBuffer(): void {      
   updateInstrumentNotes();
   for(let n: usize=0;n<sampleBufferFrames;n++) {    
-    mixernext();    
+    mixernext(sampleBufferPtr + (n * 4), sampleBufferPtr + (n * 4) + (sampleBufferFrames * 4));    
     tick += ticksPerSample;
-    store<f32>(sampleBufferPtr + (n * 4), signal.left);
-    store<f32>(sampleBufferPtr + (n * 4) + (sampleBufferFrames * 4), signal.right);    
   }
 }
