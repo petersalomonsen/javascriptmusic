@@ -19,7 +19,7 @@ const instance = module.exports;
 
 var membuffer = new Uint8Array(instance.memory.buffer);
   
-const songsource = fs.readFileSync('./songs/goodtimes.js').toString();
+const songsource = fs.readFileSync('./songs/80smachine.js').toString();
 
 eval(songsource);
 

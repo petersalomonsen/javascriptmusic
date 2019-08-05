@@ -7,7 +7,7 @@ global.instrumentNames = [];
 global.instrumentDefs = {};
 const instrumentPatternListArr = [];
 const patternsMap = {};
-const instrumentGroupMap = {};
+global.instrumentGroupMap = {};
 const instrumentsArr = [];
 const instrumentIndexMap = {};
 const soloMap = {};
@@ -18,7 +18,7 @@ let playPatternsList = [];
 
 let currentPatternPosition = 0;
 
-const ticksperbeat = () => patternsize / 4;
+global.ticksperbeat = () => patternsize / 4;
 
 let globalparamdefs;
 let globalcmddefs;
@@ -28,6 +28,7 @@ let patternAutoNameCount = 0;
 global.calculatePatternSize = () => {
 	global.patternsize = 1 << global.pattern_size_shift;
 };
+
 global.calculatePatternSize();
 global.soloInstrument = (name) => {
 	soloMap[name] = true;

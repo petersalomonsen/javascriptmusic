@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "asbuild": "asc --runtime stub assembly/index.ts -b build/index.wasm -Oz",
-    "fastbuild": "asc --runtime stub assembly/index.ts -b build/index.wasm --sourceMap -t build/index.wat"
+    "asbuild": "asc --runtime none assembly/index.ts -b build/index.wasm -Oz",
+    "fastbuild": "asc --runtime none assembly/index.ts -b build/index.wasm -t build/index.wat"
   },
   "dependencies": {},
   "devDependencies": {

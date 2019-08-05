@@ -1,0 +1,39 @@
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.css">
+<link rel="stylesheet" type="text/css" href="codemirror-monokai.css">    
+<link rel="stylesheet" type="text/css" href="style.css">    
+<div id="appcontainer">
+  <div class="toolbar">
+    <button id="startaudiobutton" onclick="startaudio()" style="width: 50px;">&#x25B6;</button>
+    <button id="stopaudiobutton" onclick="stopaudio()" style="width: 50px; display: none">&#9724;</button>
+    <button id="savesongbutton">&#x1f4be;</button>
+    <button onclick="clearRecording()">Clear recording</button>
+    <button onclick="insertRecording()">Insert recording</button>
+    <label>
+      Instrument <br />
+      <select id="midichannelmappingselection" onchange="currentMidiChannelMapping=this.value">
+      </select>
+    </label>
+
+    <label class="checkboxlabel" style="padding: 5px;">
+      <input id="toggleSongPlayCheckbox" type="checkbox" checked onclick="toggleSongPlay(this.checked)" /> play song
+    </label>
+    <input id="vkeyboardinputelement" placeholder="Virtual keyboard" />
+  </div>
+  <br />
+  <div id="editor"></div>
+  <script>
+    window.visualizeNoteOn = function() {}
+  </script>
+  <canvas id="glCanvas" style="position: absolute;
+        bottom: 20px;
+        top: 20px;
+        left: 0px;
+        right: 0px;
+        width: 100%;
+        height: 100%;
+        z-index: -10"></canvas>
+
+  <div class="footer">
+    webassembly music experiment - (c) 2019 peter salomonsen
+  </div>
+</div>

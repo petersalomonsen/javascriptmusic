@@ -1,6 +1,7 @@
 let instance;
 let leftsamplebuffer;
 let rightsamplebuffer;
+let holdchannelvalues;
 let membuffer;
 let channelvaluesbuffer;
 let channelvalueschecksum = 0;
@@ -46,7 +47,9 @@ const loadSong = (song) => {
   channelvaluesbuffer = new Float32Array(instance.memory.buffer, 
           instance.getCurrentChannelValuesBufferPtr(),
           song.instrumentPatternLists.length);
-
+  holdchannelvalues = new Float32Array(instance.memory.buffer, 
+          instance.getHoldChannelValuesBufferPtr(),
+          song.instrumentPatternLists.length);
   instance.setBPM(song.BPM ? song.BPM : 120);
 }
 
@@ -73,7 +76,7 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
               SAMPLE_FRAMES);
           rightsamplebuffer = new Float32Array(instance.memory.buffer,
               samplebufferptr + (SAMPLE_FRAMES * 4),
-              SAMPLE_FRAMES);
+              SAMPLE_FRAMES);  
         }
         if(msg.data.song) {
           loadSong(msg.data.song);
@@ -90,9 +93,9 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
             // Record data to pattern
             instance.recordChannelValue(msg.data.channel,msg.data.note);
 
-            const tick = instance.getTick();
-            const patternIndex = Math.floor(tick / patternsize);  
-            const patternNoteIndex = Math.round(tick) % patternsize;
+            const quantizedTick = Math.round(instance.getTick());
+            const patternIndex = Math.floor(quantizedTick / patternsize);  
+            const patternNoteIndex = quantizedTick % patternsize;
 
             const currentInstrumentPatternIndex = msg.data.channel * songlength + patternIndex;
             let patternNo = instrumentpatternslist[currentInstrumentPatternIndex];
@@ -118,10 +121,9 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
           }
         }
         
-        if(msg.data.clearpattern && msg.data.channel !== undefined) {
-          const patternNo = instrumentpatternslist[msg.data.channel * songlength + instance.getPatternIndex()];
+        if(msg.data.clearpattern && msg.data.patternIndex !== undefined) {
           for(let n = 0;n<patternsize; n++) {
-            patternsbuffer[patternNo * patternsize + n]  = 0; 
+            patternsbuffer[msg.data.patternIndex * patternsize + n]  = 0; 
           }
         }
 
@@ -130,12 +132,43 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
             let checksum = 0;
             for(let n=0;n<channelvaluesbuffer.length;n++) {
               checksum += channelvaluesbuffer[n];
+              if(channelvaluesbuffer[n]===1) {
+                console.log('hold', n);
+              }
             }
             
             if(checksum > 0 && channelvalueschecksum !== checksum) {
               this.port.postMessage({channelvalues: channelvaluesbuffer});
             }
-            channelvalueschecksum = checksum;
+            channelvalueschecksum = checksum;            
+
+            // Create holding note patterns if notes are held
+            for(let channel = 0; channel < holdchannelvalues.length; channel++) {
+              if (holdchannelvalues[channel] > 1) {
+                const quantizedTick = Math.round(instance.getTick());
+                const patternIndex = Math.floor(quantizedTick / patternsize);  
+
+                const currentInstrumentPatternIndex = channel * songlength + patternIndex;
+                let patternNo = instrumentpatternslist[currentInstrumentPatternIndex];
+
+                if(patternNo === 0) {
+                  patternNo = (availablePatternIndex ++);
+                  instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
+                }
+                // send pattern back to main thread for storing
+                this.port.postMessage({
+                  instrumentPatternIndex: patternIndex,
+                  channel: channel,
+                  recordedPatternNo: patternNo,
+                  patternData: Array.from(patternsbuffer.slice(
+                        patternNo * patternsize,
+                        patternNo * patternsize + patternsize
+                      )
+                    )
+                });
+              
+              }
+            }
           }
         }
         if(msg.data.songPositionMillis) {

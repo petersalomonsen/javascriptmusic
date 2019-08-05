@@ -1,7 +1,7 @@
 // The entry file of your WebAssembly module.
 import { SAMPLERATE } from './environment';
-import { mixernext, setChannelValue } from './mixes/goodtimes.mix';
-export { setChannelValue } from './mixes/goodtimes.mix';
+import { mixernext, setChannelValue } from './mixes/piano.mix';
+export { setChannelValue } from './mixes/piano.mix';
 
 export const PATTERN_SIZE_SHIFT: usize = 4;
 const PATTERN_LENGTH: f32 = (1 << PATTERN_SIZE_SHIFT) as f32;
@@ -113,6 +113,10 @@ function updateInstrumentNotes(): void {
       setChannelValue(n, channelValue);
     }    
   }
+}
+
+export function getHoldChannelValuesBufferPtr(): usize {
+  return holdChannelValuesBufferPtr;
 }
 
 export function recordChannelValue(channel: usize, value: f32): void {

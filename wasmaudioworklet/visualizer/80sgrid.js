@@ -1,10 +1,10 @@
 "use strict";
 
-async function initVisualizer() {
+export async function initVisualizer(componentRoot) {
     const vertexShaderSource = await fetch('visualizer/80sgrid_vertex.glsl').then(res => res.text());
     const fragmentShaderSource = await fetch('visualizer/80sgrid_fragment.glsl').then(res => res.text());
 
-    const canvas = document.querySelector("#glCanvas");
+    const canvas = componentRoot.querySelector("#glCanvas");
     // Initialize the GL context
     const gl = canvas.getContext("webgl");
 
@@ -108,5 +108,3 @@ async function initVisualizer() {
 
     repaint();
 }
-
-initVisualizer();
