@@ -38,6 +38,27 @@ async function initEditor() {
     }
     CodeMirror.commands.save = compileAndPostSong;
     
+    const insertStringIntoEditor = (str) => {
+
+        const selection = editor.getSelection();
+
+        if(selection.length>0){
+            editor.replaceSelection(str);
+        }
+        else{
+
+            const doc = editor.doc;
+            const cursor = doc.getCursor();
+
+            const pos = {
+               line: cursor.line,
+               ch: cursor.ch
+            }
+
+            doc.replaceRange(str, pos);
+        }
+    }
+
     window.insertRecording = () => {
         const recorded = window.recordedSongData;
         
@@ -67,9 +88,10 @@ async function initEditor() {
                     return '';
                 }
             });
-            editor.insert(
-                `"${instrumentName}": pp(4, [${patterndata.join(',')}]),\n`
-            )
+            const recordingString = `"${instrumentName}": pp(4, [${patterndata.join(',')}]),\n`;
+            
+            insertStringIntoEditor(recordingString);
+            
         });
         
         // Clear recordings
