@@ -4,10 +4,11 @@ let pitchtable = changetype<usize>(new ArrayBuffer(128*128*4));
 let pitch: f64 = c0;
 
 for(let n: usize=0;n<(128*128);n++) {    
-    store<f32>(pitchtable + (n*4), pitch as f32);
+    store<f32>(pitchtable + (n << 2), pitch as f32);
     pitch *= pitchstep;
 }
 
 export function notefreq(note: f32): f32 {
-    return load<f32>(pitchtable + (((note * 128) as usize) * 4));
+    let pitchtableIndex: usize = (note * 128.0) as usize;    
+    return load<f32>(pitchtable + (pitchtableIndex << 2));
 }

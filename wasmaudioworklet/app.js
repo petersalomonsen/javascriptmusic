@@ -1,10 +1,6 @@
 import {} from './audioworkletpolyfill.js';
 import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer } from './visualizer/80sgrid.js';
-
-// import {} from 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.js';
-// import {} from 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/mode/javascript/javascript.js';
-  
 import { initEditor } from './editorcontroller.js';
 
 customElements.define('app-javascriptmusic',

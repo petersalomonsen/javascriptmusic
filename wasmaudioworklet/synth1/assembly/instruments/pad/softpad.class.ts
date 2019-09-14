@@ -60,7 +60,9 @@ export class SoftPad {
         const lfo: f32 = this.lfo.next();
 
         const note = this.note;
-        
+        if(note<2) {
+            return;
+        }
         this.sawoscillator2.frequency = notefreq(note + 0.05 + (0.02 * lfo));
         this.sawoscillator3.frequency = notefreq(note - 0.05 - (0.02 * lfo));
         this.sawoscillator4.frequency = notefreq(note + 0.1 + (0.03 * lfo));

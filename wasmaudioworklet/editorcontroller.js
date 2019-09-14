@@ -1,4 +1,17 @@
+import { loadScript } from './common/scriptloader.js';
+
+async function loadCodeMirror() {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/mode/javascript/javascript.js');
+    loadScript('https://codemirror.net/addon/search/search.js');
+    loadScript('https://codemirror.net/addon/search/searchcursor.js');
+    loadScript('https://codemirror.net/addon/search/jump-to-line.js');
+    loadScript('https://codemirror.net/addon/dialog/dialog.js');
+}
+
 export async function initEditor(componentRoot) {
+    await loadCodeMirror();
+
     const editor = CodeMirror(componentRoot.getElementById("editor"), {
         value: "",
         mode:  "javascript",
@@ -17,10 +30,6 @@ export async function initEditor(componentRoot) {
             return false;
         }
     };
-
-    async function initEditor() {
-        
-    }
 
     window.compileSong = function() {
         const songsource = editor.doc.getValue();
