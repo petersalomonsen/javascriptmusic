@@ -15,7 +15,7 @@ import { SoftPad } from "../instruments/pad/softpad.class";
 import { Hihat } from "../instruments/hihat.class";
 import { SineLead } from "../instruments/lead/sinelead";
 
-const gain: f32 = 0.1;
+const gain: f32 = 0.13;
 const ENABLE_MULTIBAND_COMPRESSOR = false;
 
 let freeverb = new Freeverb();
