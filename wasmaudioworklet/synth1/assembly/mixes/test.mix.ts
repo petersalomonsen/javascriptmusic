@@ -1,3 +1,5 @@
+// This mix was used in the song "Groove is in the code"
+
 import { StereoSignal } from "../synth/stereosignal.class";
 
 import { Freeverb } from "../fx/freeverb";
@@ -14,6 +16,9 @@ import { SAMPLERATE } from "../environment";
 import { SquareLead } from "../instruments/squarelead.class";
 
 import { TriBandStereoCompressor } from "../fx/tribandstereocompressor";
+
+export const PATTERN_SIZE_SHIFT: usize = 4;
+export const BEATS_PER_PATTERN_SHIFT: usize = 2;
 
 const gain: f32 = 0.15;
 const ENABLE_MULTIBAND_COMPRESSOR = false;

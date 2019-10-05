@@ -17,6 +17,9 @@ import { TriBandStereoCompressor } from "../fx/tribandstereocompressor";
 import { EQBand } from "../fx/eqband";
 import { SawBass2 } from "../instruments/bass/sawbass2.class";
 
+export const PATTERN_SIZE_SHIFT: usize = 4;
+export const BEATS_PER_PATTERN_SHIFT: usize = 2;
+
 const gain: f32 = 0.2;
 const ENABLE_MULTIBAND_COMPRESSOR = false;
 

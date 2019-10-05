@@ -1,9 +1,12 @@
-// The entry file of your WebAssembly module.
-import { SAMPLERATE } from './environment';
-import { mixernext, setChannelValue } from './mixes/piano.mix';
-export { setChannelValue } from './mixes/piano.mix';
+// The entry file of the synth WebAssembly module.
 
-export const PATTERN_SIZE_SHIFT: usize = 4;
+// --- Replace with your own mix implementation here
+import { mixernext, setChannelValue, PATTERN_SIZE_SHIFT, BEATS_PER_PATTERN_SHIFT } from './mixes/shuffle.mix';
+export { setChannelValue } from './mixes/shuffle.mix';
+// -------------------------------------------------
+
+import { SAMPLERATE } from './environment';
+
 const PATTERN_LENGTH: f32 = (1 << PATTERN_SIZE_SHIFT) as f32;
 
 let NUM_INSTRUMENTS: i32;
@@ -21,7 +24,7 @@ let patternIndex: usize = 0;
 let patternNoteIndex: usize = -1;
 
 let tick: f64 = 0;
-let ticksPerBeat: f32 = 4;
+let ticksPerBeat: f32 = (1 << PATTERN_SIZE_SHIFT >> BEATS_PER_PATTERN_SHIFT) as f32;
 let bpm: f32 = 120;
 
 let ticksPerSec = ticksPerBeat * bpm / 60;

@@ -1,3 +1,6 @@
+export const PATTERN_SIZE_SHIFT: usize = 4;
+export const BEATS_PER_PATTERN_SHIFT: usize = 2;
+
 export function setChannelValue(channel: usize, value: f32): void {
     
 }

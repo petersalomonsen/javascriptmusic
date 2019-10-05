@@ -8,15 +8,15 @@ import { TriBandStereoCompressor } from "../fx/tribandstereocompressor";
 import { EQBand } from "../fx/eqband";
 import { SubPiano } from "../instruments/piano/subpiano";
 import { Kick2 } from "../instruments/drums/kick2.class";
-import { Snare2 } from "../instruments/drums/snare2.class";
+import { Snare } from "../instruments/snare.class";
 import { SawBass3 } from "../instruments/bass/sawbass3";
 import { Eftang } from "../instruments/lead/eftang";
 import { SoftPad } from "../instruments/pad/softpad.class";
 import { Hihat } from "../instruments/hihat.class";
 import { SineLead } from "../instruments/lead/sinelead";
 
-export const PATTERN_SIZE_SHIFT: usize = 4;
-export const BEATS_PER_PATTERN_SHIFT: usize = 2;
+export const PATTERN_SIZE_SHIFT: usize = 3;
+export const BEATS_PER_PATTERN_SHIFT: usize = 0;
 
 const gain: f32 = 0.13;
 const ENABLE_MULTIBAND_COMPRESSOR = false;
@@ -49,7 +49,7 @@ const pads: SoftPad[] = createInstrumentArray<SoftPad>(8, () => new SoftPad());
 const kick = new Kick2();
 const bass = new SawBass3();
 const eftang = new Eftang();
-const snare = new Snare2();
+const snare = new Snare();
 const hihat = new Hihat();
 const sinelead = new SineLead();
 
@@ -122,7 +122,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 
     snare.next();
     mainline.addStereoSignal(snare.signal, 1.0, 0.5);
-    reverbline.addStereoSignal(snare.signal, 0.2, 0.5); 
+    reverbline.addStereoSignal(snare.signal, 0.01, 0.5); 
 
     echoline.left += delayRight.read() * 0.5;
     echoline.right += delayLeft.read() * 0.5;

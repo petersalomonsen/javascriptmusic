@@ -1,5 +1,6 @@
 global.hld = 1;
 global.bpm = 100;
+global.beats_per_pattern_shift = 2;
 global.pattern_size_shift = 4;
 global.looptimes = 1;
 
@@ -18,7 +19,7 @@ let playPatternsList = [];
 
 let currentPatternPosition = 0;
 
-global.ticksperbeat = () => patternsize / 4;
+global.ticksperbeat = () => ( 1 << pattern_size_shift >> beats_per_pattern_shift );
 
 let globalparamdefs;
 let globalcmddefs;
