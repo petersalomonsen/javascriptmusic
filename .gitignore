@@ -4,3 +4,4 @@ recordings/*
 *.flac
 .vscode
 .DS_Store
+out

@@ -1,0 +1,23 @@
+@startuml
+
+node "Song editor" {
+    [Song Javascript source] as songsource
+    [Song compiler] as songcompiler
+}
+node "Synth / sequencer" {
+    [AudioWorklet processor] as audioworkletprocessor  
+    [WebAssembly synth] as wasmsynth  
+}
+
+cloud "Audio output" as audiooutput {
+
+}
+
+songsource -> songcompiler
+songcompiler -down-> audioworkletprocessor : "Pattern data"
+audioworkletprocessor -> wasmsynth
+wasmsynth -> audioworkletprocessor
+
+audioworkletprocessor -down-> audiooutput
+
+@enduml
