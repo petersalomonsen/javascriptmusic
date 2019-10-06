@@ -1,5 +1,5 @@
 const fs = require('fs');
-const patternfuncs = require('./pattern_tools.js');
+require('./pattern_tools.js');
 
 global.setGlobalParamDefs = (defs) => {
 	globalparamdefs = defs.trim();
@@ -31,13 +31,13 @@ module.exports = {
 	makeVierKlangInc: () => {
 		let patterns = '';
 	
-		patternfuncs.generatePatterns().forEach(pattern =>
+		generatePatterns().forEach(pattern =>
 			patterns += 'db ' + pattern.join(', ') + '\n'					
 		);
 		// console.log('Number of patterns', patternNo);
 
 		let instrumentPatternLists = ``;
-		patternfuncs.generateInstrumentPatternLists().forEach((instrumentPatternList, n) =>
+		generateInstrumentPatternLists().forEach((instrumentPatternList, n) =>
 			instrumentPatternLists += `Instrument${n}List		db	${
 				instrumentPatternList.join(', ')
 			};\n`
@@ -57,8 +57,11 @@ module.exports = {
 			instrcmddefs += `GO4K_END_CMDDEF\n`;
 		});
 
-		const vierklangh = `#define	SAMPLE_RATE	44100
-#define	BPM	${global.bpm}
+// Adjust BPM for beats per pattern
+const adjustedBPM = (global.bpm << 2) >> global.beats_per_pattern_shift;
+
+const vierklangh = `#define	SAMPLE_RATE	44100
+#define	BPM	${adjustedBPM}
 #define	MAX_INSTRUMENTS	${instrumentsArr.length}
 #define	MAX_PATTERNS ${max_patterns * looptimes}
 #define	PATTERN_SIZE_SHIFT ${pattern_size_shift}
@@ -95,7 +98,7 @@ const vierklanginc = `
 %define	MAX_INSTRUMENTS	${instrumentsArr.length}
 %define	MAX_VOICES 1
 %define	HLD	${global.hld} ;	// can be adjusted to give crinkler	some other possibilities
-%define	BPM	${global.bpm}
+%define	BPM	${adjustedBPM}
 %define	MAX_PATTERNS ${max_patterns}
 %define	PATTERN_SIZE_SHIFT ${pattern_size_shift}
 %define	PATTERN_SIZE (1	<< PATTERN_SIZE_SHIFT)

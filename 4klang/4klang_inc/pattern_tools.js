@@ -1,11 +1,14 @@
 global.hld = 1;
 global.bpm = 100;
+global.beats_per_pattern_shift = 2;
 global.pattern_size_shift = 4;
 global.looptimes = 1;
 
+global.instrumentNames = [];
+global.instrumentDefs = {};
 const instrumentPatternListArr = [];
 const patternsMap = {};
-const instrumentGroupMap = {};
+global.instrumentGroupMap = {};
 global.instrumentsArr = [];
 const instrumentIndexMap = {};
 const soloMap = {};
@@ -16,7 +19,7 @@ let playPatternsList = [];
 
 let currentPatternPosition = 0;
 
-const ticksperbeat = () => patternsize / 4;
+global.ticksperbeat = () => ( 1 << pattern_size_shift >> beats_per_pattern_shift );
 
 let globalparamdefs;
 let globalcmddefs;
@@ -24,9 +27,10 @@ let globalcmddefs;
 let patternAutoNameCount = 0;
 
 global.calculatePatternSize = () => {
-	global.patternsize = 1 << pattern_size_shift;
+	global.patternsize = 1 << global.pattern_size_shift;
 };
-calculatePatternSize();
+
+global.calculatePatternSize();
 global.soloInstrument = (name) => {
 	soloMap[name] = true;
 };
@@ -35,12 +39,21 @@ global.muteInstrument = (name) => {
 	muteMap[name] = true;
 };
 global.addInstrument = (name, instrument) => {
-	instrumentIndexMap[name] = instrumentsArr.length;
-	instrumentsArr.push(instrument.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
-    .join('\n'));	
-	instrumentPatternListArr.push([]);
+    instrumentIndexMap[name] = instrumentsArr.length;
+    
+    // for 4klang instrument defs
+    if(typeof instrument === 'string') {
+        instrumentsArr.push(instrument.split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 0)
+            .join('\n'));	
+    } else {
+        instrumentsArr.push(instrument);
+    }
+
+    instrumentPatternListArr.push([]);
+    global.instrumentNames.push(name);
+    global.instrumentDefs[name] = instrument;
 };
 
 global.pp = (stepsperbeat, patterndata, channels = 1) => {
@@ -53,6 +66,10 @@ global.pp = (stepsperbeat, patterndata, channels = 1) => {
 		}
 		return channelpatterns;
 	}
+};
+
+global.getPatternByName = (patternName) => {
+	return patternsMap[patternName];
 };
 
 global.addPattern = (name, pattern) => {	
@@ -164,9 +181,10 @@ global.repeatSection = (times, func, initial=0) => {
 		func(n);
 	}
 }
-new Array(128).fill(null).map((v, ndx) => 
+global.noteValues = new Array(128).fill(null).map((v, ndx) => 
     (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
-).forEach((note, ndx) => global[note] = (duration, velocity) => {
+);
+global.noteValues.forEach((note, ndx) => global[note] = (duration, velocity) => {
 	if(duration) {
 		return () => new Array(duration * ticksperbeat()).fill(null).map((v, n) => n===0 ? ndx : hld);
 	} else {
@@ -225,8 +243,8 @@ global.pattern = (stepsperbeat, notearray, channels = 1) => {
 const patternNameToIndexMap = { '0': 0 };
 global.max_patterns = 0;
 
-module.exports = {
-    generatePatterns: () => {
+
+global.generatePatterns = () => {
 		playPatternsList.forEach((playFunc) => playFunc());
 
 		const patternStringMap = {};
@@ -248,24 +266,24 @@ module.exports = {
 			}
 		});
 		return patterns;
-	},
-	generateInstrumentPatternLists: () => {
+    };
+    
+global.generateInstrumentPatternLists = () => {
 		let instrumentPatternLists = [];
-		
-		
-		
+            
 		instrumentPatternListArr.forEach((instrumentPatternList, ndx) => {
-			if(instrumentPatternList.length > max_patterns) {
+            if(instrumentPatternList.length > max_patterns) {
 				max_patterns = instrumentPatternList.length;
 			}			
 		});
-
+                
 		for(let n = 0;n < instrumentsArr.length; n++) {
 			let instrumentPatternList = instrumentPatternListArr[n];
 			
 			if(instrumentPatternList === undefined) {
 				instrumentPatternList = [];
-			}
+            }
+
 			if(instrumentPatternList.length < max_patterns) {
 				for(let ndx = instrumentPatternList.length; ndx < max_patterns; ndx++) {
 					instrumentPatternList.push(0);
@@ -273,7 +291,6 @@ module.exports = {
 			}
 			
 			instrumentPatternLists.push(instrumentPatternList.map(patternName => patternNameToIndexMap[patternName]));
-		}
+        }
 		return instrumentPatternLists;
-	}
-}
+    };
