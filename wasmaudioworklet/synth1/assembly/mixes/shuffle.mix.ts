@@ -9,11 +9,12 @@ import { EQBand } from "../fx/eqband";
 import { SubPiano } from "../instruments/piano/subpiano";
 import { Kick2 } from "../instruments/drums/kick2.class";
 import { Snare } from "../instruments/snare.class";
-import { SawBass3 } from "../instruments/bass/sawbass3";
+import { DeepBass } from "../instruments/bass/deepbass";
 import { Eftang } from "../instruments/lead/eftang";
 import { SoftPad } from "../instruments/pad/softpad.class";
 import { Hihat } from "../instruments/hihat.class";
 import { SineLead } from "../instruments/lead/sinelead";
+import { DriveLead } from "../instruments/drivelead.class";
 
 export const PATTERN_SIZE_SHIFT: usize = 3;
 export const BEATS_PER_PATTERN_SHIFT: usize = 0;
@@ -23,7 +24,7 @@ const ENABLE_MULTIBAND_COMPRESSOR = false;
 
 let freeverb = new Freeverb();
 
-const delayframes = (SAMPLERATE * (2/3) * 60 / 110) as usize;
+const delayframes = (SAMPLERATE * (3/8) * 60 / 70) as usize;
 let delayLeft: DelayLine = new DelayLine(delayframes);
 let delayRight: DelayLine = new DelayLine(delayframes);
     
@@ -36,7 +37,7 @@ let eqbandl = new EQBand(20, 19500);
 let eqbandr = new EQBand(20, 19500);
 
 function createInstrumentArray<T>(length: i32, factoryFunc: () => T): T[] {
-    const arr = Array.create<T>(length);
+    const arr = new Array<T>(length);
     for(let n  = 0; n < length;n++) {
         arr[n] = factoryFunc();
     }
@@ -45,9 +46,10 @@ function createInstrumentArray<T>(length: i32, factoryFunc: () => T): T[] {
 
 const pianos: SubPiano[] = createInstrumentArray<SubPiano>(8, () => new SubPiano());
 const pads: SoftPad[] = createInstrumentArray<SoftPad>(8, () => new SoftPad());
+const driveleads: DriveLead[] = createInstrumentArray<DriveLead>(3, () => new DriveLead());
 
 const kick = new Kick2();
-const bass = new SawBass3();
+const bass = new DeepBass();
 const eftang = new Eftang();
 const snare = new Snare();
 const hihat = new Hihat();
@@ -79,6 +81,16 @@ export function setChannelValue(channel: usize, value: f32): void {
         case channel === 21:
             sinelead.note = value;
             break;
+        case channel < 25:
+            driveleads[channel - 22].note = value;
+            break;
+        case channel === 25:
+            if(value > 1) {
+                for(let n = 0; n<driveleads.length; n++) {
+                    driveleads[n].setPitchbend(value - 64);
+                }
+            }
+            break;
     }
 }
 
@@ -100,17 +112,26 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         echoline.addStereoSignal(pad.signal, 0.4, 0.5);    
     }
 
+    for(let n = 0;n<driveleads.length;n++) {
+        const drivelead = driveleads[n];
+        drivelead.next();
+        
+        const pan = ((n + 1) * 0.25) as f32;
+        mainline.addStereoSignal(drivelead.signal, 0.1, pan);
+        echoline.addStereoSignal(drivelead.signal, 0.45, 1 - pan);    
+    }
+
     kick.next();
     mainline.addStereoSignal(kick.signal, 1.5, 0.5);
     reverbline.addStereoSignal(kick.signal, 0.2, 0.5); 
 
     hihat.next();
     mainline.addStereoSignal(hihat.signal, 1.5, 0.5);
-    reverbline.addStereoSignal(hihat.signal, 0.2, 0.5); 
+    // reverbline.addStereoSignal(hihat.signal, 0.0, 0.5); 
 
     bass.next();
-    mainline.addStereoSignal(bass.signal, 4, 0.5);
-    reverbline.addStereoSignal(bass.signal, 0.1, 0.5);    
+    mainline.addStereoSignal(bass.signal, 4.5, 0.5);
+    reverbline.addStereoSignal(bass.signal, 0.3, 0.5);    
 
     eftang.next();
     mainline.addStereoSignal(eftang.signal, 2.3, 0.5);
@@ -124,8 +145,8 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     mainline.addStereoSignal(snare.signal, 1.0, 0.5);
     reverbline.addStereoSignal(snare.signal, 0.01, 0.5); 
 
-    echoline.left += delayRight.read() * 0.5;
-    echoline.right += delayLeft.read() * 0.5;
+    echoline.left += delayRight.read() * 0.7;
+    echoline.right += delayLeft.read() * 0.7;
         
     delayLeft.write_and_advance(echoline.left);
     delayRight.write_and_advance(echoline.right);

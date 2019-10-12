@@ -19,6 +19,7 @@ export class DriveLead {
     readonly lfoenvelope: Envelope = new Envelope(1.0, 0, 1.0, 0.1);
     readonly lfo: SineOscillator = new SineOscillator();
     baseFrequency : f32;
+    pitchbend: f32 = 0;
 
     set note(note: f32) {        
         if(note > 1) {   
@@ -27,15 +28,20 @@ export class DriveLead {
             this.lfo.frequency = 8;
             this.envelope.attack();    
             this.lfoenvelope.attack();                    
+            this._note = note;
         } else {
             this.envelope.release();
             this.lfoenvelope.release();
         }
-        this._note = note;
+        
     }
 
     get note(): f32 {
         return this._note;
+    }
+
+    setPitchbend(bend: f32): void {
+        this.pitchbend = bend;        
     }
 
     next(): void {        
@@ -44,6 +50,17 @@ export class DriveLead {
             this.signal.clear();
             return;
         }
+        
+        const pitchbend: f32 = this.pitchbend;
+        if (Math.abs(pitchbend) > 0.01) {
+            // Simple pitchbend that always will return to base note
+            this.baseFrequency = notefreq(this._note + pitchbend);
+            this.pitchbend = pitchbend * 0.9999;
+        } else if(pitchbend !==0 ) {
+            this.pitchbend = 0;
+            this.baseFrequency = notefreq(this._note);
+        }
+        
         let lfo: f32 = this.lfo.next() * 3 * this.lfoenvelope.next();
         this.sawoscillatorl.frequency = this.baseFrequency + lfo + 0.5;
         this.sawoscillatorr.frequency = this.baseFrequency + lfo - 0.5;

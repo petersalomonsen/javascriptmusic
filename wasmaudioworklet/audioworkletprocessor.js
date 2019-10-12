@@ -2,7 +2,6 @@ let instance;
 let leftsamplebuffer;
 let rightsamplebuffer;
 let holdchannelvalues;
-let membuffer;
 let channelvaluesbuffer;
 let channelvalueschecksum = 0;
 let patternsbuffer;
@@ -13,10 +12,10 @@ let availablePatternIndex;
 
 const loadSong = (song) => {
   patternsize = song.patterns[0].length;
-
+  
   const extrapatterns = 100;
 
-  patternsbuffer = new Uint8Array(membuffer.buffer,
+  patternsbuffer = new Uint8Array(instance.memory.buffer,
     instance.allocatePatterns(song.patterns.length + extrapatterns),
       (song.patterns.length + extrapatterns) * patternsize);
   
@@ -30,7 +29,8 @@ const loadSong = (song) => {
   }
 
   songlength = song.instrumentPatternLists[0].length;
-  instrumentpatternslist = new Uint8Array(membuffer.buffer, 
+
+  instrumentpatternslist = new Uint8Array(instance.memory.buffer, 
       instance.allocateInstrumentPatternList(songlength, song.instrumentPatternLists.length),
       song.instrumentPatternLists.length * songlength);  
 
@@ -65,8 +65,10 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
               abort: () => console.log(abort)
             }
           })).instance.exports;
-          membuffer = new Uint8Array(instance.memory.buffer);
-          
+
+          // make some space
+          instance.memory.grow(16);
+
           // Is this really always 128??? 
           const SAMPLE_FRAMES = 128;
         

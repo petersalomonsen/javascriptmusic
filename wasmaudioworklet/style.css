@@ -11,14 +11,17 @@
 }
 button, input, select, .checkboxlabel {
     font-family: monospace;
-    background-color: green;
-    color: white;
+    background-color: #cfc;
+    border-color: #4a4;
+    border-width: 3px;
+    color:#050;
     padding: 3px;
     font-size: 16px;
+    min-width: 50px;
     
-    border-color: darkslategray;
+    border-radius: 8px;
     white-space: nowrap;
-    border-radius: 3px;
+    
     margin: 2px;
     user-select: none;
 } 
@@ -48,14 +51,21 @@ input::placeholder {
 }
 .toolbar {
     position: fixed;
+    background-color: green;
+    color: #030;
     top: 0px;
     left: 0px;
     right: 0px;
     display: flex;
+    align-items: center;
     overflow-x: auto;
     width: 100%;
 }
 
 .CodeMirror {
     height: 100%;
+}
+
+.CodeMirror-lint-tooltip {
+    z-index: 99999 !important;
 }

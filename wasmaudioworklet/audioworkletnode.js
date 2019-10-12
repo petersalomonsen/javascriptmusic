@@ -1,3 +1,5 @@
+import { stopVideoRecording, startVideoRecording } from './screenrecorder/screenrecorder.js';
+
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -31,6 +33,11 @@ export function initAudioWorkletNode(componentRoot) {
         audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
             {outputChannelCount: [2]});
         window.audioworkletnode = audioworkletnode;
+        
+        if(window.audioVideoRecordingEnabled === true) {
+            await startVideoRecording(context, audioworkletnode);        
+        }
+        
         audioworkletnode.port.start();
         audioworkletnode.port.postMessage({ topic: "wasm", 
             samplerate: context.sampleRate, 
@@ -62,6 +69,7 @@ export function initAudioWorkletNode(componentRoot) {
             }
         };
         audioworkletnode.connect(context.destination);
+
         window.getNoteStatusInterval = setInterval(() =>
             audioworkletnode.port.postMessage({ getNoteStatus: true }), 50);
         componentRoot.getElementById('startaudiobutton').style.display = 'none';
@@ -79,12 +87,19 @@ export function initAudioWorkletNode(componentRoot) {
         playing = false;
         componentRoot.getElementById('startaudiobutton').style.display = 'block';
         componentRoot.getElementById('stopaudiobutton').style.display = 'none';
+        if(window.audioVideoRecordingEnabled === true) {
+            stopVideoRecording();
+        }
     }
 
     window.toggleSongPlay = (status) => {
         if(audioworkletnode) {        
             audioworkletnode.port.postMessage({ toggleSongPlay: status});
         }
+    };
+
+    window.toggleCapture = (status) => {
+        window.audioVideoRecordingEnabled = status;
     };
 
     window.setSongPositionMillis = (songPositionMillis) => {
@@ -139,16 +154,6 @@ export function initAudioWorkletNode(componentRoot) {
     window.midichannelmappings = {};
 
     window.currentMidiChannelMapping = 'piano';
-
-    window.clearRecording = function() {    
-        const recorded = window.recordedSongData;        
-        recorded.instrumentPatternLists.forEach((patterinIndexList, instrumentIndex) => {
-            patterinIndexList.forEach(patternIndex => {
-                console.log('clear pattern', patternIndex);
-                audioworkletnode.port.postMessage({ patternIndex: patternIndex, clearpattern: true});
-            })
-        });
-    }
 
     function processNoteMessage(note, velocity) {
         visualizeNoteOn(note, velocity);

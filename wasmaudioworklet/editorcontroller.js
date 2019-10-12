@@ -1,12 +1,18 @@
-import { loadScript } from './common/scriptloader.js';
+import { loadScript, loadCSS } from './common/scriptloader.js';
 
 async function loadCodeMirror() {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.js');
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/mode/javascript/javascript.js');
-    loadScript('https://codemirror.net/addon/search/search.js');
-    loadScript('https://codemirror.net/addon/search/searchcursor.js');
-    loadScript('https://codemirror.net/addon/search/jump-to-line.js');
-    loadScript('https://codemirror.net/addon/dialog/dialog.js');
+    
+    await loadScript('https://codemirror.net/addon/search/search.js');
+    await loadScript('https://codemirror.net/addon/search/searchcursor.js');
+    await loadScript('https://codemirror.net/addon/search/jump-to-line.js');
+    await loadScript('https://codemirror.net/addon/dialog/dialog.js');
+    
+    await loadScript('https://unpkg.com/jshint@2.9.6/dist/jshint.js');
+    await loadScript('https://codemirror.net/addon/lint/lint.js');
+    await loadScript('https://codemirror.net/addon/lint/javascript-lint.js'); 
+    await loadCSS('https://codemirror.net/addon/lint/lint.css');   
 }
 
 export async function initEditor(componentRoot) {
@@ -15,7 +21,14 @@ export async function initEditor(componentRoot) {
     const editor = CodeMirror(componentRoot.getElementById("editor"), {
         value: "",
         mode:  "javascript",
-        theme: "monokai"
+        theme: "monokai",
+        lineNumbers: true,
+        gutters: ["CodeMirror-lint-markers"],
+        lint: {
+            'esversion': '8',
+            'elision': true,
+            'laxcomma': true
+        }
     });
 
     const global = window;
@@ -88,9 +101,11 @@ export async function initEditor(componentRoot) {
         try {
             const song =  compileSong();
             
-            audioworkletnode.port.postMessage({
-                song: song
-            });
+            if(audioworkletnode) {
+                audioworkletnode.port.postMessage({
+                    song: song
+                });
+            }
         } catch(e) {
             console.error(e);
         }
@@ -197,7 +212,12 @@ export async function initEditor(componentRoot) {
                 }    
                 groupRecordings[groupName][groupInstrumentIndex] = patterndata;
             } else {
-                const recordingString = `"${instrumentName}": pp(4, [${patterndata.join(',')}]),\n`;            
+                const stepsPerBeat = ticksperbeat();
+                const recordingString = `"${instrumentName}": pp(${stepsPerBeat}, [${
+                        patterndata
+                            .map((val, ndx) => ndx > 0 && ndx % stepsPerBeat === 0 ? `\n${val}` : val)
+                            .join(',')
+                }]),\n`;            
                 insertStringIntoEditor(recordingString);
             }            
         });
@@ -212,16 +232,22 @@ export async function initEditor(componentRoot) {
                     recordingArr[ndx][instrIndex] = val;
                 });
             });
-            const recordingdatastring = recordingArr.map(values => {
+            const stepsPerBeat = ticksperbeat();
+            const recordingdatastring = recordingArr.map((values, ndx) => {
+                    let newLine = '';
+                    if(ndx > 0 && ndx % stepsPerBeat === 0) {
+                        newLine = '\n';
+                    }
                     if(values.filter(val => val ? true: false).length === 0) {
-                        return '';
+                        return `${newLine}`;
                     } else if(values[0] && values.filter(val => val ? true: false).length === 1) {
-                        return values[0];
+                        return `${newLine}${values[0]}`;
                     } else {
-                        return `[${values.join(',')}]`;
+                        return `${newLine}[${values.join(',')}]`;
                     }
                 }).join(',');
-            const recordingString = `"${group}": pp(4, [${recordingdatastring}], ${recordings.length}),\n`;
+            
+            const recordingString = `"${group}": pp(${stepsPerBeat}, [${recordingdatastring}], ${recordings.length}),\n`;
             insertStringIntoEditor(recordingString);
         });
 

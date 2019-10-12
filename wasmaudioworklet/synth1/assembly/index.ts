@@ -128,23 +128,24 @@ export function recordChannelValue(channel: usize, value: f32): void {
 }
 
 export function allocatePatterns(numpatterns: i32): usize {
-  // Need to make this way of allocating better, but was a quick fix after this https://github.com/AssemblyScript/assemblyscript/pull/592
-  patternsPtr = changetype<usize>(new ArrayBuffer(numpatterns << PATTERN_SIZE_SHIFT));
+  patternsPtr = __alloc(numpatterns << PATTERN_SIZE_SHIFT, idof<Array<u32>>());
   return patternsPtr;
 }
 
 export function allocateInstrumentPatternList(songpatternslength: i32, numinstruments: i32): usize {
   NUM_INSTRUMENTS = numinstruments;
   songlength = songpatternslength;
-  currentChannelValuesBufferPtr = changetype<usize>(new ArrayBuffer(NUM_INSTRUMENTS * 4));
-  holdChannelValuesBufferPtr = changetype<usize>(new ArrayBuffer(NUM_INSTRUMENTS * 4));
-  instrumentPatternListsPtr = changetype<usize>(new ArrayBuffer(songpatternslength * NUM_INSTRUMENTS));
+  
+  currentChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
+  holdChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
+  instrumentPatternListsPtr = __alloc(songpatternslength * NUM_INSTRUMENTS, idof<Array<u32>>());
+
   return instrumentPatternListsPtr;
 }
 
 export function allocateSampleBuffer(frames: usize): usize {
   sampleBufferFrames = frames;
-  sampleBufferPtr = changetype<usize>(new ArrayBuffer(frames * 2 * 4));
+  sampleBufferPtr = __alloc(frames * 2 * 4, idof<Array<f32>>());
   return sampleBufferPtr;
 }
 

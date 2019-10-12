@@ -1,24 +1,34 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.css">
 <link rel="stylesheet" href="https://codemirror.net/addon/dialog/dialog.css">
+<link rel="stylesheet" href="https://codemirror.net/addon/lint/lint.css">
 <link rel="stylesheet" type="text/css" href="codemirror-monokai.css">    
 <link rel="stylesheet" type="text/css" href="style.css">    
 <div id="appcontainer">
   <div class="toolbar">
-    <button id="startaudiobutton" onclick="startaudio()" style="width: 50px;">&#x25B6;</button>
-    <button id="stopaudiobutton" onclick="stopaudio()" style="width: 50px; display: none">&#9724;</button>
-    <button id="savesongbutton">&#x1f4be;</button>
-    <button onclick="clearRecording()">Clear recording</button>
-    <button onclick="insertRecording()">Insert recording</button>
+    <button id="startaudiobutton" onclick="startaudio()" title="start synth">&#x25B6;</button>
+    <button id="stopaudiobutton" onclick="stopaudio()" title="stop synth" style="display: none">&#9724;</button>
+    <button id="savesongbutton" title="save song (clears recorded data)">&#x1f4be;</button>
+    <button onclick="insertRecording()" title="insert recording at cursor">&#128203;</button>
+    
     <label>
-      Instrument <br />
-      <select id="midichannelmappingselection" onchange="currentMidiChannelMapping=this.value">
+      <select id="midichannelmappingselection" title="select instrument" onchange="currentMidiChannelMapping=this.value">
       </select>
     </label>
 
-    <label class="checkboxlabel" style="padding: 5px;">
-      <input id="toggleSongPlayCheckbox" type="checkbox" checked onclick="toggleSongPlay(this.checked)" /> play song
+    <input id="vkeyboardinputelement" title="use your computer keyboard to play notes" placeholder="Virtual keyboard" />
+
+    <label title="toggle sequencer">
+      <input id="toggleSongPlayCheckbox" type="checkbox" checked onclick="toggleSongPlay(this.checked)" />
+      <span>sequencer</span>
     </label>
-    <input id="vkeyboardinputelement" placeholder="Virtual keyboard" />
+
+    &nbsp;
+
+    <label title="toggle screen and audio capture">
+        <input id="toggleSongPlayCheckbox" type="checkbox" onclick="toggleCapture(this.checked)" />
+        <span>capture</span>
+    </label>
+  
   </div>
   <br />
   <div id="editor"></div>

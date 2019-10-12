@@ -186,7 +186,11 @@ global.noteValues = new Array(128).fill(null).map((v, ndx) =>
 );
 global.noteValues.forEach((note, ndx) => global[note] = (duration, velocity) => {
 	if(duration) {
-		return () => new Array(duration * ticksperbeat()).fill(null).map((v, n) => n===0 ? ndx : hld);
+		let roundedDuration = Math.round(duration);
+		if (roundedDuration === 0) {
+			roundedDuration = 1;
+		}
+		return () => new Array(roundedDuration * ticksperbeat()).fill(null).map((v, n) => n===0 ? ndx : hld);
 	} else {
 		return ndx;
 	}

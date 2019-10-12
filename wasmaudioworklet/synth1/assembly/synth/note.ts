@@ -1,6 +1,6 @@
 const pitchstep: f64 = 1.0004513695322617; // Math.pow(2, (1/128) / 12);
 const c0: f64 = 8.175798915643707; // Math.pow(2, -69 / 12);
-let pitchtable = changetype<usize>(new ArrayBuffer(128*128*4));
+let pitchtable = __alloc(128*128*4, idof<Array<f32>>());
 let pitch: f64 = c0;
 
 for(let n: usize=0;n<(128*128);n++) {    
