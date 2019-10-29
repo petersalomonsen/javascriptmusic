@@ -134,7 +134,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     reverbline.addStereoSignal(bass.signal, 0.3, 0.5);    
 
     eftang.next();
-    mainline.addStereoSignal(eftang.signal, 2.3, 0.5);
+    mainline.addStereoSignal(eftang.signal, 2.1, 0.5);
     echoline.addStereoSignal(eftang.signal, 1.8, 0.5);    
 
     sinelead.next();
