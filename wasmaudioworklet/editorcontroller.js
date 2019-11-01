@@ -113,61 +113,84 @@ export async function initEditor(componentRoot) {
 
     let storedsongcode = localStorage.getItem('storedsongcode');
         
-        const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
+    const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
 
-        if(gistparam) {
-            const gistid = gistparam.split('=')[1];
-            
-            const gist = await fetch(`https://api.github.com/gists/${gistid}`).then(r => r.json());
-            const songfilename = Object.keys(gist.files).find(filename => filename.endsWith('.js'));
-            storedsongcode = gist.files[songfilename].content;
-            console.log(`loaded from gist ${gistid}: ${songfilename}`);
-        }
-
-        if(storedsongcode) {
-            editor.doc.setValue(storedsongcode);
-        } else {
-            editor.doc.setValue(await fetch('emptysong.js').then(r => r.text()));
-        }
-        CodeMirror.commands.save = compileAndPostSong;
+    if(gistparam) {
+        const gistid = gistparam.split('=')[1];
         
-        const insertStringIntoEditor = (str) => {
+        const gist = await fetch(`https://api.github.com/gists/${gistid}`).then(r => r.json());
+        const songfilename = Object.keys(gist.files).find(filename => filename.endsWith('.js'));
+        storedsongcode = gist.files[songfilename].content;
+        console.log(`loaded from gist ${gistid}: ${songfilename}`);
+    }
 
-            const selection = editor.getSelection();
+    if(storedsongcode) {
+        editor.doc.setValue(storedsongcode);
+    } else {
+        editor.doc.setValue(await fetch('emptysong.js').then(r => r.text()));
+    }
+    CodeMirror.commands.save = compileAndPostSong;
+    
+    const insertStringIntoEditor = (str) => {
 
-            if(selection.length>0){
-                editor.replaceSelection(str);
-            }
-            else{
+        const selection = editor.getSelection();
 
-                const doc = editor.doc;
-                const cursor = doc.getCursor();
-
-                const pos = {
-                line: cursor.line,
-                ch: cursor.ch
-                }
-
-                doc.replaceRange(str, pos);
-            }
+        if(selection.length>0){
+            editor.replaceSelection(str);
         }
+        else{
 
-        window.insertRecording = () => {
+            const doc = editor.doc;
+            const cursor = doc.getCursor();
+
+            const pos = {
+            line: cursor.line,
+            ch: cursor.ch
+            }
+
+            doc.replaceRange(str, pos);
+        }
+    }
+
+    window.insertRecording = () => {
         const recorded = window.recordedSongData;
         
         const recordings = {};
-        recorded.instrumentPatternLists.forEach((patterinIndexList, instrumentIndex) => {
-            patterinIndexList.forEach(patternIndex => {
-                if(patternIndex > 0 && !recordings[instrumentNames[instrumentIndex]]) {
-                    recordings[instrumentNames[instrumentIndex]] = [];
-                }
-                if(patternIndex > 0 && recordings[instrumentNames[instrumentIndex]]) {
-                    recorded.patterns[patternIndex-1].forEach(val => 
-                        recordings[instrumentNames[instrumentIndex]].push(val)
-                    );                        
-                }
-            })
+        const firstInstrumentPatternIndexWithData = recorded.instrumentPatternLists
+                    .map(patternIndexList =>
+                            patternIndexList.findIndex(patternIndex => patternIndex > 0))
+                    .filter(patternIndex => patternIndex > -1)
+                    .sort()[0];
+
+        recorded.instrumentPatternLists.forEach((instrumentPatternList, instrumentIndex) => {            
+            if(instrumentPatternList.find(patternIndex => patternIndex > 0)) {
+                instrumentPatternList.forEach((patternIndex, instrumentPatternIndex) => {
+                    
+                    // Go through pattern list for each instrument
+                    if(
+                        (instrumentPatternIndex >= firstInstrumentPatternIndexWithData || patternIndex > 0) 
+                        && !recordings[instrumentNames[instrumentIndex]]
+                        ) {
+                        recordings[instrumentNames[instrumentIndex]] = [];
+                    }
+
+                    if(recordings[instrumentNames[instrumentIndex]]) {
+                        // get data from recorded patterns
+                        let patternData = new Array(recorded.patterns[0].length).fill(0);
+
+                        if (patternIndex > 0 ) {
+                            patternData = recorded.patterns[patternIndex-1];
+                        }
+                        
+                        patternData.forEach(val =>
+                            // push each note from recorded patterh to recordings array per instrument
+                            recordings[instrumentNames[instrumentIndex]].push(val)
+                        );                        
+                    }
+                })
+            }
         });
+
         const groupRecordings = {};
         Object.keys(recordings).forEach(instrumentName => {
             let patterndata = recordings[instrumentName];
@@ -202,9 +225,7 @@ export async function initEditor(componentRoot) {
             const groupName = Object.keys(instrumentGroupMap).find(groupname => {
                 groupInstrumentIndex = instrumentGroupMap[groupname].findIndex(instr => instr === instrumentName);
                 return groupInstrumentIndex > -1;
-            });
-
-            
+            }); 
             
             if(groupName) {
                 if(!groupRecordings[groupName]) {
