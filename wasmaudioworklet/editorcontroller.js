@@ -157,36 +157,36 @@ export async function initEditor(componentRoot) {
         
         const recordings = {};
         
-        // find first instrument pattern index ( song pattern position ) with recorded data
-        const firstInstrumentPatternIndexWithData = recorded.instrumentPatternLists
+        // find first song position with recorded data
+        const firstSongPositionWithData = recorded.instrumentPatternLists
             .map(patternIndexList =>
                     patternIndexList.findIndex(patternIndex => patternIndex > 0))
-            .filter(instrumentPatternIndex => instrumentPatternIndex > -1)
+            .filter(songPosition => songPosition > -1)
             .sort()[0];
         
-        // find last instrument pattern index ( song pattern position ) with recorded data
-        const lastInstrumentPatternIndexWithData = recorded.instrumentPatternLists
+        // find last song position with recorded data
+        const lastSongPositionWithData = recorded.instrumentPatternLists
             .map(patternIndexList =>
                 patternIndexList.reduce(
                     // using reduce to find last element with value > 0
-                    (currentInstrumentPatternIndex, patternIndex, instrumentPatternIndex) =>
-                        patternIndex > 0 ? instrumentPatternIndex : currentInstrumentPatternIndex,
+                    (currentSongPosition, patternIndex, songPosition) =>
+                        patternIndex > 0 ? songPosition : currentSongPosition,
                     -1
                 )
             )
-            .filter(instrumentPatternIndex => instrumentPatternIndex > -1)
+            .filter(songPosition => songPosition > -1)
             .sort((a, b) => b - a)[0];
 
         recorded.instrumentPatternLists.forEach((instrumentPatternList, instrumentIndex) => {            
             if(instrumentPatternList.find(patternIndex => patternIndex > 0)) {
                 // go through pattern list for each instrument that has recorded data:
-                instrumentPatternList.forEach((patternIndex, instrumentPatternIndex) => {                                        
+                instrumentPatternList.forEach((patternIndex, songPosition) => {                                        
                     if(!recordings[instrumentNames[instrumentIndex]]) {
                         recordings[instrumentNames[instrumentIndex]] = [];
                     }
 
-                    if( instrumentPatternIndex >= firstInstrumentPatternIndexWithData &&
-                        instrumentPatternIndex <= lastInstrumentPatternIndexWithData 
+                    if( songPosition >= firstSongPositionWithData &&
+                        songPosition <= lastSongPositionWithData 
                         ) {
                         // start with an empty pattern
                         let patternData = new Array(recorded.patterns[0].length).fill(0);
