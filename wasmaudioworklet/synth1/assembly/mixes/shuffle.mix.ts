@@ -20,7 +20,7 @@ export const PATTERN_SIZE_SHIFT: usize = 3;
 export const BEATS_PER_PATTERN_SHIFT: usize = 0;
 
 const gain: f32 = 0.13;
-const ENABLE_MULTIBAND_COMPRESSOR = false;
+const ENABLE_MULTIBAND_COMPRESSOR = true;
 
 let freeverb = new Freeverb();
 
@@ -159,7 +159,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     let right = gain * (mainline.right + echoline.right + reverbline.right);
 
     if (ENABLE_MULTIBAND_COMPRESSOR) {
-        tribandstereocompressor.process(left,right,0.45, 1.0, 0.9 , 1.3, 1.05, 1.0);
+        tribandstereocompressor.process(left,right,0.45, 1.0, 0.9 , 1.20, 1.05, 1.0);
         left = tribandstereocompressor.stereosignal.left;
         right  = tribandstereocompressor.stereosignal.right;
     } else {

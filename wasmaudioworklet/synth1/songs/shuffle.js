@@ -1,3 +1,7 @@
+/**
+ * Copyright (c) 2019 - Peter Salomonsen (https://petersalomonsen.com)
+ */
+
 global.bpm =  70;
 global.pattern_size_shift = 3;
 global.beats_per_pattern_shift = 1;
@@ -5,13 +9,9 @@ calculatePatternSize();
 // global.looptimes = 100;
 
 
-/*soloInstrument('kick');
-soloInstrument('snare');
-soloInstrument('hihat');
-soloInstrument('drivelead1');
-soloInstrument('drivelead1');
-soloInstrument('drivelead3');
-soloInstrument('drivelead4');*/
+// soloInstrument('kick');
+// soloInstrument('snare');
+// soloInstrument('hihat');
 /*soloInstrument('piano1');
 soloInstrument('piano2');
 soloInstrument('piano3');
@@ -21,7 +21,7 @@ soloInstrument('piano5');*/
 // muteInstrument('pad2');
 // muteInstrument('pad3');
 //soloInstrument('sinelead');
-// global.WASM_SYNTH_LOCATION = 'https://gist.githubusercontent.com/petersalomonsen/8ed949e2cfada00b82845828e415a8b8/raw/15404228b2c4bebf79f5f2a18dcecc50d0fb8721/synth.wasm';
+global.WASM_SYNTH_LOCATION = 'https://gist.githubusercontent.com/petersalomonsen/0dd3fdd6cbc2ea6433c9e80635a68967/raw/7b3c50d5179807a43fbe095370b1a4552f953289/synth.wasm';
 
 var pianoVoices = [];
 for(let n=1;n<=8;n++) {
@@ -65,9 +65,10 @@ const primaryPatterns = {
     60,,,,,,
   	,,,,,,
     ,,,60,,20,
-    60,,,,,,
-  	,,,,,,
+    ,,,,,,
+  	60,,,,,,
     ,,,60,,20,
+    ,,,60,,,
   	]),
   snare: pp(4, [
     ,,,,,,60
@@ -106,6 +107,7 @@ for(var n=0;n<2;n++) {
 	playPatterns(primaryPatterns, 6);
 }
 
+// 
 
 for(var n=0;n<2;n++) {
   playPatterns(Object.assign({}, primaryPatterns, {
@@ -177,6 +179,7 @@ playPatterns(Object.assign({}, primaryPatterns, {
 
   }), 6);
 
+// 
 
 for(var n=0;n<2;n++) {
 playPatterns(Object.assign({}, primaryPatterns, {
@@ -213,6 +216,7 @@ playPatterns(Object.assign({}, primaryPatterns, {
 	
     }), 6);
 }
+// 
 for(var n=0;n<2;n++) {
 playPatterns({
   snare: pp(4, [
@@ -311,6 +315,7 @@ playPatterns({
 
 }, 6);
 
+ // 
 playPatterns({
   snare: pp(4, [
     ,,,,,,60
@@ -371,6 +376,7 @@ playPatterns({
 }, 6);
 }
 
+// playFromHere();
 const transitionpatterns = {
   snare: pp(4, [
     ,,,,,,60
@@ -394,11 +400,13 @@ const transitionpatterns = {
   ]),
   kick: pp(4, [
     60,,,,,,
-  	,,,,,,
-    ,,,60,,20,
+  	60,,,,,10,
     60,,,,,,
-  	,,,,,,
-    ,,,60,,20,
+    60,,,,,,
+  	60,,,,,,
+    60,,,,,,
+    60,,,40,,,
+    60,,,,,,
   ]),
  
 "driveleads": pp(4, [,,,f5(1/2),
@@ -490,7 +498,7 @@ playPatterns(Object.assign({}, transitionpatterns, {
     ,,,]),
 }), 6);
 
-
+// playFromHere();
 playPatterns({
   snare: pp(4, [
     ,,,,,,60
@@ -609,6 +617,22 @@ playPatterns({
   	,,,,,,
     ,,,60,,20,
   ]),
+  "sinelead": pp(4, [
+    	as5,,,f6,,,as6,,,
+      	as5,,as6,f6,,as6,,,
+      	as5,,,f6,,,,
+      	as5,,,f6,,,as6,,,
+      	as5,,as6,f6,,as6,,,
+      	as5,,,f6,,,
+    ]),
+  	"eftang": pp(4, [
+    	as4,,,f5,,,as5,,,
+      	as4,,as5,f5,,as5,,,
+      	as4,,,f5,,,,
+      	as4,,,f5,,,as5,,,
+      	as4,,as5,f5,,as5,,,
+      	as4,,,f5,,,
+    ]),
  "driveleads": pp(4, [,,,,
 ,,,,,,,,                      
 f6(1),,,[,ds6(1/2)],
@@ -699,7 +723,7 @@ as5(1/2),,,], 4),
 
 }), 6);
 
-// playFromHere();
+
 playPatterns(Object.assign({},primaryPatterns,{
     "pads": basisPads,    
      "eftang": pp(4, [a5(6/8),,,,,,
@@ -737,6 +761,7 @@ g6,[,a6(1/2)],,g6(1/2),
 
 }), 6);
 
+
 playPatterns(Object.assign({},primaryPatterns,{
     "pads": basisPads,
       "eftang": pp(4, [
@@ -745,7 +770,7 @@ playPatterns(Object.assign({},primaryPatterns,{
                 a5(1/2),,,g5(1/4),,f5(3/4),,
                 ,,g5(1/2),,e5(2),,]),
 }), 6);
-
+// playFromHere();
 playPatterns(Object.assign({},primaryPatterns,{
   "driveleads": pp(4, [,,,,
 ,a6,c7(3/4),,
@@ -794,3 +819,10 @@ playPatterns(Object.assign({},primaryPatterns,{
 
 playPatterns(Object.assign({},primaryPatterns,{}), 6);
 playPatterns(Object.assign({},primaryPatterns,{}), 6);
+playPatterns({
+	kick: pp(4, [60]),
+  	hihat: pp(4, [
+      	60,,30,60,,30,
+    	60,,30,60,,30,
+    ]),
+}, 3);
