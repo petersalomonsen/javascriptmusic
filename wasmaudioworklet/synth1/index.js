@@ -16,7 +16,7 @@ Object.defineProperty(module, "exports", {
   get: () => new WebAssembly.Instance(compiled, imports).exports
 });
 const instance = module.exports;
-
+instance.memory.grow(16);
 var membuffer = new Uint8Array(instance.memory.buffer);
   
 const songsource = fs.readFileSync('./songs/shuffle.js').toString();

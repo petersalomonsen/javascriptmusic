@@ -8,7 +8,11 @@ calculatePatternSize();
 /*soloInstrument('kick');
 soloInstrument('snare');
 soloInstrument('hihat');
-soloInstrument('piano1');
+soloInstrument('drivelead1');
+soloInstrument('drivelead1');
+soloInstrument('drivelead3');
+soloInstrument('drivelead4');*/
+/*soloInstrument('piano1');
 soloInstrument('piano2');
 soloInstrument('piano3');
 soloInstrument('piano4');
@@ -102,7 +106,6 @@ for(var n=0;n<2;n++) {
 	playPatterns(primaryPatterns, 6);
 }
 
-// playFromHere();
 
 for(var n=0;n<2;n++) {
   playPatterns(Object.assign({}, primaryPatterns, {
@@ -174,7 +177,6 @@ playPatterns(Object.assign({}, primaryPatterns, {
 
   }), 6);
 
-// playFromHere();
 
 for(var n=0;n<2;n++) {
 playPatterns(Object.assign({}, primaryPatterns, {
@@ -211,7 +213,6 @@ playPatterns(Object.assign({}, primaryPatterns, {
 	
     }), 6);
 }
-// playFromHere();
 for(var n=0;n<2;n++) {
 playPatterns({
   snare: pp(4, [
@@ -310,7 +311,6 @@ playPatterns({
 
 }, 6);
 
- // playFromHere();
 playPatterns({
   snare: pp(4, [
     ,,,,,,60
@@ -371,7 +371,6 @@ playPatterns({
 }, 6);
 }
 
-// playFromHere();
 const transitionpatterns = {
   snare: pp(4, [
     ,,,,,,60
@@ -446,7 +445,7 @@ ds3(5/2),,,,
 
 };
 
-playFromHere();
+
 playPatterns(transitionpatterns, 6);
 
 playPatterns(Object.assign({}, transitionpatterns, {
@@ -491,7 +490,7 @@ playPatterns(Object.assign({}, transitionpatterns, {
     ,,,]),
 }), 6);
 
-playFromHere();
+
 playPatterns({
   snare: pp(4, [
     ,,,,,,60
@@ -580,7 +579,7 @@ playPatterns({
   ], 8),
 
 }, 6);
-playFromHere();
+
 playPatterns({
   snare: pp(4, [
     ,,,,,,60
@@ -665,7 +664,7 @@ f5(3/4),,,[,g5(3/4)],
 
 }, 6);
 
-playFromHere();
+
 playPatterns(Object.assign({},primaryPatterns,{
 	driveleads: pp(4, [
     	[a5(4),d5(4),,62]
@@ -700,7 +699,7 @@ as5(1/2),,,], 4),
 
 }), 6);
 
-playFromHere();
+// playFromHere();
 playPatterns(Object.assign({},primaryPatterns,{
     "pads": basisPads,    
      "eftang": pp(4, [a5(6/8),,,,,,
@@ -709,20 +708,33 @@ playPatterns(Object.assign({},primaryPatterns,{
               ,,,g5(1/4),,e5(6/8),,
               ,,,,,,,,d5(1/4),,c5(1/4),,
               ,,a4(3/8),,,,,]),
-             
-    "driveleads": pp(4, [a6(7/4),,,,
+    
+"driveleads": pp(4, [a6(9/4),,,,
 ,,,,
-,[,g6(1/2)],,f6(1/2),
-,,d6(1/2),,
+,g6(1/2),,f6(1/2),
+,,d6(7/4),,
 ,,,,
 ,g6(1/2),,e6(5/2),
 ,,,,
-,,
-,e6,,,d6,c6(3/4),
-,,a5(3/4),,
 ,,,,
+,d6(1/2),,e6,
+[c6(3/4),d6],,,a5(2),
+,,,,
+,,,,
+f6(3/4),,,d6(1/2),
+,[,f6(5/4)],,,
+,g6(1/2),,,
+g6,[,a6(1/2)],,g6(1/2),
+,f6(1),,,
+,g6(1/2),,e6(5/2),
+,,,,
+,,,,
+,d6,,d6,
+[c6(1),e6],,,[,d6(1/2)],
+,,[d6,e6(3/4)],,
 ,,,], 4),
-         
+
+
 }), 6);
 
 playPatterns(Object.assign({},primaryPatterns,{
@@ -735,6 +747,32 @@ playPatterns(Object.assign({},primaryPatterns,{
 }), 6);
 
 playPatterns(Object.assign({},primaryPatterns,{
+  "driveleads": pp(4, [,,,,
+,a6,c7(3/4),,
+,c7(1/2),,,
+c7(1/2),,d7(1/2),,
+,,,,
+,c7(1/2),,a6,
+c7(3/4),,,a6(1/2),
+,g6(1/2),,,
+f6(1/2),,,g6(3/4),
+,,f6,d6(1/2),
+,c6,[,d6(3/4)],,
+,f6(3/4),,,
+d6(3/2),,,,
+,,,,
+,c6(1/2),,d6,
+f6(1/2),,g6(1/2),,
+,[gs6,a6(3/4)],,,
+c7(3/4),,,,
+[c7,d7(1)],,,c7(1/2),
+,a6(1/2),,,
+gs6(1/2),[,g6(1/2)],,f6(1/2),
+,g6,f6,d6(1/2),
+,c6,,f6(3/4),
+,[,d6],,], 4),
+
+
     "pads": basisPads,    
      "eftang": pp(4, [a5(6/8),,,,,,
               ,,,g5(1/4),,f5(1/4),
@@ -752,3 +790,7 @@ playPatterns(Object.assign({},primaryPatterns,{
                 a5(1/2),,,g5(1/4),,f5(3/4),,
                 ,,g5(1/2),,e5(2),,]),
 }), 6);
+
+
+playPatterns(Object.assign({},primaryPatterns,{}), 6);
+playPatterns(Object.assign({},primaryPatterns,{}), 6);
