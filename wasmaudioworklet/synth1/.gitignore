@@ -1,2 +1,4 @@
 out.flac
+# ignore generated Amiga Protracker modules
+*.mod
 .DS_Store

@@ -1,8 +1,8 @@
 // The entry file of the synth WebAssembly module.
 
 // --- Replace with your own mix implementation here
-import { mixernext, setChannelValue, PATTERN_SIZE_SHIFT, BEATS_PER_PATTERN_SHIFT } from './mixes/shuffle.mix';
-export { setChannelValue } from './mixes/shuffle.mix';
+import { mixernext, setChannelValue, PATTERN_SIZE_SHIFT, BEATS_PER_PATTERN_SHIFT } from './mixes/protracker.mix';
+export { setChannelValue } from './mixes/protracker.mix';
 // -------------------------------------------------
 
 import { SAMPLERATE } from './environment';
@@ -155,8 +155,9 @@ export function getCurrentChannelValuesBufferPtr(): usize {
 
 export function fillSampleBuffer(): void {      
   updateInstrumentNotes();
-  for(let n: usize=0;n<sampleBufferFrames;n++) {    
-    mixernext(sampleBufferPtr + (n * 4), sampleBufferPtr + (n * 4) + (sampleBufferFrames * 4));    
+  for(let n: usize = 0;n<sampleBufferFrames;n++) {   
+    let sampleNdx: usize = n << 2; 
+    mixernext(sampleBufferPtr + sampleNdx, sampleBufferPtr + sampleNdx + (sampleBufferFrames << 2));    
     tick += ticksPerSample;
   }
 }
