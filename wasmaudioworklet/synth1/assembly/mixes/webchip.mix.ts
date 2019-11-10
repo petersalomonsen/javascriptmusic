@@ -36,7 +36,7 @@ let eqbandl = new EQBand(20, 19500);
 let eqbandr = new EQBand(20, 19500);
 
 function createInstrumentArray<T>(length: i32, factoryFunc: () => T): T[] {
-    const arr = Array.create<T>(length);
+    const arr = new Array<T>(length);
     for(let n  = 0; n < length;n++) {
         arr[n] = factoryFunc();
     }
