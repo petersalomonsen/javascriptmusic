@@ -1,16 +1,9 @@
-import { SineLead } from "../instruments/lead/sinelead";
-import { DeepBass } from "../instruments/bass/deepbass";
-import { SineOscillator } from "../synth/sineoscillator.class";
-import { notefreq } from "../synth/note";
-import { SawOscillator } from "../synth/sawoscillator.class";
-import { SquareOscillator } from "../synth/squareoscillator.class";
 import { EQBand } from "../fx/eqband";
 
 import { Snare } from "../instruments/snare.class";
 import { SawBass3 } from "../instruments/bass/sawbass3";
 import { Eftang } from "../instruments/lead/eftang";
 import { StereoSignal } from "../synth/stereosignal.class";
-import { Test4KlangString } from "../instruments/string1.class";
 import { Kick } from "../instruments/kick.class";
 
 export const PATTERN_SIZE_SHIFT: usize = 4;
@@ -21,6 +14,7 @@ const gain: f32 = 0.2;
 const bass = new SawBass3();
 const lead = new Eftang();
 const kick = new Kick();
+const snare = new Snare();
 
 export function setChannelValue(channel: usize, value: f32): void {
     switch(channel) {
@@ -32,6 +26,9 @@ export function setChannelValue(channel: usize, value: f32): void {
             break;
         case 2:
             kick.note = value;
+            break;
+        case 3:
+            snare.note = value;
             break;
     }
     
@@ -53,6 +50,9 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 
     kick.next();
     mainline.addStereoSignal(kick.signal, 0.05, 0.5);
+
+    snare.next();
+    mainline.addStereoSignal(snare.signal, 0.05, 0.5);
 
     left = gain * (mainline.left );
     right = gain * (mainline.right );
