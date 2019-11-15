@@ -5,6 +5,8 @@ import { SawBass3 } from "../instruments/bass/sawbass3";
 import { Eftang } from "../instruments/lead/eftang";
 import { StereoSignal } from "../synth/stereosignal.class";
 import { Kick } from "../instruments/kick.class";
+import { SineLead } from "../instruments/lead/sinelead";
+import { Hihat } from "../instruments/hihat.class";
 
 export const PATTERN_SIZE_SHIFT: usize = 4;
 export const BEATS_PER_PATTERN_SHIFT: usize = 2;
@@ -15,6 +17,8 @@ const bass = new SawBass3();
 const lead = new Eftang();
 const kick = new Kick();
 const snare = new Snare();
+const hihat = new Hihat();
+const sinelead = new SineLead();
 
 export function setChannelValue(channel: usize, value: f32): void {
     switch(channel) {
@@ -29,6 +33,12 @@ export function setChannelValue(channel: usize, value: f32): void {
             break;
         case 3:
             snare.note = value;
+            break;
+        case 4:
+            hihat.note = value;
+            break;
+        case 5:
+            sinelead.note = value;
             break;
     }
     
@@ -46,13 +56,19 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     mainline.addStereoSignal(bass.signal, 0.2, 0.5);
 
     lead.next();
-    mainline.addStereoSignal(lead.signal, 0.05, 0.5);
+    mainline.addStereoSignal(lead.signal, 0.2, 0.5);
 
     kick.next();
-    mainline.addStereoSignal(kick.signal, 0.05, 0.5);
+    mainline.addStereoSignal(kick.signal, 0.2, 0.5);
 
     snare.next();
-    mainline.addStereoSignal(snare.signal, 0.05, 0.5);
+    mainline.addStereoSignal(snare.signal, 0.2, 0.5);
+
+    hihat.next();
+    mainline.addStereoSignal(hihat.signal, 0.2, 0.5);
+
+    sinelead.next();
+    mainline.addStereoSignal(sinelead.signal, 0.2, 0.5);
 
     left = gain * (mainline.left );
     right = gain * (mainline.right );
