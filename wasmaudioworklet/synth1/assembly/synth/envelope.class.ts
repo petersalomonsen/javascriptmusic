@@ -18,9 +18,9 @@ export class Envelope {
     state: EnvelopeState;
 
     constructor(attackTime: f32, decayTime: f32, sustainLevel: f32, releaseTime: f32) {
-        this.attackStep = attackTime > 0 ? 1.0 / (attackTime * SAMPLERATE) : 1.0;
-        this.decayStep = decayTime > 0 ? 1.0 / (decayTime * SAMPLERATE): 1.0;
-        this.releaseStep = releaseTime > 0 ? 1.0 / (releaseTime * SAMPLERATE): 1.0;
+        this.attackStep = 1.0 / (attackTime * SAMPLERATE);
+        this.decayStep = 1.0 / (decayTime * SAMPLERATE);
+        this.releaseStep = 1.0 / (releaseTime * SAMPLERATE);
         this.sustainLevel = sustainLevel;
     }
 

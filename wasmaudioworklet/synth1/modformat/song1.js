@@ -1,7 +1,7 @@
-import { writeMod } from './protrackermodwriter.js';
+import { writeMod, cmd } from './protrackermodwriter.js';
 import { createSamples } from './instrumentgenerator.js';
 
-const samples = createSamples('../build/index.wasm', [
+const samples = createSamples('./build/index.wasm', [
     (instance) => {
         instance.setChannelValue(0, 69 - (12 ));
         instance.fillSampleBuffer();
@@ -18,6 +18,7 @@ const samples = createSamples('../build/index.wasm', [
     (instance) => {
         instance.setChannelValue(0, 0);
         instance.fillSampleBuffer();
+        instance.fillSampleBuffer();
 
         instance.setChannelValue(1, 69 + (12));
         instance.fillSampleBuffer();
@@ -33,6 +34,8 @@ const samples = createSamples('../build/index.wasm', [
     (instance) => {
         instance.setChannelValue(1, 0);
         instance.fillSampleBuffer();
+        instance.fillSampleBuffer();
+
         instance.setChannelValue(2, 100);
         instance.fillSampleBuffer();
         return {
@@ -46,6 +49,7 @@ const samples = createSamples('../build/index.wasm', [
     },
     (instance) => {
         instance.setChannelValue(2, 0);
+        instance.fillSampleBuffer();
         instance.fillSampleBuffer();
         instance.setChannelValue(3, 100);
         instance.fillSampleBuffer();
@@ -61,6 +65,7 @@ const samples = createSamples('../build/index.wasm', [
     (instance) => {
         instance.setChannelValue(3, 0);
         instance.fillSampleBuffer();
+        instance.fillSampleBuffer();
         instance.setChannelValue(4, 100);
         instance.fillSampleBuffer();
         return {
@@ -75,13 +80,14 @@ const samples = createSamples('../build/index.wasm', [
     (instance) => {
         instance.setChannelValue(4, 0);
         instance.fillSampleBuffer();
+        instance.fillSampleBuffer();
         instance.setChannelValue(5, 69 + (12));
         instance.fillSampleBuffer();
         return {
             samplename: "sinelead",
             funcname: "sinelead",
             finetune: 0,
-            volume: 40,
+            volume: 25,
             loopstart: 0,
             looplength: 0
         };        
@@ -240,9 +246,9 @@ const moduledef = {
             // Pattern 3
             // instrument, period, command, value
             bass(a1, 0x0a, 0x0c),sinelead(ds3, 1, 2),lead(c2, 0, 0),kick(a3, 0, 0),
-            ,,,,
-            bass(a1, 0x0a, 0x0c),,,,
-            bass(a2, 0x0a, 0x0c),,,,
+            ,cmd(4,0x51),,,
+            bass(a1, 0x0a, 0x0c),cmd(4,0x51),,,
+            bass(a2, 0x0a, 0x0c),cmd(4,0x51),,,
             snare(a3),,sinelead(d3),kick(a3, 0, 0),
             bass(a2, 0x0a, 0x0c),,,,
             bass(a1, 0x0a, 0x0c),,,,
@@ -314,7 +320,7 @@ moduledef.patterns[2].forEach((val, ndx, arr) => {
         const row = (ndx >> 2) + 3;     
         for(let ch = 0; ch < 4; ch++) {            
             if(!arr[row * 4 + ch]) {               
-                const newVal = val[2] !== 0x0c ? 25 : val[3] - 8; 
+                const newVal = val[2] !== 0x0c ? 18 : val[3] - 8; 
                 if(newVal > 0 ) {
                     arr[row * 4 + ch] = [val[0], val[1], 0x0c, newVal];                
                 }

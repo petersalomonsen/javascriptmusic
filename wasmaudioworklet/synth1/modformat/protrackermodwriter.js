@@ -24,6 +24,8 @@ function num2word(num) {
     return [ num >> 8, num & 0xff];
 }
 
+export const cmd = (command, value) => [0, 0, command, value];
+
 export function writeMod(modFileName, moduledef) {
     // http://coppershade.org/articles/More!/Topics/Protracker_File_Format/
 
