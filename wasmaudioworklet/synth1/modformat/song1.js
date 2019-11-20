@@ -16,10 +16,6 @@ const samples = createSamples('./build/index.wasm', [
             };
     },
     (instance) => {
-        instance.setChannelValue(0, 0);
-        instance.fillSampleBuffer();
-        instance.fillSampleBuffer();
-
         instance.setChannelValue(1, 69 + (12));
         instance.fillSampleBuffer();
         return {
@@ -32,10 +28,6 @@ const samples = createSamples('./build/index.wasm', [
             };
     },
     (instance) => {
-        instance.setChannelValue(1, 0);
-        instance.fillSampleBuffer();
-        instance.fillSampleBuffer();
-
         instance.setChannelValue(2, 100);
         instance.fillSampleBuffer();
         return {
@@ -48,9 +40,6 @@ const samples = createSamples('./build/index.wasm', [
         };        
     },
     (instance) => {
-        instance.setChannelValue(2, 0);
-        instance.fillSampleBuffer();
-        instance.fillSampleBuffer();
         instance.setChannelValue(3, 100);
         instance.fillSampleBuffer();
         return {
@@ -63,9 +52,6 @@ const samples = createSamples('./build/index.wasm', [
         };        
     },
     (instance) => {
-        instance.setChannelValue(3, 0);
-        instance.fillSampleBuffer();
-        instance.fillSampleBuffer();
         instance.setChannelValue(4, 100);
         instance.fillSampleBuffer();
         return {
@@ -78,9 +64,6 @@ const samples = createSamples('./build/index.wasm', [
         };        
     },
     (instance) => {
-        instance.setChannelValue(4, 0);
-        instance.fillSampleBuffer();
-        instance.fillSampleBuffer();
         instance.setChannelValue(5, 69 + (12));
         instance.fillSampleBuffer();
         return {

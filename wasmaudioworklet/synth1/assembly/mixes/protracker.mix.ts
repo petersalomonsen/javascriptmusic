@@ -54,7 +54,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     let left: f32 = 0;
     let right: f32 = 0;
 
-    // mainline.clear();
+    mainline.clear();
 
     bass.next();
     mainline.addStereoSignal(bass.signal, 0.2, 0.5);

@@ -30,17 +30,19 @@ export function createSamples(wasmModulePath, createSampleCallbacks) {
         } 
     };
 
-    const instance = new WebAssembly.Instance(compiled, imports).exports;
-    instance.memory.grow(16);
 
     const INSTANCE_FRAMES = 16384;
-    const instancebufferptr = instance.allocateSampleBuffer(INSTANCE_FRAMES);
-    const instancebuffer = new Float32Array(instance.memory.buffer, instancebufferptr, INSTANCE_FRAMES);
-    
-    instance.toggleSongPlay(false);
-    
+
     const samples = [];
     createSampleCallbacks.forEach((createSampleCallBack, sampleno) => {
+        const instance = new WebAssembly.Instance(compiled, imports).exports;
+        instance.memory.grow(16);
+    
+        const instancebufferptr = instance.allocateSampleBuffer(INSTANCE_FRAMES);
+        const instancebuffer = new Float32Array(instance.memory.buffer, instancebufferptr, INSTANCE_FRAMES);
+        
+        instance.toggleSongPlay(false);
+    
         const sample = Object.assign({
                 finetune: 0,
                 volume: 64,

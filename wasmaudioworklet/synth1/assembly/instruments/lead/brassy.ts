@@ -12,7 +12,6 @@ import { SawOscillator } from '../../synth/SawOscillator.class';
 export class BrassyLead {
     private _note: f32;
     
-
     readonly osc: SineOscillator = new SineOscillator();
     readonly osc2: SawOscillator = new SawOscillator();
     
@@ -49,7 +48,11 @@ export class BrassyLead {
 
     next(): void {        
         const env1: f32 = this.env1.next();
-                
+        if(env1 === 0) {
+            this.signal.clear();
+            return;
+        }
+        
         let osc: f32 = this.osc.next() * 0.05;
         let osc2: f32 = this.osc2.next() * env1 * 0.2;
 

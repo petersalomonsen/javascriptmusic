@@ -59,6 +59,11 @@ export class Eftang {
 
     next(): void {        
         const env1: f32 = this.env1.next();
+        if(env1 === 0) {
+            this.signal.clear();
+            return;
+        }
+        
         const env2: f32 = this.env2.next();
         const env3: f32 = this.env3.next();
                 

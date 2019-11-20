@@ -15,7 +15,7 @@ export class Envelope {
     releaseStep: f32;
     
     val: f32 = 0;
-    state: EnvelopeState;
+    state: EnvelopeState = EnvelopeState.DONE;
 
     constructor(attackTime: f32, decayTime: f32, sustainLevel: f32, releaseTime: f32) {
         this.attackStep = 1.0 / (attackTime * SAMPLERATE);
