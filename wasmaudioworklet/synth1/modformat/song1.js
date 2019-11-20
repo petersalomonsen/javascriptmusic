@@ -74,6 +74,62 @@ const samples = createSamples('./build/index.wasm', [
             loopstart: 0,
             looplength: 0
         };        
+    },
+    (instance) => {
+        instance.setChannelValue(6, 69 + (12));
+        instance.setChannelValue(7, 69 + (12) +3 );
+        instance.setChannelValue(8, 69 + (12) + 7 );
+        instance.fillSampleBuffer();
+        return {
+            samplename: "minorchord",
+            funcname: "minorchord",
+            finetune: 0,
+            volume: 25,
+            loopstart: 0,
+            looplength: 0x2000
+        };        
+    },
+    (instance) => {
+        instance.setChannelValue(6, 69 + (12));
+        instance.setChannelValue(7, 69 + (12) + 4 );
+        instance.setChannelValue(8, 69 + (12) + 7 );
+        instance.fillSampleBuffer();
+        return {
+            samplename: "majorchord",
+            funcname: "majorchord",
+            finetune: 0,
+            volume: 25,
+            loopstart: 0,
+            looplength: 0x2000
+        };        
+    },
+    (instance) => {
+        instance.setChannelValue(6, 69 + (12));
+        instance.setChannelValue(7, 69 + (12) + 4 );
+        instance.setChannelValue(8, 69 + (12) + 9 );
+        instance.fillSampleBuffer();
+        return {
+            samplename: "minorchord2",
+            funcname: "minorchord2",
+            finetune: 0,
+            volume: 25,
+            loopstart: 0,
+            looplength: 0x2000
+        };        
+    },
+    (instance) => {
+        instance.setChannelValue(6, 69 + (12));
+        instance.setChannelValue(7, 69 + (12) + 3 );
+        instance.setChannelValue(8, 69 + (12) + 8 );
+        instance.fillSampleBuffer();
+        return {
+            samplename: "majorchord2",
+            funcname: "majorchord2",
+            finetune: 0,
+            volume: 25,
+            loopstart: 0,
+            looplength: 0x2000
+        };        
     }
 ]);
 
@@ -85,7 +141,8 @@ const moduledef = {
         0,
         1,
         2,
-        2
+        2,
+        3
     ],
     patterns: [
         [
@@ -293,6 +350,73 @@ const moduledef = {
             ,,lead(a2, 0, 0),,
             bass(g2),,,snare(a3,0x0c, 20),
             bass(g1),,,snare(a3,0x0c, 30),
+        ],
+        [
+            bass(a1, 0x0a, 0x0c),minorchord(a2),,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(a1, 0x0a, 0x0c),,,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,hihat(a3, 0x0c, 0x30),
+            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+            ,majorchord2(a2),,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+            ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
+            ,,,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(g1, 0x0a, 0x0c),majorchord(g2),,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(g1, 0x0a, 0x0c),,,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,hihat(a3, 0x0c, 0x30),
+            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+            ,minorchord2(g2),,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+
+            bass(a1, 0x0a, 0x0c),minorchord(a2),lead(e2),kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(a1, 0x0a, 0x0c),,lead(a2),kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,lead(g2),hihat(a3, 0x0c, 0x30),
+            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+            ,majorchord2(a2),lead(f2),kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(f1, 0x0a, 0x0c),,lead(e2),hihat(a3, 0x0c, 0x30),
+            ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
+            ,,,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(f1, 0x0a, 0x0c),,lead(d2),hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(g1, 0x0a, 0x0c),majorchord(g2),,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,lead(g2),hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(g1, 0x0a, 0x0c),,,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,lead(e2),hihat(a3, 0x0c, 0x30),
+            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+            ,minorchord2(g2),,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,kick(a3, 0, 0),
+            ,,,hihat(a3, 0x0c, 0x10),
+            ,,,hihat(a3, 0x0c, 0x30),
+            ,,,hihat(a3, 0x0c, 0x10),
         ]
     ]
 };

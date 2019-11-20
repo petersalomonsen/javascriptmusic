@@ -7,6 +7,8 @@ import { StereoSignal } from "../synth/stereosignal.class";
 import { Kick } from "../instruments/kick.class";
 import { BrassyLead } from "../instruments/lead/brassy";
 import { Hihat } from "../instruments/hihat.class";
+import { SoftPad } from "../instruments/pad/softpad.class";
+import { createInstrumentArray } from '../common/mixcommon';
 
 export const PATTERN_SIZE_SHIFT: usize = 4;
 export const BEATS_PER_PATTERN_SHIFT: usize = 2;
@@ -19,6 +21,7 @@ const kick = new Kick();
 const snare = new Snare();
 const hihat = new Hihat();
 const brassylead = new BrassyLead();
+const pads: SoftPad[] = createInstrumentArray<SoftPad>(4, () => new SoftPad());
 
 export function setChannelValue(channel: usize, value: f32): void {
     switch(channel) {
@@ -40,6 +43,12 @@ export function setChannelValue(channel: usize, value: f32): void {
         case 5:
             brassylead.note = value;
             break;
+        case 6:
+        case 7:
+        case 8:
+            pads[channel-6].note = value;
+            break;       
+            
     }
     
 }
@@ -73,6 +82,12 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 
     brassylead.next();
     mainline.addStereoSignal(brassylead.signal, 0.5, 0.5);
+
+    pads.forEach(pad => {
+        pad.next();
+        mainline.addStereoSignal(pad.signal, 0.5, 0.5);
+    });
+    
 
     left = gain * (mainline.left );
     right = gain * (mainline.right );
