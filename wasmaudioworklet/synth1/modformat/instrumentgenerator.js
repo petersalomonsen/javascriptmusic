@@ -30,7 +30,6 @@ export function createSamples(wasmModulePath, createSampleCallbacks) {
         } 
     };
 
-
     const INSTANCE_FRAMES = 16384;
 
     const samples = [];
