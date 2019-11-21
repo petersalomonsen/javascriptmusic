@@ -9,6 +9,7 @@ import { BrassyLead } from "../instruments/lead/brassy";
 import { Hihat } from "../instruments/hihat.class";
 import { SoftPad } from "../instruments/pad/softpad.class";
 import { createInstrumentArray } from '../common/mixcommon';
+import { Freeverb } from "../fx/freeverb";
 
 export const PATTERN_SIZE_SHIFT: usize = 4;
 export const BEATS_PER_PATTERN_SHIFT: usize = 2;
@@ -55,6 +56,8 @@ export function setChannelValue(channel: usize, value: f32): void {
 
 
 const mainline = new StereoSignal();
+const reverbline = new StereoSignal();
+const freeverb = new Freeverb();
 
 let eqbandl = new EQBand(20, 19500);
 let eqbandr = new EQBand(20, 19500);
@@ -64,33 +67,40 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     let right: f32 = 0;
 
     mainline.clear();
+    reverbline.clear();
 
     bass.next();
     mainline.addStereoSignal(bass.signal, 0.2, 0.5);
+    reverbline.addStereoSignal(bass.signal, 0.1, 0.5);
 
     lead.next();
     mainline.addStereoSignal(lead.signal, 0.2, 0.5);
+    reverbline.addStereoSignal(lead.signal, 0.02, 0.5);
 
     kick.next();
     mainline.addStereoSignal(kick.signal, 0.2, 0.5);
 
     snare.next();
-    mainline.addStereoSignal(snare.signal, 0.2, 0.5);    
+    mainline.addStereoSignal(snare.signal, 0.2, 0.5);   
+    reverbline.addStereoSignal(snare.signal, 0.05, 0.5); 
 
     hihat.next();
     mainline.addStereoSignal(hihat.signal, 0.2, 0.5);
 
     brassylead.next();
     mainline.addStereoSignal(brassylead.signal, 0.5, 0.5);
+    reverbline.addStereoSignal(brassylead.signal, 0.1, 0.5);
 
     pads.forEach(pad => {
         pad.next();
         mainline.addStereoSignal(pad.signal, 0.5, 0.5);
+        
     });
     
+    freeverb.tick(reverbline);
 
-    left = gain * (mainline.left );
-    right = gain * (mainline.right );
+    left = gain * (mainline.left + reverbline.left );
+    right = gain * (mainline.right + reverbline.right );
 
     left = eqbandl.process(left);
     right = eqbandr.process(right);

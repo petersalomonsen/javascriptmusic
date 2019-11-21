@@ -40,6 +40,33 @@ const samples = createSamples('./build/index.wasm', [
         };        
     },
     (instance) => {
+        instance.setChannelValue(2, 100);
+        instance.setChannelValue(3, 35);
+        instance.setChannelValue(4, 30);
+        instance.fillSampleBuffer();
+        return {
+            samplename: "kickandsnare",
+            funcname: "kickandsnare",
+            finetune: 0,
+            volume: 64,
+            loopstart: 0,
+            looplength: 0
+        };        
+    },
+    (instance) => {
+        instance.setChannelValue(2, 100);
+        instance.setChannelValue(4, 30);
+        instance.fillSampleBuffer();
+        return {
+            samplename: "kickandhihat",
+            funcname: "kickandhihat",
+            finetune: 0,
+            volume: 64,
+            loopstart: 0,
+            looplength: 0
+        };        
+    },
+    (instance) => {
         instance.setChannelValue(3, 100);
         instance.fillSampleBuffer();
         return {
@@ -133,16 +160,94 @@ const samples = createSamples('./build/index.wasm', [
     }
 ]);
 
+
+const patternwithpad = [
+    bass(a1, 0x0a, 0x0c),minorchord(a2),,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(a1, 0x0a, 0x0c),,,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,hihat(a3, 0x0c, 0x30),
+    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    ,majorchord2(a2),,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+    ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
+    ,,,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(g1, 0x0a, 0x0c),majorchord(g2),,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(g1, 0x0a, 0x0c),,,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,hihat(a3, 0x0c, 0x30),
+    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    ,minorchord2(g2),,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+
+    bass(a1, 0x0a, 0x0c),minorchord(a2),lead(e2),kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(a1, 0x0a, 0x0c),,lead(a2),kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,lead(g2),hihat(a3, 0x0c, 0x30),
+    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    ,majorchord2(a2),lead(f2),kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(f1, 0x0a, 0x0c),,lead(e2),hihat(a3, 0x0c, 0x30),
+    ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
+    ,,,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(f1, 0x0a, 0x0c),,lead(d2),hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(g1, 0x0a, 0x0c),majorchord(g2),,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,lead(g2),hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(g1, 0x0a, 0x0c),,,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,lead(e2),hihat(a3, 0x0c, 0x30),
+    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    ,minorchord2(g2),,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,kickandhihat(a3, 0, 0),
+    ,,,hihat(a3, 0x0c, 0x10),
+    ,,,hihat(a3, 0x0c, 0x30),
+    ,,,hihat(a3, 0x0c, 0x10),
+];
+
+const patternwithpadandsnare = patternwithpad.map((note,ndx) => {
+    if(ndx % 32 === 19) {
+        return kickandsnare(a3);
+    } else {
+        return note;
+    }    
+});
+
 const moduledef = {
     songname: "hello song",
     samples: samples,
     songpositions: [
-        // patterns to play        
+        // patterns to play    
         0,
         1,
         2,
         2,
-        3
+        3,
+        4
     ],
     patterns: [
         [
@@ -351,78 +456,15 @@ const moduledef = {
             bass(g2),,,snare(a3,0x0c, 20),
             bass(g1),,,snare(a3,0x0c, 30),
         ],
-        [
-            bass(a1, 0x0a, 0x0c),minorchord(a2),,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(a1, 0x0a, 0x0c),,,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,hihat(a3, 0x0c, 0x30),
-            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-            ,majorchord2(a2),,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-            ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
-            ,,,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(g1, 0x0a, 0x0c),majorchord(g2),,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(g1, 0x0a, 0x0c),,,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,hihat(a3, 0x0c, 0x30),
-            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-            ,minorchord2(g2),,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-
-            bass(a1, 0x0a, 0x0c),minorchord(a2),lead(e2),kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(a1, 0x0a, 0x0c),,lead(a2),kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,lead(g2),hihat(a3, 0x0c, 0x30),
-            bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-            ,majorchord2(a2),lead(f2),kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(f1, 0x0a, 0x0c),,lead(e2),hihat(a3, 0x0c, 0x30),
-            ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
-            ,,,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(f1, 0x0a, 0x0c),,lead(d2),hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(g1, 0x0a, 0x0c),majorchord(g2),,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,lead(g2),hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(g1, 0x0a, 0x0c),,,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,lead(e2),hihat(a3, 0x0c, 0x30),
-            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-            ,minorchord2(g2),,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,kick(a3, 0, 0),
-            ,,,hihat(a3, 0x0c, 0x10),
-            ,,,hihat(a3, 0x0c, 0x30),
-            ,,,hihat(a3, 0x0c, 0x10),
-        ]
+        patternwithpad,
+        patternwithpadandsnare
     ]
 };
 
+const brassleadndx = moduledef.samples.findIndex(sample => sample.samplename === 'sinelead') + 1;
+
 moduledef.patterns[2].forEach((val, ndx, arr) => {
-    if(val[0] === 6 && val[2] !== 0x01) {           
+    if(val[0] === brassleadndx && val[2] !== 0x01) {           
         // echo effect
         const row = (ndx >> 2) + 3;     
         for(let ch = 0; ch < 4; ch++) {            
