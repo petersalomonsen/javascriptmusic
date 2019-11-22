@@ -1,6 +1,6 @@
 import { writeMod, cmd } from './protrackermodwriter.js';
 import { createSamples } from './instrumentgenerator.js';
-import { createSampleEcho } from './lib/patterneffects.js';
+import { createSampleEcho, insertNotesIntoPattern, insertSampleNotesIntoPattern } from './lib/patterntools.js';
 
 const samples = createSamples('./build/index.wasm', [
     (instance) => {
@@ -223,28 +223,19 @@ const patternwithpad = [
     ,minorchord2(g2),,kickandhihat(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
     bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-    ,,,hihat(a3, 0x0c, 0x10),
-    ,,,kickandhihat(a3, 0, 0),
+    ,,,snare(a3, 0x0c, 0x30),
+    ,,,kickandsnare(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
     ,,,hihat(a3, 0x0c, 0x30),
     ,,,hihat(a3, 0x0c, 0x10),
 ];
 
-const padpatternmelody = [
-    c3,,b2,,a2,,g2,a2,,,
+insertNotesIntoPattern(synthbrasslead, patternwithpad, 0, 2, [
+    b2(1,3),cmd(6,0x62),b2,,a2,,g2,a2,,,
     e2,,d2,c2,,,
     d2,,d2,,c2,d2,,
     e2,,,g2,e2
-];
-
-padpatternmelody.forEach((note, ndx) => {
-    patternwithpad[ndx*4 + 2] = synthbrasslead(note, 0, 0);
-});
-
-
-createSampleEcho(patternwithpad,
-        samples.findIndex(sample => sample.samplename === 'synthbrasslead') + 1,
-        3, 12, 8, [0,2]);
+]);
 
 const patternwithpadandsnare = patternwithpad.map((note,ndx) => {
     if(ndx % 32 === 19) {
@@ -258,7 +249,11 @@ const patternwithpadandsnare = patternwithpad.map((note,ndx) => {
 
 });
 
-[
+createSampleEcho(patternwithpad,
+    samples.findIndex(sample => sample.samplename === 'synthbrasslead') + 1,
+    3, 12, 8, [0,2]);
+
+insertNotesIntoPattern(bass, patternwithpadandsnare,32, 0, [
     d1,cmd(10, 12),,d2(10, 12),
     ,d2(10,12),,d2,
     d1,,cmd(10,12),c2,
@@ -267,9 +262,26 @@ const patternwithpadandsnare = patternwithpad.map((note,ndx) => {
     ,g2(10,12),,g2,
     g1,,cmd(10,12),d2,
     ,g2(10,12),g1,cmd(10,12),,
-    ].forEach((note, ndx) => {
-    patternwithpadandsnare[32 * 4 + ndx * 4 + 0] = bass(note);
-});
+]);
+
+insertNotesIntoPattern(synthbrasslead, patternwithpadandsnare, 32, 2, [
+    ,,,,,e2,a2,b2,c3,b2,,a2,,g2,,a2(1,3),b2(3,30),cmd(4,0x64)
+]);
+
+insertSampleNotesIntoPattern(patternwithpadandsnare, 56, 3, [
+    kickandhihat(a3),
+    snare(a3,0x0c,20),
+    snare(a3),
+    hihat(a3, 0x0c, 0x30),
+    kickandsnare(a3),
+    hihat(a3, 0x0c, 0x30),
+    snare(a3, 0x0c, 0x20),
+    snare(a3),
+]);
+
+createSampleEcho(patternwithpadandsnare,
+    samples.findIndex(sample => sample.samplename === 'synthbrasslead') + 1,
+    3, 12, 8, [0,2]);
 
 patternwithpadandsnare[32 * 4 + 1 ] = minorchord(d2 , 0, 0);
 patternwithpadandsnare[48 * 4 + 1 ] = majorchord(g2 , 0, 0);
@@ -279,7 +291,9 @@ const moduledef = {
     samples: samples,
     songpositions: [
         // patterns to play  
-        4,
+        // 3,
+        // 4,
+        0,
         1,
         2,
         2,
@@ -489,9 +503,9 @@ const moduledef = {
             bass(e2, 0x0a, 0x0c),,,lead(g2, 0, 0),
             bass(e1, 0x0c, 0x20),,,snare(a3,0x0c, 20),
             bass(g1),snare(a3),,kick(a3, 0, 0),
-            ,,lead(a2, 0, 0),,
-            bass(g2),,,snare(a3,0x0c, 20),
-            bass(g1),,,snare(a3,0x0c, 30),
+            ,,synthbrasslead(e2, 0, 0),,
+            bass(g2),,synthbrasslead(a2, 0, 0),snare(a3,0x0c, 20),
+            bass(g1),,synthbrasslead(b2, 0, 0),snare(a3,0x0c, 30),
         ],
         patternwithpad,
         patternwithpadandsnare
