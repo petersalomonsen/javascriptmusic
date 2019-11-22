@@ -249,17 +249,37 @@ createSampleEcho(patternwithpad,
 const patternwithpadandsnare = patternwithpad.map((note,ndx) => {
     if(ndx % 32 === 19) {
         return kickandsnare(a3);
+    } else if(ndx >= 32 * 4 && ndx % 4 !== 3 ) {
+        // clear second half of pattern except drums
+        return [];
     } else {
         return note;
-    }    
+    }
+
 });
+
+[
+    d1,cmd(10, 12),,d2(10, 12),
+    ,d2(10,12),,d2,
+    d1,,cmd(10,12),c2,
+    ,d2(10,12),d1,cmd(10,12),
+    g1,cmd(10, 12),,g2(10, 12),
+    ,g2(10,12),,g2,
+    g1,,cmd(10,12),d2,
+    ,g2(10,12),g1,cmd(10,12),,
+    ].forEach((note, ndx) => {
+    patternwithpadandsnare[32 * 4 + ndx * 4 + 0] = bass(note);
+});
+
+patternwithpadandsnare[32 * 4 + 1 ] = minorchord(d2 , 0, 0);
+patternwithpadandsnare[48 * 4 + 1 ] = majorchord(g2 , 0, 0);
 
 const moduledef = {
     songname: "hello song",
     samples: samples,
     songpositions: [
         // patterns to play  
-        0,
+        4,
         1,
         2,
         2,

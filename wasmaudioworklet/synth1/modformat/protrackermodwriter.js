@@ -9,7 +9,7 @@ const periods =  [  856,808,762,720,678,640,604,570,538,508,480,453,
     428,404,381,360,339,320,302,285,269,254,240,226,
     214,202,190,180,170,160,151,143,135,127,120,113];
 periods.forEach((period, ndx) => 
-    global[['c','cs','d','ds','e','f','fs','g','gs','a','as','b'][ndx%12] + (Math.floor(ndx / 12) + 1)] = period
+    global[['c','cs','d','ds','e','f','fs','g','gs','a','as','b'][ndx%12] + (Math.floor(ndx / 12) + 1)] = (cmd = 0, val = 0, sampleno = 1) => [sampleno, period, cmd, val]
 );
 
 function str2char(str) {

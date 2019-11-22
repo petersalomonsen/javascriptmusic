@@ -21,7 +21,7 @@ export function createSamples(wasmModulePath, createSampleCallbacks) {
     const compiled = new WebAssembly.Module(readFileSync(wasmModulePath));
     const imports = { 
         environment: {
-            SAMPLERATE: periodToSampleRatePAL(a3) * 2
+            SAMPLERATE: periodToSampleRatePAL(a3()[1]) * 2
         },
         env: {
             abort(msgPtr, filePtr, line, column) {
@@ -53,7 +53,10 @@ export function createSamples(wasmModulePath, createSampleCallbacks) {
         if (sample.looplength) {
             sample.data = sample.data.slice(0, sample.loopstart + sample.looplength);
         }
-        global[sample.funcname] = (note, command, value) => [sampleno +1, note, command, value];
+        global[sample.funcname] = (note, command, value) => 
+            typeof note === 'function' ?
+                [sampleno +1, note()[1], command, value] :
+                note.map((val, ndx, arr) => arr[1] > 0 && ndx === 0 ? sampleno + 1 : val);
         samples.push(sample);
     });
     
