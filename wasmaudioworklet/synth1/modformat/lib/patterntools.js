@@ -63,3 +63,16 @@ export function toPatternArray(array) {
         createSampleEcho(array.map(v => v), sampleno, delaysteps, echostartvolume, decreaseval, allowedchannels);
     return array;
 }
+
+export function createEmptyPatternArray() {
+    return toPatternArray(new Array(64 * 4));
+}
+
+Array.prototype.repeat = function(times = 1) {
+    const arrToRepat = this.slice(0);
+    let arr = this;
+    for(let n = 0 ; n < times ; n++ ) {
+        arr = arr.concat(arrToRepat);
+    }
+    return arr;    
+}

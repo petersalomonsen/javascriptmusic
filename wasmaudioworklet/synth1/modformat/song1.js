@@ -1,6 +1,6 @@
 import { writeMod, cmd } from './protrackermodwriter.js';
 import { createSamples } from './instrumentgenerator.js';
-import { createSampleEcho, insertNotesIntoPattern, insertSampleNotesIntoPattern, toPatternArray } from './lib/patterntools.js';
+import { createSampleEcho, insertNotesIntoPattern, insertSampleNotesIntoPattern, toPatternArray, createEmptyPatternArray } from './lib/patterntools.js';
 
 const samples = createSamples('./build/index.wasm', [
     (instance) => {
@@ -359,14 +359,14 @@ const moduledef = {
     samples: samples,
     songpositions: [
         // patterns to play  
-        // 3,
-        // 4,
+        // 6,
         0,
         1,
         2,
         5,
         3,
-        4
+        4,
+        6
     ],
     patterns: [
         [
@@ -516,7 +516,35 @@ const moduledef = {
         ).createSampleEcho(
             samples.findIndex(sample => sample.samplename === 'synthbrasslead') + 1,
             3, 18, 8, [0,1,2,3]
-        )
+        ),
+        createEmptyPatternArray().insertSampleNotes(
+            0,3, [
+                kickandhihat(a3, 0, 0),
+                hihat(a3, 0xc, 0x10),
+                hihat(a3, 0xc, 0x30),
+                hihat(a3, 0xc, 0x10),
+                kickandsnare(a3),
+                hihat(a3, 0xc, 0x10),
+                hihat(a3, 0xc, 0x30),
+                hihat(a3, 0xc, 0x10),
+            ].repeat(7)
+        ).insertNotes(synthbrasslead, 0, 2, [
+            a3,a3,g3,,a3,a3,g3,a3,,
+            e3,,d3,,c3,e3
+        ]).insertNotes(bass, 0, 0, [
+            a1,,,a2,,a2,a1,g1,
+            f1,,,f2,,f2,f1,cmd(0xa,0xc),
+            c2,,,c3,,c3,c3,c1,
+            b1,,b2,,b1,,b2,cmd(0xa,0xc)
+        ]).insertSampleNotes(0, 1, [
+            minorchord(a2),,,,
+            ,,,,
+            majorchord2(a2),,,,
+            ,,,,
+            majorchord(c3),,,,
+            ,,,,
+            majorchord2(b2),,,,
+        ])
     ]
 };
 

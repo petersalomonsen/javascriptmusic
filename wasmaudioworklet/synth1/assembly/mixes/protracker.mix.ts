@@ -82,7 +82,6 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 
     snare.next();
     mainline.addStereoSignal(snare.signal, 0.2, 0.5);   
-    reverbline.addStereoSignal(snare.signal, 0.05, 0.5); 
 
     hihat.next();
     mainline.addStereoSignal(hihat.signal, 0.2, 0.5);

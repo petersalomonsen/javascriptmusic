@@ -3,7 +3,9 @@
     "asbuild": "asc --runtime none assembly/index.ts -b build/index.wasm -Oz",
     "fastbuild": "asc --runtime none assembly/index.ts -b build/index.wasm -t build/index.wat"
   },
-  "dependencies": {},
+  "dependencies": {
+    "assemblyscript": "^0.8.1"
+  },
   "devDependencies": {
     "assemblyscript": ""
   }
