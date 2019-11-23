@@ -54,6 +54,8 @@ export function createSamples(wasmModulePath, createSampleCallbacks) {
             sample.data = sample.data.slice(0, sample.loopstart + sample.looplength);
         }
         global[sample.funcname] = (note, command, value) => 
+            note === undefined ?
+            sampleno + 1 :
             typeof note === 'function' ?
                 [sampleno +1, note()[1], command, value] :
                 note.map((val, ndx, arr) => arr[1] > 0 && ndx === 0 ? sampleno + 1 : val);

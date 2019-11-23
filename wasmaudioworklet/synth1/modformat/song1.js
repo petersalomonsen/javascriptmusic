@@ -158,7 +158,20 @@ const samples = createSamples('./build/index.wasm', [
             loopstart: 0,
             looplength: 0x2000
         };        
-    }
+    },
+    (instance) => {
+        instance.setChannelValue(5, 69 + (12));
+        instance.setChannelValue(1, 69 + (24));
+        instance.fillSampleBuffer();
+        return {
+            samplename: "combinedlead",
+            funcname: "combinedlead",
+            finetune: 0,
+            volume: 40,
+            loopstart: 0,
+            looplength: 0
+        };        
+    },
 ]);
 
 
@@ -359,14 +372,16 @@ const moduledef = {
     samples: samples,
     songpositions: [
         // patterns to play  
-        // 6,
         0,
         1,
         2,
         5,
         3,
         4,
-        6
+        6,
+        6,
+        7,
+        7
     ],
     patterns: [
         [
@@ -528,15 +543,19 @@ const moduledef = {
                 hihat(a3, 0xc, 0x30),
                 hihat(a3, 0xc, 0x10),
             ].repeat(7)
-        ).insertNotes(synthbrasslead, 0, 2, [
-            a3,a3,g3,,a3,a3,g3,a3,,
-            e3,,d3,,c3,e3
+        ).insertNotes(combinedlead, 0, 2, [
+            a2,a2,g2,,a2,a2,g2,a2,,
+            e2,,d2,,c2,e2,,,,,,,
+            ,,,,,,,,,,,
+            a2,a2,g2,,a2,,g2,a2,,,
+            e2,,a2,,b2,c3,,,b2,,a2,,
+            g2,d2
         ]).insertNotes(bass, 0, 0, [
             a1,,,a2,,a2,a1,g1,
             f1,,,f2,,f2,f1,cmd(0xa,0xc),
             c2,,,c3,,c3,c3,c1,
             b1,,b2,,b1,,b2,cmd(0xa,0xc)
-        ]).insertSampleNotes(0, 1, [
+        ].repeat(1)).insertSampleNotes(0, 1, [
             minorchord(a2),,,,
             ,,,,
             majorchord2(a2),,,,
@@ -544,12 +563,61 @@ const moduledef = {
             majorchord(c3),,,,
             ,,,,
             majorchord2(b2),,,,
-        ])
+            ,,,,
+        ].repeat(1))
+        .createSampleEcho(combinedlead(), 3, 30, 8, [0, 2]),
+        // pattern 7
+        createEmptyPatternArray().insertSampleNotes(
+            0,3, [
+                kickandhihat(a3, 0, 0),
+                hihat(a3, 0xc, 0x10),
+                hihat(a3, 0xc, 0x30),
+                hihat(a3, 0xc, 0x10),
+                kickandsnare(a3),
+                hihat(a3, 0xc, 0x10),
+                hihat(a3, 0xc, 0x30),
+                hihat(a3, 0xc, 0x10),
+            ].repeat(7)
+        ).insertNotes(combinedlead, 0, 2, [
+            f2,f2,e2,,f2, ,g2,a2,,
+            g2,,f2,,,,,
+            a2,a2,g2,,
+            a2,,b2,c3,
+            ,c3,b2,,
+            a2,,g2,a2
+        ]).insertSampleNotes(0, 1, [
+            minorchord2(f2),,,,
+            ,,,,
+            ,,,,
+            ,,,,
+            majorchord(f2),,,,
+            ,,,,
+            ,,,,
+            ,,,,
+            majorchord2(e2)
+        ]).insertNotes(bass, 0, 0, [
+            d1,,cmd(0xa,0xc),d2(0xa,0xc),
+            ,d2(0xa,0xc),d1,,
+            d1,,d2,,
+            e1,,e2,,
+            f1,,cmd(0xa,0xc),f2(0xa,0xc),
+            ,f2(0xa,0xc),f1,,
+            f1,,f2,,
+            g1,,g2,,
+            a1,,cmd(0xa,0xc),a2(0xa,0xc),
+            ,e2,g2(0xa,0xc),a2,
+            e1,,e2,,
+            g1,,g2,,
+            a1,,cmd(0xa,0xc),a2(0xa,0xc),
+            ,e2,g2(0xa,0xc),a2,
+            e1,,e2,,
+            g1,,g2,,
+        ]).createSampleEcho(combinedlead(), 3, 30, 8, [0, 2])
     ]
 };
 
 createSampleEcho(moduledef.patterns[2],
-    samples.findIndex(sample => sample.samplename === 'synthbrasslead') + 1,
+    synthbrasslead(),
     3, 18, 8, [0,1,2,3]);
 
 writeMod('test.mod', moduledef);
