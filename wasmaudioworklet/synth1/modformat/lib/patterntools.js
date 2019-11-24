@@ -76,3 +76,8 @@ Array.prototype.repeat = function(times = 1) {
     }
     return arr;    
 }
+
+// call the input function with the current array as parameter to return a new transformed array
+Array.prototype.transform = function(transformfunc) {
+    return transformfunc(this);
+}

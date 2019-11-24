@@ -372,6 +372,8 @@ const moduledef = {
     samples: samples,
     songpositions: [
         // patterns to play  
+        7,
+        8,
         0,
         1,
         2,
@@ -381,7 +383,7 @@ const moduledef = {
         6,
         6,
         7,
-        7
+        8
     ],
     patterns: [
         [
@@ -612,8 +614,36 @@ const moduledef = {
             ,e2,g2(0xa,0xc),a2,
             e1,,e2,,
             g1,,g2,,
-        ]).createSampleEcho(combinedlead(), 3, 30, 8, [0, 2])
-    ]
+        ])
+    ].transform(arr => {
+        const previouspatternindex = arr.length-1;
+        arr = arr.concat([
+            arr[previouspatternindex] // Change second half of previous pattern
+                .insertSampleNotes(32, 1, [
+                    majorchord2(b2)
+                ])
+                .insertNotes(bass, 32, 0, [
+                    g1,,cmd(0xa,0xc),g2(0xa,0xc),
+                    ,d2,e2(0xa,0xc),g2,
+                    d1,,d2,,
+                    e1,,e2,,
+                ].repeat(1))
+                .insertNotes(combinedlead, 31, 0, [
+                    b2,,,,
+                    ,,,,
+                    ,,,,
+                    ,,,,
+                    g3,d3,b2,d3,
+                    b2,g2,b2,g2,
+                    d2,g2,d2,b1,
+                    d2,b1,g2,b1
+
+                ])
+                .createSampleEcho(combinedlead(), 3, 30, 8, [0, 2])
+        ]);
+        arr[previouspatternindex] = arr[previouspatternindex].createSampleEcho(combinedlead(), 3, 30, 8, [0, 2]);
+        return arr;
+    })
 };
 
 createSampleEcho(moduledef.patterns[2],
