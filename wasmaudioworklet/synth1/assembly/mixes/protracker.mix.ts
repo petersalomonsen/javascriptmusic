@@ -7,7 +7,7 @@ import { StereoSignal } from "../synth/stereosignal.class";
 import { Kick } from "../instruments/kick.class";
 import { BrassyLead } from "../instruments/lead/brassy";
 import { Hihat } from "../instruments/hihat.class";
-import { SoftPad } from "../instruments/pad/softpad.class";
+import { FlatPad } from "../instruments/pad/flatpad.class";
 import { createInstrumentArray } from '../common/mixcommon';
 import { Freeverb } from "../fx/freeverb";
 
@@ -22,7 +22,7 @@ const kick = new Kick();
 const snare = new Snare();
 const hihat = new Hihat();
 const brassylead = new BrassyLead();
-const pads: SoftPad[] = createInstrumentArray<SoftPad>(4, () => new SoftPad());
+const pads: FlatPad[] = createInstrumentArray<FlatPad>(4, () => new FlatPad());
 
 export function setChannelValue(channel: usize, value: f32): void {
     switch(channel) {
@@ -47,6 +47,7 @@ export function setChannelValue(channel: usize, value: f32): void {
         case 6:
         case 7:
         case 8:
+        case 9:
             pads[channel-6].note = value;
             break;       
             

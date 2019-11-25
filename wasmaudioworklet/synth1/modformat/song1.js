@@ -12,8 +12,9 @@ const samples = createSamples('./build/index.wasm', [
                 funcname: "bass",
                 finetune: 0,
                 volume: 64,
-                loopstart: 0xf1e,
-                looplength: 512
+                loopstart: 0x1000,
+                looptransitionlength: 0x800,
+                looplength: 0x800
             };
     },
     (instance) => {
@@ -24,8 +25,9 @@ const samples = createSamples('./build/index.wasm', [
                 funcname: "lead",
                 finetune: 0,
                 volume: 40,
-                loopstart: 0x6ea,
-                looplength: 0x1600
+                loopstart: 0x800,
+                looplength: 0x1600,
+                looptransitionlength: 0x800
             };
     },
     (instance) => {
@@ -99,64 +101,75 @@ const samples = createSamples('./build/index.wasm', [
             funcname: "synthbrasslead",
             finetune: 0,
             volume: 25,
-            loopstart: 0,
-            looplength: 0
+            loopstart: 0x1000,
+            looplength: 0x1000,
+            looptransitionlength: 0x800
         };        
     },
     (instance) => {
-        instance.setChannelValue(6, 69 + (12));
-        instance.setChannelValue(7, 69 + (12) +3 );
-        instance.setChannelValue(8, 69 + (12) + 7 );
+        
+        instance.setChannelValue(7, 69 + (12));
+        instance.setChannelValue(8, 69 + (12) +3 );
+        instance.setChannelValue(9, 69 + (12) + 7 );
         instance.fillSampleBuffer();
         return {
             samplename: "minorchord",
             funcname: "minorchord",
             finetune: 0,
-            volume: 25,
-            loopstart: 0,
-            looplength: 0x2000
+            volume: 40,
+            loopstart: 0x800,
+            looplength: 0x1000,
+            looptransitionlength: 0x800
         };        
     },
     (instance) => {
-        instance.setChannelValue(6, 69 + (12));
-        instance.setChannelValue(7, 69 + (12) + 4 );
-        instance.setChannelValue(8, 69 + (12) + 7 );
+        
+        instance.setChannelValue(7, 69 + (12));
+        instance.setChannelValue(8, 69 + (12) + 4 );
+        instance.setChannelValue(9, 69 + (12) + 7 );
         instance.fillSampleBuffer();
         return {
             samplename: "majorchord",
             funcname: "majorchord",
             finetune: 0,
-            volume: 25,
+            volume: 40,
             loopstart: 0,
-            looplength: 0x2000
+            loopstart: 0x800,
+            looplength: 0x1000,
+            looptransitionlength: 0x800
         };        
     },
     (instance) => {
-        instance.setChannelValue(6, 69 + (12));
-        instance.setChannelValue(7, 69 + (12) + 4 );
-        instance.setChannelValue(8, 69 + (12) + 9 );
+        
+        instance.setChannelValue(7, 69 + (12));
+        instance.setChannelValue(8, 69 + (12) + 4 );
+        instance.setChannelValue(9, 69 + (12) + 9 );
         instance.fillSampleBuffer();
         return {
             samplename: "minorchord2",
             funcname: "minorchord2",
             finetune: 0,
-            volume: 25,
-            loopstart: 0,
-            looplength: 0x2000
+            volume: 40,
+            loopstart: 0x800,
+            looplength: 0x1000,
+            looptransitionlength: 0x800
         };        
     },
     (instance) => {
-        instance.setChannelValue(6, 69 + (12));
-        instance.setChannelValue(7, 69 + (12) + 3 );
-        instance.setChannelValue(8, 69 + (12) + 8 );
+        
+        instance.setChannelValue(7, 69 + (12));
+        instance.setChannelValue(8, 69 + (12) + 3 );
+        instance.setChannelValue(9, 69 + (12) + 8 );
         instance.fillSampleBuffer();
         return {
             samplename: "majorchord2",
             funcname: "majorchord2",
             finetune: 0,
-            volume: 25,
+            volume: 40,
             loopstart: 0,
-            looplength: 0x2000
+            loopstart: 0x800,
+            looplength: 0x1000,
+            looptransitionlength: 0x800
         };        
     },
     (instance) => {
@@ -169,79 +182,91 @@ const samples = createSamples('./build/index.wasm', [
             finetune: 0,
             volume: 40,
             loopstart: 0,
-            looplength: 0
+            loopstart: 0x400,
+            looplength: 0x400,
+            looptransitionlength: 0x400
         };        
     },
 ]);
 
 
-const patternwithpad = [
-    bass(a1, 0x0a, 0x0c),minorchord(a2),,kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
+const patternwithpad = toPatternArray([
+    bass(a1),,,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,,hihat(a3, 0x0c, 0x30),
     ,,,hihat(a3, 0x0c, 0x10),
-    bass(a1, 0x0a, 0x0c),,,kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
+    bass(a1),,,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,,hihat(a3, 0x0c, 0x30),
-    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-    ,majorchord2(a2),,kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
-    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-    ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
+    bass(f1),,,hihat(a3, 0x0c, 0x10),
+    ,,,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    bass(f1),,,hihat(a3, 0x0c, 0x30),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,,kickandhihat(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
-    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
+    bass(f1),,,hihat(a3, 0x0c, 0x30),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    bass(g1),,,kickandhihat(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
-    bass(g1, 0x0a, 0x0c),majorchord(g2),,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
     ,,,hihat(a3, 0x0c, 0x10),
+    bass(g1),,,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,,hihat(a3, 0x0c, 0x30),
-    ,,,hihat(a3, 0x0c, 0x10),
-    bass(g1, 0x0a, 0x0c),,,kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
-    ,,,hihat(a3, 0x0c, 0x30),
-    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-    ,minorchord2(g2),,kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
-    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-    ,,,hihat(a3, 0x0c, 0x10),
+    bass(e1),,,hihat(a3, 0x0c, 0x10),
+    ,,,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    bass(e1),,,hihat(a3, 0x0c, 0x30),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,,kickandhihat(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
     ,,,hihat(a3, 0x0c, 0x30),
     ,,,hihat(a3, 0x0c, 0x10),
 
-    bass(a1, 0x0a, 0x0c),minorchord(a2),lead(e2),kickandhihat(a3, 0, 0),
+    bass(a1),,lead(e2),kickandhihat(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
-    ,,,hihat(a3, 0x0c, 0x30),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
     ,,,hihat(a3, 0x0c, 0x10),
-    bass(a1, 0x0a, 0x0c),,lead(a2),kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
+    bass(a1),,lead(a2),kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,lead(g2),hihat(a3, 0x0c, 0x30),
-    bass(f1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-    ,majorchord2(a2),lead(f2),kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
-    bass(f1, 0x0a, 0x0c),,lead(e2),hihat(a3, 0x0c, 0x30),
-    ,majorchord2(a2),,hihat(a3, 0x0c, 0x10),
+    bass(f1),,,hihat(a3, 0x0c, 0x10),
+    ,,lead(f2),kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    bass(f1),,lead(e2),hihat(a3, 0x0c, 0x30),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,,kickandhihat(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
-    bass(f1, 0x0a, 0x0c),,lead(d2),hihat(a3, 0x0c, 0x30),
+    bass(f1),,lead(d2),hihat(a3, 0x0c, 0x30),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    bass(g1),,,kickandhihat(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
-    bass(g1, 0x0a, 0x0c),majorchord(g2),,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,lead(g2),hihat(a3, 0x0c, 0x30),
     ,,,hihat(a3, 0x0c, 0x10),
-    ,,lead(g2),hihat(a3, 0x0c, 0x30),
-    ,,,hihat(a3, 0x0c, 0x10),
-    bass(g1, 0x0a, 0x0c),,,kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
+    bass(g1),,,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
     ,,lead(e2),hihat(a3, 0x0c, 0x30),
-    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
-    ,minorchord2(g2),,kickandhihat(a3, 0, 0),
-    ,,,hihat(a3, 0x0c, 0x10),
-    bass(e1, 0x0a, 0x0c),,,hihat(a3, 0x0c, 0x30),
-    ,,,snare(a3, 0x0c, 0x30),
+    bass(e1),,,hihat(a3, 0x0c, 0x10),
+    ,,,kickandhihat(a3, 0, 0),
+    cmd(0x0a, 0x0c),,,hihat(a3, 0x0c, 0x10),
+    bass(e1),,,hihat(a3, 0x0c, 0x30),
+    cmd(0x0a, 0x0c),,,snare(a3, 0x0c, 0x30),
     ,,,kickandsnare(a3, 0, 0),
     ,,,hihat(a3, 0x0c, 0x10),
     ,,,hihat(a3, 0x0c, 0x30),
     ,,,hihat(a3, 0x0c, 0x10),
-];
+]).insertSampleNotes(0, 1, [
+    minorchord(a2,0xc,30),,cmd(0xa,0xc),,
+    minorchord(a2,0xc,30),cmd(0xa,0xc),,majorchord2(a2,0xc,30),
+    ,cmd(0xa,0xc),majorchord2(a2,0xc,30),cmd(0xa,0xc),
+    ,,majorchord2(a2,0xc,30),,
+    majorchord(g2,0xc,30),,cmd(0xa,0xc),,
+    majorchord(g2,0xc,30),cmd(0xa,0xc),,minorchord2(g2,0xc,30),
+    ,cmd(0xa,0xc),minorchord2(g2,0xc,30),cmd(0xa,0xc),
+    ,,minorchord2(g2,0xc,30),,
+    
+].repeat(1));
 
 insertNotesIntoPattern(synthbrasslead, patternwithpad, 0, 2, [
     b2(1,3),cmd(6,0x62),b2,,a2,,g2,a2,,,
@@ -261,6 +286,8 @@ const patternwithpadandsnare = patternwithpad.map((note,ndx) => {
     }
 
 });
+
+
 
 createSampleEcho(patternwithpad,
     samples.findIndex(sample => sample.samplename === 'synthbrasslead') + 1,
@@ -296,8 +323,21 @@ createSampleEcho(patternwithpadandsnare,
     samples.findIndex(sample => sample.samplename === 'synthbrasslead') + 1,
     3, 12, 8, [0,2]);
 
-patternwithpadandsnare[32 * 4 + 1 ] = minorchord(d2 , 0, 0);
-patternwithpadandsnare[48 * 4 + 1 ] = majorchord(g2 , 0, 0);
+const chordpattern = [
+    minorchord(d2, 0xa, 0xc),minorchord(d2, 0xa, 0xc),,minorchord(d2, 0xa, 0xc),
+    ,,minorchord(d2),,
+    cmd(0x0a, 0x0c),minorchord(d2),,,
+    cmd(0x0a, 0x0c),minorchord(d2, 0xa, 0xc)
+];
+
+insertSampleNotesIntoPattern(patternwithpadandsnare,32,1,chordpattern);
+insertSampleNotesIntoPattern(patternwithpadandsnare,48,1,chordpattern.map(cell => {
+    if(cell && cell[0] > 0) {
+        cell = majorchord(g2, cell[2], cell[3]);
+    }
+    return cell;
+}));
+
 
 const patternwithlead = [
     bass(a1, 0x0a, 0x0c),synthbrasslead(ds3, 1, 2),lead(c2, 0, 0),kick(a3, 0, 0),
@@ -371,9 +411,7 @@ const moduledef = {
     songname: "hello song",
     samples: samples,
     songpositions: [
-        // patterns to play  
-        7,
-        8,
+        // patterns to play 
         0,
         1,
         2,
@@ -558,14 +596,14 @@ const moduledef = {
             c2,,,c3,,c3,c3,c1,
             b1,,b2,,b1,,b2,cmd(0xa,0xc)
         ].repeat(1)).insertSampleNotes(0, 1, [
-            minorchord(a2),,,,
-            ,,,,
-            majorchord2(a2),,,,
-            ,,,,
-            majorchord(c3),,,,
-            ,,,,
-            majorchord2(b2),,,,
-            ,,,,
+            minorchord(a2,0xa,0x8),minorchord(a2,0xa,0x8),,minorchord(a2,0xa,0x8),
+            ,,minorchord(a2),cmd(0xa,0x8),
+            majorchord2(a2,0xa,0x8),majorchord2(a2,0xa,0x8),,majorchord2(a2,0xa,0x8),
+            ,majorchord2(a2),,cmd(0xa,0x8),
+            majorchord(c3,0xa,0x8),majorchord(c3,0xa,0x8),,majorchord(c3,0xa,0x8),
+            ,,majorchord(c3),cmd(0xa,0x8),
+            majorchord2(b2),,cmd(0xa,0xa),majorchord2(b2),
+            ,cmd(0xa,0xa),majorchord2(b2),cmd(0xa,0xa)
         ].repeat(1))
         .createSampleEcho(combinedlead(), 3, 30, 8, [0, 2]),
         // pattern 7
@@ -587,17 +625,16 @@ const moduledef = {
             a2,,b2,c3,
             ,c3,b2,,
             a2,,g2,a2
-        ]).insertSampleNotes(0, 1, [
-            minorchord2(f2),,,,
-            ,,,,
-            ,,,,
-            ,,,,
-            majorchord(f2),,,,
-            ,,,,
-            ,,,,
-            ,,,,
-            majorchord2(e2)
-        ]).insertNotes(bass, 0, 0, [
+        ]).insertSampleNotes(0, 1,
+            [minorchord2(f2,0xc,20)].concat([cmd(0xe,0xa1)].repeat(14)).
+            concat([majorchord(f2,0xc,20)].concat([cmd(0xe,0xa1)].repeat(14))).
+            concat(
+                [
+                    majorchord2(e2,0xc,20)]
+                        .concat([cmd(0xe,0xa1)].repeat(14))
+                        .concat([cmd(0xe,0xb1)].repeat(15))
+                )
+        ).insertNotes(bass, 0, 0, [
             d1,,cmd(0xa,0xc),d2(0xa,0xc),
             ,d2(0xa,0xc),d1,,
             d1,,d2,,
@@ -620,7 +657,7 @@ const moduledef = {
         arr = arr.concat([
             arr[previouspatternindex] // Change second half of previous pattern
                 .insertSampleNotes(32, 1, [
-                    majorchord2(b2)
+                    majorchord(g2,0xc,20)
                 ])
                 .insertNotes(bass, 32, 0, [
                     g1,,cmd(0xa,0xc),g2(0xa,0xc),
@@ -628,15 +665,16 @@ const moduledef = {
                     d1,,d2,,
                     e1,,e2,,
                 ].repeat(1))
-                .insertNotes(combinedlead, 31, 0, [
-                    b2,,,,
+                .insertNotes(combinedlead, 31, 2, [
+                    b2,
                     ,,,,
                     ,,,,
                     ,,,,
-                    g3,d3,b2,d3,
-                    b2,g2,b2,g2,
-                    d2,g2,d2,b1,
-                    d2,b1,g2,b1
+                    ,,,,
+                    g3(0xc,10),d3(0xc,20),b2,d3(0xc,15),
+                    b2(0xc,25),g2(0xc,20),b2(0xc,30),g2(0xc,25),
+                    d2(0xc,35),g2,d2(0xc,30),b1,
+                    d2,b1(0xc,30),g2,b1
 
                 ])
                 .createSampleEcho(combinedlead(), 3, 30, 8, [0, 2])
