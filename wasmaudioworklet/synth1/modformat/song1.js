@@ -1,4 +1,4 @@
-import { writeMod, cmd } from './protrackermodwriter.js';
+import { writeMod, cmd, clr } from './protrackermodwriter.js';
 import { createSamples } from './instrumentgenerator.js';
 import { createSampleEcho, insertNotesIntoPattern, insertSampleNotesIntoPattern, toPatternArray, createEmptyPatternArray } from './lib/patterntools.js';
 
@@ -8,7 +8,7 @@ const samples = createSamples('./build/index.wasm', [
         instance.fillSampleBuffer();
 
         return {
-                samplename: "bass",
+                samplename: "(c) peter salomonsen",
                 funcname: "bass",
                 finetune: 0,
                 volume: 64,
@@ -21,7 +21,7 @@ const samples = createSamples('./build/index.wasm', [
         instance.setChannelValue(1, 69 + (12));
         instance.fillSampleBuffer();
         return {
-                samplename: "lead",
+                samplename: "december 2019",
                 funcname: "lead",
                 finetune: 0,
                 volume: 40,
@@ -34,7 +34,7 @@ const samples = createSamples('./build/index.wasm', [
         instance.setChannelValue(2, 100);
         instance.fillSampleBuffer();
         return {
-            samplename: "kick",
+            samplename: "written in javascript",
             funcname: "kick",
             finetune: 0,
             volume: 64,
@@ -48,7 +48,7 @@ const samples = createSamples('./build/index.wasm', [
         instance.setChannelValue(4, 30);
         instance.fillSampleBuffer();
         return {
-            samplename: "kickandsnare",
+            samplename: "check out",
             funcname: "kickandsnare",
             finetune: 0,
             volume: 64,
@@ -61,7 +61,7 @@ const samples = createSamples('./build/index.wasm', [
         instance.setChannelValue(4, 30);
         instance.fillSampleBuffer();
         return {
-            samplename: "kickandhihat",
+            samplename: "petersalomonsen.com",
             funcname: "kickandhihat",
             finetune: 0,
             volume: 64,
@@ -73,7 +73,7 @@ const samples = createSamples('./build/index.wasm', [
         instance.setChannelValue(3, 100);
         instance.fillSampleBuffer();
         return {
-            samplename: "snare",
+            samplename: "for more info",
             funcname: "snare",
             finetune: 0,
             volume: 40,
@@ -340,10 +340,10 @@ insertSampleNotesIntoPattern(patternwithpadandsnare,48,1,chordpattern.map(cell =
 
 
 const patternwithlead = [
-    bass(a1, 0x0a, 0x0c),synthbrasslead(ds3, 1, 2),lead(c2, 0, 0),kick(a3, 0, 0),
+    bass(a1, 0x0a, 0x0c),lead(c2, 0, 0),synthbrasslead(ds3, 1, 2),kick(a3, 0, 0),
     ,cmd(4,0x51),,,
-    bass(a1, 0x0a, 0x0c),cmd(4,0x51),,,
-    bass(a2, 0x0a, 0x0c),cmd(4,0x51),,,
+    bass(a1, 0x0a, 0x0c),,cmd(4,0x51),,
+    bass(a2, 0x0a, 0x0c),,cmd(4,0x51),,
     snare(a3),,synthbrasslead(d3),kick(a3, 0, 0),
     bass(a2, 0x0a, 0x0c),,,,
     bass(a1, 0x0a, 0x0c),,,,
@@ -408,7 +408,7 @@ const patternwithlead = [
 ];
 
 const moduledef = {
-    songname: "hello song",
+    songname: "trackerscripting",
     samples: samples,
     songpositions: [
         // patterns to play 
@@ -418,6 +418,14 @@ const moduledef = {
         5,
         3,
         4,
+        6,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
         6,
         6,
         7,
@@ -653,6 +661,7 @@ const moduledef = {
             g1,,g2,,
         ])
     ].transform(arr => {
+        // Pattern 8
         const previouspatternindex = arr.length-1;
         arr = arr.concat([
             arr[previouspatternindex] // Change second half of previous pattern
@@ -677,9 +686,86 @@ const moduledef = {
                     d2,b1(0xc,30),g2,b1
 
                 ])
+                .insertSampleNotes(56,3,[
+                    kickandhihat(a3),
+                    snare(a3,0x0c,0x20),
+                    hihat(a3,0x0c, 0x30),
+                    snare(a3,0x0c,0x10),
+                    kickandsnare(a3),
+                    hihat(a3, 0x0c, 0x10),
+                    snare(a3, 0x0c, 0x10),
+                    snare(a3, 0x0c, 0x20),
+                ])
                 .createSampleEcho(combinedlead(), 3, 30, 8, [0, 2])
         ]);
         arr[previouspatternindex] = arr[previouspatternindex].createSampleEcho(combinedlead(), 3, 30, 8, [0, 2]);
+        return arr;
+    }).transform(arr => {
+        // Pattern 12
+        arr.push(toPatternArray(arr[0]).insertSampleNotes(0, 1, [
+            minorchord(a2,0xc,20),,cmd(0xa,0xc),minorchord(a2,0xc,20),
+            cmd(0xa,0xc),,,,
+            majorchord2(a2,0xc,20),,cmd(0xa,0xc),majorchord2(a2,0xc,20),
+            cmd(0xa,0xc),,majorchord(c3,0xc,20),,
+            cmd(0xa,0xc),,,,
+            ,,,,
+            majorchord2(b2,0xc,20),,cmd(0xa,0xc),majorchord2(b2,0xc,20),
+            ,cmd(0xa,0xc),majorchord2(a2,0xc,20),,
+        ].repeat(1)))
+        arr.push(arr[arr.length-1].map((v, n) => {
+            if(n % (4 * 8) === 19) {
+                v = kickandsnare(a3)
+            }
+            return v;
+        }));
+        arr.push(toPatternArray(arr[arr.length-1]).insertNotes(combinedlead, 0, 2, [
+            e2(0xa,0xc),a2(0xa,0xc),,e2,
+            a2,e2(0xa,0x6),a2(0xa,0xc),e2,
+            c3,b2(0xa,0xc),,g2,
+            ,e2,,d2(0xa,0xc),
+            ,,,,
+            c2,d2,,e2(0xa,0xc),
+            ,e2,g2(0xa,0xc),,
+            e2(0xa,8),,,,
+        ].repeat(1))        
+        .createSampleEcho(combinedlead(), 3, 18, 6, [0,1,2,3]));
+        arr.push(toPatternArray(arr[arr.length-2]).insertNotes(combinedlead, 0, 2, [
+            e2(0xa,0xc),a2(0xa,0xc),,e2,
+            a2,e2(0xa,0x6),a2(0xa,0xc),e2,
+            c3,b2(0xa,0xc),,g2,
+            ,e2,,d2(0xa,0xc),
+            ,,,,
+            c2,d2,,e2(0xa,0xc),
+            ,e2,g2(0xa,0xc),,
+            e2(0xa,8),,,,
+        ].repeat(1))
+        .insertSampleNotes(0, 3, [
+            kickandhihat(a3),
+            hihat(a3, 0x0c, 0x10),
+            hihat(a3, 0x0c, 0x30),
+            hihat(a3, 0x0c, 0x10),
+            kickandsnare(a3),
+            hihat(a3, 0x0c, 0x10),
+            hihat(a3, 0x0c, 0x30),
+            hihat(a3, 0x0c, 0x10)
+        ].repeat(6))
+        .insertSampleNotes(56, 3, [
+            kickandhihat(a3),
+            snare(a3, 0x0c, 0x20),
+            hihat(a3, 0x0c, 0x30),
+            snare(a3, 0x0c, 0x10),
+            kickandsnare(a3),
+            hihat(a3, 0x0c, 0x10),
+            snare(a3, 0x0c, 0x10),
+            snare(a3, 0x0c, 0x20),
+        ])
+        .insertNotes(combinedlead,48,2,[
+            clr,g2(0xa,0x8),b2(0xc,0x10),cmd(0xa,0x8),
+            c3(0xc,0x10),b2(0xc,0x20),g2(0xa,0x8),d2(0xc,0x8),
+            c2,d2(0xa,0xc),e2,g2,a2(0xa,0x8),c3,d3,e3
+        ])
+        .createSampleEcho(combinedlead(), 3, 18, 6, [0,1,2,3])
+        );
         return arr;
     })
 };
@@ -688,4 +774,4 @@ createSampleEcho(moduledef.patterns[2],
     synthbrasslead(),
     3, 18, 8, [0,1,2,3]);
 
-writeMod('test.mod', moduledef);
+writeMod('trackerscripting.mod', moduledef);
