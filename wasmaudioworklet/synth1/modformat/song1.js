@@ -1,5 +1,5 @@
-import { writeMod, cmd, clr } from './protrackermodwriter.js';
-import { createSamples } from './instrumentgenerator.js';
+import { writeMod, cmd, clr } from './lib/protrackermodwriter.js';
+import { createSamples } from './lib/instrumentgenerator.js';
 import { createSampleEcho, insertNotesIntoPattern, insertSampleNotesIntoPattern, toPatternArray, createEmptyPatternArray } from './lib/patterntools.js';
 
 const samples = createSamples('./build/index.wasm', [
