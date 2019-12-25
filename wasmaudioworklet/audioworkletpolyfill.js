@@ -65,13 +65,15 @@ if(typeof AudioWorkletNode !== 'function') {
                     bufferSource.start(chunkStartTime);
                                         
                     let nextChunkTimeout = chunkStartTime - context.currentTime;
-                    if(nextChunkTimeout <= 0 ) {
+                    // console.log(chunkStartTime, context.currentTime, nextChunkTimeout, processorBuffers);
+                    if(nextChunkTimeout < 0.01 ) {
+                        // Increase buffer size if timeout to next chunk is less than 10ms
                         nextChunkTimeout = 0;
-                        processorBuffers *= 2;
+                        processorBuffers++;
                         chunkIndex = 1;
                         chunkOffsetTime = chunkStartTime;
                     }
-                    // console.log(chunkStartTime, context.currentTime, nextChunkTimeout, processorBuffers);
+                    
                     setTimeout(() => createAudioChunk(), nextChunkTimeout * 1000);
                 };
                 connected = true;

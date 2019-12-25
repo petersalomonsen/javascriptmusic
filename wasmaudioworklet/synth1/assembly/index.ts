@@ -1,8 +1,8 @@
 // The entry file of the synth WebAssembly module.
 
 // --- Replace with your own mix implementation here
-import { mixernext, setChannelValue, PATTERN_SIZE_SHIFT, BEATS_PER_PATTERN_SHIFT } from './mixes/protracker.mix';
-export { setChannelValue } from './mixes/protracker.mix';
+import { mixernext, setChannelValue, PATTERN_SIZE_SHIFT, BEATS_PER_PATTERN_SHIFT } from './mixes/shuffle.mix';
+export { setChannelValue } from './mixes/shuffle.mix';
 // -------------------------------------------------
 
 import { SAMPLERATE } from './environment';
