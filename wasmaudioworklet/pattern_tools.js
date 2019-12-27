@@ -196,17 +196,27 @@ global.noteValues.forEach((note, ndx) => global[note] = (duration, velocity) => 
 	}
 });
 
+class PatternArray extends Array {
+	transposeNotes(transposeAmount) {		
+		return this.map(v => v > 1 ? (v + transposeAmount) : v);
+	}
+}
+
+/**
+ * convert array of note functions and entries with multiple channels
+ * to flat numeric value (pattern) arrays.
+ */
 global.pattern = (stepsperbeat, notearray, channels = 1) => {
 	const inc = ticksperbeat() / stepsperbeat;
 
 	const channelPatterns = [];
 	
 	for(let n=0;n<channels;n++) {
-		channelPatterns.push([]);
+		channelPatterns.push(new PatternArray());
 	}
 	
 	let pattern = channelPatterns[0];
-
+	
 	for(let n = 0;n < notearray.length; n++) {
 		const notefunc = notearray[n];
 		
@@ -235,7 +245,13 @@ global.pattern = (stepsperbeat, notearray, channels = 1) => {
 			pattern = channelPatterns[0];
 		} else {
 			processNote(notefunc);
-		}				
+		}	
+		
+		if(pattern[n] === undefined) {
+			pattern[n] = 0;
+		} else if(typeof pattern[n] === 'function') {
+			pattern[n] = pattern[n]();
+		}
 	}
 	if(channels === 1) {
 		return pattern;

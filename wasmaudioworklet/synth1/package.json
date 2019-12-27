@@ -5,8 +5,5 @@
   },
   "dependencies": {
     "assemblyscript": "^0.8.1"
-  },
-  "devDependencies": {
-    "assemblyscript": ""
   }
 }
