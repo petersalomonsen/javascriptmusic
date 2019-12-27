@@ -196,10 +196,21 @@ global.noteValues.forEach((note, ndx) => global[note] = (duration, velocity) => 
 	}
 });
 
+Array.prototype.repeat = function(times = 1) {
+    const arrToRepat = this.slice(0);
+    let arr = this;
+    for(let n = 0 ; n < times ; n++ ) {
+        arr = arr.concat(arrToRepat);
+    }
+    return arr;    
+}
+
 class PatternArray extends Array {
 	transposeNotes(transposeAmount) {		
 		return this.map(v => v > 1 ? (v + transposeAmount) : v);
 	}
+
+	
 }
 
 /**
