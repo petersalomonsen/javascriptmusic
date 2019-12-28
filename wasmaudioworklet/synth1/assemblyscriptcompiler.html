@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+    <head>
+
+    </head>
+    <body>
+        <script src="https://cdn.jsdelivr.net/gh/AssemblyScript/binaryen.js@89.0.0-nightly.20191113/index.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.8.1/dist/assemblyscript.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.8.1/dist/asc.js"></script>
+        <script>
+            async function compile() {
+                const program = `
+                    export function test(): i32 {
+                        return 1 + 2;
+                    }
+                `;
+                
+                console.log(asc.compileString(program, { "runtime": "none"}));
+            }
+            compile();
+        </script>        
+    </body>
+</html>
