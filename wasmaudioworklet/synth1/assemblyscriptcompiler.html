@@ -8,14 +8,40 @@
         <script src="https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.8.1/dist/assemblyscript.js"></script>
         <script src="https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.8.1/dist/asc.js"></script>
         <script>
-            async function compile() {
-                const program = `
-                    export function test(): i32 {
-                        return 1 + 2;
-                    }
-                `;
+            async function compileAssemblyScript(sources, options, entrypoint) {
+                if (typeof sources === "string") sources = { "input.ts": sources };
+                const output = Object.create({
+                    stdout: asc.createMemoryStream(),
+                    stderr: asc.createMemoryStream()
+                });
+                var argv = [
+                    "--binaryFile", "binary",
+                    "--textFile", "text",
+                ];
+                Object.keys(options || {}).forEach(key => {
+                    var val = options[key];
+                    if (Array.isArray(val)) val.forEach(val => argv.push("--" + key, String(val)));
+                    else argv.push("--" + key, String(val));
+                });
+                asc.main(entrypoint ? argv.concat(entrypoint) : argv.concat(Object.keys(sources)), {
+                    stdout: output.stdout,
+                    stderr: output.stderr,
+                    readFile: name => sources.hasOwnProperty(name) ? sources[name] : null,
+                    writeFile: (name, contents) => output[name] = contents,
+                    listFiles: () => []
+                });
                 
-                console.log(asc.compileString(program, { "runtime": "none"}));
+                return output;
+            }
+
+            async function compile() {
+                const sources = await fetch('wasmsynthassemblyscriptsources.json').then(r => r.json());
+                
+                const {stderr, text, binary} = compileAssemblyScript(sources,
+                        { "runtime": "none", "optimizeLevel": 3, "shrinkLevel": 1},
+                        'index.ts');
+                
+                console.log(stderr);
             }
             compile();
         </script>        

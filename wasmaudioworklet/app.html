@@ -29,9 +29,24 @@
         <span>capture</span>
     </label>
   
+    &nbsp;
+
+    <label title="toggle visualizer">
+      <input id="toggleVisualizerCheckbox" type="checkbox" onclick="toggleVisualizer(this.checked)" />
+      <span>visualizer</span>
+    </label>
+
+    <div style="flex-grow: 1"></div>
+    <div class="spinner"></div>
   </div>
   <br />
+  
   <div id="editor"></div>
+  <div id="assemblyscripteditor"></div>
+  <div id="errormessages">
+    <button style="position: absolute; right: 10px" onclick="this.parentElement.style.display='none'">close</button onclick="this.parent.style.display='none'">
+    <span></span>
+  </div>
   <script>
     window.visualizeNoteOn = function() {}
   </script>

@@ -16,18 +16,14 @@ export function initAudioWorkletNode(componentRoot) {
         }
         playing = true;
     
-        const song = compileSong();
+        const song = await window.compileSong();
 
         const context = new AudioContext();
         context.resume(); // For Safari iOS
         
-        if(!window.WASM_SYNTH_LOCATION) {
-            window.WASM_SYNTH_LOCATION = 'synth1/build/index.wasm';
-        }
-        
-        const bytes = await fetch(window.WASM_SYNTH_LOCATION).then(response =>
-            response.arrayBuffer()
-        );                    
+        const bytes = window.WASM_SYNTH_LOCATION ? await fetch(window.WASM_SYNTH_LOCATION).then(response =>
+                            response.arrayBuffer()
+                        ) : window.WASM_SYNTH_BYTES;                    
         
         await context.audioWorklet.addModule('audioworkletprocessor.js');
         audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
@@ -70,8 +66,6 @@ export function initAudioWorkletNode(componentRoot) {
         };
         audioworkletnode.connect(context.destination);
 
-        window.getNoteStatusInterval = setInterval(() =>
-            audioworkletnode.port.postMessage({ getNoteStatus: true }), 50);
         componentRoot.getElementById('startaudiobutton').style.display = 'none';
         componentRoot.getElementById('stopaudiobutton').style.display = 'block';
     };
@@ -100,6 +94,17 @@ export function initAudioWorkletNode(componentRoot) {
 
     window.toggleCapture = (status) => {
         window.audioVideoRecordingEnabled = status;
+    };
+
+    window.toggleVisualizer = (status) => {
+        if(status && !window.getNoteStatusInterval) {
+            window.getNoteStatusInterval = setInterval(() =>
+                audioworkletnode.port.postMessage({ getNoteStatus: true }), 50);
+        } else if(!status && window.getNoteStatusInterval) {
+            clearInterval(window.getNoteStatusInterval);
+            new Array(128).fill(0).map((n,ndx) => ndx).forEach(n => visualizeNoteOn(n, 0));
+            window.getNoteStatusInterval = null;
+        }
     };
 
     window.setSongPositionMillis = (songPositionMillis) => {

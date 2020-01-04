@@ -2,7 +2,7 @@ import { loadScript, loadCSS } from './common/scriptloader.js';
 
 async function loadCodeMirror() {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.js');
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/mode/javascript/javascript.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/mode/javascript/javascript.js'); 
     
     await loadScript('https://codemirror.net/addon/search/search.js');
     await loadScript('https://codemirror.net/addon/search/searchcursor.js');
@@ -13,6 +13,25 @@ async function loadCodeMirror() {
     await loadScript('https://codemirror.net/addon/lint/lint.js');
     await loadScript('https://codemirror.net/addon/lint/javascript-lint.js'); 
     await loadCSS('https://codemirror.net/addon/lint/lint.css');   
+}
+
+let webassemblySynthUpdated = false;
+const synthcompilerworker = new Worker('synth1/browsercompilerwebworker.js');
+
+async function compileWebAssemblySynth(synthsource) {
+    synthcompilerworker.postMessage(synthsource);
+    
+    const result = await new Promise((resolve) => synthcompilerworker.onmessage = (msg) => resolve(msg));
+
+    if(result.data.error) {
+        throw new Error(result.data.error);
+    } else if(result.data.binary) {
+        console.log('successfully compiled webassembly synth');
+        window.WASM_SYNTH_BYTES = result.data.binary;
+        webassemblySynthUpdated = true;
+    } else {
+        console.log('no changes for webassembly synth');
+    }
 }
 
 export async function initEditor(componentRoot) {
@@ -31,6 +50,14 @@ export async function initEditor(componentRoot) {
         }
     });
 
+    const assemblyscripteditor = CodeMirror(componentRoot.getElementById("assemblyscripteditor"), {
+        value: "",
+        mode: "text/typescript",
+        theme: "monokai",
+        lineNumbers: true,
+        gutters: ["CodeMirror-lint-markers"]
+    });
+
     const global = window;
     let pattern_tools_src;
 
@@ -44,11 +71,32 @@ export async function initEditor(componentRoot) {
         }
     };
 
-    window.compileSong = function() {
+    window.compileSong = async function() {
+        const errorMessagesElement = componentRoot.querySelector('#errormessages');
+        const errorMessagesContentElement = errorMessagesElement.querySelector('span');
+        errorMessagesContentElement.innerText = '';
+        errorMessagesElement.style.display = 'none';
+
         const songsource = editor.doc.getValue();
         localStorage.setItem('storedsongcode', songsource);
+        const synthsource = assemblyscripteditor.doc.getValue();
+        localStorage.setItem('storedsynthcode', synthsource);
+
         eval(pattern_tools_src);
-        eval(songsource);
+        try {
+            window.WASM_SYNTH_LOCATION = null;
+            eval(songsource);
+            if(!window.WASM_SYNTH_LOCATION) {
+                const spinner = componentRoot.querySelector('.spinner');
+                spinner.style.display = 'block';
+                await compileWebAssemblySynth(synthsource);
+                spinner.style.display = 'none';
+            }
+        } catch(e) {
+            errorMessagesContentElement.innerText = e;
+            errorMessagesElement.style.display = 'block';
+            throw e;
+        }
         const patterns = generatePatterns();
         const instrumentPatternLists = generateInstrumentPatternLists();
         const song = {instrumentPatternLists: instrumentPatternLists, patterns: patterns, BPM: window.bpm};
@@ -97,14 +145,19 @@ export async function initEditor(componentRoot) {
         return song;
     }
 
-    function compileAndPostSong() {
+    async function compileAndPostSong() {
         try {
-            const song =  compileSong();
+            const song = await compileSong();
             
             if(audioworkletnode) {
                 audioworkletnode.port.postMessage({
-                    song: song
+                    song: song,
+                    samplerate: audioworkletnode.context.sampleRate, 
+                    toggleSongPlay: componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false,
+                    livewasmreplace: webassemblySynthUpdated,
+                    wasm: webassemblySynthUpdated ? window.WASM_SYNTH_BYTES : undefined
                 });
+                webassemblySynthUpdated = false;
             }
         } catch(e) {
             console.error(e);
@@ -112,6 +165,7 @@ export async function initEditor(componentRoot) {
     }
 
     let storedsongcode = localStorage.getItem('storedsongcode');
+    let storedsynthcode = localStorage.getItem('storedsynthcode');
         
     const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
 
@@ -128,6 +182,12 @@ export async function initEditor(componentRoot) {
         editor.doc.setValue(storedsongcode);
     } else {
         editor.doc.setValue(await fetch('emptysong.js').then(r => r.text()));
+    }
+
+    if(storedsynthcode) {
+        assemblyscripteditor.doc.setValue(storedsynthcode);
+    } else {
+        assemblyscripteditor.doc.setValue(await fetch('synth1/assembly/mixes/empty.mix.ts').then(r => r.text()));
     }
     CodeMirror.commands.save = compileAndPostSong;
     

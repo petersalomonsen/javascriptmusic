@@ -1,23 +1,22 @@
 let instance;
-let leftsamplebuffer;
-let rightsamplebuffer;
-let holdchannelvalues;
-let channelvaluesbuffer;
+let song;
 let channelvalueschecksum = 0;
-let patternsbuffer;
-let instrumentpatternslist;
+let patternsbufferptr, patternsbuffersize;
+let instrumentpatternslistptr, instrumentpatternslistsize;
 let songlength;
 let patternsize;
 let availablePatternIndex;
+let samplebufferptr;
+const SAMPLE_FRAMES = 128;
 
-const loadSong = (song) => {
+const loadSong = () => {
   patternsize = song.patterns[0].length;
   
   const extrapatterns = 100;
-
-  patternsbuffer = new Uint8Array(instance.memory.buffer,
-    instance.allocatePatterns(song.patterns.length + extrapatterns),
-      (song.patterns.length + extrapatterns) * patternsize);
+  patternsbuffersize = (song.patterns.length + extrapatterns) * patternsize;
+  patternsbufferptr = instance.allocatePatterns(song.patterns.length + extrapatterns);
+  const patternsbuffer = new Uint8Array(instance.memory.buffer, patternsbufferptr,
+      patternsbuffersize);
   
   song.patterns.splice(0, 0, new Array(patternsize).fill(0));
   availablePatternIndex = song.patterns.length;
@@ -30,9 +29,11 @@ const loadSong = (song) => {
 
   songlength = song.instrumentPatternLists[0].length;
 
-  instrumentpatternslist = new Uint8Array(instance.memory.buffer, 
-      instance.allocateInstrumentPatternList(songlength, song.instrumentPatternLists.length),
-      song.instrumentPatternLists.length * songlength);  
+  instrumentpatternslistptr = instance.allocateInstrumentPatternList(songlength, song.instrumentPatternLists.length);
+  instrumentpatternslistsize = song.instrumentPatternLists.length * songlength;
+  const instrumentpatternslist = new Uint8Array(instance.memory.buffer, 
+      instrumentpatternslistptr,
+      instrumentpatternslistsize);  
 
   for(let instrIndex = 0;
         instrIndex < song.instrumentPatternLists.length; 
@@ -43,13 +44,6 @@ const loadSong = (song) => {
         
     }
   }
-
-  channelvaluesbuffer = new Float32Array(instance.memory.buffer, 
-          instance.getCurrentChannelValuesBufferPtr(),
-          song.instrumentPatternLists.length);
-  holdchannelvalues = new Float32Array(instance.memory.buffer, 
-          instance.getHoldChannelValuesBufferPtr(),
-          song.instrumentPatternLists.length);
   instance.setBPM(song.BPM ? song.BPM : 120);
 }
 
@@ -59,35 +53,38 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
     super();
     this.port.onmessage = async (msg) => {
         if(msg.data.wasm) {
+
+          let tick = 0; 
+          if(instance && msg.data.livewasmreplace) {
+            tick = instance.getTick();
+          }
           instance = (await WebAssembly.instantiate(msg.data.wasm, {
             environment: { SAMPLERATE: msg.data.samplerate },
             env: {
               abort: () => console.log(abort)
             }
           })).instance.exports;
-
-          // make some space
-          instance.memory.grow(16);
-
-          // Is this really always 128??? 
-          const SAMPLE_FRAMES = 128;
+          
+          if(instance.setTick) {
+            // check for setTick to be present for backward compatibility
+            instance.setTick(tick);
+          }
         
-          const samplebufferptr = instance.allocateSampleBuffer(SAMPLE_FRAMES);
-          leftsamplebuffer = new Float32Array(instance.memory.buffer,
-              samplebufferptr,
-              SAMPLE_FRAMES);
-          rightsamplebuffer = new Float32Array(instance.memory.buffer,
-              samplebufferptr + (SAMPLE_FRAMES * 4),
-              SAMPLE_FRAMES);  
+          samplebufferptr = instance.allocateSampleBuffer(SAMPLE_FRAMES);
+          
         }
         if(msg.data.song) {
-          loadSong(msg.data.song);
+          song = msg.data.song;
+          loadSong();
         }
         if(msg.data.toggleSongPlay!==undefined) {    
-          console.log('toggle song play', msg.data.toggleSongPlay);
           instance.toggleSongPlay(msg.data.toggleSongPlay);
         }
-        if(msg.data.channel!==undefined && msg.data.note!==undefined) {                              
+
+        const patternsbuffer = new Uint8Array(instance.memory.buffer, patternsbufferptr, patternsbuffersize);
+        const instrumentpatternslist = new Uint8Array(instance.memory.buffer, instrumentpatternslistptr, instrumentpatternslistsize);
+
+        if(msg.data.channel!==undefined && msg.data.note!==undefined) {
           if(!instance.isPlaying()) {
             // Just play note
             instance.setChannelValue(msg.data.channel,msg.data.note);
@@ -100,7 +97,9 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
             const patternNoteIndex = quantizedTick % patternsize;
 
             const currentInstrumentPatternIndex = msg.data.channel * songlength + patternIndex;
+            
             let patternNo = instrumentpatternslist[currentInstrumentPatternIndex];
+            
             if(patternNo === 0) {
               patternNo = (availablePatternIndex ++);
               instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
@@ -130,7 +129,15 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
         }
 
         if(msg.data.getNoteStatus) {
-          if(channelvaluesbuffer) {
+          
+          
+          if(instance) {
+            const channelvaluesbuffer = new Float32Array(instance.memory.buffer, 
+              instance.getCurrentChannelValuesBufferPtr(),
+              song.instrumentPatternLists.length);
+            const holdchannelvalues = new Float32Array(instance.memory.buffer, 
+                    instance.getHoldChannelValuesBufferPtr(),
+                    song.instrumentPatternLists.length);
             let checksum = 0;
             for(let n=0;n<channelvaluesbuffer.length;n++) {
               checksum += channelvaluesbuffer[n];
@@ -138,7 +145,7 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
                 console.log('hold', n);
               }
             }
-            
+
             if(checksum > 0 && channelvalueschecksum !== checksum) {
               this.port.postMessage({channelvalues: channelvaluesbuffer});
             }
@@ -187,8 +194,12 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
     if(instance) {
       instance.fillSampleBuffer();
       
-      output[0].set(leftsamplebuffer);
-      output[1].set(rightsamplebuffer);      
+      output[0].set(new Float32Array(instance.memory.buffer,
+        samplebufferptr,
+        SAMPLE_FRAMES));
+      output[1].set(new Float32Array(instance.memory.buffer,
+        samplebufferptr + (SAMPLE_FRAMES * 4),
+        SAMPLE_FRAMES));      
     }
   
     return true;

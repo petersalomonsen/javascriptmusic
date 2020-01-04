@@ -86,25 +86,40 @@ export async function initVisualizer(componentRoot) {
     var count = positions.length / 3;
 
     const targetNoteStates = new Array(128).fill(-1);
-    window.visualizeNoteOn = (note, velocity) => targetNoteStates[note] = ((velocity / 128 ) * 2 - 1);
 
+    let animationFrameRequest = null;
     const repaint = () => {
+        animationFrameRequest = null;
+        let hasLevelsAboveZero = false;
         for(let noteIndex=0;noteIndex<128;noteIndex++) {
             const levelIndex = noteIndex * 9 + 4;
             
             if(targetNoteStates[noteIndex]>positions[levelIndex]) {
                 const inc = (targetNoteStates[noteIndex] - positions[levelIndex]) / 2;
                 positions[levelIndex] += inc;
-            } else if(targetNoteStates[noteIndex]<positions[levelIndex]) {
+                hasLevelsAboveZero = true;
+            } else if(targetNoteStates[noteIndex]<positions[levelIndex] &&
+                positions[levelIndex] > -1
+                ) {
                 positions[levelIndex] -= 0.02;
+                hasLevelsAboveZero = true;
             }
         }
+
+        if(hasLevelsAboveZero) {
         
-        // Bind the position buffer.
-        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-        gl.drawArrays(primitiveType, offset, count);
-        requestAnimationFrame(repaint);
+            // Bind the position buffer.
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+            gl.drawArrays(primitiveType, offset, count);
+            animationFrameRequest = requestAnimationFrame(repaint);
+        }
     };
 
-    repaint();
+    window.visualizeNoteOn = (note, velocity) => {
+        targetNoteStates[note] = ((velocity / 128 ) * 2 - 1);
+        
+        if(!animationFrameRequest) {
+            animationFrameRequest = requestAnimationFrame(repaint);
+        }
+    };
 }

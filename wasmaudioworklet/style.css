@@ -28,9 +28,16 @@ button, input, select, .checkboxlabel {
 #editor {
     position: fixed;
     top: 50px;
-    right: 0;
+    right: 50%;
     bottom: 20px;
     left: 0;
+}
+#assemblyscripteditor {
+    position: fixed;
+    top: 50px;
+    right: 0;
+    bottom: 20px;
+    left: 50%;
 }    
 input::placeholder {
     color: #ccc;
@@ -68,4 +75,40 @@ input::placeholder {
 
 .CodeMirror-lint-tooltip {
     z-index: 99999 !important;
+}
+
+#errormessages {
+    background-color: rgba(255, 255, 255, 0.9);
+    display: none;
+    position: fixed;
+    color: red;
+    top: 60%;
+    padding: 20px;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    overflow: auto;
+}
+
+.spinner {
+    display: none;
+    border: 12px solid #f3f3f3;
+    border-radius: 50%;
+    border-top: 12px solid #3498db;
+    
+    width: 15px;
+    height: 15px;
+    -webkit-animation: spin 1s linear infinite; /* Safari */
+    animation: spin 1s linear infinite;
+  }
+  
+/* Safari */
+@-webkit-keyframes spin {
+    0% { -webkit-transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); }
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }

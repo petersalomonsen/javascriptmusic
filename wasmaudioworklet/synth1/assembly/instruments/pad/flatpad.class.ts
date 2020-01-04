@@ -78,7 +78,7 @@ export class FlatPad {
         let left = env * (osc + osc2 + osc5);
         let right = env * (osc + osc3 + osc4 );
 
-        const filterlfo = lfo + 1;
+        const filterlfo: f32 = (lfo * 0.9) + 1;
         this.filterl.update_coeffecients(FilterType.LowPass, SAMPLERATE, 
             200 + this.filterenvelope.next() * filterlfo * 10000 + 20 * (127 - this.note), Q_BUTTERWORTH);
         

@@ -6,15 +6,21 @@ export async function startVideoRecording(audioContext, audioNodeToRecord) {
     try {
         const videostream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
-            audio: true
+            audio: false
         });
 
         const audioStreamDestination = audioContext.createMediaStreamDestination();
         audioNodeToRecord.connect(audioStreamDestination);
-            
+        
+        if(sessionStorage.getItem('capturemic') === 'true') {
+            const micstream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            const micsource = audioContext.createMediaStreamSource(new MediaStream(micstream.getAudioTracks()));
+            micsource.connect(audioStreamDestination);
+        }
+
         const tracks = [
-            ...videostream.getVideoTracks(), 
-            ...audioStreamDestination.stream.getAudioTracks()
+            ...videostream.getVideoTracks(),             
+            ...audioStreamDestination.stream.getAudioTracks()            
         ];
         captureStream = new MediaStream(tracks);
 

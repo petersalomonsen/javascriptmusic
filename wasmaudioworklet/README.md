@@ -16,7 +16,14 @@ https://petersalomonsen.com/webassemblymusic/livecodev1/?gist=ea73551e352440d5f4
 # Build / Run / Export to WAW
 
 **Build**:
+
 from the [synth1](synth1) folder:
+
+`npm run createbrowsersourcebundle`
+
+this will create a json containing all the sources for the AssemblyScript compiler running in the browser.
+
+If you want to build the webassembly synth directly:
 
 `npm run asbuild` (for optimized build)
 

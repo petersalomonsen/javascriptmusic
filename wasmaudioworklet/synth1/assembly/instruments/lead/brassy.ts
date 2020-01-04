@@ -7,7 +7,7 @@ import { BiQuadFilter, FilterType, Q_BUTTERWORTH } from '../../synth/biquad';
 
 import { SineOscillator } from '../../synth/sineoscillator.class';
 import { notefreq } from '../../synth/note';
-import { SawOscillator } from '../../synth/SawOscillator.class';
+import { SawOscillator } from '../../synth/sawoscillator.class';
 
 export class BrassyLead {
     private _note: f32;

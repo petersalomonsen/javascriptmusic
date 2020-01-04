@@ -38,6 +38,10 @@ export function setBPM(BPM: f32): void {
   ticksPerSample = ticksPerSec / SAMPLERATE;
 }
 
+export function setTick(newtick: f64): void {
+  tick = newtick;
+}
+
 export function getTick(): f64 {
   return tick;
 }
