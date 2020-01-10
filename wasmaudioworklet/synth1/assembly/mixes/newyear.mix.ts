@@ -1,3 +1,6 @@
+/**
+ * Mix for "WASM song"
+ */
 import { EQBand } from "../fx/eqband";
 import { Envelope } from '../synth/envelope.class';
 import { Snare } from "../instruments/snare.class";
@@ -7,7 +10,7 @@ import { StereoSignal } from "../synth/stereosignal.class";
 import { Kick } from "../instruments/kick.class";
 import { BrassyLead } from "../instruments/lead/brassy";
 import { Hihat } from "../instruments/hihat.class";
-// import { FlatPad } from "../instruments/pad/flatpad.class";
+import { WaveShaper } from '../synth/shaper';
 import { createInstrumentArray } from '../common/mixcommon';
 import { Freeverb } from "../fx/freeverb";
 import { DelayLine } from "../fx/delayline";
@@ -16,9 +19,13 @@ import { BiQuadFilter, FilterType, Q_BUTTERWORTH } from '../synth/biquad';
 import { notefreq } from '../synth/note';
 import { SineOscillator } from '../synth/sineoscillator.class';
 import { SawOscillator } from '../synth/sawoscillator.class';
+import { TriBandStereoCompressor } from "../fx/tribandstereocompressor";
 
 export const PATTERN_SIZE_SHIFT: usize = 4;
 export const BEATS_PER_PATTERN_SHIFT: usize = 2;
+
+const tribandstereocompressor = new TriBandStereoCompressor(20,500,7000,19500);
+const ENABLE_MULTIBAND_COMPRESSOR = true;
 
 const gain: f32 = 0.5;
 
@@ -44,7 +51,7 @@ export class FlatPad {
     readonly filterl: BiQuadFilter = new BiQuadFilter();
     readonly filterr: BiQuadFilter = new BiQuadFilter();
     readonly signal: StereoSignal = new StereoSignal();
-
+  
     set note(note: f32) {        
         if(note > 1) {            
             this.lfo.frequency = 1;
@@ -113,6 +120,7 @@ export class FlatPad {
 }
   
 const pads: FlatPad[] = createInstrumentArray<FlatPad>(10, () => new FlatPad());
+let padsVolume: f32 = 1.0;
 
 class SineLead {
     private _note: f32;
@@ -148,7 +156,67 @@ class SineLead {
         this.signal.right = osc * (1 - pan);                
     } 
 }
+
+export class DriveLead {
+    private _note: f32;
+    readonly envelope: Envelope = new Envelope(0.03, 1.0, 0.6, 0.2);
+    readonly sawoscillatorl: SawOscillator = new SawOscillator();
+    readonly sawoscillatorr: SawOscillator = new SawOscillator();
+    readonly shaper: WaveShaper = new WaveShaper();
+    readonly signal: StereoSignal = new StereoSignal();
+    readonly lfoenvelope: Envelope = new Envelope(1.0, 0, 1.0, 0.1);
+    readonly lfo: SineOscillator = new SineOscillator();
+    private baseFrequency : f32;
+    private pitchbend: f32 = 0;
+
+    set note(note: f32) {        
+        if(note > 1) {   
+            this.shaper.drive = 0.5;         
+            this.baseFrequency = notefreq(note + this.pitchbend);
+            this.lfo.frequency = 8;
+            this.envelope.attack();    
+            this.lfoenvelope.attack();                    
+            this._note = note;
+        } else {
+            this.envelope.release();
+            this.lfoenvelope.release();
+        }
+        
+    }
+
+    get note(): f32 {
+        return this._note;
+    }
+
+    setPitchbend(bend: f32): void {
+      	this.pitchbend = bend;
+      	this.baseFrequency = notefreq(this._note + bend);              	
+    }
+
+    next(): void {        
+        let env: f32 = this.envelope.next();
+        if(env===0) {
+            this.signal.clear();
+            return;
+        }       
+        
+        let lfo: f32 = this.lfo.next() * 3 * this.lfoenvelope.next();
+        this.sawoscillatorl.frequency = this.baseFrequency + lfo + 0.5;
+        this.sawoscillatorr.frequency = this.baseFrequency + lfo - 0.5;
+        
+        let left = env* this.sawoscillatorl.next() + this.signal.right * 0.5;
+        left = this.shaper.process(left);
+        
+        let right = env* this.sawoscillatorr.next() + this.signal.left * 0.5;
+        right = this.shaper.process(right);
+        
+        this.signal.left = left * 0.5 + right;
+        this.signal.right = right * 0.5 + left;  
+    } 
+}
+
 const sinelead = new SineLead();
+const drivelead = new DriveLead();
 
 export function setChannelValue(channel: usize, value: f32): void {
   const setChannelValueFunctions: usize[] = [
@@ -167,7 +235,18 @@ export function setChannelValue(channel: usize, value: f32): void {
     changetype<usize>((value:f32): void => {pads[6].note = value;}),
     changetype<usize>((value:f32): void => {pads[7].note = value;}),
     changetype<usize>((value:f32): void => {pads[8].note = value;}),
-    changetype<usize>((value:f32): void => {pads[9].note = value;})
+    changetype<usize>((value:f32): void => {pads[9].note = value;}),
+    changetype<usize>((value:f32): void => {
+      if(value >  0) {
+	      padsVolume = value / 100.0;
+      }
+    }),
+    changetype<usize>((value:f32): void => {drivelead.note = value;}),
+    changetype<usize>((value:f32): void => {
+      if(value > 0) {
+	      drivelead.setPitchbend((value - 64) / 32);
+      }
+    })
     
   ];
 
@@ -179,7 +258,7 @@ const mainline = new StereoSignal();
 const reverbline = new StereoSignal();
 const freeverb = new Freeverb();
 
-const delayframes = (SAMPLERATE * (3/8) * 60 / 120) as usize;
+const delayframes = (SAMPLERATE * (6/8) * 60 / 120) as usize;
 let delayLeft: DelayLine = new DelayLine(delayframes);
 let delayRight: DelayLine = new DelayLine(delayframes);
     
@@ -198,16 +277,20 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     echoline.clear();
 
     bass.next();
-    mainline.addStereoSignal(bass.signal, 0.8, 0.5);
+    mainline.addStereoSignal(bass.signal, 1.0, 0.5);
     reverbline.addStereoSignal(bass.signal, 0.0, 0.5);
 
     lead.next();
     mainline.addStereoSignal(lead.signal, 0.8, 0.5);
-    echoline.addStereoSignal(lead.signal, 1.0, 0.5);
+    echoline.addStereoSignal(lead.signal, 0.8, 0.5);
+
+  	drivelead.next();
+    mainline.addStereoSignal(drivelead.signal, 0.1, 0.5);
+    echoline.addStereoSignal(drivelead.signal, 0.4, 0.5);
 
   	sinelead.next();
-    mainline.addStereoSignal(sinelead.signal, 0.8, 0.5);
-    echoline.addStereoSignal(sinelead.signal, 1.0, 0.5);
+    mainline.addStereoSignal(sinelead.signal, 1.0, 0.5);
+    echoline.addStereoSignal(sinelead.signal, 1.2, 0.5);
 
     kick.next();
     mainline.addStereoSignal(kick.signal, 0.8, 0.5);
@@ -220,7 +303,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 
     pads.forEach(pad => {
         pad.next();
-        mainline.addStereoSignal(pad.signal, 0.45, 0.5);
+        mainline.addStereoSignal(pad.signal, 0.45 * padsVolume, 0.5);
     });
     
     echoline.left += delayRight.read() * 0.7;
@@ -234,9 +317,15 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
     left = gain * (mainline.left + reverbline.left + echoline.left);
     right = gain * (mainline.right + reverbline.right + echoline.right);
 
-    left = eqbandl.process(left);
-    right = eqbandr.process(right);
-    
+  	if (ENABLE_MULTIBAND_COMPRESSOR) {
+        tribandstereocompressor.process(left,right,0.45, 0.6, 0.9 , 1.20, 1.05, 1.0);
+        left = tribandstereocompressor.stereosignal.left;
+        right  = tribandstereocompressor.stereosignal.right;
+    } else {
+        left = eqbandl.process(left);
+        right = eqbandr.process(right);
+    }
+
     store<f32>(leftSampleBufferPtr, left);
     store<f32>(rightSampleBufferPtr, right);    
 }

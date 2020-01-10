@@ -56,6 +56,9 @@ global.addInstrument = (name, instrument) => {
     global.instrumentDefs[name] = instrument;
 };
 
+/**
+ * prepare pattern and register it to list of patterns
+ */
 global.pp = (stepsperbeat, patterndata, channels = 1) => {
 	const channelpatterns = pattern(stepsperbeat, patterndata, channels);
 	if(channels === 1) {	
@@ -72,6 +75,9 @@ global.getPatternByName = (patternName) => {
 	return patternsMap[patternName];
 };
 
+/**
+ * Register pattern in pattern list
+ */
 global.addPattern = (name, pattern) => {	
 	if(!name) {
 		patternAutoNameCount++;
@@ -92,6 +98,16 @@ global.addPattern = (name, pattern) => {
 		patternsMap[name] = pattern;
 	}
 	return name;
+};
+
+/**
+ * Add array of prepared patterns
+ */
+global.addPatterns = (patterns) => {
+	for(let n=0;n<patterns.length;n++) {
+		patterns[n] = addPattern(null, patterns[n]);
+	}
+	return patterns;
 };
 
 global.addInstrumentGroup = (groupName, instrumentNames) => instrumentGroupMap[groupName] = instrumentNames;

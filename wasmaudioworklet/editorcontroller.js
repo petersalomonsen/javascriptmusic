@@ -18,8 +18,12 @@ async function loadCodeMirror() {
 let webassemblySynthUpdated = false;
 const synthcompilerworker = new Worker('synth1/browsercompilerwebworker.js');
 
-async function compileWebAssemblySynth(synthsource) {
-    synthcompilerworker.postMessage(synthsource);
+async function compileWebAssemblySynth(synthsource, song) {
+    synthcompilerworker.postMessage({
+        synthsource: synthsource,
+        samplerate: new AudioContext().sampleRate,
+        song: song
+    });
     
     const result = await new Promise((resolve) => synthcompilerworker.onmessage = (msg) => resolve(msg));
 
@@ -29,6 +33,11 @@ async function compileWebAssemblySynth(synthsource) {
         console.log('successfully compiled webassembly synth');
         window.WASM_SYNTH_BYTES = result.data.binary;
         webassemblySynthUpdated = true;
+    } else if(result.data.downloadWASMurl) {
+        const linkElement = document.createElement('a');
+        linkElement.href = result.data.downloadWASMurl;
+        linkElement.download = 'song.wasm';
+        linkElement.click();
     } else {
         console.log('no changes for webassembly synth');
     }
@@ -71,7 +80,7 @@ export async function initEditor(componentRoot) {
         }
     };
 
-    window.compileSong = async function() {
+    window.compileSong = async function(exportwasm=false) {
         const errorMessagesElement = componentRoot.querySelector('#errormessages');
         const errorMessagesContentElement = errorMessagesElement.querySelector('span');
         errorMessagesContentElement.innerText = '';
@@ -86,12 +95,6 @@ export async function initEditor(componentRoot) {
         try {
             window.WASM_SYNTH_LOCATION = null;
             eval(songsource);
-            if(!window.WASM_SYNTH_LOCATION) {
-                const spinner = componentRoot.querySelector('.spinner');
-                spinner.style.display = 'block';
-                await compileWebAssemblySynth(synthsource);
-                spinner.style.display = 'none';
-            }
         } catch(e) {
             errorMessagesContentElement.innerText = e;
             errorMessagesElement.style.display = 'block';
@@ -99,7 +102,25 @@ export async function initEditor(componentRoot) {
         }
         const patterns = generatePatterns();
         const instrumentPatternLists = generateInstrumentPatternLists();
-        const song = {instrumentPatternLists: instrumentPatternLists, patterns: patterns, BPM: window.bpm};
+        const song = {
+                instrumentPatternLists: instrumentPatternLists,
+                patterns: patterns, BPM: window.bpm,
+                patternsize: 1 << window.pattern_size_shift
+        };
+
+        const spinner = componentRoot.querySelector('.spinner');
+        try {
+            if(!window.WASM_SYNTH_LOCATION) {                
+                spinner.style.display = 'block';
+                await compileWebAssemblySynth(synthsource, exportwasm ? song: undefined);                
+            }
+        } catch(e) {
+            errorMessagesContentElement.innerText = e;
+            errorMessagesElement.style.display = 'block';
+            throw e;
+        }
+        spinner.style.display = 'none';
+        
         // Use as recording buffer
         window.recordedSongData = {
             instrumentPatternLists: song.instrumentPatternLists.map(pl => new Array(pl.length).fill(0)),
@@ -149,10 +170,10 @@ export async function initEditor(componentRoot) {
         try {
             const song = await compileSong();
             
-            if(audioworkletnode) {
+            if(window.audioworkletnode) {
                 audioworkletnode.port.postMessage({
                     song: song,
-                    samplerate: audioworkletnode.context.sampleRate, 
+                    samplerate: window.audioworkletnode.context.sampleRate, 
                     toggleSongPlay: componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false,
                     livewasmreplace: webassemblySynthUpdated,
                     wasm: webassemblySynthUpdated ? window.WASM_SYNTH_BYTES : undefined

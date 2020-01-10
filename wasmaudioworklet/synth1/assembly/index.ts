@@ -131,9 +131,22 @@ export function recordChannelValue(channel: usize, value: f32): void {
   setChannelValue(channel, value);
 }
 
+export function setPatternsPtr(ptr: usize): void {
+  patternsPtr = ptr;
+}
+
 export function allocatePatterns(numpatterns: i32): usize {
   patternsPtr = __alloc(numpatterns << PATTERN_SIZE_SHIFT, idof<Array<u32>>());
   return patternsPtr;
+}
+
+export function setInstrumentPatternListPtr(ptr: usize, songpatternslength: i32, numinstruments: i32): void {
+  instrumentPatternListsPtr = ptr;
+  NUM_INSTRUMENTS = numinstruments;
+  songlength = songpatternslength;
+  
+  currentChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
+  holdChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
 }
 
 export function allocateInstrumentPatternList(songpatternslength: i32, numinstruments: i32): usize {
@@ -162,6 +175,15 @@ export function fillSampleBuffer(): void {
   for(let n: usize = 0;n<sampleBufferFrames;n++) {   
     let sampleNdx: usize = n << 2; 
     mixernext(sampleBufferPtr + sampleNdx, sampleBufferPtr + sampleNdx + (sampleBufferFrames << 2));    
+    tick += ticksPerSample;
+  }
+}
+
+export function fillSampleBufferInterleaved(): void {      
+  updateInstrumentNotes();
+  for(let n: usize = 0;n<sampleBufferFrames;n++) {   
+    let sampleNdx: usize = n << 3; 
+    mixernext(sampleBufferPtr + sampleNdx, sampleBufferPtr + sampleNdx + 4);    
     tick += ticksPerSample;
   }
 }

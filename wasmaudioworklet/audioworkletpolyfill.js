@@ -14,6 +14,7 @@ if(typeof AudioWorkletNode !== 'function') {
     window.AudioWorkletNode = function(context, processorName) {
         let connected = false;
         return {
+           context: context,
            port: {
                start: function() {
                    console.log('start');

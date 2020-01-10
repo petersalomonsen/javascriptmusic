@@ -35,8 +35,10 @@
       <input id="toggleVisualizerCheckbox" type="checkbox" onclick="toggleVisualizer(this.checked)" />
       <span>visualizer</span>
     </label>
-
+    
     <div style="flex-grow: 1"></div>
+    <button onclick="compileSong(true)" title="Export WASM">&#x21E9;</button>
+    
     <div class="spinner"></div>
   </div>
   <br />
@@ -60,6 +62,6 @@
         z-index: -10"></canvas>
 
   <div class="footer">
-    webassembly music experiment - (c) 2019 peter salomonsen
+    webassembly music experiment - (c) 2019-2020 peter salomonsen
   </div>
 </div>

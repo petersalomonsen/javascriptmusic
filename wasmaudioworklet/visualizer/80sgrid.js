@@ -1,9 +1,19 @@
 "use strict";
+const fragmentShaderSource = `
+precision mediump float;
 
-export async function initVisualizer(componentRoot) {
-    const vertexShaderSource = await fetch('visualizer/80sgrid_vertex.glsl').then(res => res.text());
-    const fragmentShaderSource = await fetch('visualizer/80sgrid_fragment.glsl').then(res => res.text());
+void main() {
+    gl_FragColor = vec4(gl_FragCoord.x * 0.01, gl_FragCoord.y * 0.01, 0.6, 1); // return redish-purple
+}`;
 
+const vertexShaderSource = `
+attribute vec4 a_position;
+
+void main() {
+    gl_Position = a_position;    
+}
+`;
+export async function initVisualizer(componentRoot) {    
     const canvas = componentRoot.querySelector("#glCanvas");
     // Initialize the GL context
     const gl = canvas.getContext("webgl");
@@ -22,7 +32,6 @@ export async function initVisualizer(componentRoot) {
         return shader;
         }
 
-        console.log(gl.getShaderInfoLog(shader));
         gl.deleteShader(shader);
     }
 
@@ -36,7 +45,6 @@ export async function initVisualizer(componentRoot) {
         return program;
         }
 
-        console.log(gl.getProgramInfoLog(program));
         gl.deleteProgram(program);
     }
 
