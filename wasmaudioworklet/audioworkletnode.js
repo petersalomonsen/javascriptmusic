@@ -16,11 +16,11 @@ export function initAudioWorkletNode(componentRoot) {
         }
         playing = true;
     
-        const song = await window.compileSong();
-
         const context = new AudioContext();
-        context.resume(); // For Safari iOS
+        // For Safari iOS, MUST happen before using "await"
+        context.resume();
         
+        const song = await window.compileSong();
         const bytes = window.WASM_SYNTH_LOCATION ? await fetch(window.WASM_SYNTH_LOCATION).then(response =>
                             response.arrayBuffer()
                         ) : window.WASM_SYNTH_BYTES;                    
