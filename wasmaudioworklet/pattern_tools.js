@@ -202,11 +202,12 @@ global.noteValues = new Array(128).fill(null).map((v, ndx) =>
 );
 global.noteValues.forEach((note, ndx) => global[note] = (duration, velocity) => {
 	if(duration) {
-		let roundedDuration = Math.round(duration);
+		// round duration to the closest tick
+		let roundedDuration = Math.round(duration  * ticksperbeat());
 		if (roundedDuration === 0) {
 			roundedDuration = 1;
 		}
-		return () => new Array(roundedDuration * ticksperbeat()).fill(null).map((v, n) => n===0 ? ndx : hld);
+		return () => new Array(roundedDuration).fill(null).map((v, n) => n===0 ? ndx : hld);
 	} else {
 		return ndx;
 	}

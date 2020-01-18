@@ -196,6 +196,13 @@ export async function initEditor(componentRoot) {
         const gist = await fetch(`https://api.github.com/gists/${gistid}`).then(r => r.json());
         const songfilename = Object.keys(gist.files).find(filename => filename.endsWith('.js'));
         storedsongcode = gist.files[songfilename].content;
+
+        const synthfilename = Object.keys(gist.files).find(filename => filename.endsWith('.ts'));
+        if(synthfilename) {
+            console.log(`found synth code in ${synthfilename}`);
+            storedsynthcode = gist.files[synthfilename].content;
+        }
+
         console.log(`loaded from gist ${gistid}: ${songfilename}`);
     }
 
@@ -285,7 +292,7 @@ export async function initEditor(componentRoot) {
                 })
             }
         });
-
+        
         const groupRecordings = {};
         Object.keys(recordings).forEach(instrumentName => {
             let patterndata = recordings[instrumentName];
@@ -296,7 +303,10 @@ export async function initEditor(componentRoot) {
                         return v + '';
                     } else if(instrumentDefs[instrumentName].type === 'note') {
                         let noteLen = 1;
-                        while(patterndata[ndx + noteLen] === 1) {
+                        while(patterndata[ndx + noteLen] === 1 &&
+                            (ndx + noteLen) < patterndata.length
+                            ) {
+                            // Detect how long the note is held
                             noteLen ++;
                         }
                         const beatLength = global.ticksperbeat();
