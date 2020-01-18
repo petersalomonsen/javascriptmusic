@@ -93,7 +93,7 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
             instance.recordChannelValue(msg.data.channel,msg.data.note);
 
             const quantizedTick = Math.round(instance.getTick());
-            const patternIndex = Math.floor(quantizedTick / patternsize);  
+            const patternIndex = Math.floor(quantizedTick / patternsize) % songlength;  
             const patternNoteIndex = quantizedTick % patternsize;
 
             const currentInstrumentPatternIndex = msg.data.channel * songlength + patternIndex;
