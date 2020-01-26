@@ -18,7 +18,7 @@ export function initAudioWorkletNode(componentRoot) {
     
         const context = new AudioContext({
             latencyHint: window.latencyHint ?
-                window.latencyHint : "balanced"
+                window.latencyHint : "interactive"
         });
         // For Safari iOS, MUST happen before using "await"
         context.resume();
