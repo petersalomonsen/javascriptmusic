@@ -5,6 +5,6 @@
     "createbrowsersourcebundle": "node createbrowsertsbundle.js"
   },
   "dependencies": {
-    "assemblyscript": "^0.8.1"
+    "assemblyscript": "^0.9.2"
   }
 }

@@ -5,6 +5,8 @@ This project demonstrates writing music in Javascript. In the beginning I used N
 
 # Webassembly music in the browser
 
+See the presentation of the project from [WebAssembly summit 2020](https://youtu.be/WZp0sPDvWfw?t=18666)
+
 This is a live-coding environment for music running entirely in the browser, synthesizing music in webassembly using [AssemblyScript](https://docs.assemblyscript.org/).
 
 Sources are in the [wasmaudioworklet](wasmaudioworklet) folder.
