@@ -48,8 +48,8 @@ function createWebAssemblySongData(song) {
 import { fd_write, iovec} from 'bindings/wasi';
 import { allocateSampleBuffer, getTick, setBPM, setPatternsPtr, setInstrumentPatternListPtr, fillSampleBufferInterleaved } from './index';
 
-const patterns: i8[] = [${patternsbuffer.map(v => '' + v).join(',')}];
-const instrumentspatternlists: i8[] = [${instrumentpatternslist.map(v => '' + v).join(',')}];
+const patterns: u8[] = [${patternsbuffer.map(v => '' + v).join(',')}];
+const instrumentspatternlists: u8[] = [${instrumentpatternslist.map(v => '' + v).join(',')}];
 
 export function _start(): void {
     const samplebuf = allocateSampleBuffer(128);
