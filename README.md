@@ -5,25 +5,17 @@ This project demonstrates writing music in Javascript. In the beginning I used N
 
 # Webassembly music in the browser
 
-See the presentation of the project from [WebAssembly summit 2020](https://youtu.be/C8j_ieOm4vE)
-
 This is a live-coding environment for music running entirely in the browser, synthesizing music in webassembly using [AssemblyScript](https://docs.assemblyscript.org/).
+
+You can test it yourself here (remove the `gist` url parameter if you want a clean project ):
+https://petersalomonsen.com/webassemblymusic/livecodev2/?gist=5b795090ead4f192e7f5ee5dcdd17392
+
+Demo videos:
+https://www.youtube.com/watch?v=C8j_ieOm4vE&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7
 
 Sources are in the [wasmaudioworklet](wasmaudioworklet) folder.
 
-### Live demos / videos
-
-Live music coding:
-https://petersalomonsen.com/webassemblymusic/livecodev1/ (demo video https://youtu.be/ZQUo2fZwUgw)
-
-Simple recorder / sequencer:
-https://petersalomonsen.com/webassemblymusic/test1/ (demo video https://youtu.be/6dem1GHOmos)
-
-And there are more videos that can be seen here:
-
-https://www.youtube.com/watch?v=ThkIgYcvkMU&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7
-
-This is all very much work in progress. More stuff coming soon....
+There are also more resources like articles and earlier versions at https://petersalomonsen.com
 
 # 4klang
 

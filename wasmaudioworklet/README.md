@@ -9,9 +9,9 @@ A synth WebAssembly module is small, and the current examples typically less tha
 
 [AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet) is used for playing music on the web with low latency, and this is currently only supported for the Chrome web browser. I've written a [polyfill](audioworkletpolyfill.js) for being able to play in other browsers, but you don't get the low latency.
 
-More about the Javascript API coming soon, but you'll find examples to study in the [synth1/songs](synth1/songs) folder, and there are also my [gists](https://gist.github.com/petersalomonsen). You can easily load music from a gist by referencing to it in the URL, e.g.:
+Go to https://petersalomonsen.com for resources like articles and videos. Also there are examples to study in the [synth1/songs](synth1/songs) folder, and there are also my [gists](https://gist.github.com/petersalomonsen). You can easily load music from a gist by referencing to it in the URL, e.g.:
 
-https://petersalomonsen.com/webassemblymusic/livecodev1/?gist=ea73551e352440d5f470c6af89d7fe7c
+https://petersalomonsen.com/webassemblymusic/livecodev2/?gist=a74d2d036b3ecaa01af4e0f6d03ae7c4
 
 # Build / Run / Export to WAW
 
@@ -43,3 +43,30 @@ the [synth1/index.js](synth1/index.js) script will output audio to `stdout`, so 
 
 `node index.js | sox -S -t raw -b 32 -e float -r 44100 -c 2 - out.wav`
 
+## Export to WASM in the browser
+
+**`WASM` should be pronounced like `AWESOME` starting with a `W`**
+
+In the browser there's a button in the upper right with download icon with tooltip `Export WASM`.
+Pressing this will generate and download a `WASM` file.
+
+You can run this `WASM` file in the browser, NodeJS or with a WebAssembly runtime like [WASM3](https://github.com/wasm3/wasm3) or [WASMER](https://wasmer.io/).
+
+See examples with WASM3 here: https://github.com/wasm3/wasm3/tree/master/test/benchmark/wasmsynth
+
+You can the WASM file to export raw audio data and import into e.g. Audacity with 32-bit float, little endian, stereo.
+
+`wasmer song.wasm > song.raw`
+
+Play directly from Wasmer by piping to sox:
+
+`wasmer song.wasm | sox -S -t raw -b 32 -e float -r 44100 -c 2 - -d`
+
+Create wav directly from Wasmer by piping to sox:
+
+`wasmer song.wasm | sox -S -t raw -b 32 -e float -r 44100 -c 2 - song.wav`
+
+or use the exported WASM binary from nodejs or the browser.
+
+This was also demonstrated at the WebAssembly summit 2020:
+https://www.youtube.com/watch?v=C8j_ieOm4vE&feature=youtu.be&t=1596
