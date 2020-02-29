@@ -1,4 +1,3 @@
-import { readFileSync } from 'fs';
 import { periodToSampleRatePAL } from './protrackermodwriter.js';
 
 export function resampleAndNormalize(buf) {
@@ -60,7 +59,7 @@ export function trimsampledata(buf) {
 }
 
 export function createSamples(wasmModulePath, createSampleCallbacks) {
-    const compiled = new WebAssembly.Module(readFileSync(wasmModulePath));
+    const compiled = new WebAssembly.Module(wasmModulePath);
     const imports = { 
         environment: {
             SAMPLERATE: periodToSampleRatePAL(a3()[1]) * 2
@@ -80,21 +79,29 @@ export function createSamples(wasmModulePath, createSampleCallbacks) {
         instance.memory.grow(16);
     
         const instancebufferptr = instance.allocateSampleBuffer(INSTANCE_FRAMES);
-        const instancebuffer = new Float32Array(instance.memory.buffer, instancebufferptr, INSTANCE_FRAMES);
-        
         instance.toggleSongPlay(false);
     
+        const createSampleCallbackOptions = {
+            offsetFrames: 0
+        };
         const sample = Object.assign({
                 finetune: 0,
                 volume: 64,
                 loopstart: 0,
                 looplength: 0,
                 looptransitionlength: 0
-            }, createSampleCallBack(instance)
+            }, createSampleCallBack(instance, createSampleCallbackOptions)
         );
+
+        const instancebuffer = new Float32Array(
+                    instance.memory.buffer,
+                    instancebufferptr + createSampleCallbackOptions.offsetFrames * 4,
+                    INSTANCE_FRAMES - createSampleCallbackOptions.offsetFrames);
+
         if (sample.looptransitionlength) {
             makeClickFreeLoop(instancebuffer, sample.loopstart * 2, sample.looplength * 2, sample.looptransitionlength);
         }
+
         sample.data = resampleAndNormalize(instancebuffer);
         if (sample.looplength) {
             // delete sample data after loop end
@@ -102,7 +109,7 @@ export function createSamples(wasmModulePath, createSampleCallbacks) {
         } else {
             sample.data = trimsampledata(sample.data);
         }
-        global[sample.funcname] = (note, command, value) => 
+        self[sample.funcname] = (note, command, value) => 
             note === undefined ?
             sampleno + 1 :
             typeof note === 'function' ?
