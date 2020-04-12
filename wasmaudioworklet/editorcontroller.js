@@ -18,10 +18,10 @@ async function loadCodeMirror() {
 let webassemblySynthUpdated = false;
 const synthcompilerworker = new Worker('synth1/browsercompilerwebworker.js');
 
-async function compileWebAssemblySynth(synthsource, song) {
+async function compileWebAssemblySynth(synthsource, song, samplerate) {
     synthcompilerworker.postMessage({
         synthsource: synthsource,
-        samplerate: new AudioContext().sampleRate,
+        samplerate: samplerate,
         song: song
     });
     
@@ -87,6 +87,13 @@ export async function initEditor(componentRoot) {
         errorMessagesElement.style.display = 'none';
 
         const songsource = editor.doc.getValue();
+
+        let songmode = 'WASM';
+        if (songsource.indexOf('SONGMODE=PROTRACKER') >= 0) {
+            // special mode: we are building an amiga protracker module
+            songmode = 'protracker';
+        }
+
         localStorage.setItem('storedsongcode', songsource);
         const synthsource = assemblyscripteditor.doc.getValue();
         localStorage.setItem('storedsynthcode', synthsource);
@@ -94,7 +101,9 @@ export async function initEditor(componentRoot) {
         eval(pattern_tools_src);
         try {
             window.WASM_SYNTH_LOCATION = null;
-            eval(songsource);
+            if (songmode === 'WASM') {
+                eval(songsource);
+            }
         } catch(e) {
             errorMessagesContentElement.innerText = e;
             errorMessagesElement.style.display = 'block';
@@ -112,7 +121,11 @@ export async function initEditor(componentRoot) {
         try {
             if(!window.WASM_SYNTH_LOCATION) {                
                 spinner.style.display = 'block';
-                await compileWebAssemblySynth(synthsource, exportwasm ? song: undefined);                
+                await compileWebAssemblySynth(synthsource,
+                        exportwasm && songmode === 'WASM' ? song: undefined,
+                        songmode === 'protracker' ? 55856:
+                        new AudioContext().sampleRate                        
+                    );                
             }
         } catch(e) {
             errorMessagesContentElement.innerText = e;
@@ -120,7 +133,28 @@ export async function initEditor(componentRoot) {
             throw e;
         }
         spinner.style.display = 'none';
-        
+        console.log('song mode', songmode);
+        if (songmode === 'protracker') {
+            const songworker = new Worker(
+                URL.createObjectURL(new Blob([
+                    songsource.split("from './lib/").join(`from '${location.origin}${location.pathname === '/' ? '' : location.pathname}/synth1/modformat/lib/`)
+                ],{type: "application/javascript"})), {type: "module"}
+            );
+            const modreciever = new Promise((resolve => songworker.onmessage = msg => resolve(
+                    msg.data
+                )
+            ));
+            songworker.postMessage({WASM_SYNTH_BYTES: WASM_SYNTH_BYTES});
+            
+            const song = await modreciever;
+            if(exportwasm) {
+                const linkElement = document.createElement('a');
+                linkElement.href = URL.createObjectURL(new Blob([song.modbytes]), 'application/octet-stream');
+                linkElement.download = `${song.name.replace(/[^A-Za-z0-9]+/g,'_').toLowerCase()}.mod`;
+                linkElement.click();
+            }
+            return song;
+        }
         // Use as recording buffer
         window.recordedSongData = {
             instrumentPatternLists: song.instrumentPatternLists.map(pl => new Array(pl.length).fill(0)),
