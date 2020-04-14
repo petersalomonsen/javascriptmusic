@@ -2,7 +2,11 @@ import { stopVideoRecording, startVideoRecording } from './screenrecorder/screen
 
 // The code in the main global scope.
 
+/**
+ * @param {Node} componentRoot
+ */
 export function initAudioWorkletNode(componentRoot) {
+    /** @type {AudioWorkletNode} */
     let audioworkletnode;
     let playing = false;
     window.recordedmidi = [];

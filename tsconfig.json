@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    // Use TypeScript only for type checking.
+    "noEmit": true,
+
+    // Run TypeScript on JS files.
+    "checkJs": true,
+    "allowJs": true,
+
+    // Strict settings to enforce the most type-safe code.
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["./wasmaudioworklet/**/*"]
+}
