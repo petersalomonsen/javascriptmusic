@@ -4,11 +4,11 @@ import { initVisualizer } from './visualizer/80sgrid.js';
 import { initEditor } from './editorcontroller.js';
 
 customElements.define('app-javascriptmusic',
-  class extends HTMLElement {
+  class JavaScriptMusic extends HTMLElement {
     constructor() {
       super();
       
-      const shadowRoot = this.attachShadow({mode: 'open'});
+      this.shadowRoot = this.attachShadow({mode: 'open'});
       this.init();      
     }
 

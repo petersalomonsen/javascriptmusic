@@ -6,12 +6,21 @@
  */
 
 if(typeof AudioContext !== 'function') {
-    window.AudioContext = window.webkitAudioContext;
+    /** @type {any} */
+    const win = window
+    window.AudioContext = win.webkitAudioContext;
 }
 
 if(typeof AudioWorkletNode !== 'function') {
     console.log('No audioworklet support - using polyfill');
-    window.AudioWorkletNode = function(context, processorName) {
+
+    window.AudioWorkletNode = /** @type {AudioWorkletNode} */(AudioWorkletNodePolyfill)
+
+    /** 
+     * @param {any} context
+     * @param {any} processorName
+     */
+    function AudioWorkletNodePolyfill(context, processorName) {
         let connected = false;
         return {
            context: context,
@@ -114,3 +123,6 @@ if(typeof AudioWorkletNode !== 'function') {
         window.audioWorkletProcessors[name] = new processorClass();
     }
 }
+
+// For TypeScript to recognize the file as a "module".
+export {}
