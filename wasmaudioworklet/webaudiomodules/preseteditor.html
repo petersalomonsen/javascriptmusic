@@ -1,0 +1,56 @@
+<style>
+    table {
+        border-left: solid #050 2px;
+        border-spacing: 0px;
+    }
+    tbody {
+        border-left: solid #030 1px;
+        border-top: solid #030 1px;
+    }
+    th, td {
+        border-right: solid #030 1px;
+        border-bottom: solid #030 1px;
+        padding: 5px;
+    }
+    button, input, select, .checkboxlabel {
+        font-family: monospace;
+        background-color: #cfc;
+        border-color: #4a4;
+        border-width: 1px;
+        color:#050;
+        padding: 2px;
+        font-size: 12px;
+        
+        border-radius: 4px;
+        white-space: nowrap;
+        
+        margin: 2px;
+        user-select: none;
+    }
+</style>
+<template id="presetselecttemplate">
+    <tr>
+        <td><span id="channelspan"></span></td>
+        <td><span id="currentinstrumentspan"></span></td>
+        <td>
+            <select id="bankselect">
+                <option disabled selected value>select bank...</option>
+            </select>
+            <select id="instrumentselect">
+                <option disabled selected value>select instrument...</option>
+            </select>
+        </td>
+    </tr>
+</template>
+<table>
+    <thead>
+        <tr>
+            <th>channel</th>
+            <th>instrument</th>
+            <th>select preset</th>
+        </tr>
+    </thead>
+    <tbody id="instrumentrows">
+
+    </tbody>
+</table>
