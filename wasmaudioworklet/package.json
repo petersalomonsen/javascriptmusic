@@ -1,0 +1,15 @@
+{
+    "name": "wasmmusic",
+    "description": "Javascript/WebAssembly live coding environment for music and synthesis",
+    "author": {
+        "name": "Peter Salomonsen",
+        "url": "https://petersalomonsen.com"
+    },
+    "type": "module",
+    "scripts": {
+        "test": "mocha --colors --recursive **/*.spec.js"
+    },
+    "devDependencies": {
+        "mocha": "^7.1.1"
+    }
+}

@@ -7,6 +7,16 @@ export async function loadScript(src) {
     });
 }
 
+export async function loadScriptModuleFromText(text) {
+  return new Promise((resolve) => {
+    const scriptelement = document.createElement('script');
+    scriptelement.onload = () => resolve();
+    scriptelement.src = URL.createObjectURL(new Blob([text], {type: "application/javascript"}));
+    scriptelement.type = "module";
+    document.documentElement.appendChild(scriptelement);
+  });
+}
+
 export async function loadCSS(href) {
   return new Promise((resolve) => {
     const head  = document.getElementsByTagName('head')[0];
