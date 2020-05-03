@@ -1,3 +1,5 @@
+![](https://travis-ci.com/petersalomonsen/javascriptmusic.svg?branch=master)
+
 Music written in Javascript
 ===========================
 
