@@ -35,6 +35,22 @@ export const controlchange = (controller, start, target, duration, steps) => asy
     pattern.controlchange(controller, start, target ? target : start, duration, steps)
 };
 
+export function quantize(noteEvents, stepsperbeat, percentage = 1) {
+    return noteEvents.map(noteEvent => {
+        const scaledUp = noteEvent[0] * stepsperbeat;
+        const diff = (scaledUp - Math.round(scaledUp)) * percentage;
+
+        return [ 
+            (scaledUp - diff) / stepsperbeat,
+            noteEvent[1]
+        ]
+    });    
+}
+
+Array.prototype.quantize = function(stepsperbeat, percentage = 1) {
+    return quantize(this, stepsperbeat, percentage);
+}
+
 export class TrackerPattern extends Pattern {
     constructor(output, channel, stepsperbeat = 1, defaultvelocity = 100) {
         super(output);            

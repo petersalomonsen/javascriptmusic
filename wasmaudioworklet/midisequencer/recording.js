@@ -43,12 +43,12 @@ function convertToBeats(notes, bpm) {
             ;
 }
 
-function quantize(notes, stepsperbeat) {
+function quantize(notes, stepsperbeat   ) {
     notes.forEach(note => note[3] = Math.round(note[3] * stepsperbeat) / stepsperbeat );
     return notes;
 }
 
-function toTrackerPattern(notes, stepsperbeat) {
+function toTrackerPattern(notes) {
     const perchannel = {};
     notes.forEach(note => {
         if (!perchannel[note[0]]) {
