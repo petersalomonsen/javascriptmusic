@@ -64,16 +64,17 @@ export function beatToTimeMillis(beatNo) {
 }
 
 export async function waitForBeat(beatNo) {
-        let timeout = Math.floor((((beatNo) / bpm) * (60*1000)) - 
-                (currentTime() -
-                startTime)); 
-        
-        if(timeout<0) {
-            timeout = 0;
-        }
+    let timeout = Math.floor((((beatNo) / bpm) * (60*1000)) -
+            (currentTime() -
+            startTime));
+    
+    if(timeout<0) {
+        timeout = 0;
+    }
 
-        return pushPendingEvent(timeout);
-    };
+    return pushPendingEvent(timeout);
+}
+
 export class Pattern {
     constructor(output) {
         this.output = output;

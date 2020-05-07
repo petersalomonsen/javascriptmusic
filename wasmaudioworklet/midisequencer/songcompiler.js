@@ -61,12 +61,19 @@ export async function compileSong(songsource) {
     const songfunc = new AsyncFunction(songargkeys, songsource);
     
     let playing = true;
+    let err;
+
     songfunc.apply(
         null,
         songargkeys.map(k => songargs[k])
-    ).then(() => playing = false);
+    ).then(() => playing = false).catch(e => {
+        err = e;
+    });
 
     while (playing) {
+        if (err) {
+            throw err;
+        }
         await nextTick();
     }
 

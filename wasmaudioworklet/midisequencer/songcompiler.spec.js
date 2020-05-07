@@ -31,6 +31,16 @@ loopHere();
         assert.equal(eventlist[eventlist.length-1].time, beatTime(2));
         assert.equal(eventlist[eventlist.length-1].message[0], -1);
     }
-    )
+    );
+    it('should not hang when writing wrong code', async () => {
+        let hasError = false;
+        try {
+            await compileSong(`createTrack(5).steps(4,[controlChange(91, 100)]);`);
+        } catch (e) {
+            assert.equal('controlChange is not defined', e.message);
+            hasError = true;
+        }
+        assert.equal(hasError, true);
+    });
 }
 );
