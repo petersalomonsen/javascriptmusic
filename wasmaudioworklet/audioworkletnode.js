@@ -36,13 +36,13 @@ export function initAudioWorkletNode(componentRoot) {
                 bytes = await fetch('https://unpkg.com/wasm-mod-player@0.0.3/wasm-mod-player.wasm')
                                 .then(r => r.arrayBuffer());
 
-                await context.audioWorklet.addModule('modaudioworkletprocessor.js');
+                await context.audioWorklet.addModule('./modaudioworkletprocessor.js');
             } else {
                 bytes = window.WASM_SYNTH_LOCATION ? await fetch(window.WASM_SYNTH_LOCATION).then(response =>
                                     response.arrayBuffer()
                                 ) : window.WASM_SYNTH_BYTES;                    
                 
-                await context.audioWorklet.addModule('audioworkletprocessor.js');
+                await context.audioWorklet.addModule('./audioworkletprocessor.js');
             }
 
             audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
