@@ -11,40 +11,53 @@ if(typeof AudioContext !== 'function') {
 
 if(typeof AudioWorkletNode !== 'function') {
     console.log('No audioworklet support - using polyfill');
-    window.AudioWorkletNode = function(context, processorName) {
-        let connected = false;
-        return {
-           context: context,
-           port: {
-               start: function() {
-                   console.log('start');
-                   window.audioWorkletProcessors[processorName].port.postMessage = (msg) => {
-                    this.onmessage({data: msg});
-                   }
-               },
-               postMessage: function(msg) {
-                    window.audioWorkletProcessors[processorName].port.onmessage({
+    AudioContext.prototype.audioWorklet = {
+        addModule: async function(modulepath) {
+            await import(modulepath).then(module => console.log('module loaded', module));
+        }        
+    };
+
+    window.AudioWorkletNode = class AudioWorkletNode {
+        constructor(context, processorName, options) {
+            this.connected = false;
+            AudioWorkletGlobalScope.sampleRate = context.sampleRate;
+
+            this.processorInstance = new window.audioWorkletProcessors[processorName](options);
+            this.processorInstance.port.postMessage = (msg) => {
+                setTimeout(() => this.onmessage({data: msg}), 0);
+            }
+
+            this.context = context;
+            this.port = {
+                start: () => true,
+                postMessage: async (msg) => {
+                    this.processorInstance.port.onmessage({
                         data: msg
                     });
                }
-           },
-           connect: function(destination) {
-                console.log('connect', destination);
+           };
+        }
+        
+        connect(destination) {
+            console.log('connect', destination);
+            
+            let chunkIndex = 0;
+            let chunkOffsetTime = 0;
+
+            let processorBuffers = 1;
+            let latencyStable = false;
+
+            const createAudioChunk = () => {
+                if (!this.connected) {
+                    return;
+                }
+                const processor = this.processorInstance;
                 
-                let chunkIndex = 0;
-                let chunkOffsetTime = 0;
-
-                let processorBuffers = 1;
-
-                const createAudioChunk = () => {
-                    if(!connected) {
-                        return;
-                    }
-                    const processor = window.audioWorkletProcessors[processorName];
-                    
-                    const processorFrames = 128;
-                    const processorBuffer = context.createBuffer(2, processorFrames * processorBuffers, context.sampleRate);
-                    
+                const processorFrames = 128;
+                const processorBuffer = this.context.createBuffer(2, processorFrames * processorBuffers,
+                                                        this.context.sampleRate);
+                
+                if ( latencyStable ) {
                     for(let processorBufferIndex = 0; processorBufferIndex < processorBuffers; processorBufferIndex++) {
                         const subarrayindex = processorBufferIndex * processorFrames;
                         processor.process([],[[
@@ -52,65 +65,65 @@ if(typeof AudioWorkletNode !== 'function') {
                             processorBuffer.getChannelData(1).subarray(subarrayindex, subarrayindex + processorFrames)
                         ]]);
                     }
+                }
 
-                    const bufferSource = context.createBufferSource();
-                    bufferSource.buffer = processorBuffer;
-                    
-                    bufferSource.connect(destination);
-                    
-                    const chunkStartTime = chunkOffsetTime +
-                                            ((chunkIndex * processorFrames * processorBuffers) /
-                                                context.sampleRate);
-                    chunkIndex ++;
-
-                    bufferSource.start(chunkStartTime);
-                                        
-                    let nextChunkTimeout = chunkStartTime - context.currentTime;
-                    // console.log(chunkStartTime, context.currentTime, nextChunkTimeout, processorBuffers);
-                    if(nextChunkTimeout < 0.01 ) {
-                        // Increase buffer size if timeout to next chunk is less than 10ms
-                        nextChunkTimeout = 0;
-                        processorBuffers++;
-                        chunkIndex = 1;
-                        chunkOffsetTime = chunkStartTime;
-                    }
-                    
-                    setTimeout(() => createAudioChunk(), nextChunkTimeout * 1000);
-                };
-                connected = true;
-                createAudioChunk();
+                const bufferSource = this.context.createBufferSource();
+                bufferSource.buffer = processorBuffer;
                 
-           },
-           disconnect: function() {
-               connected = false;
-               console.log('disconnect');
-           }
-       };
-    }
-    AudioContext.prototype.audioWorklet = {
-        addModule: async function(modulepath) {
-            const processorSource = await (await fetch(modulepath)).text();            
-            const processorFunction = new Function(processorSource);
-            await processorFunction();
-        }        
+                bufferSource.connect(destination);
+                
+                const chunkStartTime = chunkOffsetTime +
+                                        ((chunkIndex * processorFrames * processorBuffers) /
+                                            this.context.sampleRate);
+                chunkIndex ++;
+
+                bufferSource.start(chunkStartTime);
+                                    
+                let nextChunkTimeout = chunkStartTime - this.context.currentTime;
+                // console.log(chunkStartTime, context.currentTime, nextChunkTimeout, processorBuffers);
+                if(nextChunkTimeout < 0.005 ) {
+                    // Increase buffer size if timeout to next chunk is less than 10ms
+                    nextChunkTimeout = 0;
+                    processorBuffers++;
+                    chunkIndex = 1;
+                    chunkOffsetTime = chunkStartTime;
+                } else {
+                    latencyStable = true;
+                }
+                
+                setTimeout(() => createAudioChunk(), nextChunkTimeout * 1000);
+            };
+            this.connected = true;
+            createAudioChunk();
+            
+        }
+
+        disconnect() {
+            this.connected = false;
+            console.log('disconnect');
+        }
     };
 
     class AudioWorkletProcessorPolyfill {
         constructor() {
             this.port = {
                 onmessage: function() {},
-                postMessage: function(msg) {
-
-                },
+                postMessage: function(msg) {},
                 start: function() {}
             };
         }
     };
-    window.AudioWorkletProcessor = AudioWorkletProcessorPolyfill;
-    window.registerProcessor = function(name, processorClass) {
-        if(!window.audioWorkletProcessors) {
-            window.audioWorkletProcessors = {};
+
+    class AudioWorkletGlobalScope {
+        static registerProcessor(name, processorClass) {
+            if(!window.audioWorkletProcessors) {
+                window.audioWorkletProcessors = {};
+            }
+            window.audioWorkletProcessors[name] = processorClass;
         }
-        window.audioWorkletProcessors[name] = new processorClass();
-    }
+    };
+
+    window.AudioWorkletProcessor = AudioWorkletProcessorPolyfill;
+    window.registerProcessor = AudioWorkletGlobalScope.registerProcessor;
+    window.AudioWorkletGlobalScope = AudioWorkletGlobalScope;
 }

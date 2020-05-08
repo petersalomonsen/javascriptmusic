@@ -1,7 +1,11 @@
 // YOSHIMI WAM Processor
 // Jari Kleimola 2018-19 (jari@webaudiomodules.org)
+// Extended by Peter Salomonsen in 2020 to play midi event data
 
-import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from '../midisequencer/sequenceconstants.js';
+// Firefox does not support importing these from ../midisequencer/sequenceconstants.js
+const SEQ_MSG_LOOP = -1;
+const SEQ_MSG_START_RECORDING = -2;
+const SEQ_MSG_STOP_RECORDING = -3;
 
 class YOSHIMIAWP extends AudioWorkletGlobalScope.WAMProcessor
 {
@@ -58,9 +62,10 @@ class YOSHIMIAWP extends AudioWorkletGlobalScope.WAMProcessor
           this.onmsg(msg.verb, msg.prop, msg.data);
           if (msg.prop.startsWith('patch')) {
             this.port.postMessage({ paramsxml: this.getParametersXML(this.inst)});
+          } else {
+            // ACK
+            this.port.postMessage({ type: msg.type }); 
           }
-          // ACK
-          this.port.postMessage({ type: msg.type }); 
         }        
         break;
     }

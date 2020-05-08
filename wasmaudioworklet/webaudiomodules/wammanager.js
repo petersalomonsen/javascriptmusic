@@ -13,7 +13,6 @@ export async function startWAM(actx) {
     if (!wamstarted) {    
         wamstarted = true;
         console.log('starting WAM synth');
-        await loadScript("https://unpkg.com/wasm-yoshimi@0.0.1/libs/audioworklet.js"); 
         await loadScript("https://unpkg.com/wasm-yoshimi@0.0.1/libs/wam-controller.js");
         await loadScript("https://unpkg.com/wasm-yoshimi@0.0.1/libs/gunzip.js")
         await loadScript("webaudiomodules/yoshimi.js");

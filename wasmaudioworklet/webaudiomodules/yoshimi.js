@@ -20,10 +20,10 @@ WAM.YOSHIMI = class YOSHIMI extends WAMController
   }
 
   onmessage(msg) {
-      if (this.waitForMessageResolve) {
-        this.waitForMessageResolve(msg);
-        this.waitForMessageResolve = null;
-      }
+    if (this.waitForMessageResolve) {
+      this.waitForMessageResolve(msg);
+      this.waitForMessageResolve = null;
+    }
   }
 
   async postSynthSource(synthsource) {
@@ -56,7 +56,7 @@ WAM.YOSHIMI = class YOSHIMI extends WAMController
     // YOSHIMI.wasm = await YOSHIMI.load("yoshimi.wasm", "bin");
     // YOSHIMI.js = await YOSHIMI.load("yoshimi.js", "text");
     await actx.audioWorklet.addModule("https://unpkg.com/wasm-yoshimi@0.0.1/libs/wam-processor.js");
-    await actx.audioWorklet.addModule("webaudiomodules/yoshimi-awp.js");
+    await actx.audioWorklet.addModule("./webaudiomodules/yoshimi-awp.js");
   }
 
   static async load (url,type) {

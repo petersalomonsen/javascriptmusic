@@ -11,5 +11,5 @@ export function getInstrumentNamesFromYoshimiXML(xml) {
         }
         instrumentNames.push(instrumentName);
     }
-    return instrumentNames
+    return instrumentNames;
 }
