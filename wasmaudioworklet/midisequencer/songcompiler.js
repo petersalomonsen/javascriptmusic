@@ -1,4 +1,4 @@
-import { resetTick, setBPM, nextTick, currentTime, releasePendingEvents } from './pattern.js';
+import { resetTick, setBPM, nextTick, currentTime, releasePendingEvents, waitForBeat } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions } from './trackerpattern.js';
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from './sequenceconstants.js';
 
@@ -47,6 +47,7 @@ const songargs = {
     'loopHere': loopHere,
     'pitchbend': pitchbend,
     'controlchange': controlchange,
+    'waitForBeat': waitForBeat,
     'startRecording': startRecording,
     'stopRecording': stopRecording
 };
