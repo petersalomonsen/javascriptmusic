@@ -2,6 +2,8 @@ const noteNumberArray = new Array(128).fill(null).map((v, ndx) =>
 (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
 );
 
+const NOTEARRAY_CONTROL_CHANGE = -1;
+
 function extractNotes(data) {
     const notes = [];
     const ongoingNoteMap = {};
@@ -13,8 +15,7 @@ function extractNotes(data) {
 
         if((msg[0] & 0xf0) === 0x90 && msg[2] > 0) {
             // Note on
-            ongoingNoteMap[notekey(msg)] = {startTime: currentTime, velocity: msg[2]};
-            
+            ongoingNoteMap[notekey(msg)] = {startTime: currentTime, velocity: msg[2]};            
         } else if(
             ((msg[0] & 0xf0) === 0x80 || // note off message
             ((msg[0] & 0xf0) === 0x90 && msg[2] === 0)) // note on with 0 velocity
@@ -30,6 +31,12 @@ function extractNotes(data) {
             const notenumber = (key & 0xff);
             const channel = (key & 0xf00) >> 8;
             notes.push([channel, notenumber, startMsg.velocity, timestamp, duration]);
+        } else if ((msg[0] & 0xf0) === 0xb0) {
+            // control change
+            const channel = msg[0] & 0xf;
+            const controlNumber = msg[1];
+            const controlValue = msg[2];
+            notes.push([channel, NOTEARRAY_CONTROL_CHANGE, controlValue, currentTime, controlNumber]);
         }
     });
     return notes;
@@ -39,7 +46,7 @@ function convertToBeats(notes, bpm) {
     return notes.map(note => [note[0], 
                 note[1], note[2], 
                 (note[3] * bpm) / 60 , 
-                (note[4] * bpm) / 60  ])
+                note[1] < 0 ? note[4] : (note[4] * bpm) / 60  ])
             ;
 }
 
@@ -56,11 +63,16 @@ function toTrackerPattern(notes) {
         }
         perchannel[note[0]].push(note);
     });
-    return Object.keys(perchannel).map(channel => 
+    return Object.keys(perchannel).map(channel =>
         `createTrack(${channel}).play([` +
-            perchannel[channel].map(note => `[ ${note[3].toFixed(2)}, ${noteNumberArray[note[1]]}(${note[4].toFixed(2)}, ${note[2]}) ]`)
-                .join(',\n')
-                + ']);\n'
+            perchannel[channel].map(note => {
+                switch(note[1]) {
+                    case NOTEARRAY_CONTROL_CHANGE:
+                        return `[ ${note[3].toFixed(2)}, controlchange(${note[4]}, ${note[2]}) ]`;
+                    default:
+                        return `[ ${note[3].toFixed(2)}, ${noteNumberArray[note[1]]}(${note[4].toFixed(2)}, ${note[2]}) ]`
+                }
+            }).join(',\n') + ']);\n'
     ).join('\n');
 }
 
