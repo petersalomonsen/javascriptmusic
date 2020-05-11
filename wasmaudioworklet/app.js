@@ -4,6 +4,7 @@ import { initVisualizer } from './visualizer/80sgrid.js';
 import { initEditor } from './editorcontroller.js';
 
 let componentRoot;
+let appReadyPromises = [];
 
 customElements.define('app-javascriptmusic',
   class extends HTMLElement {
@@ -18,11 +19,19 @@ customElements.define('app-javascriptmusic',
         const apphtml = await fetch('app.html').then(r => r.text());
         this.shadowRoot.innerHTML = apphtml;
         initAudioWorkletNode(this.shadowRoot);
-        initVisualizer(this.shadowRoot);
-        initEditor(this.shadowRoot);
+        await initVisualizer(this.shadowRoot);
+        await initEditor(this.shadowRoot);
+        enablePlayAndSaveButtons();
+
+        appReadyPromises.forEach(p => p());
+        appReadyPromises = null;
     }
   }
 );
+
+export async function waitForAppReady() {
+  return new Promise(resolve => appReadyPromises !== null ? appReadyPromises.push(resolve) : resolve());
+}
 
 export function setInstrumentNames(instrumentNames) {
   const instrSelect = componentRoot.getElementById('midichannelmappingselection');
@@ -44,4 +53,24 @@ export function setInstrumentNames(instrumentNames) {
     instrSelect.selectedIndex = selectedIndex;
   }
   return instrSelectCount;
+}
+
+export function toggleSpinner(state) {
+  const spinner = componentRoot.querySelector('.spinner');
+
+  if (state === undefined) {
+    state = spinner.style.display === 'block' ? false : true;
+  }
+
+  if (state) {
+    spinner.style.display = 'block';
+  } else {
+    spinner.style.display = 'none';
+  }
+}
+
+export function enablePlayAndSaveButtons() {
+  componentRoot.querySelector('#startaudiobutton').disabled = false;
+  componentRoot.querySelector('#savesongbutton').disabled = false;
+  toggleSpinner(false);
 }

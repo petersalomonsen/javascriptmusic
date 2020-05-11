@@ -4,7 +4,7 @@ import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong} from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
 import {} from './webaudiomodules/preseteditor.js';
-import { setInstrumentNames } from './app.js';
+import { setInstrumentNames, enablePlayAndSaveButtons, toggleSpinner } from './app.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
@@ -53,6 +53,7 @@ async function compileWebAssemblySynth(synthsource, song, samplerate) {
 }
 
 export async function initEditor(componentRoot) {
+    toggleSpinner(true);
     await loadCodeMirror();
 
     songsourceeditor = CodeMirror(componentRoot.getElementById("editor"), {

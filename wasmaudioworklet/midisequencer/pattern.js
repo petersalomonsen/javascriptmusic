@@ -1,5 +1,3 @@
-console.log('new pattern instance');
-
 const noteStringToNoteNumberMap = 
     new Array(128).fill(null).map((v, ndx) => 
         (['c','c#','d','d#','e','f','f#','g','g#','a','a#','b'])[ndx%12]+''+Math.floor(ndx/12)
