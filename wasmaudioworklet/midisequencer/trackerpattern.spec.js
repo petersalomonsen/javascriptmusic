@@ -1,5 +1,4 @@
 import { } from './trackerpattern.js';
-import assert from 'assert';
 
 describe('trackerpattern', function() {    
     it("should quantize", () => {

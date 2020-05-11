@@ -1,4 +1,5 @@
 import { loadScript } from '../common/scriptloader.js';
+import { toggleSpinner } from '../app.js';
 
 let wamstarted = false;
 let previousSynthSource;
@@ -10,7 +11,8 @@ let samplerate;
 
 export async function startWAM(actx) {
     wamPaused = false;
-    if (!wamstarted) {    
+    if (!wamstarted) {
+        toggleSpinner(true);
         wamstarted = true;
         console.log('starting WAM synth');
         await loadScript("https://unpkg.com/wasm-yoshimi@0.0.1/libs/wam-controller.js");
@@ -20,7 +22,7 @@ export async function startWAM(actx) {
         wamsynth = new WAM.YOSHIMI(actx);
         wamsynth.connect(actx.destination);
         samplerate = actx.sampleRate;
-
+        toggleSpinner(false);
         console.log('WAM synth started');
     }
 }
@@ -32,8 +34,10 @@ export async function postSong(eventlist, synthsource) {
         return;
     }
     if (synthsource !== previousSynthSource) {
+        toggleSpinner(true);
         previousSynthSource = synthsource;
         await wamsynth.postSynthSource(synthsource);
+        toggleSpinner(false);
     }
 
     wamsynth.sendMessage("set", "seq", eventlist);    

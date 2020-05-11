@@ -1,4 +1,3 @@
-import assert from 'assert';
 import { compileSong } from './songcompiler.js';
 
 describe('songcompiler', async function() {

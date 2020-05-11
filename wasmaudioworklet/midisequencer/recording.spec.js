@@ -1,4 +1,3 @@
-import assert from 'assert';
 import { RecordConverter } from './recording.js';
 import { setBPM, beatToTimeMillis } from './pattern.js';
 import { compileSong } from './songcompiler.js';
