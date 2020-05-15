@@ -41,9 +41,11 @@ class YOSHIMIAWP extends AudioWorkletGlobalScope.WAMProcessor
       case "patch": this.onpatch(data); break;
       case "param": this.onparam(msg.key, msg.value); break;
       case "msg": 
-        if (msg.prop === 'seq') {
-          // clear recorded data
-          this.recorded = {};
+        if (msg.prop === 'seq') {          
+          if (msg.data.length > 0) {
+            // clear recorded data
+            this.recorded = {};
+          }
           this.recordingActive = false;
           // update sequence
           if (this.sequence.length > 0 && msg.data.length > 0) {
@@ -74,6 +76,7 @@ class YOSHIMIAWP extends AudioWorkletGlobalScope.WAMProcessor
   process (inputs,outputs,params) {
     let currentTime = (this.currentFrame / this.sr) * 1000;
     while (this.sequenceIndex < this.sequence.length &&
+        this.sequence[this.sequenceIndex] && // sometimes this is undefined for yet unkown reasons
         this.sequence[this.sequenceIndex].time < currentTime) {
 
       while ( this.sequence[this.sequenceIndex].message[0] < 0) {
