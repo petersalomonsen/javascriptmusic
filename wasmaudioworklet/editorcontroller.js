@@ -1,7 +1,7 @@
 import { loadScript, loadCSS } from './common/scriptloader.js';
 import { compileSong as compileMidiSong } from './midisequencer/songcompiler.js';
 import { insertMidiRecording } from './midisequencer/editorfunctions.js';
-import { postSong as wamPostSong} from './webaudiomodules/wammanager.js';
+import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
 import {} from './webaudiomodules/preseteditor.js';
 import { setInstrumentNames, enablePlayAndSaveButtons, toggleSpinner } from './app.js';
@@ -132,8 +132,12 @@ export async function initEditor(componentRoot) {
                 componentRoot.querySelector('#preseteditortogglecheckbox').checked = true;
             }            
             window.insertRecording = () => insertMidiRecording(insertStringIntoEditor);
-            try {                
-                return { eventlist: await compileMidiSong(songsource), synthsource: synthsource };
+            try {
+                const eventlist = await compileMidiSong(songsource);
+                if (exportwasm) {
+                    await exportWAMAudio(eventlist, synthsource);
+                }    
+                return { eventlist: eventlist, synthsource: synthsource };
             } catch(e) {
                 errorMessagesContentElement.innerText = e;
                 errorMessagesElement.style.display = 'block';

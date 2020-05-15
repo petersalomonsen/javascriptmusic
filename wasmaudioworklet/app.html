@@ -37,7 +37,7 @@
     </label>
     
     <div style="flex-grow: 1"></div>
-    <button onclick="compileSong(true)" title="Export WASM">&#x21E9;</button>
+    <button id="exportbutton" onclick="compileSong(true)" title="Export">&#x21E9;</button>
     
     <div class="spinner"></div>
   </div>
@@ -78,6 +78,10 @@
         height: 100%;
         z-index: -10"></canvas>
 
+  <div id="main-progress-bar" class="progress-border">
+    <div class="progress-text">50%</div>
+    <div class="progress-fill" style="width:20%"></div>
+  </div>
   <div class="footer">
     webassembly music experiment - (c) 2019-2020 peter salomonsen
   </div>

@@ -1,5 +1,6 @@
-import { getRecordedData, startWAM, wamsynth } from './wammanager.js';
+import { getRecordedData, startWAM, wamsynth, exportWAMAudio } from './wammanager.js';
 import { waitForAppReady } from '../app.js';
+import { compileSong } from '../midisequencer/songcompiler.js';
 
 describe('wammanager', async function() {
     this.timeout(10000);
@@ -41,4 +42,25 @@ describe('wammanager', async function() {
             assert(eventlist[n -1][0] <= eventlist[n][0], `${eventlist[n -1][0]} > ${eventlist[n][0]}`);
         }
     });
+    it('should export song to wav', async () => {
+        const eventlist = await compileSong(`setBPM(60);await createTrack(0).steps(4, [c4,d4,e4,f4])`);
+        let downloadedLength;
+        document._createElementOriginal = document.createElement;
+        document.createElement = function(elementType) {
+            const createdElement = this._createElementOriginal(elementType);
+            if (elementType === 'a') {
+                downloadedLength = new Promise(async resolve => {
+                    createdElement.click = async () => {                        
+                        const sounddata = await (await fetch(createdElement.href)).arrayBuffer();
+                        console.log('sounddata length', sounddata.byteLength)
+                        resolve(sounddata.byteLength);
+                    };
+                });
+            }
+            return createdElement;
+        }
+        await exportWAMAudio(eventlist, '');
+        assert((await downloadedLength) > 44100 * 2 * 2, 'downloaded data length should be more than one second of sound data');
+    });
+
 });
