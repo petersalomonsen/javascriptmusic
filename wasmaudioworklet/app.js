@@ -4,27 +4,28 @@ import { initVisualizer } from './visualizer/80sgrid.js';
 import { initEditor } from './editorcontroller.js';
 
 let componentRoot;
-let appReadyPromises = [];
+let appReadyPromises;
 
 customElements.define('app-javascriptmusic',
   class extends HTMLElement {
     constructor() {
       super();
-      
+      appReadyPromises = [];
       componentRoot = this.attachShadow({mode: 'open'});
       this.init();      
     }
 
     async init() {
-        const apphtml = await fetch('app.html').then(r => r.text());
-        this.shadowRoot.innerHTML = apphtml;
-        initAudioWorkletNode(this.shadowRoot);
-        await initVisualizer(this.shadowRoot);
-        await initEditor(this.shadowRoot);
-        enablePlayAndSaveButtons();
+      console.log('initialize app');
+      const apphtml = await fetch('app.html').then(r => r.text());
+      this.shadowRoot.innerHTML = apphtml;
+      initAudioWorkletNode(this.shadowRoot);
+      await initVisualizer(this.shadowRoot);
+      await initEditor(this.shadowRoot);
+      enablePlayAndSaveButtons();
 
-        appReadyPromises.forEach(p => p());
-        appReadyPromises = null;
+      appReadyPromises.forEach(p => p());
+      appReadyPromises = null;
     }
   }
 );
