@@ -12,6 +12,7 @@ module.exports = function(config) {
     files: [      
       {pattern: '**/*.spec.js', type: 'module'},
       {pattern: '**/*.js', included: false, type: 'module'},
+      {pattern: '**/*.json', included: false},
       {pattern: '**/*.html', included: false}
     ],
 
@@ -22,9 +23,10 @@ module.exports = function(config) {
 
     proxies: {
       '/app.html': '/base/app.html',
-      '/synth1': '/base/synth1',
+      '/synth1': '/base/synth1',      
       '/webaudiomodules': '/base/webaudiomodules',
       '/emptysong.js': '/base/emptysong.js',
+      '/pattern_tools.js': '/base/pattern_tools.js',
     },
 
     // preprocess matching files before serving them to the browser

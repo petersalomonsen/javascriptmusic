@@ -11,11 +11,12 @@ const wasi_main_src = 'wasi_main.ts';
 
 let assemblyscriptsynthsources;
 
-fetch('wasmsynthassemblyscriptsources.json').then(r => r.json())
+const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json').then(r => r.json())
     .then(obj => {
         assemblyscriptsynthsources = obj;
-        assemblyscriptsynthsources[default_mix_source] = null; // force compile first time
-});
+        assemblyscriptsynthsources[default_mix_source] = null; // force compile first 
+        resolve(true);
+}));
 
 
 function createWebAssemblySongData(song) {
@@ -100,9 +101,13 @@ function compileAssemblyScript(sources, options, entrypoint) {
     return output;
 }
 
-onmessage = function (msg) {
+onmessage = async function (msg) {
+    console.log(JSON.stringify(msg));
     const synthsource = msg.data.synthsource;
     const samplerate = msg.data.samplerate;
+    console.log('wait for assemblyscript sources to be loaded');
+    await ready;
+    console.log('assemblyscript sources loaded');
     
     if(msg.data.song) {
         assemblyscriptsynthsources[default_mix_source] = synthsource;

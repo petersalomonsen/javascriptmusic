@@ -244,7 +244,7 @@ export async function initEditor(componentRoot) {
     async function compileAndPostSong() {
         try {
             const song = await compileSong();
-            
+
             if (song.eventlist) {
                 await wamPostSong(song.eventlist, song.synthsource);
             } else if(window.audioworkletnode) {
