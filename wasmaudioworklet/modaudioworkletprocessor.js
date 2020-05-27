@@ -57,19 +57,23 @@ function loadSong(modbytes) {
     xmp.instance.exports.setBPM(bpm);
 }
 
-class MyWorkletProcessor extends AudioWorkletProcessor {
+class ModAudioWorkletProcessor extends AudioWorkletProcessor {
 
   constructor() {
     super();
     this.port.onmessage = async (msg) => {
-        if(msg.data.wasm) {
+        if (msg.data.wasm) {
             await initPlayer(msg.data.wasm, msg.data.samplerate);
         }
-        if(msg.data.song) {
+        if (msg.data.song) {
             loadSong(msg.data.song.modbytes);
+        }
+        if (msg.data.terminate) {
+            this.processorActive = false;
         }
     };
     this.port.start();
+    this.processorActive = true;
   }  
 
   process(inputs, outputs, parameters) {
@@ -95,9 +99,8 @@ class MyWorkletProcessor extends AudioWorkletProcessor {
             }
         }
     }
-  
-    return true;
+    return this.processorActive;
   }
 }
 
-registerProcessor('my-worklet-processor', MyWorkletProcessor);
+registerProcessor('mod-audio-worklet-processor', ModAudioWorkletProcessor);

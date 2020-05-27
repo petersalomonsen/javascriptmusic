@@ -7,8 +7,8 @@
     },
     "type": "module",
     "scripts": {
-        "test": "karma start --single-run --browsers ChromeHeadless karma.conf.cjs",
-        "test-watch": "karma start --browsers Chrome karma.conf.cjs"
+        "test": "karma start --single-run --browsers ChromeHeadless_NoUserGestureRequired karma.conf.cjs",
+        "test-watch": "karma start --browsers Chrome_NoUserGestureRequired karma.conf.cjs"
     },
     "devDependencies": {
         "chai": "^4.2.0",

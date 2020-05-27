@@ -1,6 +1,7 @@
 import { loadScript } from '../common/scriptloader.js';
 import { toggleSpinner, setProgressbarValue } from '../app.js';
 import { audioBufferToWav } from '../common/audiobuffertowav.js';
+import { visualizeNoteOn, clearVisualization } from '../visualizer/80sgrid.js';
 
 let wamloaded = false;
 let wamstarted = false;
@@ -10,6 +11,8 @@ export let wamsynth;
 let wamPaused;
 let lastPostedSong = [];
 let samplerate;
+let audioContext;
+let visualizeEventIndex = 0;
 
 export async function loadWAM() {
     if (wamloaded) {
@@ -36,8 +39,45 @@ export async function startWAM(actx) {
         wamsynth.connect(actx.destination);
         samplerate = actx.sampleRate;
         toggleSpinner(false);
+        audioContext = actx;
         console.log('WAM synth started');
     }
+}
+
+export async function visualizeSong() {
+    if (wamPaused || lastPostedSong.length === 0) {
+        clearVisualization();
+        return;
+    }
+    const eventlist = lastPostedSong;
+    wamsynth.sendMessage("get", "currentTime");
+    const currentTime = (await wamsynth.waitForMessage()).currentTime;
+    
+    if (currentTime < eventlist[visualizeEventIndex].time) {
+        visualizeEventIndex = 0;
+    }
+
+    while (
+            visualizeEventIndex < eventlist.length &&
+            eventlist[visualizeEventIndex].time <= currentTime
+        ) {
+        const msg = eventlist[visualizeEventIndex++].message;
+        const msgType = (msg[0] & 0xf0);
+        if(msgType === 0x90 || msgType === 0x80) {
+            visualizeNoteOn(msg[1], msg[2]);
+        }
+    }
+
+    let timeout;
+    if (visualizeEventIndex >= eventlist.length) {
+        visualizeEventIndex = 0;
+        timeout = 0;
+    } else {
+        timeout = Math.round(eventlist[visualizeEventIndex].time - currentTime);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, timeout));
+    visualizeSong();
 }
 
 export async function postSong(eventlist, synthsource) {
@@ -53,7 +93,10 @@ export async function postSong(eventlist, synthsource) {
         toggleSpinner(false);
     }
 
-    wamsynth.sendMessage("set", "seq", eventlist);    
+    wamsynth.sendMessage("set", "seq", eventlist);
+    visualizeEventIndex = 0;
+
+    visualizeSong(eventlist);
 }
 
 export function stopWAMSong() {
