@@ -1,6 +1,6 @@
 import { stopVideoRecording, startVideoRecording } from './screenrecorder/screenrecorder.js';
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
-
+import { visualizeNoteOn, clearVisualization } from './visualizer/80sgrid.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -37,16 +37,19 @@ export function initAudioWorkletNode(componentRoot) {
                                 .then(r => r.arrayBuffer());
 
                 await context.audioWorklet.addModule('./modaudioworkletprocessor.js');
+                audioworkletnode = new AudioWorkletNode(context, 'mod-audio-worklet-processor', {
+                        outputChannelCount: [2]
+                    });
             } else {
                 bytes = window.WASM_SYNTH_LOCATION ? await fetch(window.WASM_SYNTH_LOCATION).then(response =>
                                     response.arrayBuffer()
                                 ) : window.WASM_SYNTH_BYTES;                    
                 
                 await context.audioWorklet.addModule('./audioworkletprocessor.js');
+                audioworkletnode = new AudioWorkletNode(context, 'pattern-seq-audio-worklet-processor', {
+                    outputChannelCount: [2]
+                });
             }
-
-            audioworkletnode = new AudioWorkletNode(context, 'my-worklet-processor',
-                {outputChannelCount: [2]});
             window.audioworkletnode = audioworkletnode;
             
             if (window.audioVideoRecordingEnabled === true) {
@@ -94,11 +97,10 @@ export function initAudioWorkletNode(componentRoot) {
 
     window.stopaudio = async () => {
         if(audioworkletnode) {
-            
-            new Array(128).fill(0).map((n,ndx) => ndx).forEach(n => visualizeNoteOn(n, 0));
+            clearVisualization();
+            audioworkletnode.port.postMessage({terminate: true});
             audioworkletnode.disconnect();
             audioworkletnode = null;
-            clearInterval(window.getNoteStatusInterval);
         }
         playing = false;
         if (wamsynth) {
@@ -130,8 +132,11 @@ export function initAudioWorkletNode(componentRoot) {
 
     window.toggleVisualizer = (status) => {
         if(status && !window.getNoteStatusInterval) {
-            window.getNoteStatusInterval = setInterval(() =>
-                audioworkletnode.port.postMessage({ getNoteStatus: true }), 50);
+            window.getNoteStatusInterval = setInterval(() => {
+                if (audioworkletnode) {
+                    audioworkletnode.port.postMessage({ getNoteStatus: true });
+                }
+            }, 50);
         } else if(!status && window.getNoteStatusInterval) {
             clearInterval(window.getNoteStatusInterval);
             new Array(128).fill(0).map((n,ndx) => ndx).forEach(n => visualizeNoteOn(n, 0));

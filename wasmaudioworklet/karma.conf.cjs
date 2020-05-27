@@ -23,6 +23,7 @@ module.exports = function(config) {
 
     proxies: {
       '/app.html': '/base/app.html',
+      '/audioworkletprocessor.js': '/base/audioworkletprocessor.js',
       '/synth1': '/base/synth1',      
       '/webaudiomodules': '/base/webaudiomodules',
       '/emptysong.js': '/base/emptysong.js',
@@ -60,9 +61,19 @@ module.exports = function(config) {
 
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-    browsers: ['Chrome'],
-
-
+    browsers: ['Chrome_NoUserGestureRequired', 'ChromeHeadless_NoUserGestureRequired'],
+    // you can define custom flags
+    customLaunchers: {
+      Chrome_NoUserGestureRequired: {
+        base: 'Chrome',
+        flags: ['--autoplay-policy=no-user-gesture-required']
+      },
+      ChromeHeadless_NoUserGestureRequired: {
+        base: 'ChromeHeadless',
+        flags: ['--autoplay-policy=no-user-gesture-required']
+      }
+    },
+    
     // Continuous Integration mode
     // if true, Karma captures browsers, runs the tests and exits
     singleRun: false,

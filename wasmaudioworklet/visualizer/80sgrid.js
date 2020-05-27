@@ -13,10 +13,30 @@ void main() {
     gl_Position = a_position;    
 }
 `;
+
+const targetNoteStates = new Array(128).fill(-1);
+let animationFrameRequest = null;
+let gl;
+
+const positions = new Float32Array( 128 * 9);
+for(let note = 0; note < 128; note ++) {
+    const x = ((note * 2) / 128) - 1;
+    const ndx = note * 9;
+    positions[ndx] = x-0.1;
+    positions[ndx + 1] = -1;
+    positions[ndx + 2] = 1;
+    positions[ndx + 3] = x;      
+    positions[ndx + 4] = -1;
+    positions[ndx + 5] = 1;     
+    positions[ndx + 6] = x + 0.1;      
+    positions[ndx + 7] = -1;
+    positions[ndx + 8] = 1;       
+}
+
 export async function initVisualizer(componentRoot) {    
     const canvas = componentRoot.querySelector("#glCanvas");
     // Initialize the GL context
-    const gl = canvas.getContext("webgl");
+    gl = canvas.getContext("webgl");
 
     // Set clear color to black, fully opaque
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -56,21 +76,6 @@ export async function initVisualizer(componentRoot) {
     gl.useProgram(program);    
     gl.enableVertexAttribArray(positionAttributeLocation);
 
-    const positions = new Float32Array( 128 * 9);
-    for(let note = 0; note < 128; note ++) {
-        const x = ((note * 2) / 128) - 1;
-        const ndx = note * 9;
-        positions[ndx] = x-0.1;
-        positions[ndx + 1] = -1;
-        positions[ndx + 2] = 1;
-        positions[ndx + 3] = x;      
-        positions[ndx + 4] = -1;
-        positions[ndx + 5] = 1;     
-        positions[ndx + 6] = x + 0.1;      
-        positions[ndx + 7] = -1;
-        positions[ndx + 8] = 1;       
-    }
-
     var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
     var positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -88,46 +93,47 @@ export async function initVisualizer(componentRoot) {
 
     gl.vertexAttribPointer(
         positionAttributeLocation, size, type, normalize, stride, offset);
+}
 
-    var primitiveType = gl.TRIANGLES;
-    var offset = 0;
-    var count = positions.length / 3;
-
-    const targetNoteStates = new Array(128).fill(-1);
-
-    let animationFrameRequest = null;
-    const repaint = () => {
-        animationFrameRequest = null;
-        let hasLevelsAboveZero = false;
-        for(let noteIndex=0;noteIndex<128;noteIndex++) {
-            const levelIndex = noteIndex * 9 + 4;
-            
-            if(targetNoteStates[noteIndex]>positions[levelIndex]) {
-                const inc = (targetNoteStates[noteIndex] - positions[levelIndex]) / 2;
-                positions[levelIndex] += inc;
-                hasLevelsAboveZero = true;
-            } else if(targetNoteStates[noteIndex]<positions[levelIndex] &&
-                positions[levelIndex] > -1
-                ) {
-                positions[levelIndex] -= 0.02;
-                hasLevelsAboveZero = true;
-            }
-        }
-
-        if(hasLevelsAboveZero) {
+function repaint() {
+    animationFrameRequest = null;
+    let hasLevelsAboveZero = false;
+    for (let noteIndex=0; noteIndex<128; noteIndex++) {
+        const levelIndex = noteIndex * 9 + 4;
         
-            // Bind the position buffer.
-            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-            gl.drawArrays(primitiveType, offset, count);
-            animationFrameRequest = requestAnimationFrame(repaint);
+        if(targetNoteStates[noteIndex]>positions[levelIndex]) {
+            const inc = (targetNoteStates[noteIndex] - positions[levelIndex]) / 2;
+            positions[levelIndex] += inc;
+            hasLevelsAboveZero = true;
+        } else if(targetNoteStates[noteIndex]<positions[levelIndex] &&
+            positions[levelIndex] > -1
+            ) {
+            positions[levelIndex] -= 0.02;
+            hasLevelsAboveZero = true;
         }
-    };
+    }
 
-    window.visualizeNoteOn = (note, velocity) => {
-        targetNoteStates[note] = ((velocity / 128 ) * 2 - 1);
-        
-        if(!animationFrameRequest) {
-            animationFrameRequest = requestAnimationFrame(repaint);
-        }
-    };
+    if(hasLevelsAboveZero) {
+    
+        // Bind the position buffer.
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+        gl.drawArrays(gl.TRIANGLES, 0, positions.length / 3);
+        animationFrameRequest = requestAnimationFrame(repaint);
+    }
+}
+
+export function visualizeNoteOn(note, velocity) {
+    targetNoteStates[note] = ((velocity / 128 ) * 2 - 1);
+    
+    if(!animationFrameRequest) {
+        animationFrameRequest = requestAnimationFrame(repaint);
+    }
+}
+
+export function clearVisualization() {
+    targetNoteStates.fill(-1);
+}
+
+export function getTargetNoteStates() {
+    return targetNoteStates;
 }
