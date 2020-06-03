@@ -39,7 +39,6 @@ customElements.define('wam-preseteditor',
                     const instrumentPath = evt.target.value;
                     const paramsxml = (await wamsynth.loadpreset(channel, instrumentPath)).paramsxml;
                     synthsourceeditor.doc.setValue(paramsxml);
-                    localStorage.setItem('storedsynthcode', paramsxml);
                     
                     const instrumentName = instrumentPath.replace(/.xiz$/,'').substr(instrumentPath.indexOf('/') + 1);                    
                     currentinstrumentspan.innerHTML = instrumentName;

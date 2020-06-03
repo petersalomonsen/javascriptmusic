@@ -42,7 +42,7 @@
     <div class="spinner"></div>
   </div>
   <br />
-  <div class="subtoolbar">
+  <div id="subtoolbar1" class="subtoolbar">
     <label title="song editor">
       <input type="checkbox" id="songeditortogglecheckbox" checked onclick="toggleEditors('editor', this.checked)" />
       <span>song</span>
@@ -55,6 +55,7 @@
       <input type="checkbox" id="preseteditortogglecheckbox" onclick="toggleEditors('presetsui', this.checked)" />
       <span>presets</span>
     </label>
+    <span style="flex-grow: 1"></span>
   </div>
   <div class="editors">
     <div id="editor" class="editor"></div>

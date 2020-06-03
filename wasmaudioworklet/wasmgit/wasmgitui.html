@@ -1,0 +1,30 @@
+<style>
+    button, input, select, .checkboxlabel {
+        font-family: monospace;
+        background-color: #cfc;
+        border-color: #4a4;
+        border-width: 1px;
+        color:#050;
+        padding: 2px;
+        font-size: 12px;
+        
+        border-radius: 4px;
+        white-space: nowrap;
+        
+        margin: 2px;
+        user-select: none;
+    }
+    button {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+    .toolbar {
+        display: flex;
+        align-items: center;
+    }
+</style>
+<div class="toolbar">
+    <span id="loggedinuserspan" style="display: none"></span>    
+    <button id="loginButton" style="display: none">login</button>
+    <button id="syncRemoteButton">Commit & Sync</button>
+</div>
