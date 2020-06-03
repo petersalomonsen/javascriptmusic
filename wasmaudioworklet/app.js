@@ -2,6 +2,7 @@ import {} from './audioworkletpolyfill.js';
 import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer } from './visualizer/80sgrid.js';
 import { initEditor } from './editorcontroller.js';
+import { clone } from './wasmgit/wasmgitclient.js';
 
 let componentRoot;
 let appReadyPromises;
@@ -29,6 +30,10 @@ customElements.define('app-javascriptmusic',
     }
   }
 );
+
+export function appendToSubtoolbar1(element) {
+  componentRoot.querySelector('#subtoolbar1').appendChild(element);
+}
 
 export async function waitForAppReady() {
   return new Promise(resolve => appReadyPromises !== null ? appReadyPromises.push(resolve) : resolve());

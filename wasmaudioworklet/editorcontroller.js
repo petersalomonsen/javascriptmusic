@@ -5,9 +5,11 @@ import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wamma
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
 import {} from './webaudiomodules/preseteditor.js';
 import { setInstrumentNames, enablePlayAndSaveButtons, toggleSpinner } from './app.js';
+import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener } from './wasmgit/wasmgitclient.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
+let gitrepoconfig = null;
 
 async function loadCodeMirror() {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.52.2/codemirror.min.js');
@@ -107,15 +109,33 @@ export async function initEditor(componentRoot) {
         errorMessagesElement.style.display = 'none';
 
         const songsource = songsourceeditor.doc.getValue();
-
-        localStorage.setItem('storedsongcode', songsource);
-        
         const newsynthsource = synthsourceeditor.doc.getValue();
-        if (newsynthsource !== synthsource) {
-            synthsource = newsynthsource;
-            localStorage.setItem('storedsynthcode', synthsource);
-        }
 
+        if (gitrepoconfig) {
+            let synthsourceupdated = false;
+            if (synthsource !== newsynthsource) {
+                synthsource = newsynthsource;
+                synthsourceupdated = true;
+            }
+            // Store to git repository
+            (async () => {
+                // Save asynchronously so that we don't have to wait for it
+                await writefileandstage(gitrepoconfig.songfilename, songsource);
+
+                if (synthsourceupdated) {                    
+                    writefileandstage(gitrepoconfig.synthfilename, synthsource);
+                }
+            })();
+        } else {
+            // Store to localstorage
+            localStorage.setItem('storedsongcode', songsource);
+                
+            if (newsynthsource !== synthsource) {
+                synthsource = newsynthsource;
+                localStorage.setItem('storedsynthcode', synthsource);
+            }
+        }
+        
         let songmode = 'WASM';
         if (songsource.indexOf('SONGMODE=PROTRACKER') >= 0) {
             // special mode: we are building an amiga protracker module
@@ -264,10 +284,11 @@ export async function initEditor(componentRoot) {
 
     let storedsongcode = localStorage.getItem('storedsongcode');
     let storedsynthcode = localStorage.getItem('storedsynthcode');
-        
-    const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
 
-    if(gistparam) {
+    const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
+    const gitrepoparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gitrepo=') === 0) : null;
+
+    if (gistparam) {
         const gistid = gistparam.split('=')[1];
         
         const gist = await fetch(`https://api.github.com/gists/${gistid}`).then(r => r.json());
@@ -283,6 +304,17 @@ export async function initEditor(componentRoot) {
         }
 
         console.log(`loaded from gist ${gistid}: ${songfilename}`);
+    } else if (gitrepoparam) {
+        gitrepoconfig = await initWASMGitClient(gitrepoparam.split('=')[1]);
+        
+        addRemoteSyncListener(async () => {
+            storedsongcode = await readfile(gitrepoconfig.songfilename);
+            storedsynthcode = await readfile(gitrepoconfig.synthfilename);
+            songsourceeditor.doc.setValue(storedsongcode);
+            synthsourceeditor.doc.setValue(storedsynthcode);
+        });
+        storedsongcode = await readfile(gitrepoconfig.songfilename);
+        storedsynthcode = await readfile(gitrepoconfig.synthfilename);
     }
 
     if(storedsongcode) {

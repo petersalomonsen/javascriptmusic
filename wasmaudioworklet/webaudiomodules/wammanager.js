@@ -83,7 +83,7 @@ export async function visualizeSong() {
 export async function postSong(eventlist, synthsource) {
     lastPostedSong = eventlist;
 
-    if (wamPaused) {
+    if (wamPaused || !wamsynth) {
         return;
     }
     if (synthsource !== previousSynthSource) {

@@ -69,17 +69,17 @@ input::placeholder {
 .subtoolbar {
     position: fixed;
     background-color:#030;
-    padding-left: 20px;
-    padding-right: 20px;
     color: white;
     top: 40px;
-    left: 0px;
-    right: 0px;
     display: flex;
     align-items: center;
     overflow-x: auto;
+
     height: 30px;
-    width: 100%;
+    left: 0px;
+    right: 0px;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
 .CodeMirror {

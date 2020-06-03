@@ -3,7 +3,7 @@ import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { getTargetNoteStates } from './visualizer/80sgrid.js';
 
 describe('audioworkletnode', async function() {
-    this.timeout(10000);
+    this.timeout(20000);
     this.beforeAll(async () => {
         document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
         await waitForAppReady();
