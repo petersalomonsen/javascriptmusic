@@ -2,9 +2,9 @@
  * Web worker to compile web assembly synth in the browser
  */
 
-importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/binaryen.js@90.0.0-nightly.20200214/index.js');
-importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.9.2/dist/assemblyscript.js');
-importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.9.2/dist/asc.js');
+importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/binaryen.js@93.0.0-nightly.20200514/index.js');
+importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.10.0/dist/assemblyscript.js');
+importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.10.0/dist/asc.js');
 
 const default_mix_source = 'mixes/newyear.mix.ts';
 const wasi_main_src = 'wasi_main.ts';
@@ -122,18 +122,11 @@ onmessage = async function (msg) {
                 "use": "abort="
             },
             wasi_main_src);
-        
-        
-        const errors = stderr.toString();
-        if(errors) {
-            postMessage({
-                error: errors
-            });
-        } else {
-            postMessage({    
-                downloadWASMurl: URL.createObjectURL(new Blob([binary], {type: "octet/stream"}))
-            });
-        }
+
+        postMessage({
+            error: stderr.toString(),
+            downloadWASMurl: binary ? URL.createObjectURL(new Blob([binary], {type: "octet/stream"})) : null
+        });
     }
 
     if(assemblyscriptsynthsources[default_mix_source] !== synthsource) {
@@ -143,16 +136,11 @@ onmessage = async function (msg) {
         const {stderr, text, binary} = compileAssemblyScript(assemblyscriptsynthsources,
                 { "runtime": "none", "optimizeLevel": 0, "shrinkLevel": 0},
                 'index.ts');
-        const errors = stderr.toString();
-        if(errors) {
-            postMessage({
-                error: errors
-            });
-        } else {
-            this.postMessage({
-                binary: binary
-            });            
-        }
+
+        postMessage({
+            error: stderr.toString(),
+            binary: binary
+        });
     } else {
         postMessage({
             nochanges: true

@@ -38,9 +38,7 @@ async function compileWebAssemblySynth(synthsource, song, samplerate) {
     
     const result = await new Promise((resolve) => synthcompilerworker.onmessage = (msg) => resolve(msg));
 
-    if(result.data.error) {
-        throw new Error(result.data.error);
-    } else if(result.data.binary) {
+    if(result.data.binary) {
         console.log('successfully compiled webassembly synth');
         window.WASM_SYNTH_BYTES = result.data.binary;
         webassemblySynthUpdated = true;
@@ -49,6 +47,8 @@ async function compileWebAssemblySynth(synthsource, song, samplerate) {
         linkElement.href = result.data.downloadWASMurl;
         linkElement.download = 'song.wasm';
         linkElement.click();
+    } else if(result.data.error) {
+        throw new Error(result.data.error);
     } else {
         console.log('no changes for webassembly synth');
     }
