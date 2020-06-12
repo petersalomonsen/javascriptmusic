@@ -1,5 +1,5 @@
 import { initNear, authdata as nearAuthData, login as nearLogin } from './nearacl.js';
-import { appendToSubtoolbar1, toggleSpinner } from '../app.js';
+import { toggleSpinner } from '../app.js';
 
 const worker = new Worker('./wasmgit/wasmgitworker.js');
 
@@ -10,12 +10,11 @@ let commitAndPushButton;
 const remoteSyncListeners = [];
 
 export async function initWASMGitClient(gitrepo) {
-    appendToSubtoolbar1(document.createElement('wasmgit-ui'));
     gitrepourl = `https://githttpserverdemo.petersalomonsen.usw1.kubesail.io/${gitrepo}`;
         
-    let dircontents = await synclocal(gitrepourl);
+    let dircontents = await synclocal();
     if (!dircontents) {
-        dircontents = await clone(gitrepourl)
+        dircontents = await clone();
     }
 
     updateCommitAndSyncButtonState(await repoHasChanges());
@@ -32,21 +31,21 @@ export function addRemoteSyncListener(remoteSyncListener) {
     remoteSyncListeners.push(remoteSyncListener);
 }
 
-export async function clone(repositoryUrl) {
+export async function clone() {
     await readyPromise;
 
     worker.postMessage({
         command: 'clone',
-        url: repositoryUrl
+        url: gitrepourl
     });
     return await new Promise((resolve) => worker.onmessage = msg => resolve(msg.data.dircontents));
 }
 
-export async function synclocal(remoteUrl) {
+export async function synclocal() {
     await readyPromise;
     worker.postMessage({
         command: 'synclocal',
-        url: remoteUrl
+        url: gitrepourl
     });
     return await new Promise((resolve) => worker.onmessage = msg => resolve(msg.data.dircontents));
 }

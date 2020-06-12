@@ -4,7 +4,7 @@ import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
 import {} from './webaudiomodules/preseteditor.js';
-import { setInstrumentNames, enablePlayAndSaveButtons, toggleSpinner } from './app.js';
+import { setInstrumentNames, appendToSubtoolbar1, toggleSpinner } from './app.js';
 import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener } from './wasmgit/wasmgitclient.js';
 
 export let songsourceeditor;
@@ -118,7 +118,18 @@ export async function initEditor(componentRoot) {
                 synthsourceupdated = true;
             }
             // Store to git repository
-            (async () => {
+            (async () => {             
+                if (!gitrepoconfig.songfilename) {
+                    gitrepoconfig.songfilename = 'song.js';
+                }
+                if (!gitrepoconfig.synthfilename) {
+                    if (synthsource.startsWith('<?xml')) {
+                        gitrepoconfig.synthfilename = 'synth.xml';
+                    } else {
+                        gitrepoconfig.synthfilename = 'synth.ts';
+                    }
+                }
+
                 // Save asynchronously so that we don't have to wait for it
                 await writefileandstage(gitrepoconfig.songfilename, songsource);
 
@@ -305,6 +316,7 @@ export async function initEditor(componentRoot) {
 
         console.log(`loaded from gist ${gistid}: ${songfilename}`);
     } else if (gitrepoparam) {
+        appendToSubtoolbar1(document.createElement('wasmgit-ui'));
         gitrepoconfig = await initWASMGitClient(gitrepoparam.split('=')[1]);
         
         addRemoteSyncListener(async () => {

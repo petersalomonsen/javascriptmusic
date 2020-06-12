@@ -5,6 +5,9 @@ describe('app', async function() {
         document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
         await waitForAppReady();
     });
+    this.afterAll(async () => {
+        document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
+    });
     it('should start app', async () => {
         const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
         assert.equal(appElement.querySelector('#startaudiobutton').disabled, false);

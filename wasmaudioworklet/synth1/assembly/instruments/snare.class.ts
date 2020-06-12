@@ -5,9 +5,9 @@ import { Envelope } from '../synth/envelope.class';
 import { SawOscillator } from '../synth/sawoscillator.class';
 import { BiQuadFilter, FilterType, Q_BUTTERWORTH } from '../synth/biquad';
 import { Noise } from '../synth/noise.class';
+import { Instrument } from './instrument.class';
 
-export class Snare {
-    private _note: f32;
+export class Snare extends Instrument {
     private velocity: f32;
     readonly envelope: Envelope = new Envelope(0.01, 0.2, 0, 0.2);
     readonly hpfilterenvelope: Envelope = new Envelope(0.01, 0.5, 0.5, 0.3);
@@ -17,13 +17,13 @@ export class Snare {
     
     readonly hpfilter: BiQuadFilter = new BiQuadFilter();
     readonly lpfilter: BiQuadFilter = new BiQuadFilter();
-    readonly signal: StereoSignal = new StereoSignal();
 
     constructor() {
+        super();
         this.lpfilter.update_coeffecients(FilterType.LowPass, SAMPLERATE, 
            13000 , Q_BUTTERWORTH);
-
     }
+
     set note(note: f32) {        
         if(note > 1) {            
             this.sawoscillator.frequency = 200;
@@ -34,11 +34,6 @@ export class Snare {
             this.envelope.release();
             this.hpfilterenvelope.release();
         }
-        this._note = note;
-    }
-
-    get note(): f32 {
-        return this._note;
     }
 
     next(): void {        

@@ -2,9 +2,9 @@
  * Web worker to compile web assembly synth in the browser
  */
 
-importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/binaryen.js@93.0.0-nightly.20200514/index.js');
-importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.10.0/dist/assemblyscript.js');
-importScripts('https://cdn.jsdelivr.net/gh/AssemblyScript/AssemblyScript@0.10.0/dist/asc.js');
+importScripts('https://cdn.jsdelivr.net/npm/binaryen@93.0.0-nightly.20200609/index.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.12.3/dist/assemblyscript.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.12.3/dist/asc.js');
 
 const default_mix_source = 'mixes/newyear.mix.ts';
 const wasi_main_src = 'wasi_main.ts';

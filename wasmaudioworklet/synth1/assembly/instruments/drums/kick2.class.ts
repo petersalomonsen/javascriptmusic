@@ -1,14 +1,11 @@
 
-import { SAMPLERATE } from '../../environment';
 import { StereoSignal } from '../../synth/stereosignal.class';
 import { Envelope } from '../../synth/envelope.class';
-import { SawOscillator } from '../../synth/sawoscillator.class';
-import { BiQuadFilter, FilterType, Q_BUTTERWORTH } from '../../synth/biquad';
 import { Noise } from '../../synth/noise.class';
 import { BandPass } from '../../fx/bandpass';
+import { Instrument } from '../instrument.class';
 
-export class Kick2 {
-    private _note: f32;
+export class Kick2 extends Instrument {
     private velocity: f32;
     
     readonly noise: Noise = new Noise();
@@ -17,13 +14,7 @@ export class Kick2 {
     readonly bp2: BandPass = new BandPass(4000, 5000);    
     
     readonly env3: Envelope = new Envelope(0.001, 0.1, 0.05, 0.1);
-    readonly bp3: BandPass = new BandPass(10, 100);    
-    
-    readonly signal: StereoSignal = new StereoSignal();
-
-    constructor() {
-       
-    }
+    readonly bp3: BandPass = new BandPass(10, 100);
 
     set note(note: f32) {        
         if(note > 1) {            
@@ -35,15 +26,9 @@ export class Kick2 {
             this.env2.release();            
             this.env3.release();            
         }
-        this._note = note;
     }
 
-    get note(): f32 {
-        return this._note;
-    }
-
-    next(): void {        
-        
+    next(): void {
         let env2: f32 = this.env2.next();
         let env3: f32 = this.env3.next();
                 
@@ -54,9 +39,7 @@ export class Kick2 {
         let sig3 = this.bp3.process(osc) * env3 * 8;
 
         this.signal.left = this.velocity * (-sig2  + sig3);
-        this.signal.right = this.velocity * ( + sig2 - sig3);
-        
-        
+        this.signal.right = this.velocity * ( + sig2 - sig3);        
     } 
 }
   

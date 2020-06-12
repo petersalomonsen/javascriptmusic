@@ -8,9 +8,9 @@ import { SawOscillator } from '../../synth/sawoscillator.class';
 import { BiQuadFilter, FilterType, Q_BUTTERWORTH } from '../../synth/biquad';
 import { notefreq } from '../../synth/note';
 
+import { Instrument } from '../instrument.class';
 
-export class DeepBass {
-    private _note: f32;
+export class DeepBass extends Instrument {
     readonly envelope: Envelope = new Envelope(0.01, 0.2, 0.70, 0.2);
     readonly filterenv: Envelope = new Envelope(0.01, 0.4, 0.0, 0.2);
     readonly sawoscillator: SawOscillator = new SawOscillator();
@@ -21,13 +21,11 @@ export class DeepBass {
     
     readonly lpfilterl: BiQuadFilter = new BiQuadFilter();
     readonly lpfilterr: BiQuadFilter = new BiQuadFilter();
-    
-    readonly signal: StereoSignal = new StereoSignal();
 
     constructor() {
+        super();
         this.hpfilterl.update_coeffecients(FilterType.HighPass, SAMPLERATE, 35, Q_BUTTERWORTH);
-        this.hpfilterr.update_coeffecients(FilterType.HighPass, SAMPLERATE, 35, Q_BUTTERWORTH);
-        
+        this.hpfilterr.update_coeffecients(FilterType.HighPass, SAMPLERATE, 35, Q_BUTTERWORTH);   
     }
 
     set note(note: f32) {        
@@ -40,11 +38,6 @@ export class DeepBass {
             this.envelope.release();
             this.filterenv.release();
         }
-        this._note = note;
-    }
-
-    get note(): f32 {
-        return this._note;
     }
 
     next(): void {        
