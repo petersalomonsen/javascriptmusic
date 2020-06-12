@@ -8,7 +8,11 @@ describe('audioworkletnode', async function() {
         document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
         await waitForAppReady();
     });
-    this.afterAll(() => window.audioworkletnode = undefined);
+    this.afterAll(async () => {
+        window.stopaudio();
+        window.audioworkletnode = undefined;
+        document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
+    });
 
     it('should start audioworklet and play a note that triggers the visualizer', async () => {
         const synthsource = `

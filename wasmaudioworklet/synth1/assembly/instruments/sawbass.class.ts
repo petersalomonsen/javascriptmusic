@@ -1,16 +1,13 @@
 
 import { SAMPLERATE } from '../environment';
-import { SineOscillator } from '../synth/sineoscillator.class';
 import { StereoSignal } from '../synth/stereosignal.class';
 import { Envelope } from '../synth/envelope.class';
 import { SawOscillator } from '../synth/sawoscillator.class';
-import { Noise } from '../synth/noise.class';
 import { BiQuadFilter, FilterType, Q_BUTTERWORTH } from '../synth/biquad';
 import { notefreq } from '../synth/note';
+import { Instrument } from './instrument.class';
 
-
-export class SawBass {
-    private _note: f32;
+export class SawBass extends Instrument {
     readonly envelope: Envelope = new Envelope(0.01, 0.2, 0.8, 0.2);
     readonly sawoscillator: SawOscillator = new SawOscillator();
     readonly sawoscillator2: SawOscillator = new SawOscillator();
@@ -18,9 +15,8 @@ export class SawBass {
     readonly hpfilterl: BiQuadFilter = new BiQuadFilter();
     readonly hpfilterr: BiQuadFilter = new BiQuadFilter();
     
-    readonly signal: StereoSignal = new StereoSignal();
-
     constructor() {
+        super();
         this.hpfilterl.update_coeffecients(FilterType.HighPass, SAMPLERATE, 35, Q_BUTTERWORTH);
         this.hpfilterr.update_coeffecients(FilterType.HighPass, SAMPLERATE, 35, Q_BUTTERWORTH);
     }
@@ -33,11 +29,6 @@ export class SawBass {
         } else {
             this.envelope.release();
         }
-        this._note = note;
-    }
-
-    get note(): f32 {
-        return this._note;
     }
 
     next(): void {        

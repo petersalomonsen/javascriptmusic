@@ -1,13 +1,18 @@
-import { waitForAppReady, toggleSpinner, setProgressbarValue } from './app.js';
+import { waitForAppReady } from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
+import { commitAndSyncRemote } from './wasmgit/wasmgitclient.js';
 
-describe('app', async function() {
+describe('editorcontroller', async function() {
     this.timeout(20000);
     this.beforeAll(async () => {
         document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
         await waitForAppReady();
     });
-    this.afterAll(() => window.audioworkletnode = undefined);
+    this.afterAll(async () => {
+        window.stopaudio();
+        window.audioworkletnode = undefined;
+        document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
+    });
 
     const synthsource = `
 import { Kick2 } from "../instruments/drums/kick2.class";
@@ -170,4 +175,45 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
             }
         })).instance.exports._start);
     });  
+});
+
+describe('editorcontroller with git', async function() {
+    this.timeout(60000);
+    const gitrepo = 'test5512331';
+    this.afterAll(async () => {
+        document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
+        window.history.pushState( {} , '', '?' );
+        assert.equal(location.search, '');
+        window.indexedDB.deleteDatabase(`/${gitrepo}`);
+    });
+    it('gitrepoparam in query string should use git', async () => {
+        window.indexedDB.deleteDatabase(`/${gitrepo}`);
+        window.history.pushState( {} , '', `?gitrepo=${gitrepo}`);
+        assert.equal(`?gitrepo=${gitrepo}`, location.search);
+                
+        document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
+        await waitForAppReady();
+
+        let wasmgitui = null;
+
+        do {
+            console.log('waiting for wasm git to be ready');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            wasmgitui = document.querySelector('app-javascriptmusic')
+                                .shadowRoot.querySelector('wasmgit-ui');
+        } while(wasmgitui === null);
+
+        assert.isOk(wasmgitui);
+
+        let dircontents = await commitAndSyncRemote('no changes');
+        console.log('should be no song data');
+        assert.isUndefined(dircontents.find(direntry => direntry.endsWith('.js')));
+        
+        console.log('should be a file with name song.js');
+        await window.compileSong();
+        
+        dircontents = await commitAndSyncRemote('added synth and song');        
+        assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), 'song.js');
+        assert.equal(dircontents.find(direntry => direntry.endsWith('.ts')), 'synth.ts');        
+    });
 });

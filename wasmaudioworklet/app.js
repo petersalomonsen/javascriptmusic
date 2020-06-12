@@ -2,7 +2,6 @@ import {} from './audioworkletpolyfill.js';
 import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer } from './visualizer/80sgrid.js';
 import { initEditor } from './editorcontroller.js';
-import { clone } from './wasmgit/wasmgitclient.js';
 
 let componentRoot;
 let appReadyPromises;

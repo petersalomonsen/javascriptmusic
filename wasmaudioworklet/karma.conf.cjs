@@ -12,6 +12,7 @@ module.exports = function(config) {
     files: [      
       {pattern: '**/*.spec.js', type: 'module'},
       {pattern: '**/*.js', included: false, type: 'module'},
+      {pattern: 'synth1/assembly/**/*.ts', included: false},
       {pattern: '**/*.json', included: false},
       {pattern: '**/*.html', included: false}
     ],
@@ -24,8 +25,9 @@ module.exports = function(config) {
     proxies: {
       '/app.html': '/base/app.html',
       '/audioworkletprocessor.js': '/base/audioworkletprocessor.js',
-      '/synth1': '/base/synth1',      
+      '/synth1': '/base/synth1',
       '/webaudiomodules': '/base/webaudiomodules',
+      '/wasmgit': '/base/wasmgit',
       '/emptysong.js': '/base/emptysong.js',
       '/pattern_tools.js': '/base/pattern_tools.js',
     },

@@ -21,6 +21,11 @@ describe('wammanager', async function() {
             return msg;
         }
     });
+    this.afterAll(async () => {
+        window.stopaudio();
+        window.audioworkletnode = undefined;
+        document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
+    });
     it('should get recorded data as an array of events', async () => {
         recordedData = {recorded: {"16384":[[144,62,100]],"22784":[[144,62,0]],"32256":[[144,65,100]],"37120":[[144,65,0]],"49920":[[144,69,100]],"53248":[[144,69,0]]}};
         const eventlist = await getRecordedData();
