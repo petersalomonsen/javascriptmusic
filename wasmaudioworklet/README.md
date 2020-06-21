@@ -1,5 +1,15 @@
-Webassembly synth
-=================
+WASM-music
+==========
+
+**`WASM` should be pronounced like `AWESOME` starting with a `W`**
+
+Demonstrated at the [WebAssembly Summit 2020](https://webassembly-summit.org):
+
+https://youtu.be/C8j_ieOm4vE
+
+Go to [petersalomonsen.com](https://petersalomonsen.com) for the hosted version. Or have a look at [demo videos](https://www.youtube.com/watch?v=C8j_ieOm4vE&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7).
+
+# Overview diagram
 
 ![overview diagram](overview.svg)
 
@@ -45,8 +55,6 @@ the [synth1/index.js](synth1/index.js) script will output audio to `stdout`, so 
 
 ## Export to WASM in the browser
 
-**`WASM` should be pronounced like `AWESOME` starting with a `W`**
-
 In the browser there's a button in the upper right with download icon with tooltip `Export WASM`.
 Pressing this will generate and download a `WASM` file.
 
@@ -67,6 +75,3 @@ Create wav directly from Wasmer by piping to sox:
 `wasmer song.wasm | sox -S -t raw -b 32 -e float -r 44100 -c 2 - song.wav`
 
 or use the exported WASM binary from nodejs or the browser.
-
-This was also demonstrated at the WebAssembly summit 2020:
-https://www.youtube.com/watch?v=C8j_ieOm4vE&feature=youtu.be&t=1596

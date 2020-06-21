@@ -1,6 +1,7 @@
 {
-    "name": "wasmmusic",
+    "name": "wasm-music",
     "description": "Javascript/WebAssembly live coding environment for music and synthesis",
+    "version": "0.0.1",
     "author": {
         "name": "Peter Salomonsen",
         "url": "https://petersalomonsen.com"

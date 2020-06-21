@@ -1,0 +1,4 @@
+node_modules
+*.wav
+*.flac
+.DS_Store
