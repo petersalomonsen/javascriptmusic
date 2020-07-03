@@ -3,7 +3,6 @@ import { toggleSpinner } from '../app.js';
 
 const worker = new Worker('./wasmgit/wasmgitworker.js');
 
-const readyPromise = new Promise((resolve, reject) => worker.onmessage = msg => msg.data.ready ? resolve() : reject(msg));
 let gitrepourl;
 let commitAndPushButton;
 
@@ -32,8 +31,6 @@ export function addRemoteSyncListener(remoteSyncListener) {
 }
 
 export async function clone() {
-    await readyPromise;
-
     worker.postMessage({
         command: 'clone',
         url: gitrepourl
@@ -42,7 +39,6 @@ export async function clone() {
 }
 
 export async function synclocal() {
-    await readyPromise;
     worker.postMessage({
         command: 'synclocal',
         url: gitrepourl

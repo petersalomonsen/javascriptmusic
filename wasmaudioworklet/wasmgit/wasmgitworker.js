@@ -1,6 +1,7 @@
 let stdout;
 let stderr;
 let captureOutput = false;
+let currentRepoRootDir;
 
 var Module = {
     locateFile: function(s) {
@@ -35,110 +36,110 @@ function writeGlobalConfig(username, useremail) {
 
 }
 
-Module.onRuntimeInitialized = () => {
-    const lg = Module;
+const lgPromise = new Promise(resolve => {
+  Module.onRuntimeInitialized = () => {
+      writeGlobalConfig('Test user', 'test@example.com');
+      resolve(Module);
+  }
+});
 
-    function callAndCaptureOutput(args) {
-      captureOutput = true;
-      stderr = '';
-      stdout = '';
-      lg.callMain(args);
-      captureOutput = false;
-    }
+onmessage = async (msg) => {
+  const lg = await lgPromise;
+
+  function callAndCaptureOutput(args) {
+    captureOutput = true;
+    stderr = '';
+    stdout = '';
+    lg.callMain(args);
+    captureOutput = false;
+  }
+  
+  function repoHasChanges() {
+    callAndCaptureOutput(['status']);
     
-    function repoHasChanges() {
-      callAndCaptureOutput(['status']);
-      
-      if (stdout.indexOf('Changes to be committed:') > -1) {
-        return true;
-      } else {
-        return false;
-      }
+    if (stdout.indexOf('Changes to be committed:') > -1) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+  
+  if (msg.data.accessToken) {
+    accessToken = msg.data.accessToken;
+    writeGlobalConfig(msg.data.username, msg.data.useremail);
+    postMessage({accessTokenConfigured: true});
+  } else if(msg.data.command === 'writefileandstage') {
+    FS.writeFile(msg.data.filename, msg.data.contents);
+    lg.callMain(['add', '--verbose', msg.data.filename]);
+    FS.syncfs(false, () => {
+      console.log(currentRepoRootDir, 'stored to indexeddb');
+      postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
+    });
+  } else if (msg.data.command === 'repohaschanges') {
+    postMessage({repohaschanges: repoHasChanges()});
+  } else if (msg.data.command === 'commitpullpush') {
+    if (repoHasChanges()) {
+      lg.callMain(['commit','-m', msg.data.commitmessage]);
     }
 
-    writeGlobalConfig('Test user', 'test@example.com');
+    lg.callMain(['fetch', 'origin']);
+    lg.callMain(['merge', 'origin/master']);
+    lg.callMain(['push']);
+    FS.syncfs(false, () => {
+      console.log(currentRepoRootDir, 'stored to indexeddb');
+      postMessage({ dircontents: FS.readdir('.') });
+    });      
+  } else if (msg.data.command === 'synclocal') {
+    currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    console.log('synclocal', currentRepoRootDir);
 
-    let currentRepoRootDir;
-
-    onmessage = (msg) => {
-      if (msg.data.accessToken) {
-        accessToken = msg.data.accessToken;
-        writeGlobalConfig(msg.data.username, msg.data.useremail);
-      } else if(msg.data.command === 'writefileandstage') {
-        FS.writeFile(msg.data.filename, msg.data.contents);
-        lg.callMain(['add', '--verbose', msg.data.filename]);
-        FS.syncfs(false, () => {
-          console.log(currentRepoRootDir, 'stored to indexeddb');
-          postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
-        });
-      } else if (msg.data.command === 'repohaschanges') {
-        postMessage({repohaschanges: repoHasChanges()});
-      } else if (msg.data.command === 'commitpullpush') {
-        if (repoHasChanges()) {
-          lg.callMain(['commit','-m', msg.data.commitmessage]);
-        }
-
-        lg.callMain(['fetch', 'origin']);
-        lg.callMain(['merge', 'origin/master']);
-        lg.callMain(['push']);
-        FS.syncfs(false, () => {
-          console.log(currentRepoRootDir, 'stored to indexeddb');
-          postMessage({ dircontents: FS.readdir('.') });
-        });      
-      } else if (msg.data.command === 'synclocal') {
-        currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
-        console.log('synclocal', currentRepoRootDir);
-
-        FS.mkdir(`/${currentRepoRootDir}`);
-        FS.mount(IDBFS, { }, `/${currentRepoRootDir}`);
-        
-        FS.syncfs(true, () => {          
-          if( FS.readdir(`/${currentRepoRootDir}`).find(file => file === '.git') ) {
-            FS.chdir( `/${currentRepoRootDir}` );
-            postMessage({ dircontents: FS.readdir('.') });
-            console.log(currentRepoRootDir, 'restored from indexeddb');
-          } else {
-            FS.chdir( '/' );
-            console.log('no git repo in', currentRepoRootDir);
-            postMessage({ dircontents: null });
-          }
-        });
-      } else if (msg.data.command === 'deletelocal') {
-        
-        FS.unmount(`/${currentRepoRootDir}`);
-        console.log('deleting database', currentRepoRootDir);
-        self.indexedDB.deleteDatabase('/' + currentRepoRootDir);
-        postMessage({ deleted: currentRepoRootDir});
-      } else if (msg.data.command === 'clone') {
-        currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
-        
-        lg.callMain(['clone', msg.data.url, currentRepoRootDir]);
-        FS.chdir(currentRepoRootDir);
-
-        FS.syncfs(false, () => {
-          console.log(currentRepoRootDir, 'stored to indexeddb');
-          postMessage({ dircontents: FS.readdir('.') });
-        });        
-      } else if (msg.data.command === 'pull') {
-        lg.callMain(['fetch', 'origin']);
-        lg.callMain(['merge', 'origin/master']);
-        FS.syncfs(false, () => {
-          console.log(currentRepoRootDir, 'stored to indexeddb');
-          postMessage({ dircontents: FS.readdir('.') });
-        });
-      } else if (msg.data.command === 'readfile') {
-        try {
-          postMessage({
-            filename: msg.data.filename,
-            filecontents: FS.readFile(msg.data.filename, {encoding: 'utf8'})
-          });
-        } catch (e) {
-          postMessage({'stderr': JSON.stringify(e)});
-        }
+    FS.mkdir(`/${currentRepoRootDir}`);
+    FS.mount(IDBFS, { }, `/${currentRepoRootDir}`);
+    
+    FS.syncfs(true, () => {          
+      if( FS.readdir(`/${currentRepoRootDir}`).find(file => file === '.git') ) {
+        FS.chdir( `/${currentRepoRootDir}` );
+        postMessage({ dircontents: FS.readdir('.') });
+        console.log(currentRepoRootDir, 'restored from indexeddb');
       } else {
-        lg.callMain([msg.data.command]);
+        FS.chdir( '/' );
+        console.log('no git repo in', currentRepoRootDir);
+        postMessage({ dircontents: null });
       }
-    };
+    });
+  } else if (msg.data.command === 'deletelocal') {
+    
+    FS.unmount(`/${currentRepoRootDir}`);
+    console.log('deleting database', currentRepoRootDir);
+    self.indexedDB.deleteDatabase('/' + currentRepoRootDir);
+    postMessage({ deleted: currentRepoRootDir});
+  } else if (msg.data.command === 'clone') {
+    currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    
+    lg.callMain(['clone', msg.data.url, currentRepoRootDir]);
+    FS.chdir(currentRepoRootDir);
 
-    postMessage({'ready': true});
+    FS.syncfs(false, () => {
+      console.log(currentRepoRootDir, 'stored to indexeddb');
+      postMessage({ dircontents: FS.readdir('.') });
+    });        
+  } else if (msg.data.command === 'pull') {
+    lg.callMain(['fetch', 'origin']);
+    lg.callMain(['merge', 'origin/master']);
+    FS.syncfs(false, () => {
+      console.log(currentRepoRootDir, 'stored to indexeddb');
+      postMessage({ dircontents: FS.readdir('.') });
+    });
+  } else if (msg.data.command === 'readfile') {
+    try {
+      postMessage({
+        filename: msg.data.filename,
+        filecontents: FS.readFile(msg.data.filename, {encoding: 'utf8'})
+      });
+    } catch (e) {
+      postMessage({'stderr': JSON.stringify(e)});
+    }
+  } else {
+    lg.callMain([msg.data.command]);
+  }
 };
