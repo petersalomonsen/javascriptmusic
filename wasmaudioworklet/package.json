@@ -1,7 +1,11 @@
 {
     "name": "wasm-music",
     "description": "Javascript/WebAssembly live coding environment for music and synthesis",
-    "version": "0.0.1",
+    "version": "0.0.2",
+    "repository": {
+        "url": "https://github.com/petersalomonsen/javascriptmusic"
+    },
+    "license": "GPL-3.0",
     "author": {
         "name": "Peter Salomonsen",
         "url": "https://petersalomonsen.com"
