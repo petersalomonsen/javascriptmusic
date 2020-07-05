@@ -15,7 +15,7 @@ class PatternSeqAudioWorkletProcessor extends AudioWorkletProcessor {
           this.wasmInstance = (await WebAssembly.instantiate(msg.data.wasm, {
             environment: { SAMPLERATE: msg.data.samplerate },
             env: {
-              abort: () => console.log(abort)
+              abort: () => console.log('webassembly synth abort, should not happen')
             }
           })).instance.exports;
           

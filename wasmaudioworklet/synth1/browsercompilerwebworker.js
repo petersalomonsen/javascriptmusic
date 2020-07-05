@@ -11,6 +11,9 @@ const wasi_main_src = 'wasi_main.ts';
 
 let assemblyscriptsynthsources;
 
+const EXPORT_MODE_WASI_MAIN = 'wasimain';
+const EXPORT_MODE_WASM_LIB = 'libmodule';
+
 const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json').then(r => r.json())
     .then(obj => {
         assemblyscriptsynthsources = obj;
@@ -19,7 +22,7 @@ const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json'
 }));
 
 
-function createWebAssemblySongData(song) {
+function createWebAssemblySongData(song, mode=EXPORT_MODE_WASI_MAIN) {
     const patternsbuffer = new Array((song.patterns.length + 1) * song.patternsize);
     patternsbuffer.fill(0, 0, song.patternsize);
 
@@ -45,7 +48,9 @@ function createWebAssemblySongData(song) {
         }
     }
 
-    assemblyscriptsynthsources[wasi_main_src] = `
+    if (mode===EXPORT_MODE_WASI_MAIN) {
+        console.log('exporting WASM module with WASI main');
+        assemblyscriptsynthsources[wasi_main_src] = `
 import { fd_write, iovec} from 'bindings/wasi';
 import { allocateSampleBuffer, getTick, setBPM, setPatternsPtr, setInstrumentPatternListPtr, fillSampleBufferInterleaved } from './index';
 
@@ -73,6 +78,21 @@ export function _start(): void {
     } while(previousTick < getTick())
 }    
 `;
+    } else if (mode===EXPORT_MODE_WASM_LIB) {
+        console.log('exporting WASM lib module');
+assemblyscriptsynthsources[wasi_main_src] = `
+import { allocateSampleBuffer, getTick, setBPM, setPatternsPtr, setInstrumentPatternListPtr, fillSampleBufferInterleaved } from './index';
+export * from './index';
+
+const patterns: u8[] = [${patternsbuffer.map(v => '' + v).join(',')}];
+const instrumentspatternlists: u8[] = [${instrumentpatternslist.map(v => '' + v).join(',')}];
+setPatternsPtr(load<usize>(changetype<usize>(patterns)));
+setInstrumentPatternListPtr(load<usize>(changetype<usize>(instrumentspatternlists)),
+            ${songlength}, ${song.instrumentPatternLists.length});
+setBPM(${song.BPM});
+
+`;
+    }
 }
 
 function compileAssemblyScript(sources, options, entrypoint) {
@@ -112,7 +132,7 @@ onmessage = async function (msg) {
     if(msg.data.song) {
         assemblyscriptsynthsources[default_mix_source] = synthsource;
         assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = 44100;`
-        createWebAssemblySongData(msg.data.song);
+        createWebAssemblySongData(msg.data.song, msg.data.exportmode); 
         const {stderr, text, binary} = compileAssemblyScript(assemblyscriptsynthsources,
             {
                 "runtime": "none",

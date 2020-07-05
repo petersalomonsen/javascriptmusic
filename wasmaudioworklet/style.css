@@ -105,12 +105,20 @@ input::placeholder {
 
 .spinner {
     display: none;
-    border: 12px solid #f3f3f3;
+    position: fixed;
+    margin: auto;
+    top:0;
+	bottom: 0;
+	left: 0;
+	right: 0;
+    background-color: rgba(0,0,0, 0.5);
+    border: 20px solid #f3f3f3;
     border-radius: 50%;
-    border-top: 12px solid #3498db;
+    border-top: 20px solid #3498db;
+    z-index: 1000;
     
-    width: 15px;
-    height: 15px;
+    width: 100px;
+    height: 100px;
     -webkit-animation: spin 1s linear infinite; /* Safari */
     animation: spin 1s linear infinite;
   }
