@@ -1,6 +1,7 @@
 import { waitForAppReady } from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { commitAndSyncRemote } from './wasmgit/wasmgitclient.js';
+import { modal } from './common/ui/modal.js';
 
 describe('editorcontroller', async function() {
     this.timeout(20000);
@@ -138,7 +139,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         assert.isAbove(audioWorkletMessage.wasm.length, 1000);
     });
     
-    it('should compile and export song to wasm', async () => {        
+    it('should compile and export song to wasm with WASI main entry point', async () => {        
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);
         const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
@@ -158,6 +159,48 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 
                 if (elementName === 'a') {
                     elm.click = () => resolve(elm.href);
+                } else if (elementName === 'common-modal') {
+                    elm.shadowRoot.result('wasimain');
+                }
+                return elm;
+            }
+        });
+
+        appElement.querySelector('#exportbutton').click(); 
+        const url = await downloadPromise;
+
+        const wasmbinary = await fetch(url).then(r => r.arrayBuffer());
+
+        assert.isAbove(wasmbinary.byteLength, 1000);
+        assert.isDefined((await WebAssembly.instantiate(wasmbinary, {
+            wasi_snapshot_preview1: {
+                fd_write: () => 0
+            }
+        })).instance.exports._start);
+        document.createElement = document._createElement;
+    });
+    it('should compile and export song to wasm with lib functions exported', async () => {        
+        songsourceeditor.doc.setValue(songsource);
+        synthsourceeditor.doc.setValue(synthsource);
+        const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
+        let audioWorkletMessage;
+        window.audioworkletnode = {
+            port: {
+                postMessage: msg => audioWorkletMessage = msg
+            },
+            context: {
+                sampleRate: 44100
+            }
+        };
+        const downloadPromise = new Promise(resolve => {
+            document._createElement = document.createElement;
+            document.createElement = function(elementName, options) {
+                const elm = this._createElement(elementName, options);
+
+                if (elementName === 'a') {
+                    elm.click = () => resolve(elm.href);
+                } else if (elementName === 'common-modal') {
+                    elm.shadowRoot.result('libmodule');
                 }
                 return elm;
             }
@@ -169,11 +212,8 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         const wasmbinary = await fetch(url).then(r => r.arrayBuffer());
 
         assert.isAbove(wasmbinary.byteLength, 1000);
-        assert.isDefined((await WebAssembly.instantiate(wasmbinary, {
-            wasi_snapshot_preview1: {
-                fd_write: () => 0
-            }
-        })).instance.exports._start);
+        assert.isDefined((await WebAssembly.instantiate(wasmbinary)).instance.exports.fillSampleBuffer);
+        document.createElement = document._createElement;
     });  
 });
 

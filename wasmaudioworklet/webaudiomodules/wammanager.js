@@ -11,7 +11,6 @@ export let wamsynth;
 let wamPaused;
 let lastPostedSong = [];
 let samplerate;
-let audioContext;
 let visualizeEventIndex = 0;
 
 export async function loadWAM() {
@@ -39,7 +38,6 @@ export async function startWAM(actx) {
         wamsynth.connect(actx.destination);
         samplerate = actx.sampleRate;
         toggleSpinner(false);
-        audioContext = actx;
         console.log('WAM synth started');
     }
 }
