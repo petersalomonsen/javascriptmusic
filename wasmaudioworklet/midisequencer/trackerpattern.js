@@ -51,6 +51,15 @@ Array.prototype.quantize = function(stepsperbeat, percentage = 1) {
     return quantize(this, stepsperbeat, percentage);
 }
 
+Array.prototype.repeat = function(times = 1) {
+    const arrToRepat = this.slice(0);
+    let arr = this;
+    for(let n = 0 ; n < times ; n++ ) {
+        arr = arr.concat(arrToRepat);
+    }
+    return arr;    
+}
+
 export class TrackerPattern extends Pattern {
     constructor(output, channel, stepsperbeat = 1, defaultvelocity = 100) {
         super(output);            

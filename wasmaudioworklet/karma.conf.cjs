@@ -26,6 +26,7 @@ module.exports = function(config) {
       '/app.html': '/base/app.html',
       '/audioworkletprocessor.js': '/base/audioworkletprocessor.js',
       '/synth1': '/base/synth1',
+      '/midisequencer': '/base/midisequencer',
       '/webaudiomodules': '/base/webaudiomodules',
       '/wasmgit': '/base/wasmgit',
       '/emptysong.js': '/base/emptysong.js',

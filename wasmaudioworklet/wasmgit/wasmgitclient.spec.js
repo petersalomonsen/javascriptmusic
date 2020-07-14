@@ -1,12 +1,14 @@
-import { initWASMGitClient, commitAndSyncRemote, repoHasChanges } from './wasmgitclient.js';
+import { initWASMGitClient, commitAndSyncRemote, repoHasChanges,
+    writefileandstage, worker, readfile } from './wasmgitclient.js';
 
 describe('wasm-git client', async function() {
     this.timeout(20000);
 
     it('should resolve synth and song filename from git repository', async () => {                
-        document.documentElement.appendChild(document.createElement('wasmgit-ui'));
         const config = await initWASMGitClient('test');
-        
+
+        document.documentElement.appendChild(document.createElement('wasmgit-ui'));
+
         assert.isFalse(await repoHasChanges());
 
         // get dir contents by calling sync remote        
@@ -31,5 +33,32 @@ describe('wasm-git client', async function() {
             worker.onmessage = (msg) => resolve(msg)
         );
         assert.isTrue(msg.data.accessTokenConfigured);
+    });
+
+    it('should not overwrite uncommitted changes on reload', async () => {
+        assert.isFalse(await repoHasChanges());
+        const contentToWrite = 'blabla';
+        const filename = 'blabla.txt';
+        await writefileandstage(filename, contentToWrite);
+        worker.terminate();
+        await initWASMGitClient('test');        
+        assert.isTrue(await repoHasChanges());
+        assert.equal(await readfile(filename), contentToWrite);
+    });
+    it('should be able to handle simultanous actions', async () => {
+        const contentToWrite = 'blabla2';
+        const filename = 'blabla2.txt';
+        const file1promise = writefileandstage(filename, contentToWrite);
+        const readfile1promise = readfile(filename);
+
+        const contentToWrite2 = 'ababab3';
+        const filename2 = 'ababab2.txt';
+        const file2promise = writefileandstage(filename2, contentToWrite2);        
+        const readfile2promise = readfile(filename2);
+
+        assert.equal((await file1promise).find(fn => fn === filename), filename);
+        assert.equal((await file2promise).find(fn => fn === filename2), filename2);
+        assert.equal(await readfile1promise, contentToWrite);
+        assert.equal(await readfile2promise, contentToWrite2);
     });
 });

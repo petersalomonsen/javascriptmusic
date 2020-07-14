@@ -1,5 +1,5 @@
 import { loadScript, loadCSS } from './common/scriptloader.js';
-import { compileSong as compileMidiSong } from './midisequencer/songcompiler.js';
+import { compileSong as compileMidiSong, instrumentNames as midiInstrumentNames } from './midisequencer/songcompiler.js';
 import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
@@ -45,6 +45,7 @@ async function compileWebAssemblySynth(synthsource, song, samplerate, exportmode
         console.log('successfully compiled webassembly synth');
         window.WASM_SYNTH_BYTES = result.data.binary;
         webassemblySynthUpdated = true;
+        return result.data.binary;
     } else if(result.data.downloadWASMurl) {
         const linkElement = document.createElement('a');
         linkElement.href = result.data.downloadWASMurl;
@@ -55,6 +56,7 @@ async function compileWebAssemblySynth(synthsource, song, samplerate, exportmode
     } else {
         console.log('no changes for webassembly synth');
     }
+    return null;
 }
 
 export async function initEditor(componentRoot) {
@@ -147,14 +149,18 @@ export async function initEditor(componentRoot) {
             }
         }
         
-        let songmode = 'WASM';
+        let songmode = 'midi';
         if (songsource.indexOf('SONGMODE=PROTRACKER') >= 0) {
             // special mode: we are building an amiga protracker module
             songmode = 'protracker';
-        } else if (songsource.indexOf('SONGMODE=YOSHIMI') >= 0) {
-            // special mode: yoshimi midi synth
-            songmode = 'yoshimi';
-            if( !componentRoot.querySelector('wam-preseteditor')) {
+        } else if (
+            songsource.indexOf('global.pattern_size_shift')>-1 || 
+            songsource.indexOf('global.bpm')>-1 ) {
+            songmode = 'WASM';
+            window.insertRecording = () => insertRecording4klang(insertStringIntoEditor);
+        } else {
+            const synthSourceIsXML = synthsource.startsWith('<?xml');
+            if( synthSourceIsXML && !componentRoot.querySelector('wam-preseteditor')) {
                 const presetsui = componentRoot.querySelector('#presetsui');
                 presetsui.replaceChild(document.createElement('wam-preseteditor'), presetsui.firstChild);
                 toggleEditors('assemblyscripteditor', false);
@@ -165,17 +171,32 @@ export async function initEditor(componentRoot) {
             window.insertRecording = () => insertMidiRecording(insertStringIntoEditor);
             try {
                 const eventlist = await compileMidiSong(songsource);
+                if ( midiInstrumentNames.length > 0 ) {
+                    setInstrumentNames(midiInstrumentNames);
+                }
                 if (exportwasm) {
                     await exportWAMAudio(eventlist, synthsource);
-                }    
-                return { eventlist: eventlist, synthsource: synthsource };
+                }
+                let synthwasm = undefined;
+                if (!synthSourceIsXML) {
+                    toggleSpinner(true);
+                    synthwasm = await compileWebAssemblySynth(synthsource,
+                        undefined,
+                        new AudioContext().sampleRate,
+                        exportwasm                      
+                    );
+                    toggleSpinner(false);
+                    return { eventlist: eventlist, synthwasm: synthwasm };
+                } else {
+                    window.WASM_SYNTH_BYTES = null;
+                    return { eventlist: eventlist, synthsource: synthsource};
+                }
             } catch(e) {
+                toggleSpinner(false);
                 errorMessagesContentElement.innerText = e;
                 errorMessagesElement.style.display = 'block';
                 throw e;
             }
-        } else {
-            window.insertRecording = () => insertRecording4klang(insertStringIntoEditor);
         }
 
         const patternToolsGlobal = createPatternToolsGlobal();
@@ -298,8 +319,22 @@ export async function initEditor(componentRoot) {
         try {
             const song = await compileSong();
 
+            if (song.synthwasm) {
+                audioworkletnode.port.postMessage({
+                    wasm: song.synthwasm
+                });
+            }
+
             if (song.eventlist) {
-                await wamPostSong(song.eventlist, song.synthsource);
+                if (song.synthsource) {
+                    await wamPostSong(song.eventlist, song.synthsource);
+                } else {
+                    audioworkletnode.port.postMessage({ 
+                        sequencedata: song.eventlist,
+                        toggleSongPlay: componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false
+                    });
+                    webassemblySynthUpdated = false;
+                }
             } else if(window.audioworkletnode) {
                 audioworkletnode.port.postMessage({
                     song: song,
@@ -337,10 +372,10 @@ export async function initEditor(componentRoot) {
         }
 
         console.log(`loaded from gist ${gistid}: ${songfilename}`);
-    } else if (gitrepoparam) {
-        appendToSubtoolbar1(document.createElement('wasmgit-ui'));
+    } else if (gitrepoparam) {        
         gitrepoconfig = await initWASMGitClient(gitrepoparam.split('=')[1]);
-        
+        appendToSubtoolbar1(document.createElement('wasmgit-ui'));
+
         addRemoteSyncListener(async () => {
             storedsongcode = await readfile(gitrepoconfig.songfilename);
             storedsynthcode = await readfile(gitrepoconfig.synthfilename);
