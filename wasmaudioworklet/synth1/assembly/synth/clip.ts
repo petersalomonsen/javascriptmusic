@@ -13,3 +13,13 @@ export function softclip(signal: f32): f32 {
         return (signal - ((signal * signal * signal) / 3.0));
     }
 }
+
+export function hardclip(signal: f32): f32 {
+    if(signal > 1.0) {
+        return 1.0;
+    } else if(signal < -1.0) {
+        return -1.0;
+    } else {
+        return signal;
+    }
+}

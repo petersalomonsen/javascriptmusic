@@ -1,9 +1,16 @@
-language: node_js
-node_js:
-  - 14
-
-install:
-  - cd wasmaudioworklet
-  - npm install
-
-script: "npm run test"
+matrix:
+  include:
+    - language: node_js
+      node_js:
+        - 14
+      install:
+        - cd wasmaudioworklet
+        - npm install
+      script: "npm run test"
+    - language: node_js
+      node_js:
+        - 14
+      install:
+        - cd wasmaudioworklet/synth1
+        - npm install
+      script: "npm run test:ci"

@@ -1,6 +1,6 @@
 import { SAMPLERATE } from "../environment";
 
-enum EnvelopeState {
+export enum EnvelopeState {
     ATTACK = 0,
     DECAY = 1,
     SUSTAIN = 2,
@@ -61,5 +61,9 @@ export class Envelope {
     
     release(): void {
         this.state = EnvelopeState.RELEASE;
+    }
+
+    isDone(): boolean {
+        return this.state === EnvelopeState.DONE;
     }
 }

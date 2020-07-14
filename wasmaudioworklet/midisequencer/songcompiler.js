@@ -3,6 +3,7 @@ import { TrackerPattern, pitchbend, controlchange, createNoteFunctions } from '.
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from './sequenceconstants.js';
 
 let songmessages = [];
+export let instrumentNames= [];
 let loopPromise;
 export let recordingStartTimeMillis = 0;
 
@@ -49,13 +50,15 @@ const songargs = {
     'controlchange': controlchange,
     'waitForBeat': waitForBeat,
     'startRecording': startRecording,
-    'stopRecording': stopRecording
+    'stopRecording': stopRecording,
+    'addInstrument': (instrument) => instrumentNames.push(instrument)
 };
 Object.assign(songargs, createNoteFunctions());
 const songargkeys = Object.keys(songargs);
 
 export async function compileSong(songsource) {
     songmessages = [];
+    instrumentNames = [];
 
     console.log('compile song');
     resetTick();

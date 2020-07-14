@@ -1,22 +1,39 @@
 import { initNear, authdata as nearAuthData, login as nearLogin } from './nearacl.js';
 import { toggleSpinner } from '../app.js';
 
-const worker = new Worker('./wasmgit/wasmgitworker.js');
+export let worker;
 
 let gitrepourl;
 let commitAndPushButton;
 
 const remoteSyncListeners = [];
 
+let workerMessageListeners = [];
+
 export async function initWASMGitClient(gitrepo) {
-    gitrepourl = `https://githttpserverdemo.petersalomonsen.usw1.kubesail.io/${gitrepo}`;
-        
-    let dircontents = await synclocal();
-    if (!dircontents) {
-        dircontents = await clone();
+    worker = new Worker('./wasmgit/wasmgitworker.js');
+    worker.onmessage = (msg) => {
+        workerMessageListeners = workerMessageListeners.filter(listener => listener(msg) === true);
     }
 
-    updateCommitAndSyncButtonState(await repoHasChanges());
+    gitrepourl = `https://githttpserverdemo.petersalomonsen.usw1.kubesail.io/${gitrepo}`;
+        
+    await initNear();
+    if (nearAuthData) {
+        worker.postMessage(nearAuthData);
+        const result = await new Promise((resolve) =>
+            workerMessageListeners.push((msg) => msg.data.accessTokenConfigured ? resolve(msg.data.accessTokenConfigured) : true)
+        );
+        console.log('Already logged in to near', result);
+    }
+
+    let dircontents = await synclocal();
+
+    if (!dircontents) {
+        dircontents = await clone();
+    } else {
+        console.log('Repository is already local');
+    }
 
     const config = {
         songfilename: dircontents.find(filename => filename.endsWith('.js')),
@@ -35,15 +52,20 @@ export async function clone() {
         command: 'clone',
         url: gitrepourl
     });
-    return await new Promise((resolve) => worker.onmessage = msg => resolve(msg.data.dircontents));
+    return await awaitDirContents();
 }
 
+async function awaitDirContents() {
+    return await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.dircontents!==undefined ? resolve(msg.data.dircontents) : true)
+    );
+}
 export async function synclocal() {
     worker.postMessage({
         command: 'synclocal',
         url: gitrepourl
     });
-    return await new Promise((resolve) => worker.onmessage = msg => resolve(msg.data.dircontents));
+    return await awaitDirContents();    
 }
 
 export async function commitAndSyncRemote(commitmessage) {
@@ -51,7 +73,7 @@ export async function commitAndSyncRemote(commitmessage) {
         command: 'commitpullpush',
         commitmessage: commitmessage
     });
-    const dircontents = await new Promise((resolve) => worker.onmessage = msg => resolve(msg.data.dircontents));
+    const dircontents = await awaitDirContents();
     remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(dircontents));
     return dircontents;
 }
@@ -61,7 +83,9 @@ export async function readfile(filename) {
         command: 'readfile',
         filename: filename
     });
-    return await new Promise((resolve) => worker.onmessage = msg => resolve(msg.data.filecontents));
+    return await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.filename === filename ? resolve(msg.data.filecontents) : true)
+    );
 }
 
 export function updateCommitAndSyncButtonState(changes) {
@@ -80,14 +104,20 @@ export async function writefileandstage(filename, contents) {
         filename: filename,
         contents: contents
     });
-    const result = await new Promise((resolve) => worker.onmessage = msg => resolve(msg.data));
+    const result = await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges!==undefined ? resolve(msg.data) : true)
+    );
     updateCommitAndSyncButtonState(result.repoHasChanges);
-    return result.filecontents;
+    return result.dircontents;
 }
 
 export async function repoHasChanges() {
     worker.postMessage({command: 'repohaschanges'});
-    return await new Promise(resolve => worker.onmessage = msg => resolve(msg.data.repohaschanges));
+    const result =  await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.repohaschanges !== undefined ? resolve(msg.data.repohaschanges) : true)
+    );
+    updateCommitAndSyncButtonState(result);
+    return result;
 }
 
 customElements.define('wasmgit-ui',
@@ -111,8 +141,10 @@ customElements.define('wasmgit-ui',
                     document.documentElement.appendChild(commitModal);
                     await commitModal.readyPromise;
                     try {
+                        toggleSpinner(false);
                         const commitMessage = await commitModal.getCommitMessage();
                         document.documentElement.removeChild(commitModal);
+                        toggleSpinner(true);
                         await commitAndSyncRemote(commitMessage);                
                     } catch(e) {
                         document.documentElement.removeChild(commitModal);
@@ -123,10 +155,7 @@ customElements.define('wasmgit-ui',
                 toggleSpinner(false);
             };
 
-            await initNear();
-
             if (nearAuthData) {
-                worker.postMessage(nearAuthData);
                 this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';
             } else {
@@ -135,6 +164,7 @@ customElements.define('wasmgit-ui',
                     nearLogin();
                 };
             }
+            updateCommitAndSyncButtonState(await repoHasChanges());
         }
     });
 

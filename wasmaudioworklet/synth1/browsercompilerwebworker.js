@@ -2,11 +2,12 @@
  * Web worker to compile web assembly synth in the browser
  */
 
-importScripts('https://cdn.jsdelivr.net/npm/binaryen@93.0.0-nightly.20200609/index.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.12.3/dist/assemblyscript.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.12.3/dist/asc.js');
+importScripts('https://cdn.jsdelivr.net/npm/binaryen@94.0.0-nightly.20200716/index.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.14.3/dist/assemblyscript.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.14.3/dist/asc.js');
 
-const default_mix_source = 'mixes/newyear.mix.ts';
+let mix_source = 'mixes/newyear.mix.ts';
+let index_source = 'index.ts';
 const wasi_main_src = 'wasi_main.ts';
 
 let assemblyscriptsynthsources;
@@ -17,7 +18,7 @@ const EXPORT_MODE_WASM_LIB = 'libmodule';
 const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json').then(r => r.json())
     .then(obj => {
         assemblyscriptsynthsources = obj;
-        assemblyscriptsynthsources[default_mix_source] = null; // force compile first 
+        assemblyscriptsynthsources[mix_source] = null; // force compile first 
         resolve(true);
 }));
 
@@ -129,8 +130,17 @@ onmessage = async function (msg) {
     await ready;
     console.log('assemblyscript sources loaded');
     
+    if (synthsource.indexOf('midichannels') > -1) {
+        // assume midi synth
+        mix_source = 'mixes/midi.mix.ts';
+        index_source = 'midi/midisynth.ts';
+    } else {
+        mix_source = 'mixes/newyear.mix.ts';
+        index_source = 'index.ts';
+    }
+
     if(msg.data.song) {
-        assemblyscriptsynthsources[default_mix_source] = synthsource;
+        assemblyscriptsynthsources[mix_source] = synthsource;
         assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = 44100;`
         createWebAssemblySongData(msg.data.song, msg.data.exportmode); 
         const {stderr, text, binary} = compileAssemblyScript(assemblyscriptsynthsources,
@@ -149,13 +159,13 @@ onmessage = async function (msg) {
         });
     }
 
-    if(assemblyscriptsynthsources[default_mix_source] !== synthsource) {
+    if(assemblyscriptsynthsources[mix_source] !== synthsource) {
         assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = ${samplerate};`
 
-        assemblyscriptsynthsources[default_mix_source] = synthsource;
+        assemblyscriptsynthsources[mix_source] = synthsource;
         const {stderr, text, binary} = compileAssemblyScript(assemblyscriptsynthsources,
                 { "runtime": "none", "optimizeLevel": 0, "shrinkLevel": 0},
-                'index.ts');
+                index_source);
 
         postMessage({
             error: stderr.toString(),

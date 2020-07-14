@@ -1,10 +1,12 @@
 import { stopVideoRecording, startVideoRecording } from './screenrecorder/screenrecorder.js';
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
+import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization } from './visualizer/80sgrid.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
     let audioworkletnode;
+    let onmidi = () => {};
     let playing = false;
 
     const context = new AudioContext();
@@ -26,10 +28,23 @@ export function initAudioWorkletNode(componentRoot) {
         let bytes;
 
         if(song.eventlist) {
-            await startWAM(context);
-            wamPostSong(song.eventlist, song.synthsource);
-            if (window.audioVideoRecordingEnabled === true) {
-                await startVideoRecording(context, wamsynth);        
+            await context.audioWorklet.addModule('./midisequencer/audioworkletprocessorsequencer.js');
+
+            if (song.synthwasm || (!audioworkletnode && window.WASM_SYNTH_BYTES)) {                
+                audioworkletnode = await createMidiSynthAudioWorklet(context,
+                        window.WASM_SYNTH_BYTES,
+                        song.eventlist,
+                        componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false
+                    );
+                window.audioworkletnode = audioworkletnode;
+                onmidi = midiSynthOnMidi;
+            } else if (song.synthsource) {
+                await startWAM(context);
+                wamPostSong(song.eventlist, song.synthsource);
+                if (window.audioVideoRecordingEnabled === true) {
+                    await startVideoRecording(context, wamsynth);        
+                }
+                onmidi = wamOnMidi;
             }
         } else {
             if(song.modbytes) {
@@ -68,7 +83,7 @@ export function initAudioWorkletNode(componentRoot) {
                 const activenotes = new Array(song.instrumentPatternLists.length).fill(0);
                 
                 audioworkletnode.port.onmessage = msg => {
-                    if(msg.data.channelvalues) {
+                    if (msg.data.channelvalues) {
                         const channelvalues = msg.data.channelvalues;
                         for(let n=0;n<channelvalues.length;n++) {
                             const note = channelvalues[n];            
@@ -82,7 +97,7 @@ export function initAudioWorkletNode(componentRoot) {
                             }            
                         };
                     }
-                    if(msg.data.patternData) {
+                    if (msg.data.patternData) {
                         window.recordedSongData.patterns[msg.data.recordedPatternNo - 1] = msg.data.patternData;
                         window.recordedSongData.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] =
                                         msg.data.recordedPatternNo;
@@ -101,6 +116,7 @@ export function initAudioWorkletNode(componentRoot) {
             audioworkletnode.port.postMessage({terminate: true});
             audioworkletnode.disconnect();
             audioworkletnode = null;
+            window.audioworkletnode = null;
         }
         playing = false;
         if (wamsynth) {
@@ -209,7 +225,7 @@ export function initAudioWorkletNode(componentRoot) {
             sendNoteToWorkletSingle(mappedChannel, note, velocity);
         }
 
-        wamOnMidi([0x90 + mappedChannel, note, velocity]);
+        onmidi([0x90 + mappedChannel, note, velocity]);
     }
 
     async function startmidi() {
@@ -228,7 +244,7 @@ export function initAudioWorkletNode(componentRoot) {
                     
                     processNoteMessage(note, velocity);
                 } else {
-                    wamOnMidi([msgType + channel, msg.data[1], msg.data[2]]);
+                    onmidi([msgType + channel, msg.data[1], msg.data[2]]);
                 }
             };
         }

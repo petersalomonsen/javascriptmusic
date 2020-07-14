@@ -4,6 +4,9 @@
 const fs = require('fs');
 
 function walkSync(dir, filelist) {
+  if (dir.indexOf('__tests__') > -1) {
+    return [];
+  }
   const files = fs.readdirSync(dir);
   
   filelist = filelist || [];
@@ -32,6 +35,7 @@ fileList.forEach(filename => {
     case 'math':
     case 'fx':
     case 'common':
+    case 'midi':
     case 'synth':
       filecontent.split(/\n/)
         .filter(line => line.startsWith('export '))
