@@ -30,8 +30,7 @@ async function logout() {
 
 async function loadAccountData() {
     let currentUser = {
-        accountId: walletConnection.getAccountId(),
-        balance: (await walletConnection.account().state()).amount
+        accountId: walletConnection.getAccountId()
     }
     
     const tokenMessage = btoa(JSON.stringify({accountId: currentUser.accountId, iat: new Date().getTime()}));

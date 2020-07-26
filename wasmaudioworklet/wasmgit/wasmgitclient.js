@@ -18,7 +18,11 @@ export async function initWASMGitClient(gitrepo) {
 
     gitrepourl = `https://githttpserverdemo.petersalomonsen.usw1.kubesail.io/${gitrepo}`;
         
-    await initNear();
+    try {
+        await initNear();
+    } catch (e) {
+        console.error('Failed to initialize near', e);
+    }
     if (nearAuthData) {
         worker.postMessage(nearAuthData);
         const result = await new Promise((resolve) =>
