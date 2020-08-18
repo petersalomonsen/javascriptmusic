@@ -5,17 +5,17 @@ let currentRepoRootDir;
 
 var Module = {
     locateFile: function(s) {
-      return 'https://unpkg.com/wasm-git@0.0.2/' + s;
+      return 'https://unpkg.com/wasm-git@0.0.4/' + s;
     },
     'print': function(text) {   
       if (captureOutput) {
-        stdout += text;
+        stdout += text + '\n';
       }   
       console.log(text);
     },
     'printErr': function(text) {    
       if (captureOutput) {
-        stderr += text;
+        stderr += text + '\n';
       }     
       console.error(text);
     }
@@ -27,7 +27,7 @@ XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
   this._open(method, url, async, user, password);
   this.setRequestHeader('Authorization', `Bearer ${accessToken}`);
 }
-importScripts('https://unpkg.com/wasm-git@0.0.2/lg2.js');
+importScripts('https://unpkg.com/wasm-git@0.0.4/lg2.js');
 
 function writeGlobalConfig(username, useremail) {
   FS.writeFile('/home/web_user/.gitconfig', '[user]\n' +
@@ -75,6 +75,12 @@ onmessage = async (msg) => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
       postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
     });
+  } else if(msg.data.command === 'discardchanges') {
+    lg.callMain(['checkout', '--'].concat(msg.data.filenames));
+    FS.syncfs(false, () => {
+      console.log(currentRepoRootDir, 'stored to indexeddb');
+      postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
+    });
   } else if (msg.data.command === 'repohaschanges') {
     postMessage({repohaschanges: repoHasChanges()});
   } else if (msg.data.command === 'commitpullpush') {
@@ -107,8 +113,7 @@ onmessage = async (msg) => {
         postMessage({ dircontents: null });
       }
     });
-  } else if (msg.data.command === 'deletelocal') {
-    
+  } else if (msg.data.command === 'deletelocal') {    
     FS.unmount(`/${currentRepoRootDir}`);
     console.log('deleting database', currentRepoRootDir);
     self.indexedDB.deleteDatabase('/' + currentRepoRootDir);
@@ -123,6 +128,9 @@ onmessage = async (msg) => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
       postMessage({ dircontents: FS.readdir('.') });
     });        
+  } else if (msg.data.command === 'diff') {
+    callAndCaptureOutput(['diff', 'master']);
+    postMessage({ diff: stdout });
   } else if (msg.data.command === 'pull') {
     lg.callMain(['fetch', 'origin']);
     lg.callMain(['merge', 'origin/master']);

@@ -6,7 +6,7 @@
         left: 0;
         right: 0;
         width: 80%;
-        height: 180px;
+        height: 300px;
         margin: auto;
         text-align: center;
         padding: 20px;
@@ -36,11 +36,20 @@
         width: 80%;
         height: 80px;
     }
+    #diffarea {
+        overflow: scroll;
+        text-align: left;
+        height: 100px;
+        font-size: 14px;
+    }
 </style>
 <div class="modaldiv">
     Enter commit message<br />
     <textarea id="commitMessageField">edits from livecode environment</textarea>
     <br />
+    <div>
+        <pre id="diffarea"></pre>
+    </div>
     <button id="cancelbutton">Cancel</button>
     <button id="proceedbutton">Proceed</button>
 </div>

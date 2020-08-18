@@ -21,6 +21,7 @@ if(typeof AudioWorkletNode !== 'function') {
         constructor(context, processorName, options) {
             this.connected = false;
             AudioWorkletGlobalScope.sampleRate = context.sampleRate;
+            window.sampleRate = context.sampleRate;
 
             this.processorInstance = new window.audioWorkletProcessors[processorName](options);
             this.processorInstance.port.postMessage = (msg) => {
