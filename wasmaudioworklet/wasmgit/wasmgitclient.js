@@ -5,6 +5,7 @@ export let worker;
 
 let gitrepourl;
 let commitAndPushButton;
+let discardChangesButton;
 
 const remoteSyncListeners = [];
 
@@ -79,6 +80,7 @@ export async function commitAndSyncRemote(commitmessage) {
     });
     const dircontents = await awaitDirContents();
     remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(dircontents));
+    await repoHasChanges(); // update buttons after sync
     return dircontents;
 }
 
@@ -92,12 +94,37 @@ export async function readfile(filename) {
     );
 }
 
+export async function diff() {
+    worker.postMessage({
+        command: 'diff'
+    });
+    const result = await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.diff ? resolve(msg.data.diff) : true)
+    );
+    return result;
+}
+
+export async function discardchanges(filenames) {
+    worker.postMessage({
+        command: 'discardchanges',
+        filenames: filenames
+    });
+    const result = await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges!==undefined ? resolve(msg.data) : true)
+    );
+    updateCommitAndSyncButtonState(result.repoHasChanges);
+    remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(result.dircontents));
+    return result;
+}
+
 export function updateCommitAndSyncButtonState(changes) {
     if (commitAndPushButton) {
         if (changes) {
             commitAndPushButton.innerHTML = 'Commit & Sync';
+            discardChangesButton.style.display = 'block';
         } else {
             commitAndPushButton.innerHTML = 'Sync remote';
+            discardChangesButton.style.display = 'none';
         }
     }
 }
@@ -159,6 +186,10 @@ customElements.define('wasmgit-ui',
                 toggleSpinner(false);
             };
 
+            discardChangesButton = this.shadowRoot.getElementById('discardChangesButton');
+            discardChangesButton.onclick = async () => {
+                discardchanges(['song.js', 'synth.ts']);
+            };
             if (nearAuthData) {
                 this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';
@@ -188,6 +219,7 @@ customElements.define('wasmgit-commit-modal',
         async init() {
             const uihtml = await fetch('wasmgit/commitmessagemodal.html').then(r => r.text());
             this.shadowRoot.innerHTML = uihtml;
+            this.shadowRoot.getElementById('diffarea').innerHTML = await diff();
             this.proceedButtonPromise = new Promise((resolve, reject) => {
                 this.shadowRoot.getElementById('proceedbutton').onclick = resolve
                 this.shadowRoot.getElementById('cancelbutton').onclick = reject;

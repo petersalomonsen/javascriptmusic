@@ -1,5 +1,5 @@
 import { initWASMGitClient, commitAndSyncRemote, repoHasChanges,
-    writefileandstage, worker, readfile } from './wasmgitclient.js';
+    writefileandstage, worker, readfile, diff, discardchanges } from './wasmgitclient.js';
 
 describe('wasm-git client', async function() {
     this.timeout(20000);
@@ -60,5 +60,17 @@ describe('wasm-git client', async function() {
         assert.equal((await file2promise).find(fn => fn === filename2), filename2);
         assert.equal(await readfile1promise, contentToWrite);
         assert.equal(await readfile2promise, contentToWrite2);
+    });
+    it('should show diff', async () => {
+        assert.isTrue(await repoHasChanges());
+        const difftxt = await diff();
+        assert.match(difftxt, /.*\n\+ababab3\n.*/);
+    });
+    it('should discard changes', async () => {
+        assert.isTrue(await repoHasChanges());
+        await discardchanges(['ababab2.txt', 'blabla2.txt']);
+        assert.isTrue(await repoHasChanges());
+        await discardchanges(['blabla.txt']);
+        assert.isFalse(await repoHasChanges());
     });
 });
