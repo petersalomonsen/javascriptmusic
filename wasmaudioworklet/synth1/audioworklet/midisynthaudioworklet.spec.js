@@ -1,6 +1,7 @@
 import { waitForAppReady } from '../../app.js';
 import { songsourceeditor, synthsourceeditor } from '../../editorcontroller.js';
 import { getCurrentTime } from './midisynthaudioworklet.js';
+import { getTargetNoteStates } from '../../visualizer/80sgrid.js';
 
 const synthsource = `
 import { midichannels, MidiChannel, MidiVoice , SineOscillator, Envelope, notefreq } from './globalimports';
@@ -42,6 +43,11 @@ setBPM(100);
 // 69 (A4) = 440 Hz
 const noteNumberToFreq = (notenumber) => 440 * Math.pow(2, (notenumber - 69)/12);
 
+const notemap = {};
+new Array(128).fill(null).map((v, ndx) => 
+        (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
+    ).forEach((note, ndx) => notemap[note] = ndx);
+
 describe('midisynth audio worklet', async function() {
     this.timeout(20000);
 
@@ -70,9 +76,8 @@ describe('midisynth audio worklet', async function() {
         }
         assert.isDefined(window.audioworkletnode);
         assert.isNotNull(window.audioworkletnode);
-        
         window.audioworkletnode.port.postMessage({
-            midishortmsg: [0x90, 69, 100]
+            midishortmsg: [0x90, 69, 127]
         });
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0xb0, 7, 127]
@@ -85,7 +90,7 @@ describe('midisynth audio worklet', async function() {
 
         let loudestfrequency = 0;
         let level = -100;
-        while (loudestfrequency < 400 || level < -30) {
+        while (loudestfrequency < 400 || level < -25) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
             const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
@@ -101,34 +106,63 @@ describe('midisynth audio worklet', async function() {
 
         let level = 0;
         console.log('waiting for audio to stop after WASM hotswap');
-        while (level > -30) {
+        while (level > -40) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
             const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
             level = dataArray[loudestfrequencyindex];
         }
-        assert.isBelow(level, -30, 'note should be stopped on WASM hotswap');
+        assert.isBelow(level, -40, 'note should be stopped on WASM hotswap');
         
         window.audioworkletnode.port.postMessage({
-            midishortmsg: [0x90, 69, 100]
+            midishortmsg: [0x90, 69, 127]
         });
         let loudestfrequency = 440;
 
         console.log('waiting for audio to start after WASM hotswap')
-        while (loudestfrequency < 500) {
+        while (level < -30) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
-            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
+            const loudestfrequencyindex = dataArray.reduce((prev, lv, ndx) => lv > dataArray[prev] ? ndx: prev,0);
+            level = dataArray[loudestfrequencyindex];
             loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
         }
-        console.log(loudestfrequency);
+        console.log('frequency after hotswap', loudestfrequency, level);
         assert.closeTo(loudestfrequency,
             880, 0.2,
             'Note frequency should be one octave up after WASM hotswap');
 
+        synthsourceeditor.doc.setValue(synthsource.replace('notefreq(note+12)','notefreq(note)'));
+        appElement.querySelector('#savesongbutton').click();
+
+        console.log('waiting for audio to stop after WASM hotswap (reverted changes)');
+
+        while (level > -40) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            analyser.getFloatFrequencyData(dataArray);
+            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
+            level = dataArray[loudestfrequencyindex];
+        }
+        assert.isBelow(level, -40, 'note should be stopped on WASM hotswap (reverted changes)');
+
         window.audioworkletnode.port.postMessage({
-            midishortmsg: [0x90, 69, 0]
+            midishortmsg: [0x90, 57, 127]
         });
+
+        while (level < -30) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            analyser.getFloatFrequencyData(dataArray);
+            const loudestfrequencyindex = dataArray.reduce((prev, lv, ndx) => lv > dataArray[prev] ? ndx: prev,0);
+            level = dataArray[loudestfrequencyindex];
+            loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+        }
+        assert.closeTo(loudestfrequency,
+            220, 1.0,
+            'Note frequency should be 220 after WASM hotswap revert');
+
+        window.audioworkletnode.port.postMessage({
+            midishortmsg: [0x90, 57, 0]
+        });    
     });
     it('should be able to play a sequence', async () => {
         songsourceeditor.doc.setValue(`
@@ -143,20 +177,17 @@ describe('midisynth audio worklet', async function() {
         `);
         appElement.querySelector('#savesongbutton').click();
         
-        // 69 (A4) = 440 Hz
-        const noteNumberToFreq = (notenumber) => 440 * Math.pow(2, (notenumber - 69)/12);
-
-        const expectedFrequencies = [
-            noteNumberToFreq( 69 + 12 + 3 ), // c6
-            noteNumberToFreq( 69 + 12 + 3 + 4 ), // e6
-            noteNumberToFreq( 69 + 12 + 3 + 7 ), // g6
-            noteNumberToFreq( 69 + 12 + 3 + 10 ) // a#6
+        const expectedNotes = [
+            notemap['c6'],
+            notemap['e6'],
+            notemap['g6'],
+            notemap['as6']
         ];
 
-        while(expectedFrequencies.length > 0) {
+        while(expectedNotes.length > 0) {
             let loudestfrequency = 0;
             let loudestfrequencyindex = 0;
-            const nextExpectedFrequency = expectedFrequencies.shift();
+            const nextExpectedFrequency = noteNumberToFreq(expectedNotes.shift());
 
             while (loudestfrequency < nextExpectedFrequency) {
                 await new Promise(resolve => setTimeout(resolve, 50));
@@ -183,10 +214,10 @@ describe('midisynth audio worklet', async function() {
         console.log('waiting for updated song to take effect');
 
         const expectedFrequencies = [
-            noteNumberToFreq( 69 + 12 + 12 + 3 ), // c7
-            noteNumberToFreq( 69 + 12 + 12+ 3 + 4 ), // e7
-            noteNumberToFreq( 69 + 12 + 12+ 3 + 7 ), // g7
-            noteNumberToFreq( 69 + 12 + 12+ 3 + 10 ) // a#7
+            noteNumberToFreq( notemap['c7'] ),
+            noteNumberToFreq( notemap['e7'] ),
+            noteNumberToFreq( notemap['g7'] ),
+            noteNumberToFreq( notemap['as7'])
         ];
 
         while(expectedFrequencies.length > 0) {
@@ -220,10 +251,10 @@ describe('midisynth audio worklet', async function() {
         }
 
         const expectedFrequencies = [
-            noteNumberToFreq( 69 + 12 + 12 + 3 ), // c7
-            noteNumberToFreq( 69 + 12 + 12+ 3 + 4 ), // e7
-            noteNumberToFreq( 69 + 12 + 12+ 3 + 7 ), // g7
-            noteNumberToFreq( 69 + 12 + 12+ 3 + 10 ) // a#7
+            noteNumberToFreq( notemap['c7'] ),
+            noteNumberToFreq( notemap['e7'] ),
+            noteNumberToFreq( notemap['g7'] ),
+            noteNumberToFreq( notemap['as7'])
         ];
 
         audioCtx = window.audioworkletnode.context;
@@ -263,13 +294,12 @@ describe('midisynth audio worklet', async function() {
             loopHere();
         `);
         appElement.querySelector('#savesongbutton').click();
-        
+
         const firstTimeStamp = await getCurrentTime();
         let currentTime = firstTimeStamp;
+        console.log('waiting for loop');
         do {
-            await new Promise(resolve => setTimeout(resolve,20));
             currentTime = await getCurrentTime();
-            console.log('waiting for loop', currentTime);
         } while (currentTime >= firstTimeStamp);
 
         console.log('sending midi events');
@@ -297,6 +327,7 @@ describe('midisynth audio worklet', async function() {
         
         await new Promise(resolve => setTimeout(resolve,500));
 
+        console.log('insert recording');
         window.insertRecording();
         
         let songsource;
@@ -310,4 +341,45 @@ describe('midisynth audio worklet', async function() {
         assert.isTrue(songsource.indexOf('c6(') > -1);
         assert.isTrue(songsource.indexOf('e6(') > -1);
     });
-})
+    it('should be able to visualize a sequence when playing', async () => {
+        appElement.querySelector('#stopaudiobutton').click();
+        console.log('waiting for audioworklet to stop');
+
+        while (window.audioworkletnode) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        songsourceeditor.doc.setValue(`
+            setBPM(60);
+
+            await createTrack(0).steps(2, [
+                c6(1,127),e6(1,127),g6(1,127),as6(1,127)
+                ,,,,
+                ,,,,
+                ,,,,
+            ]);
+        `);
+        appElement.querySelector('#savesongbutton').click();
+        appElement.querySelector('#startaudiobutton').click();
+
+        const expectedNotes = [
+            notemap['c6'],
+            notemap['e6'],
+            notemap['g6'],
+            notemap['as6']
+        ];
+
+        for (let n = 0; n<expectedNotes.length; n++) {
+            const nextExpectedNote = expectedNotes[n];
+            console.log('expecting note in visualizer', nextExpectedNote);
+            while (getTargetNoteStates()[nextExpectedNote] === -1) {
+                await new Promise(r => setTimeout(r, 0));                
+            }
+            assert.approximately(getTargetNoteStates()[nextExpectedNote], 1.0, 0.1);
+        }
+        while (getTargetNoteStates().find(v => v > -1)) {
+            await new Promise(r => setTimeout(r, 100));
+        }
+        getTargetNoteStates().forEach(v => assert.equal(v, -1));
+    });
+});

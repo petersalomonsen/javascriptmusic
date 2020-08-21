@@ -123,7 +123,7 @@ function repaint() {
 }
 
 export function visualizeNoteOn(note, velocity) {
-    targetNoteStates[note] = ((velocity / 128 ) * 2 - 1);
+    targetNoteStates[note] = ((velocity / 127 ) * 2 - 1);
     
     if(!animationFrameRequest) {
         animationFrameRequest = requestAnimationFrame(repaint);
