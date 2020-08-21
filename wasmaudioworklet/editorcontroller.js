@@ -8,6 +8,7 @@ import { setInstrumentNames, appendToSubtoolbar1, toggleSpinner } from './app.js
 import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener } from './wasmgit/wasmgitclient.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal } from './common/ui/modal.js';
+import { updateSong } from './synth1/audioworklet/midisynthaudioworklet.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
@@ -329,10 +330,7 @@ export async function initEditor(componentRoot) {
                 if (song.synthsource) {
                     await wamPostSong(song.eventlist, song.synthsource);
                 } else {
-                    audioworkletnode.port.postMessage({ 
-                        sequencedata: song.eventlist,
-                        toggleSongPlay: componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false
-                    });
+                    updateSong(song.eventlist, componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false);
                     webassemblySynthUpdated = false;
                 }
             } else if(window.audioworkletnode) {

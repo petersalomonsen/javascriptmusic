@@ -2,6 +2,7 @@ import { stopVideoRecording, startVideoRecording } from './screenrecorder/screen
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
 import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization } from './visualizer/80sgrid.js';
+import { setPaused } from './visualizer/midieventlistvisualizer.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -131,8 +132,9 @@ export function initAudioWorkletNode(componentRoot) {
     }
 
     window.toggleSongPlay = (status) => {
-        if (audioworkletnode) {        
+        if (audioworkletnode) {
             audioworkletnode.port.postMessage({ toggleSongPlay: status});
+            setPaused(!status);
         } else if (wamsynth) {
             if (status) {
                 resumeWAMSong();

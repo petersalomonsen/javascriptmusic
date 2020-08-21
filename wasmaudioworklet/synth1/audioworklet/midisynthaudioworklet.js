@@ -1,12 +1,23 @@
+import { visualizeSong, setGetCurrentTimeFunction, setPaused } from '../../visualizer/midieventlistvisualizer.js';
+import { WorkerMessageHandler } from '../../common/workermessagehandler.js';
+
 export let audioworkletnode;
 
-let recordedDataPromiseResolve;
-let currentTimePromiseResolve;
+let workerMessageHandler;
 
 export function onmidi(data) {
     audioworkletnode.port.postMessage({ 
         midishortmsg: data
     });
+}
+
+export async function updateSong(sequencedata, toggleSongPlay) {
+    audioworkletnode.port.postMessage({
+        sequencedata: sequencedata,
+        toggleSongPlay: toggleSongPlay
+    });
+    setPaused(!toggleSongPlay);
+    visualizeSong(sequencedata);
 }
 
 export async function createAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
@@ -23,23 +34,23 @@ export async function createAudioWorklet(context, wasm_synth_bytes, sequencedata
     });
     audioworkletnode.connect(context.destination);
     
-    audioworkletnode.port.onmessage = (msg) => {
-        if (msg.data.recorded) {
-            recordedDataPromiseResolve(msg.data.recorded);
-        }
-        if (msg.data.currentTime) {
-            currentTimePromiseResolve(msg.data.currentTime)
-        }
-    };
+    workerMessageHandler = new WorkerMessageHandler(audioworkletnode.port);
+
+    setGetCurrentTimeFunction(getCurrentTime);
+
+    setPaused(!toggleSongPlay);
+    visualizeSong(sequencedata);
     return audioworkletnode;
 }
 
 export async function getRecordedData() {
-    audioworkletnode.port.postMessage({recorded: true});
-    return await new Promise(resolve => recordedDataPromiseResolve = resolve);
+    return (await workerMessageHandler.callAndGetResult({recorded: true},
+            (msgdata) => msgdata.recorded ? true : false))
+        .recorded;
 }
 
 export async function getCurrentTime() {
-    audioworkletnode.port.postMessage({currentTime: true});
-    return await new Promise(resolve => currentTimePromiseResolve = resolve);
+    return (await workerMessageHandler.callAndGetResult({currentTime: true},
+            (msgdata) => msgdata.currentTime !== undefined ? true : false))
+        .currentTime;
 }

@@ -1,7 +1,6 @@
 import { waitForAppReady } from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { commitAndSyncRemote } from './wasmgit/wasmgitclient.js';
-import { modal } from './common/ui/modal.js';
 
 describe('editorcontroller', async function() {
     this.timeout(20000);

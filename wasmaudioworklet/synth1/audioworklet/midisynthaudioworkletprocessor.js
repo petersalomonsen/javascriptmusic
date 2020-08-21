@@ -45,11 +45,15 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
         }
         
         if (msg.data.currentTime) {
-          this.port.postMessage({ currentTime:  AudioWorkletGlobalScope.midisequencer.getCurrentTime()});
+          this.port.postMessage({ currentTime:
+            this.processorActive ?
+              AudioWorkletGlobalScope.midisequencer.getCurrentTime() : null
+          });
         }
 
         if (msg.data.terminate) {
           this.processorActive = false;
+          this.port.close();
         }
     };
     this.port.start();
