@@ -8,7 +8,8 @@ import { setInstrumentNames, appendToSubtoolbar1, toggleSpinner } from './app.js
 import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener } from './wasmgit/wasmgitclient.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal } from './common/ui/modal.js';
-import { updateSong } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { updateSong, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
@@ -30,35 +31,6 @@ async function loadCodeMirror() {
 }
 
 let webassemblySynthUpdated = false;
-const synthcompilerworker = new Worker('synth1/browsercompilerwebworker.js');
-
-async function compileWebAssemblySynth(synthsource, song, samplerate, exportmode) {
-    synthcompilerworker.postMessage({
-        synthsource: synthsource,
-        samplerate: samplerate,
-        song: song,
-        exportmode: exportmode
-    });
-    
-    const result = await new Promise((resolve) => synthcompilerworker.onmessage = (msg) => resolve(msg));
-
-    if(result.data.binary) {
-        console.log('successfully compiled webassembly synth');
-        window.WASM_SYNTH_BYTES = result.data.binary;
-        webassemblySynthUpdated = true;
-        return result.data.binary;
-    } else if(result.data.downloadWASMurl) {
-        const linkElement = document.createElement('a');
-        linkElement.href = result.data.downloadWASMurl;
-        linkElement.download = 'song.wasm';
-        linkElement.click();
-    } else if(result.data.error) {
-        throw new Error(result.data.error);
-    } else {
-        console.log('no changes for webassembly synth');
-    }
-    return null;
-}
 
 export async function initEditor(componentRoot) {
     toggleSpinner(true);
@@ -175,18 +147,26 @@ export async function initEditor(componentRoot) {
                 if ( midiInstrumentNames.length > 0 ) {
                     setInstrumentNames(midiInstrumentNames);
                 }
-                if (exportwasm) {
+                if (synthSourceIsXML && exportwasm) {
                     await exportWAMAudio(eventlist, synthsource);
                 }
-                let synthwasm = undefined;
+                
                 if (!synthSourceIsXML) {
                     toggleSpinner(true);
-                    synthwasm = await compileWebAssemblySynth(synthsource,
+                    const synthwasm = await compileWebAssemblySynth(synthsource,
                         undefined,
                         new AudioContext().sampleRate,
-                        exportwasm                      
+                        false                      
                     );
+                    if (synthwasm) {
+                        window.WASM_SYNTH_BYTES = synthwasm;
+                        webassemblySynthUpdated = true;
+                    }
+                    if (exportwasm) {
+                        await exportToWav(eventlist, window.WASM_SYNTH_BYTES);
+                    }
                     toggleSpinner(false);
+
                     return { eventlist: eventlist, synthwasm: synthwasm };
                 } else {
                     window.WASM_SYNTH_BYTES = null;
@@ -246,12 +226,16 @@ export async function initEditor(componentRoot) {
                     toggleSpinner(true);
                 }
 
-                await compileWebAssemblySynth(synthsource,
+                const synthwasm = await compileWebAssemblySynth(synthsource,
                     exportwasm && songmode === 'WASM' ? song: undefined,
                     songmode === 'protracker' ? 55856:
                     new AudioContext().sampleRate,
                     exportwasm                      
-                );                
+                );
+                if (synthwasm) {
+                    window.WASM_SYNTH_BYTES = synthwasm;
+                    webassemblySynthUpdated = true;
+                }
             }
         } catch(e) {
             errorMessagesContentElement.innerText = e;

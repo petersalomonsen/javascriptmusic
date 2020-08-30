@@ -1,7 +1,7 @@
 export class WorkerMessageHandler {
-    workerMessageListeners = [];
 
     constructor(messagePort) {
+        this.workerMessageListeners = [];
         this.messagePort = messagePort;
         messagePort.onmessage = (msg) => {
             this.workerMessageListeners = this.workerMessageListeners.filter(listener =>
