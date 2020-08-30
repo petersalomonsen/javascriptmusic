@@ -84,6 +84,7 @@ describe('wammanager', async function() {
         }
         await exportWAMAudio(eventlist, '');
         assert((await downloadedLength) > 44100 * 2 * 2, 'downloaded data length should be more than one second of sound data');
+        document.createElement = document._createElementOriginal;
     });
 
 });

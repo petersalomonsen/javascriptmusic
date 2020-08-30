@@ -18,6 +18,7 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
           });
           this.wasmInstance = (await this.wasmInstancePromise).instance.exports;
           AudioWorkletGlobalScope.midisequencer.addMidiReceiver(this.wasmInstance.shortmessage);
+          this.port.postMessage({wasmloaded: true});
         }
         
         if (msg.data.sequencedata) {
