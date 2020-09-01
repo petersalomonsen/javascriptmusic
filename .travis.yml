@@ -1,3 +1,6 @@
+addons:
+  firefox: "83.0"
+
 matrix:
   include:
     - language: node_js
@@ -7,6 +10,17 @@ matrix:
         - cd wasmaudioworklet
         - npm install
       script: "npm run test"
+      name: "Chrome headless"
+    - dist: xenial
+      services:
+        - xvfb
+      node_js:
+        - 14
+      install:
+        - cd wasmaudioworklet
+        - npm install
+      script: "npm run test-firefox"
+      name: "Firefox xvfb"
     - language: node_js
       node_js:
         - 14
@@ -14,3 +28,4 @@ matrix:
         - cd wasmaudioworklet/synth1
         - npm install
       script: "npm run test:ci"
+      name: "As-pect AssemblyScript"
