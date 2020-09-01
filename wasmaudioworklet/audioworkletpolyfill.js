@@ -25,7 +25,7 @@ if(typeof AudioWorkletNode !== 'function') {
 
             this.processorInstance = new window.audioWorkletProcessors[processorName](options);
             this.processorInstance.port.postMessage = (msg) => {
-                setTimeout(() => this.onmessage({data: msg}), 0);
+                setTimeout(() => this.port.onmessage({data: msg}), 0);
             }
 
             this.context = context;
@@ -35,7 +35,9 @@ if(typeof AudioWorkletNode !== 'function') {
                     this.processorInstance.port.onmessage({
                         data: msg
                     });
-               }
+               },
+               close: () => {},
+               onmessage: () => {}
            };
         }
         
@@ -110,7 +112,8 @@ if(typeof AudioWorkletNode !== 'function') {
             this.port = {
                 onmessage: function() {},
                 postMessage: function(msg) {},
-                start: function() {}
+                start: function() {},
+                close: function() {}
             };
         }
     };
