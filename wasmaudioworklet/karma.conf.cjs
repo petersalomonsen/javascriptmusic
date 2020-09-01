@@ -1,4 +1,4 @@
-module.exports = function(config) {
+module.exports = function (config) {
   config.set({
 
     // base path that will be used to resolve all patterns (eg. files, exclude)
@@ -9,12 +9,12 @@ module.exports = function(config) {
     frameworks: ['mocha', 'chai'],
 
     // list of files / patterns to load in the browser
-    files: [      
-      {pattern: '**/*.spec.js', type: 'module'},
-      {pattern: '**/*.js', included: false, type: 'module'},
-      {pattern: 'synth1/assembly/**/*.ts', included: false},
-      {pattern: '**/*.json', included: false},
-      {pattern: '**/*.html', included: false}
+    files: [
+      { pattern: '**/*.spec.js', type: 'module' },
+      { pattern: '**/*.js', included: false, type: 'module' },
+      { pattern: 'synth1/assembly/**/*.ts', included: false },
+      { pattern: '**/*.json', included: false },
+      { pattern: '**/*.html', included: false }
     ],
 
     // list of files / patterns to exclude
@@ -64,7 +64,7 @@ module.exports = function(config) {
 
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-    browsers: ['Chrome_NoUserGestureRequired', 'ChromeHeadless_NoUserGestureRequired'],
+    browsers: ['Chrome_NoUserGestureRequired', 'ChromeHeadless_NoUserGestureRequired', 'Safari', 'Firefox'],
     // you can define custom flags
     customLaunchers: {
       Chrome_NoUserGestureRequired: {
@@ -76,7 +76,7 @@ module.exports = function(config) {
         flags: ['--autoplay-policy=no-user-gesture-required']
       }
     },
-    
+
     // Continuous Integration mode
     // if true, Karma captures browsers, runs the tests and exits
     singleRun: false,

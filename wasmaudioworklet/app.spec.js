@@ -1,6 +1,7 @@
 import { waitForAppReady, toggleSpinner, setProgressbarValue } from './app.js';
 
-describe('app', async function() {
+describe('app', function() {
+    this.timeout(10000);
     this.beforeAll(async () => {
         document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
         await waitForAppReady();

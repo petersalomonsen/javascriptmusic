@@ -144,4 +144,30 @@ export class FFT {
             }
         }
     }
-} 
+}
+
+export function createFFT(buffersize_shift: i32): usize {
+    return changetype<usize>(new FFT(buffersize_shift));
+}
+
+export function setComplex(instance: usize, arrayIndex: i32, re: f32, im: f32): void {
+    const buffer = changetype<FFT>(instance).buffer;
+    buffer[arrayIndex].re = re;
+    buffer[arrayIndex].im = im;
+}
+
+export function getComplexRe(instance: usize, arrayIndex: i32): f32 {
+    return changetype<FFT>(instance).buffer[arrayIndex].re;
+}
+
+export function getComplexIm(instance: usize, arrayIndex: i32): f32 {
+    return changetype<FFT>(instance).buffer[arrayIndex].im;
+}
+
+export function calculateFFT(instance: usize): void {
+    changetype<FFT>(instance).calculate();
+}
+
+export function calculateIFFT(instance: usize): void {
+    changetype<FFT>(instance).calculateInverse();
+}
