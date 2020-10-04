@@ -1,10 +1,12 @@
-import { initWASMGitClient, commitAndSyncRemote, repoHasChanges,
-    writefileandstage, worker, readfile, diff, discardchanges } from './wasmgitclient.js';
+import {
+    initWASMGitClient, commitAndSyncRemote, repoHasChanges,
+    writefileandstage, worker, readfile, diff, discardchanges, log
+} from './wasmgitclient.js';
 
-describe('wasm-git client', async function() {
+describe('wasm-git client', async function () {
     this.timeout(20000);
 
-    it('should resolve synth and song filename from git repository', async () => {                
+    it('should resolve synth and song filename from git repository', async () => {
         const config = await initWASMGitClient('test');
 
         document.documentElement.appendChild(document.createElement('wasmgit-ui'));
@@ -41,7 +43,7 @@ describe('wasm-git client', async function() {
         const filename = 'blabla.txt';
         await writefileandstage(filename, contentToWrite);
         worker.terminate();
-        await initWASMGitClient('test');        
+        await initWASMGitClient('test');
         assert.isTrue(await repoHasChanges());
         assert.equal(await readfile(filename), contentToWrite);
     });
@@ -53,7 +55,7 @@ describe('wasm-git client', async function() {
 
         const contentToWrite2 = 'ababab3';
         const filename2 = 'ababab2.txt';
-        const file2promise = writefileandstage(filename2, contentToWrite2);        
+        const file2promise = writefileandstage(filename2, contentToWrite2);
         const readfile2promise = readfile(filename2);
 
         assert.equal((await file1promise).find(fn => fn === filename), filename);
@@ -72,5 +74,26 @@ describe('wasm-git client', async function() {
         assert.isTrue(await repoHasChanges());
         await discardchanges(['blabla.txt']);
         assert.isFalse(await repoHasChanges());
+    });
+    it('should be possible to create an empty repo', async () => {
+        worker.terminate();
+        const config = await initWASMGitClient('nonexistingtest');
+
+        assert.isFalse(await repoHasChanges());
+
+        const contentToWrite = 'blabla';
+        const filename = 'blabla.txt';
+        await writefileandstage(filename, contentToWrite);
+        assert.isTrue(await repoHasChanges());
+        assert.equal(await readfile(filename), contentToWrite);
+        const difftxt = await diff();
+        assert.match(difftxt, /.*On branch Not currently on any branch.*/);
+        assert.match(difftxt, /.*new file:   blabla.txt\n.*/);
+
+        await commitAndSyncRemote('first commit');
+        assert.isFalse(await repoHasChanges());
+
+        const logResult = await log();
+        assert.match(logResult, /.*first commit.*/);
     });
 });
