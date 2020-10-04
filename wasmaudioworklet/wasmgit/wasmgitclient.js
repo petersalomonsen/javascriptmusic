@@ -17,8 +17,8 @@ export async function initWASMGitClient(gitrepo) {
         workerMessageListeners = workerMessageListeners.filter(listener => listener(msg) === true);
     }
 
-    gitrepourl = `https://githttpserverdemo.petersalomonsen.usw1.kubesail.io/${gitrepo}`;
-        
+    gitrepourl = `https://wasm-git.petersalomonsen.com/${gitrepo}`;
+
     try {
         await initNear();
     } catch (e) {
@@ -62,7 +62,7 @@ export async function clone() {
 
 async function awaitDirContents() {
     return await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.dircontents!==undefined ? resolve(msg.data.dircontents) : true)
+        workerMessageListeners.push((msg) => msg.data.dircontents !== undefined ? resolve(msg.data.dircontents) : true)
     );
 }
 export async function synclocal() {
@@ -70,7 +70,7 @@ export async function synclocal() {
         command: 'synclocal',
         url: gitrepourl
     });
-    return await awaitDirContents();    
+    return await awaitDirContents();
 }
 
 export async function commitAndSyncRemote(commitmessage) {
@@ -104,13 +104,23 @@ export async function diff() {
     return result;
 }
 
+export async function log() {
+    worker.postMessage({
+        command: 'log'
+    });
+    const result = await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.log ? resolve(msg.data.log) : true)
+    );
+    return result;
+}
+
 export async function discardchanges(filenames) {
     worker.postMessage({
         command: 'discardchanges',
         filenames: filenames
     });
     const result = await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges!==undefined ? resolve(msg.data) : true)
+        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges !== undefined ? resolve(msg.data) : true)
     );
     updateCommitAndSyncButtonState(result.repoHasChanges);
     remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(result.dircontents));
@@ -136,15 +146,15 @@ export async function writefileandstage(filename, contents) {
         contents: contents
     });
     const result = await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges!==undefined ? resolve(msg.data) : true)
+        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges !== undefined ? resolve(msg.data) : true)
     );
     updateCommitAndSyncButtonState(result.repoHasChanges);
     return result.dircontents;
 }
 
 export async function repoHasChanges() {
-    worker.postMessage({command: 'repohaschanges'});
-    const result =  await new Promise((resolve) =>
+    worker.postMessage({ command: 'repohaschanges' });
+    const result = await new Promise((resolve) =>
         workerMessageListeners.push((msg) => msg.data.repohaschanges !== undefined ? resolve(msg.data.repohaschanges) : true)
     );
     updateCommitAndSyncButtonState(result);
@@ -155,9 +165,9 @@ customElements.define('wasmgit-ui',
     class extends HTMLElement {
         constructor() {
             super();
-            
-            this.attachShadow({mode: 'open'});
-            this.init();      
+
+            this.attachShadow({ mode: 'open' });
+            this.init();
         }
 
         async init() {
@@ -176,8 +186,8 @@ customElements.define('wasmgit-ui',
                         const commitMessage = await commitModal.getCommitMessage();
                         document.documentElement.removeChild(commitModal);
                         toggleSpinner(true);
-                        await commitAndSyncRemote(commitMessage);                
-                    } catch(e) {
+                        await commitAndSyncRemote(commitMessage);
+                    } catch (e) {
                         document.documentElement.removeChild(commitModal);
                     }
                 } else {
@@ -208,8 +218,8 @@ customElements.define('wasmgit-commit-modal',
     class extends HTMLElement {
         constructor() {
             super();
-            
-            this.attachShadow({mode: 'open'});
+
+            this.attachShadow({ mode: 'open' });
             this.readyPromise = new Promise(async resolve => {
                 await this.init();
                 resolve();
