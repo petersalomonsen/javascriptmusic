@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        .playpausebutton {
+            width: 50px;
+            height: 50px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Select WASM module file to play</h1>
+    <input type="file" onchange="playWASMFile(event)" />
+
+    <h4>Song position (tick)</h4>
+    <input id="timeindicator" style="width: 100%" type="range" value="0" min="0" max="1000"
+        oninput="seek(this.value)" />
+
+    <button class="playpausebutton" id="playbutton" onclick="togglePlay(true)">&#x25B6;</button>
+    <button class="playpausebutton" id="pausebutton" onclick="togglePlay(false)">&#9616;&nbsp;&#9612;</button>
+
+    <h4>Set tempo (BPM)</h4>
+    <input id="bpmrange" style="width: 100%" type="range" value="110" min="50" max="200" oninput="setBPM(this.value)" />
+
+    <br />
+
+    <script>
+        let audioWorkletNode;
+        function seek(val) {
+            audioWorkletNode.port.postMessage({ seek: val });
+        }
+
+        function setBPM(val) {
+            audioWorkletNode.port.postMessage({ bpm: val });
+        }
+        function togglePlay(val) {
+            audioWorkletNode.port.postMessage({ toggleSongPlay: val });
+            if (val) {
+                document.querySelector('#playbutton').style.display = 'none';
+                document.querySelector('#pausebutton').style.display = 'block';
+            } else {
+                document.querySelector('#playbutton').style.display = 'block';
+                document.querySelector('#pausebutton').style.display = 'none';
+            }
+        }
+
+        async function playWASMFile(event) {
+            const wasm_synth_bytes = await new Promise(resolve => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result);
+                fr.readAsArrayBuffer(event.target.files[0]);
+            });
+
+            const context = new AudioContext({ sampleRate: 44100 });
+            await context.audioWorklet.addModule('./wasmpatternseqplayeraudioworkletprocessor.js');
+            audioWorkletNode = new AudioWorkletNode(context, 'asc-patternseqsynth-audio-worklet-processor', {
+                outputChannelCount: [2]
+            });
+            audioWorkletNode.port.start();
+            audioWorkletNode.port.postMessage({ wasm: wasm_synth_bytes });
+            audioWorkletNode.connect(context.destination);
+
+            function updateTimeIndicator() {
+                requestAnimationFrame(() => {
+                    audioWorkletNode.port.postMessage({ currentTime: true });
+                    audioWorkletNode.port.onmessage = (msg) => {
+                        if (msg.data.playing) {
+                            document.querySelector("#timeindicator").value = Math.round(msg.data.currentTime);
+                        }
+                        updateTimeIndicator();
+                    }
+                });
+            }
+            updateTimeIndicator();
+            document.querySelector('#pausebutton').style.display = 'block';
+        }
+
+
+    </script>
+</body>
+
+</html>

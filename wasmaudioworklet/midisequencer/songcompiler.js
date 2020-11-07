@@ -3,20 +3,24 @@ import { TrackerPattern, pitchbend, controlchange, createNoteFunctions } from '.
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from './sequenceconstants.js';
 
 let songmessages = [];
-export let instrumentNames= [];
+export let instrumentNames = [];
 let loopPromise;
 export let recordingStartTimeMillis = 0;
 
-const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-const output = { sendMessage: (msg) => {
-    songmessages.push({
-        time: currentTime(),
-        message: msg
-    })
-} };
+const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
+const output = {
+    sendMessage: (msg) => {
+        songmessages.push({
+            time: currentTime(),
+            message: msg
+        })
+    }
+};
 
 function playFromHere() {
-    songmessages = [];
+    songmessages = songmessages.filter(evt => (evt.message[0] & 0xf0) === 0xb0)
+        .map(evt => Object.assign(evt, { time: 0 }));
+
     resetTick();
 }
 
@@ -25,7 +29,7 @@ async function loopHere() {
     // if user don't "await" for loopHere, keep the promise so that we can wait for it
     loopPromise = new Promise(resolve => loopPromiseResolve = resolve);
     await releasePendingEvents();
-    output.sendMessage([SEQ_MSG_LOOP]);    
+    output.sendMessage([SEQ_MSG_LOOP]);
     loopPromiseResolve();
 }
 
@@ -43,7 +47,7 @@ const songargs = {
     'setBPM': setBPM,
     'TrackerPattern': TrackerPattern,
     'createTrack': (channel, stepsperbeat, defaultvelocity) =>
-            new TrackerPattern(output, channel, stepsperbeat, defaultvelocity),
+        new TrackerPattern(output, channel, stepsperbeat, defaultvelocity),
     'playFromHere': playFromHere,
     'loopHere': loopHere,
     'pitchbend': pitchbend,
@@ -63,7 +67,7 @@ export async function compileSong(songsource) {
     console.log('compile song');
     resetTick();
     const songfunc = new AsyncFunction(songargkeys, songsource);
-    
+
     let playing = true;
     let err;
 
@@ -81,10 +85,42 @@ export async function compileSong(songsource) {
         await nextTick();
     }
 
-    if ( loopPromise ) {
+    if (loopPromise) {
         console.log('wait for loop');
         await loopPromise;
     }
     console.log('song compiled');
     return songmessages;
+}
+
+export function convertEventListToByteArraySequence(eventlist) {
+    return new Uint8Array(eventlist
+        .filter(evt => (
+            evt.message.length === 1 && evt.message[0] === SEQ_MSG_LOOP) ||
+            evt.message.length > 1 // short messages            
+        )
+        .map((evt, ndx) => {
+            if (evt.message.length === 1 && evt.message[0] === SEQ_MSG_LOOP) {
+                evt.message = [0xff, 0x2f, 0x00];
+            }
+            return {
+                message: evt.message,
+                time: evt.time,
+                deltatime: ndx > 0 ? evt.time - eventlist[ndx - 1].time : evt.time
+            };
+        }).map(evt => {
+            const deltatimearr = [];
+            let deltatime = evt.deltatime;
+
+            do {
+                let deltatimepart = deltatime & 0x7f;
+                deltatime = deltatime >> 7;
+                if (deltatime > 0) {
+                    deltatimepart |= 0x80;
+                }
+                deltatimearr.push(deltatimepart);
+            } while (deltatime > 0)
+
+            return deltatimearr.concat(evt.message);
+        }).reduce((prev, curr) => prev.concat(curr), []));
 }
