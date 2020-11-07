@@ -11,7 +11,7 @@ export const midichannels = new StaticArray<MidiChannel>(16);
 export const activeVoices = new StaticArray<MidiVoice | null>(MAX_ACTIVE_VOICES);
 export let numActiveVoices = 0;
 export let voiceActivationCount = 0;
-export let currentframe = 0;
+
 export const sampleBufferFrames = 128;
 export const sampleBufferBytesPerChannel = sampleBufferFrames * 4;
 export const sampleBufferChannels = 2;
@@ -41,10 +41,10 @@ export class MidiChannel {
 
     constructor(numvoices: i32, factoryFunc: (channel: MidiChannel, voiceindex: i32) => MidiVoice) {
         this.voices = new StaticArray<MidiVoice>(numvoices);
-        for (let n=0; n<numvoices; n++) {
+        for (let n = 0; n < numvoices; n++) {
             this.voices[n] = factoryFunc(this, n);
         }
-        
+
     }
 
     controlchange(controller: u8, value: u8): void {
@@ -54,7 +54,7 @@ export class MidiChannel {
             case CONTROL_SUSTAIN:
                 // sustain
                 if (value < 64) {
-                    for (let n = 0; n<MAX_ACTIVE_VOICES; n++) {
+                    for (let n = 0; n < MAX_ACTIVE_VOICES; n++) {
                         if (this.sustainedVoices[n] != null) {
                             (this.sustainedVoices[n] as MidiVoice).noteoff();
                             this.sustainedVoices[n] = null;
@@ -69,16 +69,16 @@ export class MidiChannel {
                 this.reverb = midiLevelToGain(value);
                 break;
             case CONTROL_PAN:
-                this.pan.setPan((value as f32)/ 127.0);
+                this.pan.setPan((value as f32) / 127.0);
                 break;
         }
     }
 
     noteoff(note: u8): void {
-        for(let n = 0; n < this.voices.length; n++) {
+        for (let n = 0; n < this.voices.length; n++) {
             const voice = this.voices[n];
             if (voice.note === note) {
-                if (this.controllerValues[CONTROL_SUSTAIN] >= 64 ) {
+                if (this.controllerValues[CONTROL_SUSTAIN] >= 64) {
                     this.sustainedVoices[this.sustainedVoicesIndex++] = voice;
                     this.sustainedVoicesIndex &= ((1 << MAX_ACTIVE_VOICES_SHIFT) - 1);
                 } else {
@@ -90,17 +90,17 @@ export class MidiChannel {
     }
 
     removeFromSustainedVoices(voice: MidiVoice): void {
-        for(let n=0;n<this.sustainedVoices.length;n++) {
-            if(this.sustainedVoices[n] === voice) {
+        for (let n = 0; n < this.sustainedVoices.length; n++) {
+            if (this.sustainedVoices[n] === voice) {
                 this.sustainedVoices[n] = null;
             }
         }
     }
-    
-    activateVoice(note: u8): MidiVoice | null {
-        for(let n = 0; n<this.voices.length; n++) {
+
+    activateVoice(note: u8): MidiVoice | null {
+        for (let n = 0; n < this.voices.length; n++) {
             const voice = this.voices[n];
-            if(voice.activeVoicesIndex > -1 && voice.note === note) {
+            if (voice.activeVoicesIndex > -1 && voice.note === note) {
                 // Found already active voice for the given note
                 voice.activationCount = voiceActivationCount++;
                 // must remove from sustained voices
@@ -114,8 +114,8 @@ export class MidiChannel {
         }
 
         let activeVoiceIndex: i32 = numActiveVoices;
-        
-        for(let n = 0; n<this.voices.length; n++) {
+
+        for (let n = 0; n < this.voices.length; n++) {
             const voice = this.voices[n];
             if (voice.activeVoicesIndex === -1 &&
                 note >= voice.minnote &&
@@ -130,11 +130,11 @@ export class MidiChannel {
 
         // no available voices for the current channel, we'll pick the oldest
         let oldestVoice: MidiVoice | null = null;
-        for(let n = 0; n<this.voices.length; n++) {
+        for (let n = 0; n < this.voices.length; n++) {
             const voice = this.voices[n];
             if (
                 (oldestVoice === null ||
-                voice.activationCount <= (oldestVoice as MidiVoice).activationCount) &&
+                    voice.activationCount <= (oldestVoice as MidiVoice).activationCount) &&
                 note >= voice.minnote &&
                 note <= voice.maxnote) {
                 oldestVoice = voice;
@@ -209,40 +209,40 @@ export function shortmessage(val1: u8, val2: u8, val3: u8): void {
     const channel = val1 & 0xf;
     const command = val1 & 0xf0;
 
-    if(command === 0x90 && val3 > 0) {
+    if (command === 0x90 && val3 > 0) {
         const activatedVoice = midichannels[channel].activateVoice(val2);
-        if(activatedVoice!==null) {
+        if (activatedVoice !== null) {
             const voice = activatedVoice as MidiVoice;
             voice.noteon(val2, val3);
         }
-    } else if(
+    } else if (
         (command === 0x80 ||
-        (command === 0x90 && val3 === 0)) // 
+            (command === 0x90 && val3 === 0)) // 
     ) {
         // note off
         midichannels[channel].noteoff(val2);
-    } else if(command === 0xb0) {
+    } else if (command === 0xb0) {
         // control change
         midichannels[channel].controlchange(val2, val3);
     }
 }
 
 export function allNotesOff(): void {
-    for (let n=0; n<numActiveVoices; n++) {
+    for (let n = 0; n < numActiveVoices; n++) {
         const voice = activeVoices[n] as MidiVoice;
         voice.noteoff();
     }
 }
 
 export function cleanupInactiveVoices(): void {
-    for (let n=0; n<numActiveVoices; n++) {
+    for (let n = 0; n < numActiveVoices; n++) {
         const voice = activeVoices[n] as MidiVoice;
         if (voice.isDone()) {
             voice.deactivate();
-            for (let r = n+1; r < numActiveVoices; r++) {
+            for (let r = n + 1; r < numActiveVoices; r++) {
                 const nextVoice = activeVoices[r] as MidiVoice;
                 nextVoice.activeVoicesIndex--;
-                activeVoices[r-1] = nextVoice;
+                activeVoices[r - 1] = nextVoice;
                 activeVoices[r] = null;
             }
             numActiveVoices--;
@@ -252,28 +252,28 @@ export function cleanupInactiveVoices(): void {
 }
 
 export function playActiveVoices(): void {
-    for (let n=0; n<numActiveVoices; n++) {
+    for (let n = 0; n < numActiveVoices; n++) {
         (activeVoices[n] as MidiVoice).nextframe();
     }
 }
 
-export function fillSampleBuffer(): void {      
+export function fillSampleBuffer(): void {
     cleanupInactiveVoices();
 
-    for(let bufferpos = bufferposstart; bufferpos<bufferposend; bufferpos+=4) {
+    for (let bufferpos = bufferposstart; bufferpos < bufferposend; bufferpos += 4) {
         playActiveVoices();
 
-        for(let ch = 0; ch < 16; ch++) {            
+        for (let ch = 0; ch < 16; ch++) {
             const midichannel = midichannels[ch];
             midichannel.preprocess();
             const channelsignal = midichannel.signal;
             channelsignal.left *= midichannel.pan.leftLevel * midichannel.volume;
             channelsignal.right *= midichannel.pan.rightLevel * midichannel.volume;
-            
+
             const reverb = midichannel.reverb;
 
             mainline.add(channelsignal.left, channelsignal.right);
-            reverbline.add(channelsignal.left*reverb, channelsignal.right*reverb);
+            reverbline.add(channelsignal.left * reverb, channelsignal.right * reverb);
             midichannel.signal.clear();
         }
 
@@ -320,7 +320,7 @@ class DefaultInstrument extends MidiVoice {
 }
 const defaultMidiChannel = new MidiChannel(1, (channel: MidiChannel) => new DefaultInstrument(channel));
 
-for(let ch = 0; ch < 16; ch++) {
+for (let ch = 0; ch < 16; ch++) {
     midichannels[ch] = defaultMidiChannel;
 }
 

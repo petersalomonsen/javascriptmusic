@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        .playpausebutton {
+            width: 50px;
+            height: 50px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Select WASM module file to play</h1>
+    <input type="file" onchange="playWASMFile(event)" />
+
+    <input id="timeindicator" style="width: 100%" type="range" value="0" min="0" max="180000"
+        oninput="seek(this.value)" />
+
+    <span id="timespan"></span>
+    <button class="playpausebutton" id="playbutton" onclick="togglePlay(true)">&#x25B6;</button>
+    <button class="playpausebutton" id="pausebutton" onclick="togglePlay(false)">&#9616;&nbsp;&#9612;</button>
+    <br />
+    <midi-mixer oninput="mixerchange(event)"></midi-mixer>
+    <script>
+        let audioWorkletNode;
+        function seek(val) {
+            audioWorkletNode.port.postMessage({ seek: val });
+        }
+
+        function togglePlay(val) {
+            audioWorkletNode.port.postMessage({ toggleSongPlay: val });
+            if (val) {
+                document.querySelector('#playbutton').style.display = 'none';
+                document.querySelector('#pausebutton').style.display = 'block';
+            } else {
+                document.querySelector('#playbutton').style.display = 'block';
+                document.querySelector('#pausebutton').style.display = 'none';
+            }
+        }
+
+        async function playWASMFile(event) {
+            const wasm_synth_bytes = await new Promise(resolve => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result);
+                fr.readAsArrayBuffer(event.target.files[0]);
+            });
+
+            const context = new AudioContext({ sampleRate: 44100 });
+            await context.audioWorklet.addModule('./wasmmidimoduleplayeraudioworkletprocessor.js');
+            audioWorkletNode = new AudioWorkletNode(context, 'asc-midisynth-audio-worklet-processor', {
+                outputChannelCount: [2]
+            });
+            audioWorkletNode.port.start();
+            audioWorkletNode.port.postMessage({ wasm: wasm_synth_bytes });
+            audioWorkletNode.connect(context.destination);
+
+            function padNumber(num, len) {
+                const ret = '0000' + num;
+                return ret.substr(ret.length - len);
+            }
+
+            function updateTimeIndicator() {
+                requestAnimationFrame(() => {
+                    audioWorkletNode.port.postMessage({ currentTime: true });
+                    audioWorkletNode.port.onmessage = (msg) => {
+                        document.querySelector("#timeindicator").value = Math.round(msg.data.currentTime);
+                        document.querySelector("#timespan").innerHTML =
+                            Math.floor(msg.data.currentTime / (60 * 1000)) + ':' +
+                            padNumber(Math.floor(msg.data.currentTime / (1000)) % 60, 2) + ':' +
+                            padNumber(Math.floor(msg.data.currentTime % (1000)), 3);
+                        updateTimeIndicator();
+                    }
+                });
+            }
+            updateTimeIndicator();
+            document.querySelector('#pausebutton').style.display = 'block';
+        }
+        function mixerchange(evt) {
+            audioWorkletNode.port.postMessage({
+                midishortmsg: [
+                    0xb0 + evt.detail.channel, evt.detail.controller, evt.detail.value
+                ]
+            });
+        }
+    </script>
+    <script src="../midisequencer/midimixer.component.js" type="module"></script>
+</body>
+
+</html>

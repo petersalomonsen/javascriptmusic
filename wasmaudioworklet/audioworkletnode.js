@@ -1,5 +1,5 @@
 import { stopVideoRecording, startVideoRecording } from './screenrecorder/screenrecorder.js';
-import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
+import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
 import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization } from './visualizer/80sgrid.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
@@ -7,7 +7,7 @@ import { setPaused } from './visualizer/midieventlistvisualizer.js';
 
 export function initAudioWorkletNode(componentRoot) {
     let audioworkletnode;
-    let onmidi = () => {};
+    let onmidi = () => { };
     let playing = false;
 
     const context = new AudioContext();
@@ -16,11 +16,11 @@ export function initAudioWorkletNode(componentRoot) {
      * Should be called from UI event for Safari / iOS
      */
     window.startaudio = async () => {
-        if(playing) {
+        if (playing) {
             return;
         }
         playing = true;
-    
+
         // For Safari iOS, MUST happen before using "await"
         context.resume();
 
@@ -28,80 +28,81 @@ export function initAudioWorkletNode(componentRoot) {
 
         let bytes;
 
-        if(song.eventlist) {
+        if (song.eventlist) {
             await context.audioWorklet.addModule('./midisequencer/audioworkletprocessorsequencer.js');
 
-            if (song.synthwasm || (!audioworkletnode && window.WASM_SYNTH_BYTES)) {                
+            if (song.synthwasm || (!audioworkletnode && window.WASM_SYNTH_BYTES)) {
                 audioworkletnode = await createMidiSynthAudioWorklet(context,
-                        window.WASM_SYNTH_BYTES,
-                        song.eventlist,
-                        componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false
-                    );
+                    window.WASM_SYNTH_BYTES,
+                    song.eventlist,
+                    componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false
+                );
                 window.audioworkletnode = audioworkletnode;
                 onmidi = midiSynthOnMidi;
             } else if (song.synthsource) {
                 await startWAM(context);
                 wamPostSong(song.eventlist, song.synthsource);
                 if (window.audioVideoRecordingEnabled === true) {
-                    await startVideoRecording(context, wamsynth);        
+                    await startVideoRecording(context, wamsynth);
                 }
                 onmidi = wamOnMidi;
             }
         } else {
-            if(song.modbytes) {
+            if (song.modbytes) {
                 bytes = await fetch('https://unpkg.com/wasm-mod-player@0.0.3/wasm-mod-player.wasm')
-                                .then(r => r.arrayBuffer());
+                    .then(r => r.arrayBuffer());
 
                 await context.audioWorklet.addModule('./modaudioworkletprocessor.js');
                 audioworkletnode = new AudioWorkletNode(context, 'mod-audio-worklet-processor', {
-                        outputChannelCount: [2]
-                    });
+                    outputChannelCount: [2]
+                });
             } else {
                 bytes = window.WASM_SYNTH_LOCATION ? await fetch(window.WASM_SYNTH_LOCATION).then(response =>
-                                    response.arrayBuffer()
-                                ) : window.WASM_SYNTH_BYTES;                    
-                
+                    response.arrayBuffer()
+                ) : window.WASM_SYNTH_BYTES;
+
                 await context.audioWorklet.addModule('./audioworkletprocessor.js');
                 audioworkletnode = new AudioWorkletNode(context, 'pattern-seq-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
             }
             window.audioworkletnode = audioworkletnode;
-            
+
             if (window.audioVideoRecordingEnabled === true) {
-                await startVideoRecording(context, audioworkletnode);        
+                await startVideoRecording(context, audioworkletnode);
             }
 
             audioworkletnode.port.start();
-            audioworkletnode.port.postMessage({ topic: "wasm", 
-                samplerate: context.sampleRate, 
-                wasm: bytes, 
+            audioworkletnode.port.postMessage({
+                topic: "wasm",
+                samplerate: context.sampleRate,
+                wasm: bytes,
                 song: song,
-                toggleSongPlay: componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true: false
+                toggleSongPlay: componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false
             });
 
-            if(song.instrumentPatternLists) {
+            if (song.instrumentPatternLists) {
                 const activenotes = new Array(song.instrumentPatternLists.length).fill(0);
-                
+
                 audioworkletnode.port.onmessage = msg => {
                     if (msg.data.channelvalues) {
                         const channelvalues = msg.data.channelvalues;
-                        for(let n=0;n<channelvalues.length;n++) {
-                            const note = channelvalues[n];            
-                            if(note !==1 && note!==activenotes[n]) {                
+                        for (let n = 0; n < channelvalues.length; n++) {
+                            const note = channelvalues[n];
+                            if (note !== 1 && note !== activenotes[n]) {
                                 visualizeNoteOn(activenotes[n], 0);
                                 activenotes[n] = 0;
-                            } 
-                            if(note > 1) {                
+                            }
+                            if (note > 1) {
                                 visualizeNoteOn(note, 127);
                                 activenotes[n] = note;
-                            }            
+                            }
                         };
                     }
                     if (msg.data.patternData) {
                         window.recordedSongData.patterns[msg.data.recordedPatternNo - 1] = msg.data.patternData;
                         window.recordedSongData.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] =
-                                        msg.data.recordedPatternNo;
+                            msg.data.recordedPatternNo;
                     }
                 };
             }
@@ -112,9 +113,9 @@ export function initAudioWorkletNode(componentRoot) {
     };
 
     window.stopaudio = async () => {
-        if(audioworkletnode) {
+        if (audioworkletnode) {
             clearVisualization();
-            audioworkletnode.port.postMessage({terminate: true});
+            audioworkletnode.port.postMessage({ terminate: true });
             audioworkletnode.disconnect();
             audioworkletnode = null;
             window.audioworkletnode = null;
@@ -126,14 +127,14 @@ export function initAudioWorkletNode(componentRoot) {
 
         componentRoot.getElementById('startaudiobutton').style.display = 'block';
         componentRoot.getElementById('stopaudiobutton').style.display = 'none';
-        if(window.audioVideoRecordingEnabled === true) {
+        if (window.audioVideoRecordingEnabled === true) {
             stopVideoRecording();
         }
     }
 
     window.toggleSongPlay = (status) => {
         if (audioworkletnode) {
-            audioworkletnode.port.postMessage({ toggleSongPlay: status});
+            audioworkletnode.port.postMessage({ toggleSongPlay: status });
             setPaused(!status);
         } else if (wamsynth) {
             if (status) {
@@ -149,28 +150,28 @@ export function initAudioWorkletNode(componentRoot) {
     };
 
     window.toggleVisualizer = (status) => {
-        if(status && !window.getNoteStatusInterval) {
+        if (status && !window.getNoteStatusInterval) {
             window.getNoteStatusInterval = setInterval(() => {
                 if (audioworkletnode) {
                     audioworkletnode.port.postMessage({ getNoteStatus: true });
                 }
             }, 50);
-        } else if(!status && window.getNoteStatusInterval) {
+        } else if (!status && window.getNoteStatusInterval) {
             clearInterval(window.getNoteStatusInterval);
-            new Array(128).fill(0).map((n,ndx) => ndx).forEach(n => visualizeNoteOn(n, 0));
+            new Array(128).fill(0).map((n, ndx) => ndx).forEach(n => visualizeNoteOn(n, 0));
             window.getNoteStatusInterval = null;
         }
     };
 
     window.setSongPositionMillis = (songPositionMillis) => {
-        if(audioworkletnode) {        
-            audioworkletnode.port.postMessage({ songPositionMillis: songPositionMillis});
+        if (audioworkletnode) {
+            audioworkletnode.port.postMessage({ songPositionMillis: songPositionMillis });
         }
     };
 
     window.sendNoteToWorklet = (channel, note) => {
-        if(audioworkletnode) {        
-            audioworkletnode.port.postMessage({ channel: channel, note: note});
+        if (audioworkletnode) {
+            audioworkletnode.port.postMessage({ channel: channel, note: note });
         }
     }
 
@@ -178,19 +179,19 @@ export function initAudioWorkletNode(componentRoot) {
     const polyphonicmapByNote = {};
 
     window.sendNoteToWorkletPolyphonic = (minchannel, maxchannel, note, velocity) => {
-        
-        if(polyphonicmapByNote[note]!==undefined && velocity === 0) {
+
+        if (polyphonicmapByNote[note] !== undefined && velocity === 0) {
             window.sendNoteToWorklet(polyphonicmapByNote[note], 0);
             delete polyphonicmapByNote[note];
-        } else if(polyphonicmapByNote[note]!==undefined) {
+        } else if (polyphonicmapByNote[note] !== undefined) {
             return;
         }
 
-        if(velocity > 0) {
+        if (velocity > 0) {
             const busyChannels = {};
             Object.keys(polyphonicmapByNote).map(note => polyphonicmapByNote[note]).forEach(ch => busyChannels[ch] = true);
-            for(let ch = minchannel; ch<=maxchannel ; ch++) {
-                if(!busyChannels[ch]) {
+            for (let ch = minchannel; ch <= maxchannel; ch++) {
+                if (!busyChannels[ch]) {
                     window.sendNoteToWorklet(ch, note);
                     polyphonicmapByNote[note] = ch;
                     break;
@@ -202,10 +203,10 @@ export function initAudioWorkletNode(componentRoot) {
     const channelnotemap = {};
 
     const sendNoteToWorkletSingle = (channel, note, velocity) => {
-        if(velocity > 0) {
+        if (velocity > 0) {
             channelnotemap[channel] = note;
             window.sendNoteToWorklet(channel, note);
-        } else if(channelnotemap[channel]===note) {
+        } else if (channelnotemap[channel] === note) {
             window.sendNoteToWorklet(channel, 0);
             channelnotemap[channel] = 0;
         }
@@ -213,16 +214,16 @@ export function initAudioWorkletNode(componentRoot) {
 
     window.midichannelmappings = {};
 
-    window.currentMidiChannelMapping = 'piano';
+    window.currentMidiChannelMapping = null;
 
     function processNoteMessage(note, velocity) {
         visualizeNoteOn(note, velocity);
 
         const mappedChannel = midichannelmappings[currentMidiChannelMapping] ?
             midichannelmappings[currentMidiChannelMapping] : 0;
-        
+
         if (mappedChannel.min !== undefined) {
-            sendNoteToWorkletPolyphonic(mappedChannel.min, mappedChannel.max, note,velocity);
+            sendNoteToWorkletPolyphonic(mappedChannel.min, mappedChannel.max, note, velocity);
         } else {
             sendNoteToWorkletSingle(mappedChannel, note, velocity);
         }
@@ -232,18 +233,18 @@ export function initAudioWorkletNode(componentRoot) {
 
     async function startmidi() {
         const midi = await navigator.requestMIDIAccess();
-        
+
         for (var input of midi.inputs.values()) {
             input.onmidimessage = (msg) => {
                 const msgType = (msg.data[0] & 0xf0);
-                
-                const channel = midichannelmappings[currentMidiChannelMapping] ?
-                    midichannelmappings[currentMidiChannelMapping]: 0;
 
-                if(msgType === 0x90 || msgType === 0x80) {                
+                const channel = midichannelmappings[currentMidiChannelMapping] ?
+                    midichannelmappings[currentMidiChannelMapping] : 0;
+
+                if (msgType === 0x90 || msgType === 0x80) {
                     const note = msg.data[1];
-                    const velocity = msgType === 0x80 ? 0 : msg.data[2];                    
-                    
+                    const velocity = msgType === 0x80 ? 0 : msg.data[2];
+
                     processNoteMessage(note, velocity);
                 } else {
                     onmidi([msgType + channel, msg.data[1], msg.data[2]]);
@@ -252,18 +253,18 @@ export function initAudioWorkletNode(componentRoot) {
         }
     }
 
-    if(typeof navigator.requestMIDIAccess === 'function') {
+    if (typeof navigator.requestMIDIAccess === 'function') {
         startmidi();
     }
 
-    window.lowerkeyboardkeys = ["KeyZ","KeyS","KeyX","KeyD","KeyC","KeyV","KeyG","KeyB","KeyH","KeyN","KeyJ","KeyM","Comma","KeyL","Period","Semicolon","Slash"];
-    window.upperkeyboardkeys = ["KeyQ","Digit2","KeyW","Digit3","KeyE","KeyR","Digit5","KeyT","Digit6","KeyY","Digit7","KeyU","KeyI","Digit9","KeyO","Digit0","KeyP","BracketLeft"];
+    window.lowerkeyboardkeys = ["KeyZ", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV", "KeyG", "KeyB", "KeyH", "KeyN", "KeyJ", "KeyM", "Comma", "KeyL", "Period", "Semicolon", "Slash"];
+    window.upperkeyboardkeys = ["KeyQ", "Digit2", "KeyW", "Digit3", "KeyE", "KeyR", "Digit5", "KeyT", "Digit6", "KeyY", "Digit7", "KeyU", "KeyI", "Digit9", "KeyO", "Digit0", "KeyP", "BracketLeft"];
 
     let basenote = 48;
 
     const vkeyboardinputelement = componentRoot.getElementById('vkeyboardinputelement');
-    const noteNames = new Array(128).fill(null).map((v, ndx) => 
-        (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
+    const noteNames = new Array(128).fill(null).map((v, ndx) =>
+        (['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'])[ndx % 12] + '' + Math.floor(ndx / 12)
     );
     const keysDown = {};
     const updateVirtualKeyBoardInputValue = () => {
@@ -290,20 +291,20 @@ export function initAudioWorkletNode(componentRoot) {
             }
         };
 
-        if(upperkeyboardindex >= 0) {
+        if (upperkeyboardindex >= 0) {
             k.preventDefault();
             processNote(basenote + 12 + upperkeyboardindex);
-        } else if(lowerkeyboardindex >= 0) {
+        } else if (lowerkeyboardindex >= 0) {
             k.preventDefault();
             processNote(basenote + lowerkeyboardindex);
-        } else if(k.code === 'ArrowRight') {
+        } else if (k.code === 'ArrowRight') {
             k.preventDefault();
-            if(basenote<108) {
+            if (basenote < 108) {
                 basenote += 12;
             }
-        } else if(k.code === 'ArrowLeft') {
+        } else if (k.code === 'ArrowLeft') {
             k.preventDefault();
-            if(basenote > 12) {
+            if (basenote > 12) {
                 basenote -= 12;
             }
         }
@@ -312,19 +313,19 @@ export function initAudioWorkletNode(componentRoot) {
     vkeyboardinputelement.onkeyup = (k) => {
         let upperkeyboardindex = upperkeyboardkeys.findIndex(code => code === k.code);
         let lowerkeyboardindex = lowerkeyboardkeys.findIndex(code => code === k.code);
-        if(upperkeyboardindex >= 0) {
+        if (upperkeyboardindex >= 0) {
             k.preventDefault();
             const note = basenote + 12 + upperkeyboardindex;
             processNoteMessage(note, 0);
             delete keysDown[note];
             updateVirtualKeyBoardInputValue();
-        } else if(lowerkeyboardindex >= 0) {
+        } else if (lowerkeyboardindex >= 0) {
             k.preventDefault();
             const note = basenote + lowerkeyboardindex;
             processNoteMessage(note, 0);
             delete keysDown[note];
             updateVirtualKeyBoardInputValue();
-        } 
-        
+        }
+
     };
 }
