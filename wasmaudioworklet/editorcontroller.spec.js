@@ -2,8 +2,8 @@ import { waitForAppReady } from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { commitAndSyncRemote } from './wasmgit/wasmgitclient.js';
 
-describe('editorcontroller', async function() {
-    this.timeout(20000);
+describe('editorcontroller', async function () {
+    this.timeout(30000);
     this.beforeAll(async () => {
         document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
         await waitForAppReady();
@@ -92,7 +92,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 }
         `;
 
-        const songsource = `
+    const songsource = `
         global.bpm = 120;
         global.pattern_size_shift = 4;
         
@@ -114,7 +114,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         
         });`
 
-    it('should compile default wasm song source code', async () => {        
+    it('should compile default wasm song source code', async () => {
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);
         const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
@@ -128,7 +128,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
             }
         };
         appElement.querySelector('#savesongbutton').click();
-        while(!audioWorkletMessage) {
+        while (!audioWorkletMessage) {
             await new Promise((resolve) => setTimeout(() => resolve(), 1000));
         }
         assert.equal(localStorage.getItem('storedsynthcode'), synthsource);
@@ -137,8 +137,8 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         assert.equal(audioWorkletMessage.song.patterns.length, 2);
         assert.isAbove(audioWorkletMessage.wasm.length, 1000);
     });
-    
-    it('should compile and export song to wasm with WASI main entry point', async () => {        
+
+    it('should compile and export song to wasm with WASI main entry point', async () => {
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);
         const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
@@ -153,7 +153,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         };
         const downloadPromise = new Promise(resolve => {
             document._createElement = document.createElement;
-            document.createElement = function(elementName, options) {
+            document.createElement = function (elementName, options) {
                 const elm = this._createElement(elementName, options);
 
                 if (elementName === 'a') {
@@ -165,7 +165,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
             }
         });
 
-        appElement.querySelector('#exportbutton').click(); 
+        appElement.querySelector('#exportbutton').click();
         const url = await downloadPromise;
 
         const wasmbinary = await fetch(url).then(r => r.arrayBuffer());
@@ -178,7 +178,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         })).instance.exports._start);
         document.createElement = document._createElement;
     });
-    it('should compile and export song to wasm with lib functions exported', async () => {        
+    it('should compile and export song to wasm with lib functions exported', async () => {
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);
         const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
@@ -193,7 +193,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         };
         const downloadPromise = new Promise(resolve => {
             document._createElement = document.createElement;
-            document.createElement = function(elementName, options) {
+            document.createElement = function (elementName, options) {
                 const elm = this._createElement(elementName, options);
 
                 if (elementName === 'a') {
@@ -205,7 +205,7 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
             }
         });
 
-        appElement.querySelector('#exportbutton').click();  
+        appElement.querySelector('#exportbutton').click();
         const url = await downloadPromise;
 
         const wasmbinary = await fetch(url).then(r => r.arrayBuffer());
@@ -213,23 +213,23 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         assert.isAbove(wasmbinary.byteLength, 1000);
         assert.isDefined((await WebAssembly.instantiate(wasmbinary)).instance.exports.fillSampleBuffer);
         document.createElement = document._createElement;
-    });  
+    });
 });
 
-describe('editorcontroller with git', async function() {
+describe('editorcontroller with git', async function () {
     this.timeout(60000);
     const gitrepo = 'test5512331';
     this.afterAll(async () => {
         document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
-        window.history.pushState( {} , '', '?' );
+        window.history.pushState({}, '', '?');
         assert.equal(location.search, '');
         window.indexedDB.deleteDatabase(`/${gitrepo}`);
     });
     it('gitrepoparam in query string should use git', async () => {
         window.indexedDB.deleteDatabase(`/${gitrepo}`);
-        window.history.pushState( {} , '', `?gitrepo=${gitrepo}`);
+        window.history.pushState({}, '', `?gitrepo=${gitrepo}`);
         assert.equal(`?gitrepo=${gitrepo}`, location.search);
-                
+
         document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
         await waitForAppReady();
 
@@ -239,20 +239,20 @@ describe('editorcontroller with git', async function() {
             console.log('waiting for wasm git to be ready');
             await new Promise(resolve => setTimeout(resolve, 500));
             wasmgitui = document.querySelector('app-javascriptmusic')
-                                .shadowRoot.querySelector('wasmgit-ui');
-        } while(wasmgitui === null);
+                .shadowRoot.querySelector('wasmgit-ui');
+        } while (wasmgitui === null);
 
         assert.isOk(wasmgitui);
 
         let dircontents = await commitAndSyncRemote('no changes');
         console.log('should be no song data');
         assert.isUndefined(dircontents.find(direntry => direntry.endsWith('.js')));
-        
+
         console.log('should be a file with name song.js');
         await window.compileSong();
-        
-        dircontents = await commitAndSyncRemote('added synth and song');        
+
+        dircontents = await commitAndSyncRemote('added synth and song');
         assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), 'song.js');
-        assert.equal(dircontents.find(direntry => direntry.endsWith('.ts')), 'synth.ts');        
+        assert.equal(dircontents.find(direntry => direntry.endsWith('.ts')), 'synth.ts');
     });
 });

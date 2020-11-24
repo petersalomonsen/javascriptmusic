@@ -1,36 +1,33 @@
-import { resetTick, setBPM, nextTick, currentTime, releasePendingEvents, waitForBeat } from './pattern.js';
+import { resetTick, setBPM, nextTick, currentTime, waitForBeat } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions } from './trackerpattern.js';
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from './sequenceconstants.js';
 
 let songmessages = [];
 export let instrumentNames = [];
 let loopPromise;
+
 export let recordingStartTimeMillis = 0;
 
 const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 const output = {
     sendMessage: (msg) => {
+
         songmessages.push({
             time: currentTime(),
             message: msg
-        })
+        });
     }
 };
 
 function playFromHere() {
-    songmessages = songmessages.filter(evt => (evt.message[0] & 0xf0) === 0xb0)
+    songmessages = songmessages.filter(evt => (evt.message[0] & 0xf0) === 0xb0) // keep control changes
         .map(evt => Object.assign(evt, { time: 0 }));
 
     resetTick();
 }
 
 async function loopHere() {
-    let loopPromiseResolve;
-    // if user don't "await" for loopHere, keep the promise so that we can wait for it
-    loopPromise = new Promise(resolve => loopPromiseResolve = resolve);
-    await releasePendingEvents();
     output.sendMessage([SEQ_MSG_LOOP]);
-    loopPromiseResolve();
 }
 
 function startRecording() {
@@ -85,10 +82,6 @@ export async function compileSong(songsource) {
         await nextTick();
     }
 
-    if (loopPromise) {
-        console.log('wait for loop');
-        await loopPromise;
-    }
     console.log('song compiled');
     return songmessages;
 }

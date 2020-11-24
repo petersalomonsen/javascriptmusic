@@ -135,5 +135,61 @@ loopHere();
         assert.equal(eventlist[eventlist.length - 1].message[0], -1);
     }
     );
+
+    it('should loop in the middle of the song', async () => {
+        const bpm = 110;
+        const songsource = `
+        setBPM(${bpm});
+    
+        async function kickbeat() {
+            return createTrack(1).steps(4, [
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,c5(1/8,30),
+              [c5],,,,
+        
+            ].repeat(1));
+        }
+        
+        createTrack(1).steps(4,[
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,,,
+          ,,b5,,
+          b5,,,
+          b5,,,a5,
+          a5(5),,g5(5,33),,
+          f5,,,,
+          f5]);
+        await kickbeat();
+        
+        loopHere();
+
+        await kickbeat();
+        
+        loopHere();
+
+`;
+        const beatTime = beatNo => Math.floor((beatNo / bpm) * 60 * 1000);
+
+        const eventlist = await compileSong(songsource);
+        assert.equal(eventlist[0].time, 0);
+        assert.equal(eventlist[1].time, beatTime(1));
+        assert.notEqual(eventlist.find(evt => evt.time === beatTime(16) && evt.message[0] === -1), undefined);
+    }
+    );
 }
 );
