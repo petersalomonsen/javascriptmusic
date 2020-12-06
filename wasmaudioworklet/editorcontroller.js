@@ -153,9 +153,10 @@ export async function initEditor(componentRoot) {
 
                 if (!synthSourceIsXML) {
                     toggleSpinner(true);
+                    const systemSampleRate = new AudioContext().sampleRate;
                     const synthwasm = await compileWebAssemblySynth(synthsource,
                         undefined,
-                        new AudioContext().sampleRate,
+                        systemSampleRate,
                         false
                     );
                     if (synthwasm) {
@@ -180,7 +181,13 @@ export async function initEditor(componentRoot) {
 
                         if (exportwasm === 'wav') {
                             toggleSpinner(true);
-                            await exportToWav(eventlist, window.WASM_SYNTH_BYTES);
+                            const wasmBytes = systemSampleRate === 44100 ? window.WASM_SYNTH_BYTES : await compileWebAssemblySynth(
+                                synthsource + '\n',
+                                undefined,
+                                44100,
+                                false
+                            );
+                            await exportToWav(eventlist, wasmBytes);
                         } else if (exportwasm === 'midilibmodule') {
                             toggleSpinner(true);
                             await compileWebAssemblySynth(synthsource,
