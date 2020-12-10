@@ -92,14 +92,14 @@ export function convertEventListToByteArraySequence(eventlist) {
             evt.message.length === 1 && evt.message[0] === SEQ_MSG_LOOP) ||
             evt.message.length > 1 // short messages            
         )
-        .map((evt, ndx) => {
+        .map((evt, ndx, arr) => {
             if (evt.message.length === 1 && evt.message[0] === SEQ_MSG_LOOP) {
                 evt.message = [0xff, 0x2f, 0x00];
             }
             return {
                 message: evt.message,
                 time: evt.time,
-                deltatime: ndx > 0 ? evt.time - eventlist[ndx - 1].time : evt.time
+                deltatime: ndx > 0 ? evt.time - arr[ndx - 1].time : evt.time
             };
         }).map(evt => {
             const deltatimearr = [];

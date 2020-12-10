@@ -7,9 +7,9 @@
     "test:ci": "asp --summary"
   },
   "dependencies": {
-    "assemblyscript": "^0.14.3"
+    "assemblyscript": "^0.17.7"
   },
   "devDependencies": {
-    "@as-pect/cli": "^4.0.0"
+    "@as-pect/cli": "^5.0.0"
   }
 }
