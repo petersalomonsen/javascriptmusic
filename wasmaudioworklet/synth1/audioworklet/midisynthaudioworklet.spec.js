@@ -3,7 +3,7 @@ import { songsourceeditor, synthsourceeditor } from '../../editorcontroller.js';
 import { getCurrentTime, exportToWav } from './midisynthaudioworklet.js';
 import { getTargetNoteStates } from '../../visualizer/80sgrid.js';
 import { compileWebAssemblySynth } from '../browsersynthcompiler.js';
-import { compileSong as compileMidiSong } from '../../midisequencer/songcompiler.js';
+import { compileSong as compileMidiSong } from '../../midisequencer/songcompiler.js';
 
 const synthsource = `
 import { midichannels, MidiChannel, MidiVoice , SineOscillator, Envelope, notefreq } from './globalimports';
@@ -43,14 +43,14 @@ setBPM(100);
 `;
 
 // 69 (A4) = 440 Hz
-const noteNumberToFreq = (notenumber) => 440 * Math.pow(2, (notenumber - 69)/12);
+const noteNumberToFreq = (notenumber) => 440 * Math.pow(2, (notenumber - 69) / 12);
 
 const notemap = {};
-new Array(128).fill(null).map((v, ndx) => 
-        (['c','cs','d','ds','e','f','fs','g','gs','a','as','b'])[ndx%12]+''+Math.floor(ndx/12)
-    ).forEach((note, ndx) => notemap[note] = ndx);
+new Array(128).fill(null).map((v, ndx) =>
+    (['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'])[ndx % 12] + '' + Math.floor(ndx / 12)
+).forEach((note, ndx) => notemap[note] = ndx);
 
-describe('midisynth audio worklet', async function() {
+describe('midisynth audio worklet', async function () {
     this.timeout(20000);
 
     let appElement;
@@ -91,19 +91,19 @@ describe('midisynth audio worklet', async function() {
         window.audioworkletnode.connect(analyser);
 
         let loudestfrequency = 0;
-        
+
         while (Math.abs(loudestfrequency - 440) > 0.1) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
-            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
-            loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx : prev, 0);
+            loudestfrequency = (audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length);
         }
 
         console.log(loudestfrequency, audioCtx.sampleRate);
         assert.closeTo(loudestfrequency, 440, 0.1);
     });
     it('should hotswap the midisynth wasm binary', async () => {
-        synthsourceeditor.doc.setValue(synthsource.replace('notefreq(note)','notefreq(note+12)'));
+        synthsourceeditor.doc.setValue(synthsource.replace('notefreq(note)', 'notefreq(note+12)'));
         appElement.querySelector('#savesongbutton').click();
 
         let level = 0;
@@ -111,12 +111,12 @@ describe('midisynth audio worklet', async function() {
         while (level > -60) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
-            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
+            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx : prev, 0);
             level = dataArray[loudestfrequencyindex];
-            console.log((audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length), level);
+            console.log((audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length), level);
         }
         assert.isBelow(level, -60, 'note should be stopped on WASM hotswap');
-        
+
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 69, 127]
         });
@@ -126,9 +126,9 @@ describe('midisynth audio worklet', async function() {
         while (Math.abs(loudestfrequency - 880) > 0.5 || level < -35) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
-            const loudestfrequencyindex = dataArray.reduce((prev, lv, ndx) => lv > dataArray[prev] ? ndx: prev,0);
+            const loudestfrequencyindex = dataArray.reduce((prev, lv, ndx) => lv > dataArray[prev] ? ndx : prev, 0);
             level = dataArray[loudestfrequencyindex];
-            loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+            loudestfrequency = (audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length);
             console.log(loudestfrequency, level);
         }
         console.log('frequency after hotswap', loudestfrequency, level);
@@ -136,7 +136,7 @@ describe('midisynth audio worklet', async function() {
             880, 0.5,
             'Note frequency should be one octave up after WASM hotswap');
 
-        synthsourceeditor.doc.setValue(synthsource.replace('notefreq(note+12)','notefreq(note)'));
+        synthsourceeditor.doc.setValue(synthsource.replace('notefreq(note+12)', 'notefreq(note)'));
         appElement.querySelector('#savesongbutton').click();
 
         console.log('waiting for audio to stop after WASM hotswap (reverted changes)');
@@ -144,7 +144,7 @@ describe('midisynth audio worklet', async function() {
         while (level > -40) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
-            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
+            const loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx : prev, 0);
             level = dataArray[loudestfrequencyindex];
         }
         assert.isBelow(level, -40, 'note should be stopped on WASM hotswap (reverted changes)');
@@ -156,9 +156,9 @@ describe('midisynth audio worklet', async function() {
         while (level < -30) {
             await new Promise(resolve => setTimeout(resolve, 200));
             analyser.getFloatFrequencyData(dataArray);
-            const loudestfrequencyindex = dataArray.reduce((prev, lv, ndx) => lv > dataArray[prev] ? ndx: prev,0);
+            const loudestfrequencyindex = dataArray.reduce((prev, lv, ndx) => lv > dataArray[prev] ? ndx : prev, 0);
             level = dataArray[loudestfrequencyindex];
-            loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+            loudestfrequency = (audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length);
         }
         assert.closeTo(loudestfrequency,
             220, 1.0,
@@ -166,7 +166,7 @@ describe('midisynth audio worklet', async function() {
 
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 57, 0]
-        });    
+        });
     });
     it('should be able to play a sequence', async () => {
         songsourceeditor.doc.setValue(`
@@ -180,7 +180,7 @@ describe('midisynth audio worklet', async function() {
             loopHere();
         `);
         appElement.querySelector('#savesongbutton').click();
-        
+
         const expectedNotes = [
             notemap['c6'],
             notemap['e6'],
@@ -188,7 +188,7 @@ describe('midisynth audio worklet', async function() {
             notemap['as6']
         ];
 
-        while(expectedNotes.length > 0) {
+        while (expectedNotes.length > 0) {
             let loudestfrequency = 0;
             let loudestfrequencyindex = 0;
             const nextExpectedFrequency = noteNumberToFreq(expectedNotes.shift());
@@ -196,8 +196,8 @@ describe('midisynth audio worklet', async function() {
             while (loudestfrequency < nextExpectedFrequency) {
                 await new Promise(resolve => setTimeout(resolve, 50));
                 analyser.getFloatFrequencyData(dataArray);
-                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
-                loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx : prev, 0);
+                loudestfrequency = (audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length);
             }
 
             assert.closeTo(loudestfrequency, nextExpectedFrequency, 5.0, 'Expected note to have frequency close to ' + nextExpectedFrequency);
@@ -218,13 +218,13 @@ describe('midisynth audio worklet', async function() {
         console.log('waiting for updated song to take effect');
 
         const expectedFrequencies = [
-            noteNumberToFreq( notemap['c7'] ),
-            noteNumberToFreq( notemap['e7'] ),
-            noteNumberToFreq( notemap['g7'] ),
-            noteNumberToFreq( notemap['as7'])
+            noteNumberToFreq(notemap['c7']),
+            noteNumberToFreq(notemap['e7']),
+            noteNumberToFreq(notemap['g7']),
+            noteNumberToFreq(notemap['as7'])
         ];
 
-        while(expectedFrequencies.length > 0) {
+        while (expectedFrequencies.length > 0) {
             let loudestfrequency = 0;
             let loudestfrequencyindex = 0;
             const nextExpectedFrequency = expectedFrequencies.shift();
@@ -232,8 +232,8 @@ describe('midisynth audio worklet', async function() {
             while (loudestfrequency < nextExpectedFrequency) {
                 await new Promise(resolve => setTimeout(resolve, 50));
                 analyser.getFloatFrequencyData(dataArray);
-                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
-                loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx : prev, 0);
+                loudestfrequency = (audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length);
             }
 
             assert.closeTo(loudestfrequency, nextExpectedFrequency, 5.0, 'Expected note to have frequency close to ' + nextExpectedFrequency);
@@ -255,10 +255,10 @@ describe('midisynth audio worklet', async function() {
         }
 
         const expectedFrequencies = [
-            noteNumberToFreq( notemap['c7'] ),
-            noteNumberToFreq( notemap['e7'] ),
-            noteNumberToFreq( notemap['g7'] ),
-            noteNumberToFreq( notemap['as7'])
+            noteNumberToFreq(notemap['c7']),
+            noteNumberToFreq(notemap['e7']),
+            noteNumberToFreq(notemap['g7']),
+            noteNumberToFreq(notemap['as7'])
         ];
 
         audioCtx = window.audioworkletnode.context;
@@ -267,17 +267,17 @@ describe('midisynth audio worklet', async function() {
         dataArray = new Float32Array(analyser.frequencyBinCount);
         window.audioworkletnode.connect(analyser);
 
-        while(expectedFrequencies.length > 0) {
+        while (expectedFrequencies.length > 0) {
             let loudestfrequency = 0;
             let loudestfrequencyindex = 0;
             const nextExpectedFrequency = expectedFrequencies.shift();
 
-            console.log('expecting frequency',nextExpectedFrequency);
-            while (Math.abs(loudestfrequency - nextExpectedFrequency) > 5.0 ) {
+            console.log('expecting frequency', nextExpectedFrequency);
+            while (Math.abs(loudestfrequency - nextExpectedFrequency) > 5.0) {
                 await new Promise(resolve => setTimeout(resolve, 50));
                 analyser.getFloatFrequencyData(dataArray);
-                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
-                loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx : prev, 0);
+                loudestfrequency = (audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length);
             }
 
             assert.closeTo(loudestfrequency, nextExpectedFrequency, 5.0, 'Expected note to have frequency close to ' + nextExpectedFrequency);
@@ -310,30 +310,30 @@ describe('midisynth audio worklet', async function() {
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 69, 91]
         });
-        await new Promise(resolve => setTimeout(resolve,500));
+        await new Promise(resolve => setTimeout(resolve, 500));
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 69, 0]
         });
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 72, 92]
         });
-        await new Promise(resolve => setTimeout(resolve,500));
+        await new Promise(resolve => setTimeout(resolve, 500));
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 72, 0]
         });
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 76, 93]
         });
-        await new Promise(resolve => setTimeout(resolve,500));
+        await new Promise(resolve => setTimeout(resolve, 500));
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 76, 0]
         });
-        
-        await new Promise(resolve => setTimeout(resolve,500));
+
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         console.log('insert recording');
         window.insertRecording();
-        
+
         let songsource;
         do {
             songsource = songsourceeditor.doc.getValue();
@@ -363,6 +363,7 @@ describe('midisynth audio worklet', async function() {
                 ,,,,
             ]);
         `);
+        synthsourceeditor.doc.setValue(synthsource + ' ');
         appElement.querySelector('#savesongbutton').click();
         appElement.querySelector('#startaudiobutton').click();
 
@@ -373,11 +374,11 @@ describe('midisynth audio worklet', async function() {
             notemap['as6']
         ];
 
-        for (let n = 0; n<expectedNotes.length; n++) {
+        for (let n = 0; n < expectedNotes.length; n++) {
             const nextExpectedNote = expectedNotes[n];
             console.log('expecting note in visualizer', nextExpectedNote);
             while (getTargetNoteStates()[nextExpectedNote] === -1) {
-                await new Promise(r => setTimeout(r, 0));                
+                await new Promise(r => setTimeout(r, 0));
             }
             assert.approximately(getTargetNoteStates()[nextExpectedNote], 1.0, 0.1);
         }
@@ -393,11 +394,11 @@ describe('midisynth audio worklet', async function() {
         let soundFileDataPromise;
 
         document._createElementOriginal = document.createElement;
-        document.createElement = function(elementType) {
+        document.createElement = function (elementType) {
             const createdElement = this._createElementOriginal(elementType);
             if (elementType === 'a') {
                 soundFileDataPromise = new Promise(async resolve => {
-                    createdElement.click = async () => {                        
+                    createdElement.click = async () => {
                         const sounddata = await (await fetch(createdElement.href)).arrayBuffer();
                         console.log('sounddata length', sounddata.byteLength)
                         resolve(sounddata);
@@ -407,13 +408,13 @@ describe('midisynth audio worklet', async function() {
             return createdElement;
         }
         await exportToWav(eventlist, wasm_synth_bytes);
-        
+
         const soundfiledata = await soundFileDataPromise;
-        
+
         const audioCtx = new AudioContext();
 
         const analyser = audioCtx.createAnalyser();
-        
+
         analyser.fftSize = 32768;
         dataArray = new Float32Array(analyser.frequencyBinCount);
         const decodeddata = await audioCtx.decodeAudioData(soundfiledata);
@@ -435,7 +436,7 @@ describe('midisynth audio worklet', async function() {
             notemap['f4']
         ];
 
-        while(expectedNotes.length > 0) {
+        while (expectedNotes.length > 0) {
             let loudestfrequency = 0;
             let loudestfrequencyindex = 0;
             const nextExpectedNote = expectedNotes.shift();
@@ -446,8 +447,8 @@ describe('midisynth audio worklet', async function() {
             while (Math.abs(loudestfrequency - nextExpectedFrequency) > 5.0) {
                 await new Promise(resolve => setTimeout(resolve, 50));
                 analyser.getFloatFrequencyData(dataArray);
-                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx: prev,0);
-                loudestfrequency = (audioCtx.sampleRate / 2) * ( (1 + loudestfrequencyindex) / dataArray.length);
+                loudestfrequencyindex = dataArray.reduce((prev, level, ndx) => level > dataArray[prev] ? ndx : prev, 0);
+                loudestfrequency = (audioCtx.sampleRate / 2) * ((1 + loudestfrequencyindex) / dataArray.length);
             }
 
             assert.closeTo(loudestfrequency, nextExpectedFrequency, 5.0, 'Expected note to have frequency close to ' + nextExpectedFrequency);

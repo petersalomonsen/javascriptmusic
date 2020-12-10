@@ -2,9 +2,11 @@
  * Web worker to compile web assembly synth in the browser
  */
 
-importScripts('https://cdn.jsdelivr.net/npm/binaryen@94.0.0-nightly.20200716/index.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.14.3/dist/assemblyscript.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.14.3/dist/asc.js');
+self.require = (name) => self[name];
+
+importScripts('https://cdn.jsdelivr.net/npm/binaryen@98.0.0-nightly.20201109/index.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.17.7/dist/assemblyscript.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.17.7/dist/asc.js');
 
 let mix_source = 'mixes/newyear.mix.ts';
 let index_source = 'index.ts';

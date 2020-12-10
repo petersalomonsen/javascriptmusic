@@ -136,7 +136,7 @@ export function setPatternsPtr(ptr: usize): void {
 }
 
 export function allocatePatterns(numpatterns: i32): usize {
-  patternsPtr = __alloc(numpatterns << PATTERN_SIZE_SHIFT, idof<Array<u32>>());
+  patternsPtr = __new(numpatterns << PATTERN_SIZE_SHIFT, idof<Array<u32>>());
   return patternsPtr;
 }
 
@@ -145,24 +145,24 @@ export function setInstrumentPatternListPtr(ptr: usize, songpatternslength: i32,
   NUM_INSTRUMENTS = numinstruments;
   songlength = songpatternslength;
   
-  currentChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
-  holdChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
+  currentChannelValuesBufferPtr = __new(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
+  holdChannelValuesBufferPtr = __new(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
 }
 
 export function allocateInstrumentPatternList(songpatternslength: i32, numinstruments: i32): usize {
   NUM_INSTRUMENTS = numinstruments;
   songlength = songpatternslength;
   
-  currentChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
-  holdChannelValuesBufferPtr = __alloc(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
-  instrumentPatternListsPtr = __alloc(songpatternslength * NUM_INSTRUMENTS, idof<Array<u32>>());
+  currentChannelValuesBufferPtr = __new(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
+  holdChannelValuesBufferPtr = __new(NUM_INSTRUMENTS * 4, idof<Array<f32>>());
+  instrumentPatternListsPtr = __new(songpatternslength * NUM_INSTRUMENTS, idof<Array<u32>>());
 
   return instrumentPatternListsPtr;
 }
 
 export function allocateSampleBuffer(frames: usize): usize {
   sampleBufferFrames = frames;
-  sampleBufferPtr = __alloc(frames * 2 * 4, idof<Array<f32>>());
+  sampleBufferPtr = __new(frames * 2 * 4, idof<Array<f32>>());
   return sampleBufferPtr;
 }
 

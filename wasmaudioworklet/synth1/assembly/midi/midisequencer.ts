@@ -25,7 +25,7 @@ export function playEvents(targetTime: i32): void {
         let shiftamount: u8 = 0;
         do {
             deltaTimePart = eventlist[ndx++];
-            deltaTime += ((deltaTimePart & 0x7f) << shiftamount);
+            deltaTime += (((deltaTimePart & 0x7f) as i32) << shiftamount);
             shiftamount += 7;
         } while (deltaTimePart & 0x80);
 
