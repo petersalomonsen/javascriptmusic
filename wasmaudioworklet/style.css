@@ -40,13 +40,14 @@ input::placeholder {
 }
 .footer {
     position: fixed;
+    display: flex;
     bottom: 0px;
     left: 0px;
     right: 0px;
     height: 20px;
-    width: 100%;
     padding-top: 3px;
     padding-left: 20px;
+    padding-right: 20px;
     background-color: green;
     overflow: hidden;
     white-space: nowrap;
@@ -161,4 +162,12 @@ input::placeholder {
 .progress-fill {
     background-color: rgba(0,255,0, 0.7);
     height: 50px;    
+}
+
+#timeindicator {
+    position: fixed;
+    bottom: 25px;
+    width: 99%;
+    left: 0px;
+    display: none;
 }

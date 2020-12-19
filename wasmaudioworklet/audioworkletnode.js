@@ -1,8 +1,9 @@
-import { stopVideoRecording, startVideoRecording } from './screenrecorder/screenrecorder.js';
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
 import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization } from './visualizer/80sgrid.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
+import { detachSeek } from './app.js';
+import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -42,9 +43,6 @@ export function initAudioWorkletNode(componentRoot) {
             } else if (song.synthsource) {
                 await startWAM(context);
                 wamPostSong(song.eventlist, song.synthsource);
-                if (window.audioVideoRecordingEnabled === true) {
-                    await startVideoRecording(context, wamsynth);
-                }
                 onmidi = wamOnMidi;
             }
         } else {
@@ -67,10 +65,6 @@ export function initAudioWorkletNode(componentRoot) {
                 });
             }
             window.audioworkletnode = audioworkletnode;
-
-            if (window.audioVideoRecordingEnabled === true) {
-                await startVideoRecording(context, audioworkletnode);
-            }
 
             audioworkletnode.port.start();
             audioworkletnode.port.postMessage({
@@ -108,6 +102,7 @@ export function initAudioWorkletNode(componentRoot) {
             }
             audioworkletnode.connect(context.destination);
         }
+        recordAudioNode(audioworkletnode);
         componentRoot.getElementById('startaudiobutton').style.display = 'none';
         componentRoot.getElementById('stopaudiobutton').style.display = 'block';
     };
@@ -117,6 +112,7 @@ export function initAudioWorkletNode(componentRoot) {
             clearVisualization();
             audioworkletnode.port.postMessage({ terminate: true });
             audioworkletnode.disconnect();
+            detachSeek();
             audioworkletnode = null;
             window.audioworkletnode = null;
         }
@@ -126,10 +122,7 @@ export function initAudioWorkletNode(componentRoot) {
         }
 
         componentRoot.getElementById('startaudiobutton').style.display = 'block';
-        componentRoot.getElementById('stopaudiobutton').style.display = 'none';
-        if (window.audioVideoRecordingEnabled === true) {
-            stopVideoRecording();
-        }
+        componentRoot.getElementById('stopaudiobutton').style.display = 'none';        
     }
 
     window.toggleSongPlay = (status) => {
@@ -146,9 +139,13 @@ export function initAudioWorkletNode(componentRoot) {
     };
 
     window.toggleCapture = (status) => {
-        window.audioVideoRecordingEnabled = status;
+        if (status) {
+            startVideoRecording(context);
+        } else {
+            stopVideoRecording();
+        }
     };
-
+  
     window.toggleVisualizer = (status) => {
         if (status && !window.getNoteStatusInterval) {
             window.getNoteStatusInterval = setInterval(() => {

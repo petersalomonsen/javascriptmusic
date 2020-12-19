@@ -1,17 +1,18 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.css">
 <link rel="stylesheet" href="https://codemirror.net/addon/dialog/dialog.css">
 <link rel="stylesheet" href="https://codemirror.net/addon/lint/lint.css">
-<link rel="stylesheet" type="text/css" href="codemirror-monokai.css">    
-<link rel="stylesheet" type="text/css" href="style.css">    
+<link rel="stylesheet" type="text/css" href="codemirror-monokai.css">
+<link rel="stylesheet" type="text/css" href="style.css">
 <div id="appcontainer">
   <div class="toolbar">
     <button id="startaudiobutton" onclick="startaudio()" disabled title="start synth">&#x25B6;</button>
     <button id="stopaudiobutton" onclick="stopaudio()" title="stop synth" style="display: none">&#9724;</button>
-    <button id="savesongbutton" disabled  title="save song (clears recorded data)">&#x1f4be;</button>
+    <button id="savesongbutton" disabled title="save song (clears recorded data)">&#x1f4be;</button>
     <button onclick="insertRecording()" title="insert recording at cursor" style="height: 31px">&#128203;</button>
-    
+
     <label>
-      <select id="midichannelmappingselection" title="select instrument" onchange="currentMidiChannelMapping=this.value">
+      <select id="midichannelmappingselection" title="select instrument"
+        onchange="currentMidiChannelMapping=this.value">
       </select>
     </label>
 
@@ -25,17 +26,17 @@
     &nbsp;
 
     <label title="toggle screen and audio capture">
-        <input id="toggleSongPlayCheckbox" type="checkbox" onclick="toggleCapture(this.checked)" />
-        <span>capture</span>
+      <input id="toggleSongPlayCheckbox" type="checkbox" onclick="toggleCapture(this.checked)" />
+      <span>capture</span>
     </label>
-  
+
     &nbsp;
 
     <label title="toggle visualizer">
       <input id="toggleVisualizerCheckbox" type="checkbox" onclick="toggleVisualizer(this.checked)" />
       <span>visualizer</span>
     </label>
-    
+
     <div style="flex-grow: 1"></div>
     <button id="exportbutton" onclick="compileSong(true)" title="Export">&#x21E9;</button>
   </div>
@@ -46,7 +47,8 @@
       <span>song</span>
     </label>
     <label title="synth editor">
-      <input type="checkbox" id="syntheditortogglecheckbox" checked onclick="toggleEditors('assemblyscripteditor', this.checked)" />
+      <input type="checkbox" id="syntheditortogglecheckbox" checked
+        onclick="toggleEditors('assemblyscripteditor', this.checked)" />
       <span>synth</span>
     </label>
     <label title="presets">
@@ -60,13 +62,14 @@
     <div id="assemblyscripteditor" class="editor"></div>
     <div id="presetsui" class="editor" style="display: none"><span>Not available</span></div>
   </div>
-  
+
   <div id="errormessages">
-    <button style="position: absolute; right: 10px" onclick="this.parentElement.style.display='none'">close</button onclick="this.parent.style.display='none'">
+    <button style="position: absolute; right: 10px" onclick="this.parentElement.style.display='none'">close</button
+      onclick="this.parent.style.display='none'">
     <span></span>
   </div>
   <script>
-    window.visualizeNoteOn = function() {}
+    window.visualizeNoteOn = function () { }
   </script>
   <canvas id="glCanvas" style="position: absolute;
         bottom: 20px;
@@ -80,9 +83,14 @@
   <div id="main-progress-bar" class="progress-border">
     <div class="progress-text">50%</div>
     <div class="progress-fill" style="width:20%"></div>
-  </div> 
+  </div>
   <div class="spinner"></div>
+
+  <input id="timeindicator" type="range" value="0" min="0" max="180000" />
+
   <div class="footer">
     webassembly music experiment - (c) 2019-2020 peter salomonsen
+    <span style="flex-grow: 1"></span>
+    <span id="timespan"></span>
   </div>
 </div>

@@ -1,32 +1,35 @@
 
 let mediaRecorder;
 let captureStream;
+let audioStreamDestination;
 
-export async function startVideoRecording(audioContext, audioNodeToRecord) {    
+export async function startVideoRecording(audioContext) {
     try {
         const videostream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: false
         });
 
-        const audioStreamDestination = audioContext.createMediaStreamDestination();
-        audioNodeToRecord.connect(audioStreamDestination);
-        
-        if(sessionStorage.getItem('capturemic') === 'true') {
+        audioStreamDestination = audioContext.createMediaStreamDestination();
+
+        // need at least one node connected in order to keep in sync with the video
+        audioContext.createGain().connect(audioStreamDestination);
+
+        if (sessionStorage.getItem('capturemic') === 'true') {
             const micstream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             const micsource = audioContext.createMediaStreamSource(new MediaStream(micstream.getAudioTracks()));
             micsource.connect(audioStreamDestination);
         }
 
         const tracks = [
-            ...videostream.getVideoTracks(),             
-            ...audioStreamDestination.stream.getAudioTracks()            
+            ...videostream.getVideoTracks(),
+            ...audioStreamDestination.stream.getAudioTracks()
         ];
         captureStream = new MediaStream(tracks);
 
         mediaRecorder = new MediaRecorder(captureStream);
-        mediaRecorder.ondataavailable = (event) => { 
-            if (event.data.size > 0) {                
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
                 var blob = new Blob([event.data], {
                     type: "video/webm"
                 });
@@ -41,12 +44,19 @@ export async function startVideoRecording(audioContext, audioNodeToRecord) {
             }
         };
         mediaRecorder.start();
-    } catch(err) {
-      console.error("Error: " + err);
+    } catch (err) {
+        console.error("Error: " + err);
+    }
+}
+
+export function recordAudioNode(audioNodeToRecord) {
+    if (audioStreamDestination) {
+        audioNodeToRecord.connect(audioStreamDestination);
     }
 }
 
 export function stopVideoRecording() {
     captureStream.getVideoTracks().forEach(t => t.stop());
     mediaRecorder.stop();
+    audioStreamDestination = null;
 }
