@@ -9,56 +9,67 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
     AudioWorkletGlobalScope.midisequencer.currentFrame = 0;
 
     this.port.onmessage = async (msg) => {
-        if(msg.data.wasm) {
-          this.wasmInstancePromise = WebAssembly.instantiate(msg.data.wasm, {
-            environment: { SAMPLERATE: msg.data.samplerate },
-            env: {
-              abort: () => console.log('webassembly synth abort, should not happen')
-            }
-          });
-          this.wasmInstance = (await this.wasmInstancePromise).instance.exports;
-          AudioWorkletGlobalScope.midisequencer.addMidiReceiver(this.wasmInstance.shortmessage);
-          this.port.postMessage({wasmloaded: true});
-        }
-        
-        if (msg.data.sequencedata) {
-          AudioWorkletGlobalScope.midisequencer.setSequenceData(msg.data.sequencedata);
-        }
-
-        if (msg.data.toggleSongPlay !== undefined) {
-          this.playMidiSequence = msg.data.toggleSongPlay;
-          if (this.wasmInstance && msg.data.toggleSongPlay === false) {
-            this.wasmInstance.allNotesOff();
+      if (msg.data.wasm) {
+        this.wasmInstancePromise = WebAssembly.instantiate(msg.data.wasm, {
+          environment: { SAMPLERATE: msg.data.samplerate },
+          env: {
+            abort: () => console.log('webassembly synth abort, should not happen')
           }
-        }
+        });
+        this.wasmInstance = (await this.wasmInstancePromise).instance.exports;
+        AudioWorkletGlobalScope.midisequencer.addMidiReceiver(this.wasmInstance.shortmessage);
+        this.port.postMessage({ wasmloaded: true });
+      }
 
-        if (msg.data.midishortmsg) {
-            (await this.wasmInstancePromise).instance.exports.shortmessage(
-                msg.data.midishortmsg[0],
-                msg.data.midishortmsg[1],
-                msg.data.midishortmsg[2]
-            );
-            AudioWorkletGlobalScope.midisequencer.onmidi(msg.data.midishortmsg);
+      if (msg.data.sequencedata) {
+        if (this.wasmInstance) {
+          this.wasmInstance.allNotesOff();
         }
+        AudioWorkletGlobalScope.midisequencer.setSequenceData(msg.data.sequencedata);
+      }
 
-        if (msg.data.recorded) {
-          this.port.postMessage({ 'recorded':  AudioWorkletGlobalScope.midisequencer.getRecorded() });
+      if (msg.data.toggleSongPlay !== undefined) {
+        this.playMidiSequence = msg.data.toggleSongPlay;
+        if (this.wasmInstance && msg.data.toggleSongPlay === false) {
+          this.wasmInstance.allNotesOff();
         }
-        
-        if (msg.data.currentTime) {
-          this.port.postMessage({ currentTime:
+      }
+
+      if (msg.data.midishortmsg) {
+        (await this.wasmInstancePromise).instance.exports.shortmessage(
+          msg.data.midishortmsg[0],
+          msg.data.midishortmsg[1],
+          msg.data.midishortmsg[2]
+        );
+        AudioWorkletGlobalScope.midisequencer.onmidi(msg.data.midishortmsg);
+      }
+
+      if (msg.data.recorded) {
+        this.port.postMessage({ 'recorded': AudioWorkletGlobalScope.midisequencer.getRecorded() });
+      }
+
+      if (msg.data.currentTime) {
+        this.port.postMessage({
+          currentTime:
             this.processorActive ?
               AudioWorkletGlobalScope.midisequencer.getCurrentTime() : null
-          });
-        }
+        });
+      }
 
-        if (msg.data.terminate) {
-          this.processorActive = false;
-          this.port.close();
+      if (msg.data.seek !== undefined) {
+        if (this.wasmInstance) {
+          this.wasmInstance.allNotesOff();
         }
+        AudioWorkletGlobalScope.midisequencer.setCurrentTime(msg.data.seek);
+      }
+
+      if (msg.data.terminate) {
+        this.processorActive = false;
+        this.port.close();
+      }
     };
     this.port.start();
-  }  
+  }
 
   process(inputs, outputs, parameters) {
     const output = outputs[0];
@@ -75,7 +86,7 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
         this.wasmInstance.samplebuffer + (SAMPLE_FRAMES * 4),
         SAMPLE_FRAMES));
     }
-  
+
     return this.processorActive;
   }
 }

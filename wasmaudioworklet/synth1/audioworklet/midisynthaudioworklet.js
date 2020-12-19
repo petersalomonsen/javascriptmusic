@@ -1,6 +1,6 @@
-import { visualizeSong, setGetCurrentTimeFunction, setPaused } from '../../visualizer/midieventlistvisualizer.js';
+import { visualizeSong, setGetCurrentTimeFunction, setPaused } from '../../visualizer/midieventlistvisualizer.js';
 import { WorkerMessageHandler } from '../../common/workermessagehandler.js';
-import { toggleSpinner, setProgressbarValue } from '../../app.js';
+import { toggleSpinner, setProgressbarValue, attachSeek } from '../../app.js';
 import { audioBufferToWav } from '../../common/audiobuffertowav.js';
 
 export let audioworkletnode;
@@ -8,7 +8,7 @@ export let audioworkletnode;
 let workerMessageHandler;
 
 export function onmidi(data) {
-    audioworkletnode.port.postMessage({ 
+    audioworkletnode.port.postMessage({
         midishortmsg: data
     });
 }
@@ -27,20 +27,22 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
     const awn = new AudioWorkletNode(context, 'asc-midisynth-audio-worklet-processor', {
         outputChannelCount: [2]
     });
-    awn.port.start();    
-    
+    awn.port.start();
+
     const wmh = new WorkerMessageHandler(awn.port);
     await wmh.callAndGetResult({
-            samplerate: context.sampleRate, 
-            wasm: wasm_synth_bytes, 
-            sequencedata: sequencedata,
-            toggleSongPlay: toggleSongPlay
-        }, (msg) => msg.wasmloaded);
+        samplerate: context.sampleRate,
+        wasm: wasm_synth_bytes,
+        sequencedata: sequencedata,
+        toggleSongPlay: toggleSongPlay
+    }, (msg) => msg.wasmloaded);
     setGetCurrentTimeFunction(getCurrentTime);
-
+    attachSeek((time) => awn.port.postMessage({ seek: time }),
+        getCurrentTime,
+        sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0);
     awn.connect(context.destination);
 
-    return {audioworkletnode: awn, workerMessageHandler: wmh};
+    return { audioworkletnode: awn, workerMessageHandler: wmh };
 }
 
 export async function createAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
@@ -55,25 +57,26 @@ export async function createAudioWorklet(context, wasm_synth_bytes, sequencedata
 }
 
 export async function getRecordedData() {
-    return (await workerMessageHandler.callAndGetResult({recorded: true},
-            (msgdata) => msgdata.recorded ? true : false))
+    return (await workerMessageHandler.callAndGetResult({ recorded: true },
+        (msgdata) => msgdata.recorded ? true : false))
         .recorded;
 }
 
 export async function getCurrentTime() {
-    return (await workerMessageHandler.callAndGetResult({currentTime: true},
-            (msgdata) => msgdata.currentTime !== undefined ? true : false))
+    const currentTime = (await workerMessageHandler.callAndGetResult({ currentTime: true },
+        (msgdata) => msgdata.currentTime !== undefined ? true : false))
         .currentTime;
+    return currentTime;
 }
 
 export async function exportToWav(eventlist, wasm_synth_bytes) {
     toggleSpinner(true);
     const renderSampleRate = 44100;
-    const duration = eventlist[eventlist.length-1].time / 1000;
+    const duration = eventlist[eventlist.length - 1].time / 1000;
     const offlineCtx = new OfflineAudioContext(2,
-            duration * renderSampleRate,
-            renderSampleRate);
-    
+        duration * renderSampleRate,
+        renderSampleRate);
+
     await offlineCtx.audioWorklet.addModule('./midisequencer/audioworkletprocessorsequencer.js');
     await connectAudioWorklet(offlineCtx, wasm_synth_bytes, eventlist, true);
 

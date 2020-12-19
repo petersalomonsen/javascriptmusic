@@ -39,7 +39,7 @@ export class BiQuadFilter {
         return out;
     }
 
-    process(input: f32): f32 {        
+    process(input: f32): f32 {
         let out = this.coeffs.b0 * input + this.coeffs.b1 * this.x1 + this.coeffs.b2 * this.x2
             - this.coeffs.a1 * this.y1
             - this.coeffs.a2 * this.y2;
@@ -61,16 +61,15 @@ export class BiQuadFilter {
         f0Hertz: f32,
         q_value: f32
     ): void {
-        /*
-        if f0.hz() > fs.hz() / 2.0 {
-            return Err(Errors::OutsideNyquist);
+        if (f0Hertz > fsHertz / 2.0) {
+            f0Hertz = fsHertz / 2.0;
         }
 
-        if q_value < 0.0 {
-            return Err(Errors::NegativeQ);
-        }*/
+        if (q_value < 0.0) {
+            q_value = 0;
+        }
 
-        let omega : f32 = 2.0 * PI * f0Hertz / fsHertz;
+        let omega: f32 = 2.0 * PI * f0Hertz / fsHertz;
         let alpha: f32;
         let omega_s: f32;
         let omega_c: f32;
@@ -80,18 +79,18 @@ export class BiQuadFilter {
         let a0: f32;
         let a1: f32;
         let a2: f32;
-    
-        
-        switch(filtertype) {
+
+
+        switch (filtertype) {
             case FilterType.SinglePoleLowPass:
                 alpha = omega / (omega + 1.0);
-    
-                this.coeffs.a1 =alpha - 1.0;
+
+                this.coeffs.a1 = alpha - 1.0;
                 this.coeffs.a2 = 0.0;
                 this.coeffs.b0 = alpha;
                 this.coeffs.b1 = 0.0;
                 this.coeffs.b2 = 0.0;
-                
+
                 break;
             case FilterType.LowPass:
                 // The code for omega_s/c and alpha is currently duplicated due to the single pole
@@ -100,58 +99,58 @@ export class BiQuadFilter {
                 omega_s = sin(omega);
                 omega_c = cos(omega);
                 alpha = omega_s / (2.0 * q_value);
-    
+
                 b0 = (1.0 - omega_c) * 0.5;
                 b1 = 1.0 - omega_c;
                 b2 = (1.0 - omega_c) * 0.5;
                 a0 = 1.0 + alpha;
                 a1 = -2.0 * omega_c;
                 a2 = 1.0 - alpha;
-    
+
                 this.coeffs.a1 = a1 / a0;
                 this.coeffs.a2 = a2 / a0;
                 this.coeffs.b0 = b0 / a0;
                 this.coeffs.b1 = b1 / a0;
                 this.coeffs.b2 = b2 / a0;
-                
+
                 break;
             case FilterType.HighPass:
                 omega_s = sin(omega);
                 omega_c = cos(omega);
                 alpha = omega_s / (2.0 * q_value);
-    
+
                 b0 = (1.0 + omega_c) * 0.5;
                 b1 = -(1.0 + omega_c);
                 b2 = (1.0 + omega_c) * 0.5;
                 a0 = 1.0 + alpha;
                 a1 = -2.0 * omega_c;
                 a2 = 1.0 - alpha;
-    
+
                 this.coeffs.a1 = a1 / a0;
                 this.coeffs.a2 = a2 / a0;
                 this.coeffs.b0 = b0 / a0;
                 this.coeffs.b1 = b1 / a0;
                 this.coeffs.b2 = b2 / a0;
-                
+
                 break;
             case FilterType.Notch:
                 omega_s = sin(omega);
                 omega_c = cos(omega);
                 alpha = omega_s / (2.0 * q_value);
-    
+
                 b0 = 1.0;
                 b1 = -2.0 * omega_c;
                 b2 = 1.0;
                 a0 = 1.0 + alpha;
                 a1 = -2.0 * omega_c;
                 a2 = 1.0 - alpha;
-    
+
                 this.coeffs.a1 = a1 / a0;
-                this.coeffs.a2 =  a2 / a0;
-                this.coeffs.b0 =  b0 / a0;
+                this.coeffs.a2 = a2 / a0;
+                this.coeffs.b0 = b0 / a0;
                 this.coeffs.b1 = b1 / a0;
                 this.coeffs.b2 = b2 / a0;
-                
+
                 break;
         }
     }
