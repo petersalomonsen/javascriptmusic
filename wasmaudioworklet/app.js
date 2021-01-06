@@ -20,6 +20,7 @@ customElements.define('app-javascriptmusic',
       console.log('initialize app');
       const apphtml = await fetch('app.html').then(r => r.text());
       this.shadowRoot.innerHTML = apphtml;
+      this.shadowRoot.getElementById('copyrighttoyear').innerHTML = new Date().getFullYear();
       initAudioWorkletNode(this.shadowRoot);
       await initVisualizer(this.shadowRoot);
       await initEditor(this.shadowRoot);
@@ -100,6 +101,12 @@ function padNumber(num, len) {
   return ret.substr(ret.length - len);
 }
 
+export function formatTime(currentTime) {
+  return Math.floor(currentTime / (60 * 1000)) + ':' +
+    padNumber(Math.floor(currentTime / (1000)) % 60, 2) + ':' +
+    padNumber(Math.floor(currentTime % (1000)), 3);
+}
+
 export function attachSeek(seekFunc, getCurrentTimeFunc, max) {
   const timeindicatorelement = componentRoot.querySelector("#timeindicator");
   componentRoot.querySelector("#timeindicator").style.display = 'block';
@@ -111,11 +118,8 @@ export function attachSeek(seekFunc, getCurrentTimeFunc, max) {
     requestAnimationFrame(async () => {
       const currentTime = await getCurrentTimeFunc();
       componentRoot.querySelector("#timeindicator").value = Math.round(currentTime);
-      componentRoot.querySelector("#timespan").innerHTML =
-        Math.floor(currentTime / (60 * 1000)) + ':' +
-        padNumber(Math.floor(currentTime / (1000)) % 60, 2) + ':' +
-        padNumber(Math.floor(currentTime % (1000)), 3);
-      ;
+      componentRoot.querySelector("#timespan").innerHTML = formatTime(currentTime);
+
       if (seekAttached) {
         updateTimeIndicatorLoop();
       }

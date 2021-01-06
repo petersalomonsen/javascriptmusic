@@ -1,9 +1,10 @@
 addons:
-  firefox: "83.0"
+  firefox: "85.0"
 
 matrix:
   include:
     - language: node_js
+      dist: focal
       node_js:
         - 14
       install:
@@ -11,7 +12,7 @@ matrix:
         - npm install
       script: "npm run test"
       name: "Chrome headless"
-    - dist: xenial
+    - dist: focal
       services:
         - xvfb
       node_js:
@@ -22,6 +23,7 @@ matrix:
       script: "npm run test-firefox"
       name: "Firefox xvfb"
     - language: node_js
+      dist: focal
       node_js:
         - 14
       install:

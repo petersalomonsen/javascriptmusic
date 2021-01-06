@@ -1,6 +1,6 @@
 import { waitForAppReady } from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
-import { commitAndSyncRemote } from './wasmgit/wasmgitclient.js';
+import { commitAndSyncRemote, log } from './wasmgit/wasmgitclient.js';
 
 describe('editorcontroller', async function () {
     this.timeout(30000);
@@ -244,15 +244,34 @@ describe('editorcontroller with git', async function () {
 
         assert.isOk(wasmgitui);
 
-        let dircontents = await commitAndSyncRemote('no changes');
+        let dircontents;
+        try {
+            dircontents = await commitAndSyncRemote('no changes');
+            assert.isTrue(false, 'expected repository to not exist remotely');
+        } catch (e) {
+            dircontents = e.dircontents;
+        }
         console.log('should be no song data');
         assert.isUndefined(dircontents.find(direntry => direntry.endsWith('.js')));
 
         console.log('should be a file with name song.js');
         await window.compileSong();
 
-        dircontents = await commitAndSyncRemote('added synth and song');
-        assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), 'song.js');
-        assert.equal(dircontents.find(direntry => direntry.endsWith('.ts')), 'synth.ts');
+        const commitComment = 'added synth and song';
+        try {
+            await commitAndSyncRemote(commitComment);
+            assert.isTrue(false, 'expecting not to be able to push to remote');
+        } catch (e) {
+            dircontents = e.dircontents;
+            assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), 'song.js');
+            assert.equal(dircontents.find(direntry => direntry.endsWith('.ts')), 'synth.ts');
+        }
+        assert.isTrue((await log()).indexOf(commitComment) > -1, 'expecting to find commit comment in log');
+
+        const idbrequest = indexedDB.open(`/${gitrepo}`);
+        const db = await new Promise(resolve =>
+            idbrequest.onsuccess = (e) => resolve(e.target.result)
+        );
+        assert.isTrue(db.objectStoreNames.contains('FILE_DATA'), 'file system should have been persisted');
     });
 });

@@ -52,6 +52,9 @@ onmessage = async (msg) => {
     stdout = '';
     lg.callMain(args);
     captureOutput = false;
+    if (stderr) {
+      throw new Error(stderr);
+    }
   }
 
   function repoHasChanges() {
@@ -88,12 +91,19 @@ onmessage = async (msg) => {
       lg.callMain(['commit', '-m', msg.data.commitmessage]);
     }
 
-    lg.callMain(['fetch', 'origin']);
-    lg.callMain(['merge', 'origin/master']);
-    lg.callMain(['push']);
+    let err = null;
+    try {
+      callAndCaptureOutput(['fetch', 'origin']);
+      if (stdout.indexOf('Received 0/0 objects') === -1) {
+        callAndCaptureOutput(['merge', 'origin/master']);
+      }
+      callAndCaptureOutput(['push']);
+    } catch (e) {
+      err = e;
+    }
     FS.syncfs(false, () => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ dircontents: FS.readdir('.') });
+      postMessage({ id: msg.data.id, error: err ? err.message : undefined, dircontents: FS.readdir('.') });
     });
   } else if (msg.data.command === 'synclocal') {
     currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
@@ -117,7 +127,7 @@ onmessage = async (msg) => {
     FS.unmount(`/${currentRepoRootDir}`);
     console.log('deleting database', currentRepoRootDir);
     self.indexedDB.deleteDatabase('/' + currentRepoRootDir);
-    postMessage({ deleted: currentRepoRootDir });
+    postMessage({ id: msg.data.id, deleted: currentRepoRootDir });
   } else if (msg.data.command === 'clone') {
     currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
 
@@ -148,7 +158,7 @@ onmessage = async (msg) => {
         filecontents: FS.readFile(msg.data.filename, { encoding: 'utf8' })
       });
     } catch (e) {
-      postMessage({ 'stderr': JSON.stringify(e) });
+      postMessage({ 'error': JSON.stringify(e) });
     }
   } else if (msg.data.command === 'log') {
     callAndCaptureOutput(['log']);
