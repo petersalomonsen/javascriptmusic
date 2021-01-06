@@ -14,7 +14,12 @@ describe('wasm-git client', async function () {
         assert.isFalse(await repoHasChanges());
 
         // get dir contents by calling sync remote        
-        const dircontents = await commitAndSyncRemote('no changes');
+        let dircontents;
+        try {
+            dircontents = await commitAndSyncRemote('no changes');
+        } catch (e) {
+            dircontents = e.dircontents;
+        }
 
         assert.equal(dircontents.find(direntry => direntry === '.git'), '.git');
         assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), config.songfilename);
@@ -77,6 +82,7 @@ describe('wasm-git client', async function () {
     });
     it('should be possible to create an empty repo', async () => {
         worker.terminate();
+        window.indexedDB.deleteDatabase(`/nonexistingtest`);
         const config = await initWASMGitClient('nonexistingtest');
 
         assert.isFalse(await repoHasChanges());
@@ -90,10 +96,15 @@ describe('wasm-git client', async function () {
         assert.match(difftxt, /.*On branch Not currently on any branch.*/);
         assert.match(difftxt, /.*new file:   blabla.txt\n.*/);
 
-        await commitAndSyncRemote('first commit');
-        assert.isFalse(await repoHasChanges());
+        try {
+            await commitAndSyncRemote('first commit');
+            assert.isTrue(false, 'should not be able to push to remote');
+        } catch (e) {
+            assert(e.error.indexOf('early EOF') > -1, 'should receieve early EOF from remote');
+            assert.isFalse(await repoHasChanges());
 
-        const logResult = await log();
-        assert.match(logResult, /.*first commit.*/);
+            const logResult = await log();
+            assert.match(logResult, /.*first commit.*/);
+        }
     });
 });

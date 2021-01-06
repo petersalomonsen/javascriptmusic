@@ -122,7 +122,7 @@ export function initAudioWorkletNode(componentRoot) {
         }
 
         componentRoot.getElementById('startaudiobutton').style.display = 'block';
-        componentRoot.getElementById('stopaudiobutton').style.display = 'none';        
+        componentRoot.getElementById('stopaudiobutton').style.display = 'none';
     }
 
     window.toggleSongPlay = (status) => {
@@ -145,7 +145,7 @@ export function initAudioWorkletNode(componentRoot) {
             stopVideoRecording();
         }
     };
-  
+
     window.toggleVisualizer = (status) => {
         if (status && !window.getNoteStatusInterval) {
             window.getNoteStatusInterval = setInterval(() => {
@@ -248,6 +248,28 @@ export function initAudioWorkletNode(componentRoot) {
                 }
             };
         }
+
+        // support https://pypi.org/project/midi-websocket-server/ (useful for firefox)
+        const midiws = new WebSocket('ws://localhost:8765');
+        midiws.onmessage = (wsmsg) => {
+            const msg = { data: JSON.parse(wsmsg.data).content.msg };
+            if (!msg.data) {
+                return;
+            }
+            const msgType = (msg.data[0] & 0xf0);
+
+            const channel = midichannelmappings[currentMidiChannelMapping] ?
+                midichannelmappings[currentMidiChannelMapping] : 0;
+
+            if (msgType === 0x90 || msgType === 0x80) {
+                const note = msg.data[1];
+                const velocity = msgType === 0x80 ? 0 : msg.data[2];
+
+                processNoteMessage(note, velocity);
+            } else {
+                onmidi([msgType + channel, msg.data[1], msg.data[2]]);
+            }
+        };
     }
 
     if (typeof navigator.requestMIDIAccess === 'function') {

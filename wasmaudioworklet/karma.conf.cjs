@@ -24,6 +24,7 @@ module.exports = function (config) {
 
     proxies: {
       '/app.html': '/base/app.html',
+      '/analyser': '/base/analyser',
       '/audioworkletprocessor.js': '/base/audioworkletprocessor.js',
       '/synth1': '/base/synth1',
       '/midisequencer': '/base/midisequencer',

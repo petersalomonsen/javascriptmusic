@@ -1,15 +1,36 @@
 import { initNear, authdata as nearAuthData, login as nearLogin } from './nearacl.js';
 import { toggleSpinner } from '../app.js';
+import { modal } from '../common/ui/modal.js';
 
 export let worker;
 
 let gitrepourl;
 let commitAndPushButton;
 let discardChangesButton;
+let deleteLocalButton;
 
 const remoteSyncListeners = [];
 
 let workerMessageListeners = [];
+
+let msgId = 1;
+async function callAndWaitForWorker(message) {
+    message.id = msgId++;
+    worker.postMessage(message);
+    return await new Promise((resolve, reject) =>
+        workerMessageListeners.push((msg) => {
+            if (msg.data.id === message.id) {
+                if (msg.data.error) {
+                    reject(msg.data);
+                } else {
+                    resolve(msg.data);
+                }
+            } else {
+                return true;
+            }
+        })
+    );
+}
 
 export async function initWASMGitClient(gitrepo) {
     worker = new Worker('./wasmgit/wasmgitworker.js');
@@ -73,12 +94,23 @@ export async function synclocal() {
     return await awaitDirContents();
 }
 
+export async function deletelocal() {
+    await callAndWaitForWorker({ command: 'deletelocal' });
+
+    if (await modal(`<p>Local clone deleted</p>
+            <button onclick="getRootNode().result(null)">Dismiss</button>
+            <button onclick="getRootNode().result(true)">Reload</button>
+    `)) {
+        location.reload();
+    }
+}
+
 export async function commitAndSyncRemote(commitmessage) {
-    worker.postMessage({
+    const dircontents = await callAndWaitForWorker({
         command: 'commitpullpush',
         commitmessage: commitmessage
     });
-    const dircontents = await awaitDirContents();
+
     remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(dircontents));
     await repoHasChanges(); // update buttons after sync
     return dircontents;
@@ -170,6 +202,12 @@ customElements.define('wasmgit-ui',
             this.init();
         }
 
+        async displayErrorModal(err) {
+            await modal(`<p>${err}</p>
+                        <button onclick="getRootNode().result(null)">Dismiss</button>
+                `);
+        }
+
         async init() {
             const uihtml = await fetch('wasmgit/wasmgitui.html').then(r => r.text());
             this.shadowRoot.innerHTML = uihtml;
@@ -177,28 +215,46 @@ customElements.define('wasmgit-ui',
             commitAndPushButton = this.shadowRoot.getElementById('syncRemoteButton');
             commitAndPushButton.onclick = async () => {
                 toggleSpinner(true);
+                let commitMessage = null;
+                let commitCancelled = false;
                 if (await repoHasChanges()) {
                     const commitModal = document.createElement('wasmgit-commit-modal');
                     document.documentElement.appendChild(commitModal);
                     await commitModal.readyPromise;
                     try {
                         toggleSpinner(false);
-                        const commitMessage = await commitModal.getCommitMessage();
+                        commitMessage = await commitModal.getCommitMessage();
                         document.documentElement.removeChild(commitModal);
-                        toggleSpinner(true);
-                        await commitAndSyncRemote(commitMessage);
                     } catch (e) {
                         document.documentElement.removeChild(commitModal);
+                        commitCancelled = true;
                     }
-                } else {
-                    await commitAndSyncRemote();
                 }
-                toggleSpinner(false);
+                if (!commitCancelled) {
+                    toggleSpinner(true);
+                    try {
+                        await commitAndSyncRemote(commitMessage);
+                        toggleSpinner(false);
+                    } catch (e) {
+                        toggleSpinner(false);
+                        await this.displayErrorModal(e);
+                    }
+                }
             };
 
             discardChangesButton = this.shadowRoot.getElementById('discardChangesButton');
             discardChangesButton.onclick = async () => {
                 discardchanges(['song.js', 'synth.ts']);
+            };
+            deleteLocalButton = this.shadowRoot.getElementById('deleteLocalButton');
+            deleteLocalButton.onclick = async () => {
+                if (await modal(`<h3>Are you sure?</h3>
+                    <p>This will delete the local clone of the git repository</p>
+                    <button onclick="getRootNode().result(null)">No</button>
+                    <button onclick="getRootNode().result(true)">Yes</button>
+                `)) {
+                    deletelocal();
+                }
             };
             if (nearAuthData) {
                 this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
