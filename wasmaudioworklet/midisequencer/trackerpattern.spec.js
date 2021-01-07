@@ -57,4 +57,27 @@ describe('trackerpattern', function () {
 
         assert.equal(events[0][1], events[1][1] + 12);
     });
+    it("should fix velocities on notes with and without parameters", async () => {
+        const noteFunctions = createNoteFunctions();
+
+        const events = [];
+
+        const pattern = new TrackerPattern({
+            sendMessage: (msg) => events.push(msg)
+        }, 0, 1, 100);
+        pattern.steps(1, [
+            noteFunctions.c5(2),
+            noteFunctions.d5(2, 33),
+            noteFunctions.e5(2, 88),
+            noteFunctions.f5
+        ].fixVelocity(66));
+        while (events.length < 8) {
+            await nextTick();
+        }
+        const noteOnEvents = events.filter(evt => evt[0] === 144);
+        assert.equal(noteOnEvents.length, 4);
+        for (var n = 0; n < noteOnEvents.length; n++) {
+            assert.equal(noteOnEvents[n][2], 66);
+        }
+    });
 });

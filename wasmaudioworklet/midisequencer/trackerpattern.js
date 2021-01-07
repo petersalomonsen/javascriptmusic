@@ -8,10 +8,10 @@ export function createNoteFunctions() {
     );
 
     noteFunctionKeys.forEach((note, ndx) => notefunctions[note] = (duration, velocity, offset) => {
-        const createNoteFunc = (notenumber) => async (pattern, rowbeat) => {
+        const createNoteFunc = (notenumber, _velocity = velocity) => async (pattern, rowbeat) => {
             await pattern.waitForBeat(rowbeat + (offset ? offset : 0));
 
-            pattern.velocity = velocity && typeof duration !== 'object' ? velocity : pattern.defaultvelocity;
+            pattern.velocity = _velocity && typeof duration !== 'object' ? _velocity : pattern.defaultvelocity;
             if (!duration || typeof duration === 'object') {
                 duration = 1 / pattern.stepsperbeat;
             }
@@ -23,11 +23,13 @@ export function createNoteFunctions() {
             return noteFunc(duration, velocity);
         } else {
             noteFunc.transpose = (transposeAmount) => createNoteFunc(ndx + transposeAmount);
+            noteFunc.fixVelocity = (_velocity) => createNoteFunc(ndx, _velocity);
             return noteFunc;
         }
     });
     noteFunctionKeys.forEach((note, ndx) => {
         notefunctions[note].transpose = (transposeAmount) => notefunctions[noteFunctionKeys[ndx + transposeAmount]];
+        notefunctions[note].fixVelocity = (_velocity) => notefunctions[noteFunctionKeys[ndx]](undefined, _velocity);
     });
     return notefunctions;
 }
@@ -56,6 +58,10 @@ export function quantize(noteEvents, stepsperbeat, percentage = 1) {
 
 Array.prototype.quantize = function (stepsperbeat, percentage = 1) {
     return quantize(this, stepsperbeat, percentage);
+}
+
+Array.prototype.fixVelocity = function (velocity) {
+    return this.map(evt => evt.fixVelocity ? evt.fixVelocity(velocity) : evt);
 }
 
 Array.prototype.repeat = function (times = 1) {
