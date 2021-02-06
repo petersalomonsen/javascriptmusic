@@ -1,8 +1,0 @@
-{
-    "dependencies": {
-        "midi": "^0.9.5"
-    },
-    "devDependencies": {
-        "mocha": "^7.1.1"
-    }
-}

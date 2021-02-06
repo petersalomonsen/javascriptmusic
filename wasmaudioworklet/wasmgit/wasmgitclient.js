@@ -237,7 +237,7 @@ customElements.define('wasmgit-ui',
                         toggleSpinner(false);
                     } catch (e) {
                         toggleSpinner(false);
-                        await this.displayErrorModal(e);
+                        await this.displayErrorModal(e.error);
                     }
                 }
             };
