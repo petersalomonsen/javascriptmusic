@@ -38,10 +38,12 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay
     }, (msg) => msg.wasmloaded);
-    setGetCurrentTimeFunction(getCurrentTime);
-    attachSeek((time) => awn.port.postMessage({ seek: time }),
-        getCurrentTime,
-        sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0);
+    if (!(context instanceof (OfflineAudioContext))) {
+        setGetCurrentTimeFunction(getCurrentTime);
+        attachSeek((time) => awn.port.postMessage({ seek: time }),
+            getCurrentTime,
+            sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0);
+    }
     awn.connect(context.destination);
 
     return { audioworkletnode: awn, workerMessageHandler: wmh };
@@ -98,17 +100,21 @@ export async function exportToWav(eventlist, wasm_synth_bytes) {
     updateSpinner();
 
     const renderedBuffer = await offlineCtx.startRendering();
+    console.log('finished rendering');
     const exportstats = await statfunc();
 
     if (exportstats.clips.length > 0) {
         rendering = false;
+
         toggleSpinner(false);
 
+        const maxClipsToShow = 1000;
         if (!await modal(`
             <h3>Warning: clipping in exported audio</h3>
+            <p>${exportstats.clips.length} clips ${exportstats.clips.length > maxClipsToShow ? `, showing the first ${maxClipsToShow}` : ''}</p>
             <div style="height: 80px; overflow: auto">
                 <table>
-                    ${exportstats.clips.map(clip => `<tr>
+                    ${exportstats.clips.slice(0, 100).map(clip => `<tr>
                         <td>${formatTime(clip.time * 1000)}</td>
                         <td>${clip.channel ? 'right' : 'left'}</td>
                     </tr>`).join('')
@@ -120,6 +126,7 @@ export async function exportToWav(eventlist, wasm_synth_bytes) {
                 Save exported file
             </button>
         `)) {
+            console.log('export wav cancelled');
             return;
         }
     }

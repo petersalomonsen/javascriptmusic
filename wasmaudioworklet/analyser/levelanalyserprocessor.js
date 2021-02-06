@@ -35,7 +35,7 @@ class LevelAnalyserProcessor extends AudioWorkletProcessor {
             }
         }
         this.position += inputs[0][0].length;
-        return false;
+        return true;
     }
 }
 
