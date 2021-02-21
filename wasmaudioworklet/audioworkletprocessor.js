@@ -35,44 +35,46 @@ class PatternSeqAudioWorkletProcessor extends AudioWorkletProcessor {
           this.wasmInstance.toggleSongPlay(msg.data.toggleSongPlay);
         }
 
-        const patternsbuffer = new Uint8Array(this.wasmInstance.memory.buffer, this.patternsbufferptr, this.patternsbuffersize);
-        const instrumentpatternslist = new Uint8Array(this.wasmInstance.memory.buffer, this.instrumentpatternslistptr, this.instrumentpatternslistsize);
+        if (this.wasmInstance) {
+          const patternsbuffer = new Uint8Array(this.wasmInstance.memory.buffer, this.patternsbufferptr, this.patternsbuffersize);
+          const instrumentpatternslist = new Uint8Array(this.wasmInstance.memory.buffer, this.instrumentpatternslistptr, this.instrumentpatternslistsize);
 
-        if(msg.data.channel!==undefined && msg.data.note!==undefined) {
-          if(!this.wasmInstance.isPlaying()) {
-            // Just play note
-            this.wasmInstance.setChannelValue(msg.data.channel,msg.data.note);
-          } else {
-            // Record data to pattern
-            this.wasmInstance.recordChannelValue(msg.data.channel,msg.data.note);
+          if(msg.data.channel!==undefined && msg.data.note!==undefined) {
+            if(!this.wasmInstance.isPlaying()) {
+              // Just play note
+              this.wasmInstance.setChannelValue(msg.data.channel,msg.data.note);
+            } else {
+              // Record data to pattern
+              this.wasmInstance.recordChannelValue(msg.data.channel,msg.data.note);
 
-            const quantizedTick = Math.round(this.wasmInstance.getTick());
-            const patternIndex = Math.floor(quantizedTick / this.patternsize) % this.songlength;  
-            const patternNoteIndex = quantizedTick % this.patternsize;
+              const quantizedTick = Math.round(this.wasmInstance.getTick());
+              const patternIndex = Math.floor(quantizedTick / this.patternsize) % this.songlength;  
+              const patternNoteIndex = quantizedTick % this.patternsize;
 
-            const currentInstrumentPatternIndex = msg.data.channel * this.songlength + patternIndex;
-            
-            let patternNo = instrumentpatternslist[currentInstrumentPatternIndex];
-            
-            if(patternNo === 0) {
-              patternNo = (this.availablePatternIndex ++);
-              instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
-            }
-            if(msg.data.note > 0) {
-              patternsbuffer[patternNo * this.patternsize + patternNoteIndex]  = msg.data.note;
-            }
+              const currentInstrumentPatternIndex = msg.data.channel * this.songlength + patternIndex;
+              
+              let patternNo = instrumentpatternslist[currentInstrumentPatternIndex];
+              
+              if(patternNo === 0) {
+                patternNo = (this.availablePatternIndex ++);
+                instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
+              }
+              if(msg.data.note > 0) {
+                patternsbuffer[patternNo * this.patternsize + patternNoteIndex]  = msg.data.note;
+              }
 
-            // send pattern back to main thread for storing
-            this.port.postMessage({
-              instrumentPatternIndex: patternIndex,
-              channel: msg.data.channel,
-              recordedPatternNo: patternNo,
-              patternData: Array.from(patternsbuffer.slice(
-                    patternNo * this.patternsize,
-                    patternNo * this.patternsize + this.patternsize
+              // send pattern back to main thread for storing
+              this.port.postMessage({
+                instrumentPatternIndex: patternIndex,
+                channel: msg.data.channel,
+                recordedPatternNo: patternNo,
+                patternData: Array.from(patternsbuffer.slice(
+                      patternNo * this.patternsize,
+                      patternNo * this.patternsize + this.patternsize
+                    )
                   )
-                )
-            });
+              });
+            }
           }
         }
         
@@ -99,7 +101,7 @@ class PatternSeqAudioWorkletProcessor extends AudioWorkletProcessor {
             }
 
             if(checksum > 0 && this.channelvalueschecksum !== checksum) {
-              this.port.postMessage({channelvalues: channelvaluesbuffer});
+              this.port.postMessage({channelvalues: channelvaluesbuffer.slice(0)});
             }
             this.channelvalueschecksum = checksum;            
 

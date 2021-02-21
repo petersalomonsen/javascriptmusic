@@ -1,4 +1,4 @@
-import { initNear, authdata as nearAuthData, login as nearLogin } from './nearacl.js';
+import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout, login } from './nearacl.js';
 import { toggleSpinner } from '../app.js';
 import { modal } from '../common/ui/modal.js';
 
@@ -259,8 +259,15 @@ customElements.define('wasmgit-ui',
             if (nearAuthData) {
                 this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';
+                this.shadowRoot.getElementById('logoutButton').style.display = 'block';
+                this.shadowRoot.getElementById('logoutButton').onclick = async () => {
+                    await nearLogout();
+                    location.reload();
+                };
             } else {
                 this.shadowRoot.getElementById('loginButton').style.display = 'block';
+                this.shadowRoot.getElementById('logoutButton').style.display = 'none';
+                this.shadowRoot.getElementById('loggedinuserspan').style.display = 'none';
                 this.shadowRoot.getElementById('loginButton').onclick = () => {
                     nearLogin();
                 };

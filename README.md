@@ -1,4 +1,4 @@
-![](https://travis-ci.com/petersalomonsen/javascriptmusic.svg?branch=master)
+![](https://github.com/petersalomonsen/javascriptmusic/actions/workflows/main.yml/badge.svg)
 
 Music written in Javascript
 ===========================

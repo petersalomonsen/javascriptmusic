@@ -4,9 +4,9 @@
 
 self.require = (name) => self[name];
 
-importScripts('https://cdn.jsdelivr.net/npm/binaryen@98.0.0-nightly.20201109/index.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.17.7/dist/assemblyscript.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.17.7/dist/asc.js');
+importScripts('https://cdn.jsdelivr.net/npm/binaryen@98.0.0-nightly.20210106/index.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.18.12/dist/assemblyscript.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.18.12/dist/asc.js');
 
 let mix_source = 'mixes/newyear.mix.ts';
 let index_source = 'index.ts';
@@ -29,7 +29,7 @@ const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json'
 function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
     if (mode === EXPORT_MODE_MIDISYNTH_WASM_LIB) {
         console.log('exporting midisynth WASM lib module');
-
+        assemblyscriptsynthsources['environment.ts'] = `export declare const SAMPLERATE: f32;`
         assemblyscriptsynthsources[wasi_main_src] = `
             import { setEventList } from './midi/midisequencer';
             export { fillSampleBuffer, samplebuffer, allNotesOff, shortmessage } from './midi/midisynth';
@@ -162,7 +162,7 @@ onmessage = async function (msg) {
         createWebAssemblySongData(msg.data.song, msg.data.exportmode);
         const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
             {
-                "runtime": "none",
+                "runtime": "stub",
                 "optimizeLevel": 3,
                 "shrinkLevel": 3,
                 // "noAssert": "",
@@ -181,7 +181,7 @@ onmessage = async function (msg) {
 
         assemblyscriptsynthsources[mix_source] = synthsource;
         const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
-            { "runtime": "none", "optimizeLevel": 0, "shrinkLevel": 0 },
+            { "runtime": "stub", "optimizeLevel": 0, "shrinkLevel": 0 },
             index_source);
 
         postMessage({

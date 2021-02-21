@@ -34,8 +34,9 @@ export async function login() {
     await loadAccountData();
 }
 
-async function logout() {
-    await walletConnection.requestSignOut();
+export async function logout() {
+    await walletConnection.signOut();
+    authdata = null;
 }
 
 async function loadAccountData() {

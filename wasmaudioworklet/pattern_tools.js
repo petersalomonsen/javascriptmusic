@@ -108,7 +108,7 @@ export function createPatternToolsGlobal() {
 	 */
 	global.addPatterns = (patterns) => {
 		for(let n=0;n<patterns.length;n++) {
-			patterns[n] = addPattern(null, patterns[n]);
+			patterns[n] = global.addPattern(null, patterns[n]);
 		}
 		return patterns;
 	};

@@ -50,7 +50,7 @@ new Array(128).fill(null).map((v, ndx) =>
     (['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'])[ndx % 12] + '' + Math.floor(ndx / 12)
 ).forEach((note, ndx) => notemap[note] = ndx);
 
-describe.only('midisynth audio worklet', async function () {
+describe('midisynth audio worklet', async function () {
     this.timeout(20000);
 
     let appElement;
@@ -455,7 +455,7 @@ describe.only('midisynth audio worklet', async function () {
         }
         document.createElement = document._createElementOriginal;
     });
-    it.only('should export song to wav and detect clipping', async () => {
+    it('should export song to wav and detect clipping', async () => {
         const eventlist = await compileMidiSong(`setBPM(60);await createTrack(0).steps(1, [c4,d4,e4,f4])`);
 
         const synthsourceclipped = `

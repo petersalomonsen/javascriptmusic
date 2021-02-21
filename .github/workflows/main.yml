@@ -1,0 +1,37 @@
+name: CI
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+jobs:
+  chromeheadless:
+    name: Chrome headless
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Chrome headless
+        run: |
+          cd wasmaudioworklet
+          npm install
+          npm test
+  firefoxxvfb:
+    name: Firefox xvfb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Firefox xvfb
+        run: |
+          cd wasmaudioworklet
+          npm install
+          xvfb-run npm run test-firefox
+  assemblyscriptsynth:
+    name: AssemblyScript synth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Assemblyscript synth
+        run: |
+          cd wasmaudioworklet/synth1
+          npm install
+          npm run test:ci
