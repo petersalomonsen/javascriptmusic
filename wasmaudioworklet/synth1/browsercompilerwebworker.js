@@ -17,6 +17,7 @@ let assemblyscriptsynthsources;
 const EXPORT_MODE_WASI_MAIN = 'wasimain';
 const EXPORT_MODE_WASM_LIB = 'libmodule';
 const EXPORT_MODE_MIDISYNTH_WASM_LIB = 'midilibmodule';
+const EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB = 'midimultipartmodule';
 
 const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json').then(r => r.json())
     .then(obj => {
@@ -33,12 +34,32 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
         assemblyscriptsynthsources[wasi_main_src] = `
             import { setEventList } from './midi/midisequencer';
             export { fillSampleBuffer, samplebuffer, allNotesOff, shortmessage } from './midi/midisynth';
-            export { playEvents, seek, playEventsAndFillSampleBuffer, currentTimeMillis } from './midi/midisequencer';
+            export { seek, playEventsAndFillSampleBuffer, currentTimeMillis } from './midi/sequencer/midisequencer';
 
             const eventlist: u8[] = [${song.eventlist.map(v => '' + v).join(',')}];
 
             setEventList(eventlist);        
             `;
+    } else if (mode === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB) {
+        console.log('exporting midisynth multipart WASM lib module');
+        
+        assemblyscriptsynthsources['environment.ts'] = `export declare const SAMPLERATE: f32;`
+        assemblyscriptsynthsources['midi/sequencer/midiparts.ts'] = `
+            import { MidiSequencerPart, MidiSequencerPartSchedule } from "./midisequencerpart";
+
+            export const midiparts: MidiSequencerPart[] = [${song.map(part => 'new MidiSequencerPart(['+part.eventlist.join(',')+'])')}];            
+            export const midipartschedule: MidiSequencerPartSchedule[] = [${
+                song.reduce((p, c, ndx) => p.concat(c.startTimes.map(t =>
+                        ({startTime: t, patternIndex: ndx})
+                    )), []).sort((a, b) => a.startTime - b.startTime)
+                    .map(schedule => `new MidiSequencerPartSchedule(${schedule.patternIndex}, ${schedule.startTime})`)
+                    .join(',')
+            }];
+        `;
+        assemblyscriptsynthsources[wasi_main_src] = `
+            export { fillSampleBuffer, samplebuffer, allNotesOff, shortmessage, getActiveVoicesStatusSnapshot } from './midi/midisynth';
+            export { seek, playEventsAndFillSampleBuffer, currentTimeMillis, setMidiPartSchedule } from './midi/sequencer/midisequencer';
+        `;
     } else {
         const patternsbuffer = new Array((song.patterns.length + 1) * song.patternsize);
         patternsbuffer.fill(0, 0, song.patternsize);

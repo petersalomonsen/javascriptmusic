@@ -9,6 +9,8 @@ const MAX_ACTIVE_VOICES = 1 << MAX_ACTIVE_VOICES_SHIFT;
 
 export const midichannels = new StaticArray<MidiChannel>(16);
 export const activeVoices = new StaticArray<MidiVoice | null>(MAX_ACTIVE_VOICES);
+const activeVoicesStatusSnapshot = new StaticArray<u8>(MAX_ACTIVE_VOICES * 3);
+
 export let numActiveVoices = 0;
 export let voiceActivationCount = 0;
 
@@ -28,7 +30,6 @@ const mainline = new StereoSignal();
 const reverbline = new StereoSignal();
 const freeverb = new Freeverb();
 export const outputline = new StereoSignal();
-
 export class MidiChannel {
     controllerValues: StaticArray<u8> = new StaticArray<u8>(128);
     voices: StaticArray<MidiVoice>;
@@ -38,6 +39,7 @@ export class MidiChannel {
     volume: f32 = midiLevelToGain(100);
     reverb: f32 = midiLevelToGain(7);
     pan: Pan = new Pan();
+    voiceTransitionBuffer: StaticArray<f32> = new StaticArray<f32>(sampleBufferFrames * 2);
 
     constructor(numvoices: i32, factoryFunc: (channel: MidiChannel, voiceindex: i32) => MidiVoice) {
         this.voices = new StaticArray<MidiVoice>(numvoices);
@@ -81,7 +83,7 @@ export class MidiChannel {
                 if (this.controllerValues[CONTROL_SUSTAIN] >= 64) {
                     this.sustainedVoices[this.sustainedVoicesIndex++] = voice;
                     this.sustainedVoicesIndex &= ((1 << MAX_ACTIVE_VOICES_SHIFT) - 1);
-                } else {
+                } else {                    
                     voice.noteoff();
                 }
                 break;
@@ -97,9 +99,10 @@ export class MidiChannel {
         }
     }
 
-    activateVoice(note: u8): MidiVoice | null {
+    activateVoice(note: u8, channelNo: u8): MidiVoice | null {
         for (let n = 0; n < this.voices.length; n++) {
             const voice = this.voices[n];
+            voice.channelNo = channelNo;
             if (voice.activeVoicesIndex > -1 && voice.note === note) {
                 // Found already active voice for the given note
                 voice.activationCount = voiceActivationCount++;
@@ -141,8 +144,16 @@ export class MidiChannel {
             }
         }
         if (oldestVoice !== null) {
-            (oldestVoice as MidiVoice).activationCount = voiceActivationCount++;
-            this.removeFromSustainedVoices(oldestVoice);
+            const voice = (oldestVoice as MidiVoice);
+            for (let n = 0;n<sampleBufferFrames;n++) {
+                voice.nextframe();
+                const fact: f32 = ((sampleBufferFrames as f32) - (n as f32)) / (sampleBufferFrames as f32);
+                this.voiceTransitionBuffer[n<<1] += this.signal.left * fact;
+                this.voiceTransitionBuffer[(n<<1) + 1] += this.signal.right * fact;
+                this.signal.clear();
+            }
+            voice.activationCount = voiceActivationCount++;
+            this.removeFromSustainedVoices(voice);                        
         }
         return oldestVoice;
     }
@@ -157,6 +168,7 @@ export class MidiChannel {
 
 export abstract class MidiVoice {
     channel: MidiChannel;
+    channelNo: u8;
     note: u8;
     velocity: u8;
     activeVoicesIndex: i32 = -1;
@@ -210,7 +222,7 @@ export function shortmessage(val1: u8, val2: u8, val3: u8): void {
     const command = val1 & 0xf0;
 
     if (command === 0x90 && val3 > 0) {
-        const activatedVoice = midichannels[channel].activateVoice(val2);
+        const activatedVoice = midichannels[channel].activateVoice(val2, channel);
         if (activatedVoice !== null) {
             const voice = activatedVoice as MidiVoice;
             voice.noteon(val2, val3);
@@ -225,6 +237,23 @@ export function shortmessage(val1: u8, val2: u8, val3: u8): void {
         // control change
         midichannels[channel].controlchange(val2, val3);
     }
+}
+
+export function getActiveVoicesStatusSnapshot(): usize {
+    for (let n=0;n<activeVoices.length;n++) {
+        const activeVoicesStatusSnapshotIndex = n * 3;
+        if (activeVoices[n] != null) {    
+            const voice = (activeVoices[n] as MidiVoice);        
+            activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex] = voice.channelNo;
+            activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 1] = voice.note;
+            activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 2] = voice.velocity;
+        } else {
+            activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex] = 0;
+            activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 1] = 0;
+            activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 2] = 0;
+        }
+    }
+    return changetype<usize>(activeVoicesStatusSnapshot);
 }
 
 export function allNotesOff(): void {
@@ -260,13 +289,22 @@ export function playActiveVoices(): void {
 export function fillSampleBuffer(): void {
     cleanupInactiveVoices();
 
+    let voiceTransitionBufferNdx = 0;
+
     for (let bufferpos = bufferposstart; bufferpos < bufferposend; bufferpos += 4) {
         playActiveVoices();
 
         for (let ch = 0; ch < 16; ch++) {
             const midichannel = midichannels[ch];
-            midichannel.preprocess();
             const channelsignal = midichannel.signal;
+
+            channelsignal.left += midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx];
+            midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx] = 0;
+            channelsignal.right +=midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx+1];
+            midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx+1] = 0;
+            
+            midichannel.preprocess();            
+                        
             channelsignal.left *= midichannel.pan.leftLevel * midichannel.volume;
             channelsignal.right *= midichannel.pan.rightLevel * midichannel.volume;
 
@@ -292,6 +330,7 @@ export function fillSampleBuffer(): void {
         mainline.clear();
         reverbline.clear();
         outputline.clear();
+        voiceTransitionBufferNdx += 2;
     }
 }
 

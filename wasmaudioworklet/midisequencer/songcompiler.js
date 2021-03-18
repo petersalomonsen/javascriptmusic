@@ -4,18 +4,25 @@ import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from '.
 
 let songmessages = [];
 export let instrumentNames = [];
-let loopPromise;
 
 export let recordingStartTimeMillis = 0;
+let muted = {};
+let solo = {};
+
+let trackerPatterns = [];
 
 const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 const output = {
     sendMessage: (msg) => {
-
-        songmessages.push({
-            time: currentTime(),
-            message: msg
-        });
+        const ch = msg[0] & 0x0f;
+        if (msg.length !==3 ||
+            (!muted[ch] && !Object.keys(solo).length || solo[ch])
+        ) {
+            songmessages.push({
+                time: currentTime(),
+                message: msg
+            });
+        }
     }
 };
 
@@ -43,8 +50,21 @@ const songargs = {
     'output': output,
     'setBPM': setBPM,
     'TrackerPattern': TrackerPattern,
-    'createTrack': (channel, stepsperbeat, defaultvelocity) =>
-        new TrackerPattern(output, channel, stepsperbeat, defaultvelocity),
+    'createTrack': (channel, stepsperbeat, defaultvelocity) => {
+        const trackerPattern = new TrackerPattern({
+            startTime: currentTime(),
+            midievents: [],
+            sendMessage: function(msg) {
+                this.midievents.push({
+                    time: currentTime()-this.startTime,
+                    message: msg
+                });
+                output.sendMessage(msg);
+            }
+        }, channel, stepsperbeat, defaultvelocity);
+        trackerPatterns.push(trackerPattern);
+        return trackerPattern;
+    },
     'playFromHere': playFromHere,
     'loopHere': loopHere,
     'pitchbend': pitchbend,
@@ -52,6 +72,8 @@ const songargs = {
     'waitForBeat': waitForBeat,
     'startRecording': startRecording,
     'stopRecording': stopRecording,
+    'mute': (channel) => muted[channel] = true,
+    'solo': (channel) => solo[channel] = true,
     'addInstrument': (instrument) => instrumentNames.push(instrument)
 };
 Object.assign(songargs, createNoteFunctions());
@@ -60,6 +82,9 @@ const songargkeys = Object.keys(songargs);
 export async function compileSong(songsource) {
     songmessages = [];
     instrumentNames = [];
+    trackerPatterns = [];
+    muted = {};
+    solo = {};
 
     console.log('compile song');
     resetTick();
@@ -116,4 +141,63 @@ export function convertEventListToByteArraySequence(eventlist) {
 
             return deltatimearr.concat(evt.message);
         }).reduce((prev, curr) => prev.concat(curr), []));
+}
+
+export function createMultipatternSequence() {
+    const outputPatterns = [];
+    for (let n = 0;n<trackerPatterns.length; n++) {
+        if (trackerPatterns[n]) {
+            const pattern = trackerPatterns[n];
+            const outputPattern = { eventlist: convertEventListToByteArraySequence(pattern.output.midievents),
+                    startTimes: [pattern.output.startTime],
+                    channel: pattern.channel
+                };
+            trackerPatterns.forEach((p, ndx) => {                
+                if(ndx > n &&
+                    p &&
+                    p.output.midievents.length === pattern.output.midievents.length &&
+                    p.output.midievents.reduce((prevstate, midievent, midievtndx) =>
+                        prevstate &&
+                        (midievent.time - pattern.output.midievents[midievtndx].time) < 2,
+                        true)
+                ) {
+                    const noteCheckMap = {};
+                    const p1 = p.output.midievents;
+                    const p2 = pattern.output.midievents;
+                    for (let i=0; i<p1.length; i++) {
+                        const note1 = p1[i].message.join(',');
+                        const note2 = p2[i].message.join(',');
+
+                        if (!noteCheckMap[note1]) {
+                            noteCheckMap[note1] = true;
+                        } else {
+                            delete noteCheckMap[note1];
+                        }
+                        if (!noteCheckMap[note2]) {
+                            noteCheckMap[note2] = true;
+                        } else {
+                            delete noteCheckMap[note2];
+                        }
+                    }
+                    if (Object.keys(noteCheckMap).length === 0) {
+                        trackerPatterns[ndx] = null;
+                        outputPattern.startTimes.push(p.output.startTime);
+                    }
+                }
+            });
+            outputPatterns.push(outputPattern);
+        }
+    }
+    const patternmap = {};
+    outputPatterns.forEach((pattern, ndx) => {
+        if (!patternmap[pattern.channel]) {
+            patternmap[pattern.channel] = [0];
+        }
+        if (ndx > 0) {
+            patternmap[pattern.channel].push(ndx);
+        }
+    });
+    console.log(outputPatterns);
+    console.log('created multipartsequence. Here is the patternmap', JSON.stringify(patternmap));
+    return outputPatterns;
 }

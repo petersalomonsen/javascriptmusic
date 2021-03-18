@@ -1,4 +1,4 @@
-import { samplebuffer, sampleBufferFrames, playActiveVoices, cleanupInactiveVoices, shortmessage, activeVoices, MidiVoice, midichannels, MidiChannel, numActiveVoices, fillSampleBuffer, allNotesOff } from '../../midi/midisynth';
+import { samplebuffer, sampleBufferFrames, playActiveVoices, cleanupInactiveVoices, shortmessage, activeVoices, MidiVoice, midichannels, MidiChannel, numActiveVoices, fillSampleBuffer, allNotesOff, getActiveVoicesStatusSnapshot } from '../../midi/midisynth';
 import { SineOscillator } from '../../synth/sineoscillator.class';
 import { Envelope, EnvelopeState } from '../../synth/envelope.class';
 import { notefreq } from '../../synth/note';
@@ -32,6 +32,28 @@ class TestMidiInstrument extends MidiVoice {
   }
 }
 
+class ShortReleaseMidiInstrument extends MidiVoice {
+  osc: SineOscillator = new SineOscillator();
+  env: Envelope = new Envelope(0.1, 0.0, 1.0, 0.000001);
+
+  noteon(note: u8, velocity: u8): void {
+    super.noteon(note, velocity);
+    this.osc.frequency = notefreq(note);
+    this.env.attack();
+  }
+
+  noteoff(): void {
+    this.env.release();
+  }
+
+  isDone(): boolean {
+    return this.env.isDone();
+  }
+
+  nextframe(): void {
+    signal += this.osc.next() * this.env.next();
+  }
+}
 class LongReleaseInstrument extends MidiVoice {
   osc: SineOscillator = new SineOscillator();
   env: Envelope = new Envelope(0.05, 0.0, 1.0, 10.0);
@@ -531,8 +553,7 @@ describe("midisynth", () => {
       expect<f32>(samplebuffer[0]).toBeCloseTo(1);   
       expect<f32>(samplebuffer[sampleBufferFrames]).toBeCloseTo(-1);
     });
-    it("should be able to use multiple different voices for channel", () => {      
-      
+    it("should be able to use multiple different voices for channel", () => {            
       midichannels[0] = new MidiChannel(2, (ch, n) => {
         switch(n) {
           case 0:
@@ -554,6 +575,7 @@ describe("midisynth", () => {
       shortmessage(0x90, 64, 127);
 
       fillSampleBuffer();
+      fillSampleBuffer();
 
       expect<f32>(samplebuffer[0]).toBeCloseTo(-0.6 * NativeMathf.sqrt(1/2));   
       expect<f32>(samplebuffer[sampleBufferFrames]).toBeCloseTo(0.6 * NativeMathf.sqrt(1/2));
@@ -561,8 +583,67 @@ describe("midisynth", () => {
       shortmessage(0x90, 65, 127);
 
       fillSampleBuffer();
+      fillSampleBuffer();
 
       expect<f32>(samplebuffer[0]).toBeCloseTo(-0.6 * NativeMathf.sqrt(1/2));   
       expect<f32>(samplebuffer[sampleBufferFrames]).toBeCloseTo(0.6 * NativeMathf.sqrt(1/2));
+      allNotesOff();
+      while (activeVoices[0] != null) {
+        fillSampleBuffer();
+      }
+    });
+    it("should provide shapshot of active voices", () => {
+      midichannels[0] = new MidiChannel(1, (channel: MidiChannel) => new ShortReleaseMidiInstrument(channel));
+      midichannels[1] = new MidiChannel(2, (channel: MidiChannel) => new ShortReleaseMidiInstrument(channel));
+
+      expect<MidiVoice | null>(activeVoices[0]).toBe(null, 'should be no active voices');
+      shortmessage(0x90, 69, 100);
+      
+      const activeVoicesShapshotLocation = changetype<usize>(getActiveVoicesStatusSnapshot());
+      expect<u8>(load<u8>(activeVoicesShapshotLocation)).toBe(0, "channel is 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 1)).toBe(69, "note is 69");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 2)).toBe(100, "velocity is 100" );
+
+      // note off
+      shortmessage(0x90, 69, 0);
+      fillSampleBuffer();
+      fillSampleBuffer();
+      getActiveVoicesStatusSnapshot();
+      expect<u8>(load<u8>(activeVoicesShapshotLocation)).toBe(0, "channel is 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 1)).toBe(0, "note is 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 2)).toBe(0, "velocity is 0" );
+
+      shortmessage(0x90, 69, 100);
+      
+      shortmessage(0x91, 69, 100);
+      shortmessage(0x91, 70, 101);
+
+      getActiveVoicesStatusSnapshot();
+      expect<u8>(load<u8>(activeVoicesShapshotLocation)).toBe(0, "channel is 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 1)).toBe(69, "note is 69");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 2)).toBe(100, "velocity is 100" );
+
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 3)).toBe(1, "channel is 1");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 4)).toBe(69, "note is 69");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 5)).toBe(100, "velocity is 100" );
+
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 6)).toBe(1, "channel is 1");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 7)).toBe(70, "note is 70");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 8)).toBe(101, "velocity is 101" );
+
+      allNotesOff();
+      fillSampleBuffer();
+      fillSampleBuffer();
+
+      getActiveVoicesStatusSnapshot();
+      expect<u8>(load<u8>(activeVoicesShapshotLocation)).toBe(0);
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 1)).toBe(0, "note 0 should be 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 2)).toBe(0, "vel 0 should be 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 3)).toBe(0, "ch 1 should be 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 4)).toBe(0, "note 1 should be 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 5)).toBe(0, "vel 1 should be 0");
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 6)).toBe(0);
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 7)).toBe(0);
+      expect<u8>(load<u8>(activeVoicesShapshotLocation + 8)).toBe(0);            
     });
 });  

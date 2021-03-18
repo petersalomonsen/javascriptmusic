@@ -1,12 +1,5 @@
 export const modalTemplate = (modalcontent) => `<style>
     .modaldiv {
-        position: fixed;
-        top:0;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        width: 80%;
-        height: 180px;
         margin: auto;
         text-align: center;
         padding: 20px;

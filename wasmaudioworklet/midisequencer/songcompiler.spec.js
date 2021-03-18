@@ -1,4 +1,4 @@
-import { compileSong, convertEventListToByteArraySequence } from './songcompiler.js';
+import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence } from './songcompiler.js';
 
 describe('songcompiler', async function () {
     it('should compile a simple song', async () => {
@@ -189,6 +189,51 @@ loopHere();
         assert.equal(eventlist[0].time, 0);
         assert.equal(eventlist[1].time, beatTime(1));
         assert.notEqual(eventlist.find(evt => evt.time === beatTime(16) && evt.message[0] === -1), undefined);
+    }
+    );
+    it('should create multipattern sequence', async () => {
+        const bpm = 110;
+        const songsource = `
+        setBPM(${bpm});
+    
+        const kickbeat = () => createTrack(1).steps(4, [
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,c5(1/8,30),
+              [c5],,,,        
+            ]);
+        
+        const blabla = () => createTrack(0).steps(4, [
+           c1,c2,c3    
+            ]);
+        
+        const tralala = () => createTrack(0).steps(4, [
+                d4,c3,c1,f6    
+                 ]);
+             
+        const hohoho = () => createTrack(0).steps(4, [
+            d3,d2,d1   
+        ]);
+        blabla();
+        await kickbeat();
+        tralala();
+        await kickbeat();
+        hohoho();
+        await kickbeat();
+        loopHere();
+`;
+        await compileSong(songsource);
+        const multipatternsequence = createMultipatternSequence();
+        console.log(multipatternsequence[1].startTimes);
+        assert.equal(multipatternsequence.length, 4);
+        assert.equal(multipatternsequence[0].startTimes.length, 1);
+        assert.equal(multipatternsequence[1].startTimes.length, 3);
+        assert.equal(multipatternsequence[2].startTimes.length, 1);
+        assert.equal(multipatternsequence[3].startTimes.length, 1);
     }
     );
 }
