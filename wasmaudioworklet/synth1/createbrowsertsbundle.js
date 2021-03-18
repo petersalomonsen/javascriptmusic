@@ -36,6 +36,9 @@ fileList.forEach(filename => {
     case 'fx':
     case 'common':
     case 'midi':
+      if (adjustedFileName.split('/')[1] === 'sequencer') {
+        break;
+      }
     case 'synth':
       filecontent.split(/\n/)
         .filter(line => line.startsWith('export '))

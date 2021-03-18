@@ -61,8 +61,9 @@ export class BiQuadFilter {
         f0Hertz: f32,
         q_value: f32
     ): void {
-        if (f0Hertz > fsHertz / 2.0) {
-            f0Hertz = fsHertz / 2.0;
+        const fLimit = (fsHertz / 2.0) - 1000;
+        if (f0Hertz > fLimit) {
+            f0Hertz = fLimit;
         }
 
         if (q_value < 0.0) {

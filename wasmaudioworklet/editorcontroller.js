@@ -1,5 +1,5 @@
 import { loadScript, loadCSS } from './common/scriptloader.js';
-import { compileSong as compileMidiSong, convertEventListToByteArraySequence, instrumentNames as midiInstrumentNames } from './midisequencer/songcompiler.js';
+import { compileSong as compileMidiSong, convertEventListToByteArraySequence, createMultipatternSequence, instrumentNames as midiInstrumentNames } from './midisequencer/songcompiler.js';
 import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
@@ -171,6 +171,7 @@ export async function initEditor(componentRoot) {
                                 <form>
                                 <label><input type="radio" name="exporttype" value="wav" checked="checked">WAV audio file</label><br />
                                 <label><input type="radio" name="exporttype" value="midilibmodule">WASM Library module</label><br />
+                                <label><input type="radio" name="exporttype" value="midimultipartmodule">WASM midi-multipart module</label><br />
                                 </form>
                             </p>
                             <button onclick="getRootNode().result(null)">Cancel</button>
@@ -192,6 +193,14 @@ export async function initEditor(componentRoot) {
                             toggleSpinner(true);
                             await compileWebAssemblySynth(synthsource,
                                 { eventlist: convertEventListToByteArraySequence(eventlist) },
+                                44100,
+                                exportwasm
+                            );
+                        } else if (exportwasm === 'midimultipartmodule') {
+                            toggleSpinner(true);
+                            const multipartsequence = createMultipatternSequence();
+                            await compileWebAssemblySynth(synthsource,
+                                multipartsequence,
                                 44100,
                                 exportwasm
                             );
