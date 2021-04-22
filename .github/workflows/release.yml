@@ -13,6 +13,13 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
     - run: |
         cd wasmaudioworklet
-        npm publish
+        export VERSION=`npm view wasm-music dist-tags.latest`
+        export NEWVERSION=`node -p "require('./package.json').version"`
+        echo $VERSION $NEWVERSION
+        if [ "$VERSION" != "$NEWVERSION" ]
+        then
+          echo "publishing new version"
+          npm publish
+        fi
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
