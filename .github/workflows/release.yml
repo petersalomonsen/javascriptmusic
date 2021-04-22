@@ -13,6 +13,6 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
     - run: |
         cd wasmaudioworklet
-        npm publish --dry-run
+        npm publish
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
