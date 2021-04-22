@@ -31,14 +31,19 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
     if (mode === EXPORT_MODE_MIDISYNTH_WASM_LIB) {
         console.log('exporting midisynth WASM lib module');
         assemblyscriptsynthsources['environment.ts'] = `export declare const SAMPLERATE: f32;`
+        assemblyscriptsynthsources['midi/sequencer/midiparts.ts'] = `
+            import { MidiSequencerPart, MidiSequencerPartSchedule } from "./midisequencerpart";
+            export const midiparts: MidiSequencerPart[] = [new MidiSequencerPart([${song.eventlist.map(v => '' + v).join(',')}])];
+            export const midipartschedule: MidiSequencerPartSchedule[] = [new MidiSequencerPartSchedule(0, 0)];
+        `;
         assemblyscriptsynthsources[wasi_main_src] = `
-            import { setEventList } from './midi/midisequencer';
-            export { fillSampleBuffer, samplebuffer, allNotesOff, shortmessage } from './midi/midisynth';
+            export { fillSampleBuffer, samplebuffer, allNotesOff, shortmessage, getActiveVoicesStatusSnapshot } from './midi/midisynth';
             export { seek, playEventsAndFillSampleBuffer, currentTimeMillis } from './midi/sequencer/midisequencer';
+            import { midipartschedule } from './midi/sequencer/midiparts';
 
-            const eventlist: u8[] = [${song.eventlist.map(v => '' + v).join(',')}];
-
-            setEventList(eventlist);        
+            export function getDuration(): i32 {
+                return midipartschedule[0].endTime;
+            }
             `;
     } else if (mode === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB) {
         console.log('exporting midisynth multipart WASM lib module');
