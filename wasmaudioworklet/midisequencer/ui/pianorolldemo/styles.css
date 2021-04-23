@@ -1,0 +1,127 @@
+html, body {
+    overscroll-behavior-x: none;
+}
+body {
+    background-color: #000;
+    margin: auto;
+    color: white;
+    font-family: monospace;
+}
+#toolbar {
+    background-color: #222;
+    margin-bottom: 10px;
+    padding: 10px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+}
+button {
+    background-color: #358;
+    color: white;
+    font-size: 15px;
+    margin: 3px;
+    border: none;
+    border-radius: 5px;
+}
+
+button.toggled {
+    border: white solid 1px;
+    box-shadow: 0px 0px 3px 3px;
+}
+button:hover {
+    box-shadow: 0px 0px 3px 3px #135;
+}
+#pianorolls {
+    grid-column: auto / span 4;
+    grid-row: span 2;
+    padding: 10px;
+}
+midi-pianoroll {
+    height: 500px;
+}
+midi-mixer {
+    background-color: #aac;
+    border-radius: 10px;
+    padding: 20px;
+    height: 200px;
+    grid-column: span 2;
+}
+#container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    grid-template-rows: 1fr 1fr;
+    margin-bottom: 50px;
+}
+
+#copyright {
+    background-color:rgba(255, 255, 255, 0.7);
+    color: black;
+    font-size: 14px;
+    position: fixed;
+    width: 100%;
+    bottom: 0px;
+    left: 0px;
+    padding: 10px;
+    z-index: 1000;
+}
+.hiddenbutton {
+    display: none;
+}
+.requireslogin {
+    display: none;
+}
+#postingsarea {
+    padding: 5px;
+}
+#latest20mixes {
+    display: flex;
+    padding-bottom: 10px;
+    overflow-x: auto;
+}
+#timeindicator {
+    margin-top: 10px;
+    
+}
+#controlsarea {
+    background-color: #358;
+    padding: 15px;
+    color: white;
+    border-radius: 5px;
+    margin: 5px;
+}
+#controlsarea input {
+    width: 50px;
+    height: 25px;
+    font-size: 14px;
+    margin-left: 5px;
+    text-align: right;
+}
+#controlsarea select {
+    width: 100px;
+    font-size: 15px;
+    height: 25px;
+    margin-left: 10px;
+}
+#controlsarea button {
+    background-color: #135;
+}
+.currentmix {
+    font-weight: bold;
+    background-color: #fff;
+    color: black;
+    
+}
+.mixlistitem {
+    padding: 5px;
+    border-radius: 3px;
+    user-select: none;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 12px;
+}
+.mixlistitem:hover {
+    background-color: #666;
+}
+.mixlistdate {
+    font-size: 10px;
+}

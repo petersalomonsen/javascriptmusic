@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <div id="toolbar">
+
+            <button id="audiobutton" class="hiddenbutton" onclick="startAudio()" title="Start audio">&#128264;</button>
+            <button id="playbutton" onclick="togglePlay()" title="Toggle play">&#9199;</button>
+            <button id="recordingbutton" onclick="toggleRecording()" title="Toggle recording">&#x23fa;</button>
+
+            <div id="currentMixOwner"></div>
+            <div style="flex-grow: 1"></div>
+            <button id="logginbutton" style="display: none;" onclick="login()">Login</button>
+            <button style="padding: 5px" class="requireslogin" id="postmixbutton" title="Publish to NEAR">Publish</button>
+            <button id="recordvideobutton" class="hiddenbutton">&#127909;</button>
+        </div>        
+        <div id="postingsarea">                        
+            <div id="latest20mixes">
+
+            </div>
+        </div>
+        
+        <div id="controlsarea">
+            <div style="display: flex; align-items: center;">
+                <input id="beatlengthinput" type="number" value="4" min="3" max="32" /><label for="beatlengthinput">&nbsp;beats</label>
+                <input id="tempoinput" type="number" value="120" min="20" max="300" /><label for="tempoinput">&nbsp;BPM</label>
+                <select id="midipartselect"></select>
+                <div style="flex-grow: 1;"></div>
+                <button id="savebutton" onclick="saveToLocalStorage()" title="Save to local storage">&#128190;</button>
+                <button id="clearallbutton" onclick="clearAll()" title="Clear all">&#128465;</button>
+            </div>
+            <input id="timeindicator" style="width: 100%" type="range" value="0" min="0" max="22000"
+                                oninput="seek(this.value)" />
+        </div>
+        <div id="container">            
+            <div id="pianorolls"></div>
+            <midi-mixer oninput="mixerchange(event)" data-channels="piano,strings,drums,guitar,bass,flute"></midi-mixer>
+        </div>
+        <div id="copyright">
+            Copyright (c) 2021 Peter Salomonsen 
+        </div>    
+        <script src="https://cdn.jsdelivr.net/gh/nearprotocol/near-api-js/dist/near-api-js.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bn.js"></script>
+        <script src="pianorolldemo.bundle.js" type="module"></script>
+    </body>
+</html>

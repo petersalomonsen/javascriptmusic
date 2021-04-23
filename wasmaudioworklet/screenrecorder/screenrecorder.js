@@ -5,7 +5,7 @@ let mediaRecorder;
 let captureStream;
 let audioStreamDestination;
 
-export async function startVideoRecording(audioContext) {
+export async function startVideoRecording(audioContext, audioNodeToRecord = null) {
     try {
         const videostream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
@@ -13,9 +13,13 @@ export async function startVideoRecording(audioContext) {
         });
 
         audioStreamDestination = audioContext.createMediaStreamDestination();
-
-        // need at least one node connected in order to keep in sync with the video
-        audioContext.createGain().connect(audioStreamDestination);
+        
+        if (audioNodeToRecord) {
+            audioNodeToRecord.connect(audioStreamDestination);
+        } else {
+            // need at least one node connected in order to keep in sync with the video
+            audioContext.createGain().connect(audioStreamDestination);
+        }
 
         if (sessionStorage.getItem('capturemic') === 'true') {
             const micstream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });

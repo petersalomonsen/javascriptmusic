@@ -4,7 +4,7 @@ const noteNumberArray = new Array(128).fill(null).map((v, ndx) =>
 
 const NOTEARRAY_CONTROL_CHANGE = -1;
 
-function extractNotes(data) {
+export function extractNotes(data) {
     const notes = [];
     const ongoingNoteMap = {};
     const notekey = (msg) => ((msg[0] & 0x0f) << 8) + msg[1];
@@ -42,7 +42,7 @@ function extractNotes(data) {
     return notes;
 }
 
-function convertToBeats(notes, bpm) {
+export function convertToBeats(notes, bpm) {
     return notes.map(note => [note[0], 
                 note[1], note[2], 
                 (note[3] * bpm) / 60 , 
