@@ -11,15 +11,19 @@ customElements.define('common-modal',
 
 export async function modal(modalContent) {
     const modalElement = document.createElement('common-modal');
-    modalElement.style.position = 'fixed';
-    modalElement.style.left = '0px';
-    modalElement.style.top = '0px';
-    modalElement.style.right = '0px';
-    modalElement.style.bottom = '0px';
-    modalElement.style.display = 'flex';
     modalElement.shadowRoot.innerHTML = modalTemplate(modalContent);
     document.documentElement.appendChild(modalElement);
     const result = await modalElement.resultPromise;
     document.documentElement.removeChild(modalElement);
     return result;
+}
+
+export async function modalYesNo(title, question) {
+    return modal(`
+    <h3>${title}</h3>
+    <p>${question}</p>
+    <p>
+        <button onclick="getRootNode().result(false)">No</button>
+        <button onclick="getRootNode().result(true)">Yes</button>
+    </p>`);
 }

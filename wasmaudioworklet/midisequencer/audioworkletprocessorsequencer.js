@@ -1,8 +1,8 @@
-export const SEQ_MSG_LOOP = -1;
-export const SEQ_MSG_START_RECORDING = -2;
-export const SEQ_MSG_STOP_RECORDING = -3;
+const SEQ_MSG_LOOP = -1;
+const SEQ_MSG_START_RECORDING = -2;
+const SEQ_MSG_STOP_RECORDING = -3;
 
-export class MidiSequencer {
+class MidiSequencer {
   constructor() {
     this.sequence = [];
     this.recorded = {};
@@ -13,7 +13,14 @@ export class MidiSequencer {
       // clear recorded data
       this.recorded = {};
     }
-    this.recordingActive = false;
+    
+    const startRecordingEntry = sequencedata.find(entry => entry.message.length === 1 && entry.message[0] === SEQ_MSG_START_RECORDING);
+
+    if (startRecordingEntry && startRecordingEntry.time <= this.getCurrentTime()) {
+      this.recordingActive = true;
+    } else {
+      this.recordingActive = false;
+    }    
     // update sequence
     if (this.sequence.length > 0 && sequencedata.length > 0) {
       // Replace while playing
@@ -72,7 +79,8 @@ export class MidiSequencer {
       this.sequence[this.sequenceIndex] && // sometimes this is undefined for yet unkown reasons
       this.sequence[this.sequenceIndex].time < currentTime) {
 
-      while (this.sequence[this.sequenceIndex].message[0] < 0) {
+      while (this.sequence[this.sequenceIndex].message[0] < 0 &&
+          this.sequence[this.sequenceIndex].time <= currentTime) {
         switch (this.sequence[this.sequenceIndex].message[0]) {
           case SEQ_MSG_LOOP:
             // loop

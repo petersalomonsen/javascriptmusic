@@ -22,16 +22,14 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
       }
 
       if (msg.data.sequencedata) {
-        if (this.wasmInstance) {
-          this.wasmInstance.allNotesOff();
-        }
+        this.allNotesOff();
         AudioWorkletGlobalScope.midisequencer.setSequenceData(msg.data.sequencedata);
       }
 
       if (msg.data.toggleSongPlay !== undefined) {
         this.playMidiSequence = msg.data.toggleSongPlay;
-        if (this.wasmInstance && msg.data.toggleSongPlay === false) {
-          this.wasmInstance.allNotesOff();
+        if (msg.data.toggleSongPlay === false) {
+          this.allNotesOff();
         }
       }
 
@@ -57,9 +55,7 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
       }
 
       if (msg.data.seek !== undefined) {
-        if (this.wasmInstance) {
-          this.wasmInstance.allNotesOff();
-        }
+        this.allNotesOff();
         AudioWorkletGlobalScope.midisequencer.setCurrentTime(msg.data.seek);
       }
 
@@ -69,6 +65,17 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
       }
     };
     this.port.start();
+  }
+
+  allNotesOff() {
+    if (this.wasmInstance) {
+      this.wasmInstance.allNotesOff();
+      for(let ch = 0; ch < 16; ch++) {
+        this.wasmInstance.shortmessage(
+          0xb0 + ch, 64, 0  // reset sustain pedal
+        );
+      }
+    }
   }
 
   process(inputs, outputs, parameters) {
