@@ -13,6 +13,7 @@ export class MidiSequencerPart {
 
     public changeEventListLength(newLength: i32): void {
         this.eventlist.length = newLength;
+        this.findLastEventTime();
     }
 
     public setEventListValueAt(ndx: i32, val: u8): void {

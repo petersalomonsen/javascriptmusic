@@ -1,6 +1,7 @@
 import { SAMPLERATE } from "../../environment";
 import { midiparts, midipartschedule } from "./midiparts";
 import { fillSampleBuffer, sampleBufferFrames } from "../midisynth";
+import { MidiSequencerPart, MidiSequencerPartSchedule } from "./midisequencerpart";
 
 const PLAY_EVENT_INTERVAL = ((sampleBufferFrames * 1000) as f64 / SAMPLERATE);
 
@@ -44,5 +45,31 @@ export function playEventsAndFillSampleBuffer(): void {
 }
 
 export function setMidiPartSchedule(ndx: i32, midipartindex: i32, startTime: i32): void {
-    midipartschedule[ndx].updateEndTime(midipartindex, startTime);
+    if (ndx>=midipartschedule.length) {
+        midipartschedule[ndx] = new MidiSequencerPartSchedule(midipartindex, startTime);
+    } else {
+        midipartschedule[ndx].updateEndTime(midipartindex, startTime);
+    }
+}
+
+export function setMidiPartEventListValueAt(midipartindex: i32, eventlistindex: i32, value: u8): void {
+    midiparts[midipartindex].setEventListValueAt(eventlistindex, value);
+}
+
+export function changeMidiPartEventListLength(midipartindex: i32, length: i32): void {
+    midiparts[midipartindex].changeEventListLength(length);
+}
+
+export function addMidiPart(eventlistlength: i32): i32 {
+    return midiparts.push(new MidiSequencerPart(new Array<u8>(eventlistlength))) - 1;
+}
+
+export function getDuration(): i32 {
+    let duration: i32 = 0;
+    for (let n = 0;n<midipartschedule.length; n++) {
+        if (midipartschedule[n].endTime > duration) {
+            duration = midipartschedule[n].endTime;
+        }
+    }
+    return duration;
 }
