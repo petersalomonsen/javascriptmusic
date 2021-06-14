@@ -7,7 +7,19 @@ export class MidiSequencerPart {
     previousTargetTime: i32 = 0;
     lastEventTime: i32 = 0;
 
-    constructor(public eventlist: u8[]) {
+    constructor(public eventlist: Array<u8>) {
+        this.findLastEventTime();
+    }
+
+    public changeEventListLength(newLength: i32): void {
+        this.eventlist.length = newLength;
+    }
+
+    public setEventListValueAt(ndx: i32, val: u8): void {
+        this.eventlist[ndx] = val;
+    }
+
+    public findLastEventTime(): void {
         let lastEventTime = 0;
         for (let ndx = 0; ndx < this.eventlist.length;ndx += 3) {
             let deltaTime: i32 = 0;
