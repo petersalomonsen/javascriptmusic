@@ -9,7 +9,7 @@ const progressbarhtml = `
     font-family: monospace;
     margin: auto;
     z-index: 1000;
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(100, 100, 100, 0.5);
 }
 
 .progress-border {

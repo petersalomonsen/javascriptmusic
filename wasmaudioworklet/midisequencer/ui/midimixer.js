@@ -3,6 +3,7 @@ const midimixerhtml = `
   :host {
     display: inline-block;
     overflow-x: scroll;
+    max-height: 220px;
   }
   .panslider {
     width: 50px;

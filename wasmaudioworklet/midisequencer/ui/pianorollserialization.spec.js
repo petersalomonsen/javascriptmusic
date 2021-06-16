@@ -48,18 +48,23 @@ describe('pianorollserialization', function() {
             );
         }
 
-        const serialized = serializePianorollsData(Array.from(document.querySelectorAll('midi-pianoroll')).map((pianoroll) =>
-            pianoroll.getPianorollData()));
+        const serialized = serializePianorollsData(Array.from(document.querySelectorAll('midi-pianoroll')).map((pianoroll, ndx) =>
+            ({
+                channel: ndx,
+                pianorolldata: pianoroll.getPianorollData()
+            })
+        ));
 
-        const deserialized = deserializePianorollsData(serialized);
+        const deserialized = deserializePianorollsData(serialized, numpianorolls);
+        assert.equal(deserialized.deserializedbytecount, serialized.length);
         originaldata.forEach((originalchanneldata, ndx) => {
-            const channeldata = deserialized[ndx];
-            
-            assert.equal(channeldata.length, 
+            const midipart = deserialized.pianorollsdata[ndx];
+
+            assert.equal(midipart.pianorolldata.length, 
                     originalchanneldata.notes.length +
                     originalchanneldata.controlevents.length);
             
-            const deserializedNotes = channeldata.filter(n => n.noteNumber !== undefined);
+            const deserializedNotes = midipart.pianorolldata.filter(n => n.noteNumber !== undefined);
             assert.equal(deserializedNotes.length, originalchanneldata.notes.length);
             
             const deserializedNotesSorted = deserializedNotes.sort((a, b) =>
@@ -79,7 +84,7 @@ describe('pianorollserialization', function() {
                 assert.equal(evt.velocityValue, originalNotesSorted[ndx].velocityValue );
             });
 
-            const deserializedControlEvents = channeldata.filter(n => n.controllerNumber !== undefined);
+            const deserializedControlEvents = midipart.pianorolldata.filter(n => n.controllerNumber !== undefined);
             assert.equal(deserializedControlEvents.length, originalchanneldata.controlevents.length);
 
             const deserializedControlSorted = deserializedControlEvents.sort((a, b) =>

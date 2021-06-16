@@ -26,9 +26,9 @@
         
         <div id="controlsarea">
             <div style="display: flex; align-items: center;">
-                <input id="beatlengthinput" type="number" value="4" min="3" max="32" /><label for="beatlengthinput">&nbsp;beats</label>
                 <input id="tempoinput" type="number" value="120" min="20" max="300" /><label for="tempoinput">&nbsp;BPM</label>
                 <select id="midipartselect"></select>
+                <button id="addmidipartbutton">add</button>
                 <div style="flex-grow: 1;"></div>
                 <button id="savebutton" onclick="saveToLocalStorage()" title="Save to local storage">&#128190;</button>
                 <button id="clearallbutton" onclick="clearAll()" title="Clear all">&#128465;</button>
@@ -38,8 +38,12 @@
         </div>
         <div id="container">            
             <div id="pianorolls"></div>
-            <midi-mixer oninput="mixerchange(event)" data-channels="piano,strings,drums,guitar,bass,flute"></midi-mixer>
+            <div id="mixerandpartscheduler">
+                <midi-mixer oninput="mixerchange(event)" data-channels="piano,strings,drums,guitar,bass,flute"></midi-mixer>
+                <midi-part-scheduler></midi-part-scheduler>
+            </div>
         </div>
+        <div style="height: 80px;"></div>
         <div id="copyright">
             Copyright (c) 2021 Peter Salomonsen 
         </div>    

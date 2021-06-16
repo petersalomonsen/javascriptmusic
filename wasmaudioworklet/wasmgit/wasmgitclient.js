@@ -1,5 +1,6 @@
 import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout, login } from './nearacl.js';
-import { toggleSpinner } from '../app.js';
+import { toggleSpinner } from '../common/ui/progress-spinner.js';
+
 import { modal } from '../common/ui/modal.js';
 
 export let worker;

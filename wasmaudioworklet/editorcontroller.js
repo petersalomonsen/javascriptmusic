@@ -4,7 +4,9 @@ import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
 import { } from './webaudiomodules/preseteditor.js';
-import { setInstrumentNames, appendToSubtoolbar1, toggleSpinner } from './app.js';
+import { setInstrumentNames, appendToSubtoolbar1 } from './app.js';
+import { toggleSpinner } from './common/ui/progress-spinner.js';
+
 import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener } from './wasmgit/wasmgitclient.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal } from './common/ui/modal.js';

@@ -104,65 +104,6 @@ input::placeholder {
     overflow: auto;
 }
 
-.spinner {
-    display: none;
-    position: fixed;
-    margin: auto;
-    top:0;
-	bottom: 0;
-	left: 0;
-	right: 0;
-    background-color: rgba(0,0,0, 0.5);
-    border: 20px solid #f3f3f3;
-    border-radius: 50%;
-    border-top: 20px solid #3498db;
-    z-index: 1000;
-    
-    width: 100px;
-    height: 100px;
-    -webkit-animation: spin 1s linear infinite; /* Safari */
-    animation: spin 1s linear infinite;
-  }
-  
-/* Safari */
-@-webkit-keyframes spin {
-    0% { -webkit-transform: rotate(0deg); }
-    100% { -webkit-transform: rotate(360deg); }
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.progress-border {
-    border: green solid 1px;
-    position: fixed;
-
-    height: 50px;
-    top:0;
-	bottom: 0;
-	left: 0;
-	right: 0;
-  	
-    margin: auto;
-    z-index: 1000;
-    display: none;
-}
-
-.progress-text {
-    position: absolute;
-    color: white;
-    text-align: center;
-    width: 100%;
-    height: 100%;
-    font-size: 45px;
-}
-
-.progress-fill {
-    background-color: rgba(0,255,0, 0.7);
-    height: 50px;    
-}
 
 #timeindicator {
     position: fixed;

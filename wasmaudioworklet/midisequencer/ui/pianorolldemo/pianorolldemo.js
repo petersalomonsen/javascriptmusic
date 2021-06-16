@@ -1,5 +1,6 @@
 import { COLUMNS_PER_BEAT } from '../pianoroll.js';
 import '../midimixer.js';
+import '../partschedule.js';
 import { WorkerMessageHandler } from '../../../common/workermessagehandler.js';
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from '../../sequenceconstants.js';
 import { extractNotes, convertToBeats } from '../../recording.js';
@@ -8,7 +9,7 @@ import { getTokenContent, byteArrayToBase64 } from './nearclient.js';
 import { decodeAndDecrunch, serializeMusic, deserializeMusic, base64ToByteArray } from './nft.js';
 import { exportToWav } from './exportwav.js';
 import { applyPolyfill, browserSupportsAudioWorklet } from '../../../audioworkletpolyfill.js';
-import { modalYesNo } from '../../../common/ui/modal.js';
+import { modal, modalYesNo } from '../../../common/ui/modal.js';
 
 let audioWorkletNode;
 let audioCtx;
@@ -18,66 +19,104 @@ let recordingEnabled = false;
 let bpm = 100;
 let wasm_synth_bytes;
 
-const beatlengthinput = document.getElementById('beatlengthinput');
-let sequenceLengthBeats = parseInt(beatlengthinput.value);
-let sequenceEndTime = sequenceLengthBeats * 60000 / bpm;
-document.getElementById('timeindicator').max = sequenceEndTime;
-
 const pianorollsdiv = document.querySelector('#pianorolls');
 const midipartselect = document.querySelector('#midipartselect');
+const partscheduler = document.querySelector('midi-part-scheduler');
 
-['piano', 'strings', 'drums', 'guitar', 'bass', 'flute'].forEach((name, ndx) => {
+let sequenceEndTime;
+
+const channelNames = ['piano', 'strings', 'drums', 'guitar', 'bass', 'flute'];
+let partsPerChannel = {};
+let pianoroll;
+
+export function addPianoroll(channel) {
+    if(!partsPerChannel[channel]) {
+        partsPerChannel[channel] = 1;
+    }
+    const name = channelNames[channel]+' '+(partsPerChannel[channel]++);
     const pianoroll = document.createElement('midi-pianoroll');
-    pianoroll.setAttribute('data-columns', `${sequenceLengthBeats * COLUMNS_PER_BEAT}`);
     pianoroll.setAttribute('data-title', name);
+    pianoroll.setAttribute('data-columns', 4 * COLUMNS_PER_BEAT);
     pianoroll.style.display = 'none';
-    pianoroll.channel = ndx;
+    pianoroll.channel = channel;
     pianorollsdiv.appendChild(pianoroll);
     const selectoption = document.createElement('option');
-    selectoption.value = ndx;
+    selectoption.value = pianorollsdiv.childElementCount - 1;
     selectoption.innerHTML = name;
     midipartselect.appendChild(selectoption);
-});
+    partscheduler.setAttribute('data-parts', Array.from(midipartselect.childNodes).map(opt => opt.innerHTML));
+    return pianoroll;
+}
 
 const onpianokey = (evt) => {
     audioWorkletNode.port.postMessage({midishortmsg: [0x90 + evt.target.channel, evt.detail.note, evt.detail.velocity]});
 };
 
-let currentVisiblePart = 0;
-let pianoroll = pianorollsdiv.firstChild;
-pianoroll.addEventListener('change', updateSequence);
-pianoroll.addEventListener('pianokey', onpianokey);
-pianoroll.style.display = 'block';
+midipartselect.addEventListener('change', e => selectPianoroll(e.target.value));
 
-midipartselect.addEventListener('change', e => {
-    pianoroll.style.display = 'none';
-    pianoroll.removeEventListener('change', updateSequence);
-    pianoroll.removeEventListener('pianokey', onpianokey);
-    currentVisiblePart = e.target.value;
-    pianoroll = pianorollsdiv.childNodes[currentVisiblePart];
+export function selectPianoroll(pianorollndx) {
+    if (pianoroll) {
+        pianoroll.style.display = 'none';
+        pianoroll.removeEventListener('change', updateSequence);
+        pianoroll.removeEventListener('pianokey', onpianokey);
+    }
+    document.querySelector('#midipartselect').value = pianorollndx;
+    pianoroll = pianorollsdiv.childNodes[pianorollndx];
     pianoroll.style.display = 'block';
     
     pianoroll.addEventListener('change', updateSequence);
     pianoroll.addEventListener('pianokey', onpianokey);
-});
-
-function convertPianorollsDataToEventList() {
-    const pianorollsdata = Array.from(pianorollsdiv.childNodes).map((pianoroll) => pianoroll.getPianorollData());    
-
-    return pianorollsdata.map((pianorolldata, channel) =>
-        pianorolldata.map(r => r.noteNumber ? [{
-        time: r.start * 60000 / bpm,
-        message: [0x90 + channel, r.noteNumber, r.velocityValue]
-    },{
-        time: r.end * 60000 / bpm,
-        message: [0x90 + channel, r.noteNumber, 0]
-    }]: {
-        time: r.start * 60000 / bpm,
-        message: [0xb0 + channel, r.controllerNumber, r.controllerValue]
-    })).flat(2).sort((a,b) => a.time - b.time);
 }
 
-function updateSequence() {
+function convertPianorollsDataToEventList() {
+    const pianorollsdata = Array.from(pianorollsdiv.childNodes).map((pianoroll) => ({
+        channel: pianoroll.channel,
+        length: parseInt(pianoroll.dataset.columns) / COLUMNS_PER_BEAT,
+        pianorolldata: pianoroll.getPianorollData()
+    }));
+
+    const parts = pianorollsdata.map((pianorolldata) =>
+            pianorolldata.pianorolldata.map(r => r.noteNumber ? [{
+                time: r.start,
+                message: [0x90 + pianorolldata.channel, r.noteNumber, r.velocityValue]
+            },{
+                time: r.end - 0.01,
+                message: [0x90 + pianorolldata.channel, r.noteNumber, 0]
+            }]: {
+                time: r.start,
+                message: [0xb0 + pianorolldata.channel, r.controllerNumber, r.controllerValue]
+            }
+        ).flat(1)
+    )
+
+    const partschedules = partscheduler.getState();
+
+    let sequenceLengthBeats = 0;
+    const sequence = partschedules.map(sch => {
+        const playTimes = 1 + sch.repeat;
+        const partLength = pianorollsdata[sch.part].length;
+
+        const partEndBeat = sch.beat + partLength * playTimes;
+        if (partEndBeat > sequenceLengthBeats) {
+            sequenceLengthBeats = partEndBeat;
+        }
+        const partevents = [];
+        for (let n=0; n<playTimes; n++) {
+            parts[sch.part].forEach(evt =>
+                partevents.push(Object.assign({}, evt, {time: (partLength * n + evt.time + sch.beat) * 60000 / bpm}))
+            );
+        }
+        return partevents;
+    }).flat(1);
+
+    sequenceEndTime = sequenceLengthBeats * 60000 / bpm;
+
+    document.getElementById('timeindicator').max = sequenceEndTime;
+
+    return sequence.sort((a,b) => a.time - b.time);
+}
+
+export function updateSequence() {
     if (!audioCtx) {
         return;
     }
@@ -98,12 +137,20 @@ window.toggleRecording = async function() {
         const recordeddata = (await workerMsgHandler.callAndGetResult({
             recorded: true
         }, (msg) => msg.recorded !== undefined)).recorded;
-        if (confirm('keep recording?')) {
+        if (await modalYesNo('keep recording?', '')) {
+            const schedules = partscheduler.getState().filter(sch => sch.part == midipartselect.value);
+            
             convertToBeats(extractNotes(recordeddata), bpm).forEach(e => {
-                if(e[1] >= 0) {
-                    pianoroll.addNote(e[1], e[3], e[4], e[2]);
-                } else {
-                    pianoroll.addControlEvent(e[4], e[3], e[2]);
+                const beatpos = e[3];
+                const beatoffset = (arr => arr.length ? arr[arr.length-1].beat : -1)(schedules.filter(sch => sch.beat < beatpos));
+                if(beatoffset >= 0) {
+                    const adjustedbeatpos = beatpos - beatoffset;
+                    
+                    if(e[1] >= 0) {
+                        pianoroll.addNote(e[1], adjustedbeatpos, e[4], e[2]);
+                    } else {
+                        pianoroll.addControlEvent(e[4], adjustedbeatpos, e[2]);
+                    }
                 }
             });
         }
@@ -196,7 +243,7 @@ window.startAudio = async function() {
                         (data[0] & 0xf0) === 0xb0
                     )
                 ) {
-                    data[0] = (data[0] & 0xff) + parseInt(midipartselect.value);
+                    data[0] = (data[0] & 0xff) + parseInt(pianorollsdiv.childNodes[midipartselect.value].channel);
                     audioWorkletNode.port.postMessage({midishortmsg: data});
                 }
             };
@@ -207,7 +254,13 @@ window.startAudio = async function() {
 
     const updateTimeIndicator = async () => {
         let currentTime = (await workerMsgHandler.callAndGetResult({currentTime: true}, msg => msg.currentTime !== undefined)).currentTime;
-        pianoroll.setTimeIndicatorPos(currentTime * bpm / 60000);
+        const beatpos = currentTime * bpm / 60000
+        const schedules = partscheduler.getState().filter(sch => sch.part == midipartselect.value);
+        const beatoffset = (arr => arr.length ? arr[arr.length-1].beat : -1)(schedules.filter(sch => sch.beat < beatpos));
+        if(beatoffset >= 0) {
+            const adjustedbeatpos = beatpos - beatoffset;
+            pianoroll.setTimeIndicatorPos(adjustedbeatpos);
+        }
         const timeIndicatorElement = document.getElementById('timeindicator');
         const timeIndicatorMax = parseInt(timeIndicatorElement.max);
 
@@ -237,35 +290,42 @@ function mixerchange(evt) {
 }
 window.mixerchange = mixerchange;
 
-window.clearAll = () => {
-    if (confirm('Really delete everything?')) {
-        Array.from(document.querySelectorAll('midi-pianoroll')).forEach(pianoroll => pianoroll.clearAll());
-        updateSequence();
+export function clearAll() {
+    Array.from(document.querySelectorAll('midi-pianoroll')).forEach(pianoroll => pianoroll.remove());
+    Array.from(midipartselect.childNodes).forEach(s => s.remove());
+    document.querySelector('midi-part-scheduler').setState([]);
+    partsPerChannel = {};
+    updateSequence();
+}
+
+window.clearAll = async () => {
+    if (await modalYesNo('Really delete everything?','')) {
+        clearAll();
     }
 };
 document.getElementById('tempoinput').addEventListener('change', (ev) => {
     bpm = parseInt(ev.target.value);
-    sequenceEndTime = sequenceLengthBeats * 60000 / bpm;
-    document.getElementById('timeindicator').max = sequenceEndTime;
     updateSequence();
+});
+document.getElementById('addmidipartbutton').addEventListener('click', async (ev) => {
+    const channel = await modal(`
+        <h3>Select instrument</h3>
+        <p>
+        <select id="channelselect">
+            ${channelNames.map((ch, ndx) => `<option value="${ndx}">${ch}</option>`)}
+        </select>
+        </p>
+        <button onclick="getRootNode().result(-1)">Cancel</button>
+        <button onclick="getRootNode().result(parseInt(getRootNode().querySelector('#channelselect').value))">Ok</button>
+    `);
+    if (channel>=0) {
+        addPianoroll(channel);
+        selectPianoroll(pianorollsdiv.childNodes.length - 1);
+    }
 });
 
-beatlengthinput.addEventListener('change', (ev) => {
-    const newValue = parseInt(ev.target.value);
-    if ( newValue > beatlengthinput.max) {
-        ev.target.value = beatlengthinput.max;
-    } else if (newValue < beatlengthinput.min) {
-        ev.target.value = beatlengthinput.min;
-    }
-    Array.from(pianorollsdiv.childNodes).forEach((pianoroll) => {
-        sequenceLengthBeats = parseInt(ev.target.value);
-        pianoroll.setAttribute('data-columns', `${sequenceLengthBeats * COLUMNS_PER_BEAT}`);
-        
-        sequenceEndTime = sequenceLengthBeats * 60000 / bpm;
-        document.getElementById('timeindicator').max = sequenceEndTime;
-    });
-    updateSequence();
-});
+partscheduler.addEventListener('change', () => updateSequence());
+
 const recordVideoButton = document.getElementById('recordvideobutton');
 recordVideoButton.addEventListener('click', async () => {
     if (!audioCtx) {
@@ -282,13 +342,27 @@ recordVideoButton.addEventListener('click', async () => {
 });
 
 export const exportWav = () => {
-    exportToWav(convertPianorollsDataToEventList(),wasm_synth_bytes);    
+    const eventlist = document.querySelector('midi-mixer').getState().map((v, ch) => [{
+            time: 0,
+            message: [
+                0xb0 + ch, 7, v.volume
+            ]
+        },
+        {
+            time: 0,
+            message: [
+                    0xb0 + ch, 10, v.pan
+                ]
+        }]).flat(1).concat(convertPianorollsDataToEventList());
+    exportToWav(eventlist,wasm_synth_bytes);    
 };
 
 window.saveToLocalStorage = async () => {
     localStorage.setItem('lastSavedMusicPiece', await byteArrayToBase64(serializeMusic()));
 };
 
-try {
-    deserializeMusic(base64ToByteArray(localStorage.getItem('lastSavedMusicPiece')));
-} catch(e) { console.log('no saved music was found in local storage', e); }
+
+const lastsaved = localStorage.getItem('lastSavedMusicPiece')
+if (lastsaved) {
+    deserializeMusic(base64ToByteArray(lastsaved));
+}
