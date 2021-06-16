@@ -1,4 +1,4 @@
-import { waitForAppReady, toggleSpinner, setProgressbarValue } from './app.js';
+import { waitForAppReady} from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { getTargetNoteStates } from './visualizer/80sgrid.js';
 

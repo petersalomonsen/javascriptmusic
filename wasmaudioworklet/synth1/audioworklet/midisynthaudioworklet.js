@@ -1,6 +1,8 @@
 import { visualizeSong, setGetCurrentTimeFunction, setPaused } from '../../visualizer/midieventlistvisualizer.js';
 import { WorkerMessageHandler } from '../../common/workermessagehandler.js';
-import { toggleSpinner, setProgressbarValue, attachSeek, formatTime } from '../../app.js';
+import { toggleSpinner } from '../../common/ui/progress-spinner.js';
+import { setProgressbarValue } from '../../common/ui/progress-bar.js';
+import { attachSeek, formatTime } from '../../app.js';
 import { audioBufferToWav } from '../../common/audiobuffertowav.js';
 import { connectLevelAnalyser } from '../../analyser/levelanalysernode.js';
 import { modal } from '../../common/ui/modal.js';

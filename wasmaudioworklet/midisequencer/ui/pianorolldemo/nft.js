@@ -2,7 +2,9 @@ import { deserializePianorollsData, importToPianoroll, serializePianorollsData }
 import { getMixes, publishMix, buyMix, viewTokenOwner, viewTokenPrice, getMixTokenContent, connectNear } from './nearclient.js';
 import { ungzip, gzip } from 'https://unpkg.com/pako@2.0.3/dist/pako.esm.mjs';
 import { toggleSpinner } from '../../../common/ui/progress-spinner.js';
-import { exportWav } from './pianorolldemo.js';
+import { exportWav, addPianoroll, clearAll, selectPianoroll, updateSequence } from './pianorolldemo.js';
+import { COLUMNS_PER_BEAT } from '../pianoroll.js';
+import { modalYesNo } from '../../../common/ui/modal.js';
 
 const existingPublishedMixes = [];
 const currentMixOwnerDiv = document.querySelector('#currentMixOwner');
@@ -21,32 +23,66 @@ export function decodeAndDecrunch(base64encoded) {
 }
 
 export function serializeMusic() {
-    const pianorollsdata = Array.from(document.querySelectorAll('midi-pianoroll')).map((pianoroll) => pianoroll.getPianorollData());
+    const pianorollsdata = Array.from(document.querySelectorAll('midi-pianoroll')).map((pianoroll) => ({
+        channel: pianoroll.channel,
+        length: pianoroll.dataset.columns / COLUMNS_PER_BEAT,
+        pianorolldata: pianoroll.getPianorollData()
+    }));
     const pianorollbytes = serializePianorollsData(pianorollsdata);
-    const serialized = new Uint8Array(pianorollbytes.length + 32 + 2);
-    serialized.set(pianorollbytes, 0);
+    const schedulestate = document.getElementsByTagName('midi-part-scheduler')[0].getState();
+
+    const serialized = new Uint8Array(
+            1 + // number of parts
+            pianorollbytes.length + // pianoroll data
+            + 32 // mixer states
+            + 2 // tempo, default beatlength
+            + 1 // number of schedules
+            + schedulestate.length * 3 // schedule data
+            + pianorollsdata.length // parts lengths
+        );
+    serialized[0] = pianorollsdata.length;
+    serialized.set(pianorollbytes, 1);
     const mixerdata = document.querySelector('midi-mixer').getState();
-    let ndx = pianorollbytes.length;
+    let ndx = pianorollbytes.length + 1;
     mixerdata.forEach(v => {
         serialized[ndx++] = v.volume;
         serialized[ndx++] = v.pan;
     });
     serialized[ndx++] = parseInt(document.getElementById('tempoinput').value);
-    serialized[ndx++] = parseInt(document.getElementById('beatlengthinput').value);
+    ndx++; // beatlengthinput not in use anymore
+
+    serialized[ndx++] = schedulestate.length;
+
+    schedulestate.forEach(partSchedule => {
+        serialized[ndx++] = partSchedule.beat;
+        serialized[ndx++] = partSchedule.part;
+        serialized[ndx++] = partSchedule.repeat;
+    });
+
+    pianorollsdata.forEach(pianorolldata => 
+        serialized[ndx++] = pianorolldata.length
+    );
     return serialized;
 }
 
 export function deserializeMusic(musicdata) {
-    const pianorolls = Array.from(document.querySelectorAll('midi-pianoroll'));
-    const deserializedpianorolldata = deserializePianorollsData(musicdata);
-    pianorolls.forEach((pianoroll, ndx) => {
-        pianoroll.clearAll();
-        if (deserializedpianorolldata[ndx]) {
-            importToPianoroll(deserializedpianorolldata[ndx], pianoroll);
-        }
-    });
+    clearAll();
+    let numParts = 6;
+    if (musicdata[0] > 0) {
+        // version 2 can have any number of parts
+        numParts = musicdata[0];
+        musicdata = musicdata.slice(1);
+    }
+    const {pianorollsdata, deserializedbytecount} = deserializePianorollsData(musicdata, numParts);
+
+    const pianorolls = [];
+    for (let n=0;n<numParts;n++) {
+        const pianoroll = addPianoroll(pianorollsdata[n].channel);
+        importToPianoroll(pianorollsdata[n].pianorolldata, pianoroll);
+        pianorolls.push(pianoroll);
+    }
     const midimixerelement = document.querySelector('midi-mixer');
-    const mixerdatapos = musicdata.length - 34;
+    const mixerdatapos = deserializedbytecount;
     musicdata.slice(mixerdatapos, mixerdatapos + 32)
         .forEach((v, ndx) => {
             const channel = Math.floor(ndx / 2);
@@ -58,10 +94,45 @@ export function deserializeMusic(musicdata) {
         });
     const tempoinput = document.getElementById('tempoinput');
     tempoinput.value = musicdata[mixerdatapos + 32];
+    const legacyBeatLength = musicdata[mixerdatapos + 33];
     tempoinput.dispatchEvent(new Event('change'));
-    const beatlengthinput = document.getElementById('beatlengthinput');
-    beatlengthinput.value = musicdata[mixerdatapos + 32 + 1];
-    beatlengthinput.dispatchEvent(new Event('change'));
+    const partscheduler = document.querySelector('midi-part-scheduler');
+
+    if (musicdata.length > mixerdatapos + 34) {
+        let partschedulelength = musicdata[mixerdatapos + 34];
+        let partschedulendx = mixerdatapos + 35;
+
+        const partschedulestate = [];
+        for (var n = 0; n < partschedulelength; n++) {
+            partschedulestate.push({
+                beat: musicdata[partschedulendx++],
+                part: musicdata[partschedulendx++],
+                repeat: musicdata[partschedulendx++]
+            });
+        }
+        partscheduler.setState(partschedulestate);
+
+        let partlengthsndx = partschedulendx;
+        pianorolls.forEach((pianoroll) => {
+            pianoroll.dataset.columns = musicdata[partlengthsndx++] * COLUMNS_PER_BEAT;
+        });
+    } else {
+        // first version did not have part schedules
+        partscheduler.setAttribute('data-parts', pianorolls.map(pr => pr.dataset.title).join(','));
+        partscheduler.setState([
+            {part: 0, beat: 0, repeat:0 },
+            {part: 1, beat: 0, repeat:0 },
+            {part: 2, beat: 0, repeat:0 },
+            {part: 3, beat: 0, repeat:0 },
+            {part: 4, beat: 0, repeat:0 },
+            {part: 5, beat: 0, repeat:0 }
+        ]);
+        pianorolls.forEach((pianoroll, ndx) => {
+            pianoroll.channel = ndx;
+            pianoroll.dataset.columns = legacyBeatLength * COLUMNS_PER_BEAT;
+        });        
+    }
+    selectPianoroll(0);
 }
 
 (async () => {
@@ -102,6 +173,7 @@ export function deserializeMusic(musicdata) {
 
             // restore published music piece
             deserializeMusic(mixdata);
+            updateSequence();
             // buy / sell logic
 
             if (mix.owner) {
@@ -169,7 +241,16 @@ export function deserializeMusic(musicdata) {
     if (ownedmixes.length === 20) {
         document.querySelector('#postmixbutton').style.display = 'none';
     }
-    document.getElementById('postmixbutton').addEventListener('click', () => {
-        publishMix(gzip(serializeMusic()));
+    document.getElementById('postmixbutton').addEventListener('click', async () => {
+        if (await modalYesNo('Publish your track?', `
+            <ul style="text-align: left; font-size: 14px;">
+            <li>Your track will be listed on top of this page, and for sale for 10N</li>
+            <li>You will get 4N if sold ( the rest goes to the instrument NFT owner and platform )</li>
+            <li>The first owner will be able to export to wav, and can also resell for any price</li>
+            <li>You will get 2% on re-sales, the owner will get 95% when selling</li>
+            </ul>
+        `)) {
+            publishMix(gzip(serializeMusic()));
+        }
     });
 })();

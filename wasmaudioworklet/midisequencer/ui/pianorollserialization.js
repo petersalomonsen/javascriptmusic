@@ -20,15 +20,16 @@ export function importToPianoroll(deserializedevents, pianoroll) {
  * @param {*} pianorolldatabytes 
  * @returns 
  */
-export function deserializePianorollsData(pianorolldatabytes) {
-    const pianorollsdata = new Array(16);
+export function deserializePianorollsData(pianorolldatabytes, numparts) {
+    const pianorollsdata = new Array();
 
     let n = 0;
-    while (n<pianorolldatabytes.length) {
+    while (pianorollsdata.length < numparts) {
         const channel = pianorolldatabytes[n];
         const numnotes = pianorolldatabytes[n + 1];
         const numcontrollers = pianorolldatabytes[n + 2];
-        pianorollsdata[channel] = [];
+
+        const pianorolldata = [];
         n += 3;
         const controllersndx = n + (numnotes * 4);
         const nextchannelndx = controllersndx + (numcontrollers * 3);
@@ -37,16 +38,19 @@ export function deserializePianorollsData(pianorolldatabytes) {
             const duration = pianorolldatabytes[n++] / SERIALIZE_TIME_RESOLUTION;
             const noteNumber = pianorolldatabytes[n++];
             const velocityValue = pianorolldatabytes[n++];
-            pianorollsdata[channel].push({start: evtstart, duration: duration, noteNumber: noteNumber, velocityValue: velocityValue});
+            pianorolldata.push({start: evtstart, duration: duration, noteNumber: noteNumber, velocityValue: velocityValue});
         }
         while (n < nextchannelndx) {
             const evtstart = pianorolldatabytes[n++] / SERIALIZE_TIME_RESOLUTION;
             const controllerNumber = pianorolldatabytes[n++];
             const controllerValue = pianorolldatabytes[n++];
-            pianorollsdata[channel].push({start: evtstart, controllerNumber: controllerNumber, controllerValue: controllerValue});
+            pianorolldata.push({start: evtstart, controllerNumber: controllerNumber, controllerValue: controllerValue});
         }
+        pianorollsdata.push({channel: channel,
+            pianorolldata: pianorolldata
+        });
     }
-    return pianorollsdata;
+    return {pianorollsdata: pianorollsdata, deserializedbytecount: n};
 }
 
 /**
@@ -55,10 +59,11 @@ export function deserializePianorollsData(pianorolldatabytes) {
  * @returns 
  */
 export function serializePianorollsData(pianorollsdata) {
-    const exportabledata = pianorollsdata.map((pianorolldata, channel) => {
+    const exportabledata = pianorollsdata.map((part) => {
+        const pianorolldata = part.pianorolldata;
         const notesLength = pianorolldata.filter(v => v.noteNumber).length;
         const controllersLength = pianorolldata.length - notesLength;
-        const channelarrarr = [channel,notesLength,controllersLength].concat(
+        const channelarrarr = [part.channel,notesLength,controllersLength].concat(
             pianorolldata.map(r => r.noteNumber ? 
                 [r.start * SERIALIZE_TIME_RESOLUTION, (r.end - r.start) * SERIALIZE_TIME_RESOLUTION, r.noteNumber, r.velocityValue]:
                 [r.start * SERIALIZE_TIME_RESOLUTION, r.controllerNumber, r.controllerValue]

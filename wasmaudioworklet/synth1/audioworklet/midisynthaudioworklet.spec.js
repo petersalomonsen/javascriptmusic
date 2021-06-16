@@ -307,6 +307,7 @@ describe('midisynth audio worklet', async function () {
         } while (currentTime >= firstTimeStamp);
 
         console.log('sending midi events');
+        await new Promise(resolve => setTimeout(resolve, 10));
         window.audioworkletnode.port.postMessage({
             midishortmsg: [0x90, 69, 91]
         });
@@ -495,8 +496,11 @@ export function postprocess(): void {
         const exportWavPromise = exportToWav(eventlist, wasm_synth_bytes);
 
         while (!document.querySelector('common-modal')) {
-            const progressText = document.querySelector('app-javascriptmusic').shadowRoot.querySelector('.progress-text').innerText;
-            console.log('waiting for modal with clipping warning', progressText);
+            const progressbar = document.querySelector('progress-bar');
+            if (progressbar) {
+                const progressText = document.querySelector('progress-bar').shadowRoot.querySelector('.progress-text').innerText;
+                console.log('waiting for modal with clipping warning', progressText);
+            }
             await new Promise(r => setTimeout(r, 100));
         }
 

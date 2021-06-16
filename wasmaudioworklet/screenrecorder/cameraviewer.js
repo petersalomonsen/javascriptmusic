@@ -4,8 +4,9 @@ export function showCamViewer() {
     videoElement.style.position = 'fixed';
     videoElement.style.right = '5px';
     videoElement.style.bottom = '5px';
-    videoElement.style.width = '200px';
-    videoElement.style.height = '200px';
+    videoElement.style.width = '250px';
+    videoElement.style.height = '250px';
+    videoElement.style.zIndex = 9999999;
     document.documentElement.appendChild(videoElement);
 
     if (navigator.mediaDevices.getUserMedia) {

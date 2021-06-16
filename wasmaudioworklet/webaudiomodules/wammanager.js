@@ -1,5 +1,6 @@
 import { loadScript } from '../common/scriptloader.js';
-import { toggleSpinner, setProgressbarValue } from '../app.js';
+import { toggleSpinner } from '../common/ui/progress-spinner.js';
+import { setProgressbarValue } from '../common/ui/progress-bar.js';
 import { audioBufferToWav } from '../common/audiobuffertowav.js';
 import { visualizeSong, setGetCurrentTimeFunction, setPaused as setVisualizerPaused } from '../visualizer/midieventlistvisualizer.js';
 

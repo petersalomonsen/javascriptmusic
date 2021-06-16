@@ -52,6 +52,13 @@ const templateHTML = (numrows) => `
         color: white;
         border-top-left-radius: 30px;
         border-top-right-radius: 30px;
+        display: flex;
+        align-items: center;
+        overflow-x: scroll;
+        overflow-y: hidden;
+    }
+    #titlespan {
+        white-space: nowrap;
     }
     #footer {
         background-color: #358;
@@ -160,11 +167,20 @@ const templateHTML = (numrows) => `
     input[type=checkbox] {
         display: none;
     }
+    #toolbar div {
+        font-size: 12px;        
+    }
+    #toolbar * {
+        margin: 3px;
+    }
+    #beatlengthinput {
+        width: 50px;
+    }
 </style>
 <div id="container">
     <div id="toolbar">
-        <input type="radio" id="editmode_draw" name="editmode" value="draw" checked /><label for="editmode_draw">&#9998</label>
-        <input type="radio" id="editmode_erase" name="editmode" value="erase" /><label for="editmode_erase">&#8999;</label>
+        <input type="radio" id="editmode_draw" name="editmode" value="draw" checked /><label for="editmode_draw" title="Draw">&#9998</label>
+        <input type="radio" id="editmode_erase" name="editmode" value="erase" /><label for="editmode_erase" title="Erase">&#8999;</label>
         <select id="controllerselect">
             <option value="">- select controller -</option>
             <option value="7">Volume</option>
@@ -172,6 +188,10 @@ const templateHTML = (numrows) => `
             <option value="64">Sustain</option>
             <option value="91">Reverb</option>
         </select>
+        <div>
+            Beats<br />
+            <input id="beatlengthinput" type="number" value="4" min="3" max="32" />
+        </div>
         <select id="snapselect">
             <option value="">- snap -</option>
             <option value="4">1/1</option>
@@ -181,8 +201,10 @@ const templateHTML = (numrows) => `
             <option value="0.25">1/16</option>
             <option value="0.125">1/32</option>
         </select>
-        <input type="checkbox" id="keyboardeditingenabledcheckbox"><label for="keyboardeditingenabledcheckbox">&#9000;</label>
+        <input type="checkbox" id="keyboardeditingenabledcheckbox"><label for="keyboardeditingenabledcheckbox" title="Keyboard editing">&#9000;</label>
         <span id="titlespan"></span>
+        <span style="flex-grow: 1"></span>
+        <button id="clearcontentsbutton" onclick="clearContents()" title="Clear contents">&#128465;</button>
     </div>
     <div id="pianorollcontainer" tabindex="1">
         <div id="notenames"></div>
@@ -234,6 +256,8 @@ customElements.define('midi-pianoroll',
             this.gridcontainer = this.shadowRoot.getElementById('gridcontainer');
             this.pianorollcontainer = this.shadowRoot.getElementById('pianorollcontainer');
             this.grid = this.shadowRoot.getElementById('grid');
+            this.beatlengthinput = this.shadowRoot.querySelector('#beatlengthinput')
+
             this.grid.addEventListener('click', (e) => {
                 if (this.getEditMode() !== 'draw') {
                     return;
@@ -443,18 +467,11 @@ customElements.define('midi-pianoroll',
             };
             this.editcursor = editcursor;
 
-            this.addEventListener('mouseenter', () => {
+            this.pianorollcontainer.addEventListener('mouseenter', () => {
                 document.addEventListener('keydown', keyboardEditorListener);
-                this.pianorollcontainer.focus();
             });
-            this.addEventListener('mouseleave', () => {
+            this.pianorollcontainer.addEventListener('mouseleave', () => {
                 document.removeEventListener('keydown', keyboardEditorListener);
-                this.pianorollcontainer.blur();
-            });
-            this.addEventListener('show', () => {
-                // Scroll to middle
-                console.log('show')
-                this.pianorollcontainer.scrollTop = `${pianorollrowheight * 64}`;
             });
 
             // Controllers
@@ -491,6 +508,10 @@ customElements.define('midi-pianoroll',
                     .forEach(d => this.controllers.appendChild(d));
             });
 
+            this.beatlengthinput.addEventListener('input', (e) => {
+                const numcolumns = this.beatlengthinput.value * COLUMNS_PER_BEAT;
+                this.dataset.columns = numcolumns;                
+            }); 
             this.shadowRoot.querySelector('#snapselect').addEventListener('change', (e) => {
                 if (e.target.value) {
                     this.snap = parseFloat(e.target.value);
@@ -501,7 +522,9 @@ customElements.define('midi-pianoroll',
                     this.snap = null;
                     editcursor.style.display = 'none';
                 }
-            }
+            });
+            this.shadowRoot.querySelector('#clearcontentsbutton').addEventListener('click', () => 
+                this.clearAll()
             );
         }
 
@@ -514,6 +537,7 @@ customElements.define('midi-pianoroll',
                     // controllers
                     this.controllers.style.gridTemplateColumns = `repeat(${numcolumns}, ${pianorollcolumnwidth}px)`;
                     this.configureRuler(numcolumns);
+                    this.beatlengthinput.value = numcolumns / COLUMNS_PER_BEAT;
                     break;
                 case 'data-title':
                     this.shadowRoot.getElementById('titlespan').innerHTML = newValue;
@@ -535,6 +559,7 @@ customElements.define('midi-pianoroll',
                 ruler.appendChild(rulerElement);
             }
         }
+
         dispatchNoteOn(row) {
             this.dispatchEvent(
                 new CustomEvent('pianokey', {
@@ -585,6 +610,7 @@ customElements.define('midi-pianoroll',
             Array.from(this.shadowRoot.querySelectorAll('.note')).map(note => note.remove());
             this.allcontrollerdivs.forEach(controller => controller.remove());
             this.allcontrollerdivs = [];
+            this.dispatchChangeEvent();
         }
 
         getEditMode() {

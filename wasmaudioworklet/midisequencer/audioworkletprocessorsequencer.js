@@ -79,14 +79,13 @@ class MidiSequencer {
       this.sequence[this.sequenceIndex] && // sometimes this is undefined for yet unkown reasons
       this.sequence[this.sequenceIndex].time < currentTime) {
 
+      let loop = false;
       while (this.sequence[this.sequenceIndex].message[0] < 0 &&
           this.sequence[this.sequenceIndex].time <= currentTime) {
         switch (this.sequence[this.sequenceIndex].message[0]) {
           case SEQ_MSG_LOOP:
             // loop
-            this.sequenceIndex = 0;
-            this.currentFrame = 0;
-            currentTime = 0;
+            loop = true;
             break;
           case SEQ_MSG_START_RECORDING:
             this.recordingActive = true;
@@ -97,11 +96,21 @@ class MidiSequencer {
             this.sequenceIndex++;
             break;
         }
+        if (loop) {
+          break;
+        }
       }
+      if (loop) {
+        this.sequenceIndex = 0;
+        this.currentFrame = 0;
+        break;
+      }
+
       const message = this.sequence[this.sequenceIndex].message;
       this.midireceiver(message[0], message[1], message[2]);
       this.sequenceIndex++;
     }
+
     if (this.recordingActive && this.recorded[this.currentFrame]) {
       const recorded = this.recorded[this.currentFrame];
 

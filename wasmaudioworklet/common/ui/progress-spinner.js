@@ -9,7 +9,7 @@ const spinnerHtml = `<style type="text/css">
     justify-content: center;
     align-items: center;
     z-index: 100;
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: rgba(100, 100, 100, 0.5);
 }
 .loader {
     border: 16px solid #f3f3f3;

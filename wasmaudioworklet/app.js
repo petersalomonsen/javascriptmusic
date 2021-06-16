@@ -2,6 +2,7 @@ import { } from './audioworkletpolyfill.js';
 import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer } from './visualizer/80sgrid.js';
 import { initEditor } from './editorcontroller.js';
+import { toggleSpinner } from './common/ui/progress-spinner.js';
 
 let componentRoot;
 let appReadyPromises;
@@ -60,34 +61,6 @@ export function setInstrumentNames(instrumentNames) {
     instrSelect.selectedIndex = selectedIndex;
   }
   return instrSelectCount;
-}
-
-export function toggleSpinner(state) {
-  const spinner = componentRoot.querySelector('.spinner');
-  const exportbutton = componentRoot.querySelector('#exportbutton');
-
-  if (state === undefined) {
-    state = spinner.style.display === 'block' ? false : true;
-  }
-
-  if (state) {
-    spinner.style.display = 'block';
-    exportbutton.style.display = 'none';
-  } else {
-    spinner.style.display = 'none';
-    exportbutton.style.display = 'block';
-  }
-}
-
-export function setProgressbarValue(val) {
-  const progressbar = componentRoot.querySelector('#main-progress-bar');
-  if (val !== null) {
-    progressbar.style.display = 'block';
-    progressbar.querySelector('.progress-text').innerHTML = `${(val * 100).toFixed(0)}%`;
-    progressbar.querySelector('.progress-fill').style.width = `${(val * 100).toFixed(2)}%`;
-  } else {
-    progressbar.style.display = 'none';
-  }
 }
 
 export function enablePlayAndSaveButtons() {
