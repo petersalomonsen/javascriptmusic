@@ -15,7 +15,9 @@
             <div id="currentMixOwner"></div>
             <div style="flex-grow: 1"></div>
             <button id="logginbutton" style="display: none;" onclick="login()">Login</button>
-            <button style="padding: 5px" class="requireslogin" id="postmixbutton" title="Publish to NEAR">Publish</button>
+            
+            <span id="loggedinuserspan" class="requireslogin"></span>
+            <button id="logoutbutton" class="requireslogin" onclick="logout()">Logout</button>
             <button id="recordvideobutton" class="hiddenbutton">&#127909;</button>
         </div>        
         <div id="postingsarea">                        
@@ -29,7 +31,8 @@
                 <input id="tempoinput" type="number" value="120" min="20" max="300" /><label for="tempoinput">&nbsp;BPM</label>
                 <select id="midipartselect"></select>
                 <button id="addmidipartbutton">add</button>
-                <div style="flex-grow: 1;"></div>
+                <div style="flex-grow: 1;"></div>                
+                <button style="padding: 5px" class="requireslogin" id="postmixbutton" title="Publish to NEAR">Publish</button>
                 <button id="savebutton" onclick="saveToLocalStorage()" title="Save to local storage">&#128190;</button>
                 <button id="clearallbutton" onclick="clearAll()" title="Clear all">&#128465;</button>
             </div>
@@ -49,6 +52,6 @@
         </div>    
         <script src="https://cdn.jsdelivr.net/gh/nearprotocol/near-api-js/dist/near-api-js.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/bn.js"></script>
-        <script src="pianorolldemo.bundle.js" type="module"></script>
+        <script src="pianorolldemo.js" type="module"></script>
     </body>
 </html>

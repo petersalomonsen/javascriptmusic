@@ -44,3 +44,13 @@ jobs:
           cd wasmaudioworklet/synth1
           npm install
           npm run test:ci
+  bundle-pianorolldemo:
+    name: Bundle pianorolldemo
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v2
+        - name: Bundle pianorolldemo
+          run: |
+            cd wasmaudioworklet
+            npm install
+            npm run bundle-pianorolldemo

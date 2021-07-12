@@ -44,7 +44,10 @@ window.login = login;
 
 async function logout() {
     await walletConnection.signOut();
+    location.reload();
 }
+
+window.logout = logout;
 
 function convertNearToYocto(near) {
     const milliNear = near * 1000;
@@ -158,6 +161,9 @@ export async function initNear() {
     // Load in account data
     if (!walletConnection.getAccountId()) {
         console.log('no loggedin user');
+    } else {
+        document.getElementById('loggedinuserspan').innerHTML = walletConnection.getAccountId();
+        document.getElementById('logoutbutton').style.display = 'block';
     }
 }
 

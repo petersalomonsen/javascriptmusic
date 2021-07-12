@@ -6,6 +6,9 @@ import { attachSeek, formatTime } from '../../app.js';
 import { audioBufferToWav } from '../../common/audiobuffertowav.js';
 import { connectLevelAnalyser } from '../../analyser/levelanalysernode.js';
 import { modal } from '../../common/ui/modal.js';
+import { getAudioWorkletModuleUrl } from '../../common/audioworkletmodules.js';
+import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from './midisynthaudioworkletprocessor.js';
+import { AudioWorkletProcessorSequencerModule } from '../../midisequencer/audioworkletprocessorsequencer.js';
 
 export let audioworkletnode;
 
@@ -27,7 +30,7 @@ export async function updateSong(sequencedata, toggleSongPlay) {
 }
 
 async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
-    await context.audioWorklet.addModule('./synth1/audioworklet/midisynthaudioworkletprocessor.js');
+    await context.audioWorklet.addModule(getAudioWorkletModuleUrl(AssemblyScriptMidiSynthAudioWorkletProcessorModule));
     const awn = new AudioWorkletNode(context, 'asc-midisynth-audio-worklet-processor', {
         outputChannelCount: [2]
     });
@@ -83,7 +86,7 @@ export async function exportToWav(eventlist, wasm_synth_bytes) {
         duration * renderSampleRate,
         renderSampleRate);
 
-    await offlineCtx.audioWorklet.addModule('./midisequencer/audioworkletprocessorsequencer.js');
+    await offlineCtx.audioWorklet.addModule(getAudioWorkletModuleUrl(AudioWorkletProcessorSequencerModule));
     const audioworkletcontainer = await connectAudioWorklet(offlineCtx, wasm_synth_bytes, eventlist, true);
     const statfunc = await connectLevelAnalyser(audioworkletcontainer.audioworkletnode);
 
