@@ -18,6 +18,9 @@ jobs:
         echo $VERSION $NEWVERSION
         if [ "$VERSION" != "$NEWVERSION" ]
         then
+          npm install
+          echo "creating pianorolldemo bundle"
+          npm run bundle-pianorolldemo
           echo "publishing new version"
           npm publish
         fi

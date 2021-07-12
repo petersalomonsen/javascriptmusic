@@ -165,6 +165,7 @@ export function deserializeMusic(musicdata) {
         elm.classList.add('mixlistitem');
         const mixdata = mix.content;
         elm.onclick = async () => {
+            hidePublishButton();
             if (currentMixElement) {
                 currentMixElement.classList.remove('currentmix');
             }
@@ -239,7 +240,7 @@ export function deserializeMusic(musicdata) {
     }
 
     if (ownedmixes.length === 20) {
-        document.querySelector('#postmixbutton').style.display = 'none';
+        hidePublishButton();
     }
     document.getElementById('postmixbutton').addEventListener('click', async () => {
         if (await modalYesNo('Publish your track?', `
@@ -254,3 +255,13 @@ export function deserializeMusic(musicdata) {
         }
     });
 })();
+
+export function hidePublishButton() {
+    document.querySelector('#savebutton').style.display = 'none';
+    document.querySelector('#postmixbutton').style.display = 'none';
+}
+
+export function showPublishButton() {
+    document.querySelector('#postmixbutton').style.display = 'block';
+    document.querySelector('#savebutton').style.display = 'block';
+}

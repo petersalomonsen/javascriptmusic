@@ -4,6 +4,8 @@ import { visualizeNoteOn, clearVisualization } from './visualizer/80sgrid.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
 import { detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
+import { getAudioWorkletModuleUrl } from './common/audioworkletmodules.js';
+import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkletprocessorsequencer.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -30,7 +32,7 @@ export function initAudioWorkletNode(componentRoot) {
         let bytes;
 
         if (song.eventlist) {
-            await context.audioWorklet.addModule('./midisequencer/audioworkletprocessorsequencer.js');
+            await context.audioWorklet.addModule(getAudioWorkletModuleUrl(AudioWorkletProcessorSequencerModule));
 
             if (song.synthwasm || (!audioworkletnode && window.WASM_SYNTH_BYTES)) {
                 audioworkletnode = await createMidiSynthAudioWorklet(context,

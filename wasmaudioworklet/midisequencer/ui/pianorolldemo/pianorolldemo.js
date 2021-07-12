@@ -6,10 +6,12 @@ import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from '.
 import { extractNotes, convertToBeats } from '../../recording.js';
 import { startVideoRecording, stopVideoRecording } from '../../../screenrecorder/screenrecorder.js';
 import { getTokenContent, byteArrayToBase64 } from './nearclient.js';
-import { decodeAndDecrunch, serializeMusic, deserializeMusic, base64ToByteArray } from './nft.js';
+import { decodeAndDecrunch, serializeMusic, deserializeMusic, base64ToByteArray, showPublishButton } from './nft.js';
 import { exportToWav } from './exportwav.js';
-import { applyPolyfill, browserSupportsAudioWorklet } from '../../../audioworkletpolyfill.js';
 import { modal, modalYesNo } from '../../../common/ui/modal.js';
+import { getAudioWorkletModuleUrl } from '../../../common/audioworkletmodules.js';
+import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from '../../../synth1/audioworklet/midisynthaudioworkletprocessor.js';
+import { AudioWorkletProcessorSequencerModule } from '../../audioworkletprocessorsequencer.js';
 
 let audioWorkletNode;
 let audioCtx;
@@ -197,25 +199,14 @@ window.startAudio = async function() {
     audiobutton.classList.add('toggled');
     audiobutton.disabled = true;
 
-    if (browserSupportsAudioWorklet && !(await modalYesNo('Use AudioWorklet technology?', `
-        Music played here is synthesized in real time, and may be demanding on computing resources.
-        <br />
-        AudioWorklet provides the best experience if your browser / device support it well.
-        In some browsers audio playback may be more stable without it.
-    `))) {
-        audioCtx = new AudioContext({ sampleRate: 22050 });
-        audioCtx.resume();    
-        applyPolyfill(audioCtx);
-    } else {
-        audioCtx = new AudioContext({ sampleRate: 44100 });
-        audioCtx.resume();
-    }
+    audioCtx = new AudioContext({ sampleRate: 44100 });
+    audioCtx.resume();
 
     const encoded = await getTokenContent();
     wasm_synth_bytes = decodeAndDecrunch(encoded);
 
-    await audioCtx.audioWorklet.addModule('./audioworkletprocessor.js');
-
+    await audioCtx.audioWorklet.addModule(getAudioWorkletModuleUrl(AudioWorkletProcessorSequencerModule));
+    await audioCtx.audioWorklet.addModule(getAudioWorkletModuleUrl(AssemblyScriptMidiSynthAudioWorkletProcessorModule));
     audioWorkletNode = new AudioWorkletNode(audioCtx, 'asc-midisynth-audio-worklet-processor', {
         outputChannelCount: [2]
     });
@@ -301,8 +292,10 @@ export function clearAll() {
 window.clearAll = async () => {
     if (await modalYesNo('Really delete everything?','')) {
         clearAll();
+        showPublishButton();
     }
 };
+
 document.getElementById('tempoinput').addEventListener('change', (ev) => {
     bpm = parseInt(ev.target.value);
     updateSequence();

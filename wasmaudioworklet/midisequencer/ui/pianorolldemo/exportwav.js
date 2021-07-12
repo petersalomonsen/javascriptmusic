@@ -2,6 +2,9 @@ import { WorkerMessageHandler } from '../../../common/workermessagehandler.js';
 import { audioBufferToWav } from '../../../common/audiobuffertowav.js';
 import { toggleSpinner } from '../../../common/ui/progress-spinner.js';
 import { setProgressbarValue } from '../../../common/ui/progress-bar.js';
+import { getAudioWorkletModuleUrl } from '../../../common/audioworkletmodules.js';
+import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from '../../../synth1/audioworklet/midisynthaudioworkletprocessor.js';
+import { AudioWorkletProcessorSequencerModule } from '../../audioworkletprocessorsequencer.js';
 
 export async function exportToWav(eventlist, wasm_synth_bytes) {
     toggleSpinner(true);
@@ -11,8 +14,9 @@ export async function exportToWav(eventlist, wasm_synth_bytes) {
         duration * renderSampleRate,
         renderSampleRate);
 
-    await offlineCtx.audioWorklet.addModule('./audioworkletprocessor.js');
-    const audioWorkletNode = new AudioWorkletNode(offlineCtx, 'asc-midisynth-audio-worklet-processor', {
+        await offlineCtx.audioWorklet.addModule(getAudioWorkletModuleUrl(AudioWorkletProcessorSequencerModule));
+        await offlineCtx.audioWorklet.addModule(getAudioWorkletModuleUrl(AssemblyScriptMidiSynthAudioWorkletProcessorModule));
+        const audioWorkletNode = new AudioWorkletNode(offlineCtx, 'asc-midisynth-audio-worklet-processor', {
         outputChannelCount: [2]
     });
     audioWorkletNode.port.start();
