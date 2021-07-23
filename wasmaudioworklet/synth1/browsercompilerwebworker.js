@@ -177,6 +177,15 @@ onmessage = async function (msg) {
         // assume midi synth
         mix_source = 'mixes/midi.mix.ts';
         index_source = 'midi/midisynth.ts';
+
+        let midisynthsource = assemblyscriptsynthsources[index_source];
+        if (synthsource.indexOf('AudioPlayer') > -1) {
+            midisynthsource = midisynthsource.replace(/\n\/\/ (export.*allocateAudioBuffer[^\n]+)/, '\n$1');
+        } else {
+            midisynthsource = midisynthsource.replace(/\n(export.*allocateAudioBuffer[^\n]+)/, '\n// $1');
+        }
+        assemblyscriptsynthsources[index_source] = midisynthsource;
+        
     } else {
         mix_source = 'mixes/newyear.mix.ts';
         index_source = 'index.ts';

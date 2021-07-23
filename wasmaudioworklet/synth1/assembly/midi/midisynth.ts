@@ -1,8 +1,10 @@
 import { initializeMidiSynth, postprocess } from '../mixes/midi.mix';
-import { StereoSignal, Envelope, SineOscillator, notefreq, Freeverb } from '../mixes/globalimports';
+import { StereoSignal, Freeverb } from '../mixes/globalimports';
 import { midiLevelToGain } from '../synth/decibel';
 
 import { Pan } from '../synth/pan.class';
+import { DefaultInstrument } from './instruments/defaultinstrument';
+// export { allocateAudioBuffer } from './instruments/audioplayer';
 
 const MAX_ACTIVE_VOICES_SHIFT = 5; // up to 32 voices playing simultaneously
 const MAX_ACTIVE_VOICES = 1 << MAX_ACTIVE_VOICES_SHIFT;
@@ -334,29 +336,6 @@ export function fillSampleBuffer(): void {
     }
 }
 
-class DefaultInstrument extends MidiVoice {
-    osc: SineOscillator = new SineOscillator();
-    env: Envelope = new Envelope(0.01, 0.0, 1.0, 0.01);
-
-    noteon(note: u8, velocity: u8): void {
-        super.noteon(note, velocity);
-        this.osc.frequency = notefreq(note);
-        this.env.attack();
-    }
-
-    noteoff(): void {
-        this.env.release();
-    }
-
-    isDone(): boolean {
-        return this.env.isDone();
-    }
-
-    nextframe(): void {
-        const signal = this.osc.next() * this.env.next() * this.velocity / 256;
-        this.channel.signal.addMonoSignal(signal, 0.2, 0.5);
-    }
-}
 const defaultMidiChannel = new MidiChannel(1, (channel: MidiChannel) => new DefaultInstrument(channel));
 
 for (let ch = 0; ch < 16; ch++) {

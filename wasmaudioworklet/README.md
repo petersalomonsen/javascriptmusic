@@ -1,8 +1,6 @@
 WASM-music
 ==========
 
-**`WASM` should be pronounced like `AWESOME` starting with a `W`**
-
 Demonstrated at the [WebAssembly Summit 2020](https://webassembly-summit.org):
 
 https://youtu.be/C8j_ieOm4vE
@@ -19,7 +17,7 @@ A synth WebAssembly module is small, and the current examples typically less tha
 
 [AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet) is used for playing music on the web with low latency, and this is currently only supported for the Chrome web browser. I've written a [polyfill](audioworkletpolyfill.js) for being able to play in other browsers, but you don't get the low latency.
 
-Go to https://petersalomonsen.com for resources like articles and videos. Also there are examples to study in the [synth1/songs](synth1/songs) folder, and there are also my [gists](https://gist.github.com/petersalomonsen). You can easily load music from a gist by referencing to it in the URL, e.g.:
+Go to https://petersalomonsen.com for resources like articles, videos and examples. Also there are  my [gists](https://gist.github.com/petersalomonsen). You can easily load music from a gist by referencing to it in the URL, e.g.:
 
 https://petersalomonsen.com/webassemblymusic/livecodev2/?gist=a74d2d036b3ecaa01af4e0f6d03ae7c4
 
@@ -41,7 +39,7 @@ If you want to build the webassembly synth directly:
 
 **Run**:
 
-`node webserver.js`
+`npm run serve`
 
 Browse to http://localhost:5000
 
@@ -75,3 +73,5 @@ Create wav directly from Wasmer by piping to sox:
 `wasmer song.wasm | sox -S -t raw -b 32 -e float -r 44100 -c 2 - song.wav`
 
 or use the exported WASM binary from nodejs or the browser.
+
+**`WASM` should be pronounced like `AWESOME` starting with a `W`**

@@ -9,6 +9,11 @@ export class BandPass {
         this.update_frequencies(lowfreq, hifreq);
     }
 
+    clearBuffers(): void {
+        this.hpfilter.clearBuffers();
+        this.lpfilter.clearBuffers();
+    }
+
     update_frequencies(lowfreq: f32, hifreq: f32): void {
         this.lpfilter.update_coeffecients(FilterType.LowPass, SAMPLERATE, hifreq, Q_BUTTERWORTH);
         this.hpfilter.update_coeffecients(FilterType.HighPass, SAMPLERATE, lowfreq, Q_BUTTERWORTH);

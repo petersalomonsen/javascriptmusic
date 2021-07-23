@@ -52,9 +52,10 @@ customElements.define('progress-spinner', class Spinner extends HTMLElement {
 });
 
 export function toggleSpinner(state) {
-    if (state) {
+    const spinnerElement = document.getElementsByTagName('progress-spinner')[0];
+    if (state && !spinnerElement) {
         document.documentElement.appendChild(document.createElement('progress-spinner'));
-    } else {
-        document.getElementsByTagName('progress-spinner')[0].remove();
+    } else if (!state && spinnerElement) {
+        spinnerElement.remove();
     }
 }

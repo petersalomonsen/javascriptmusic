@@ -96,7 +96,7 @@ export async function buy(id = token_id, deposit = currentTokenPrice) {
         if (!walletConnection.getAccountId()) {
             login();
         }
-        const result = await walletConnection.account().functionCall(nearconfig.contractName, 'buy_token', { token_id: id }, undefined, deposit);
+        const result = await walletConnection.account().functionCall(nearconfig.contractName, 'buy_token', { token_id: id }, '100000000000000', deposit);
         console.log('succeeded buying', result);
     } catch (e) {
         alert(e.message);
