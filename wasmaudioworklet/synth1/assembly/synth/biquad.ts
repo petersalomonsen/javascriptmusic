@@ -1,4 +1,5 @@
-import { sin, cos, PI } from "../math/sin";
+import { SAMPLERATE } from "../environment";
+import { cos, PI, sin } from "../math/sin";
 
 // Taken from https://docs.rs/crate/biquad/0.2.0/source/src/
 
@@ -20,6 +21,36 @@ export class Coefficients {
     b0: f32;
     b1: f32;
     b2: f32;
+
+    phaseSamples: f32;
+    magnitude: f32;
+
+    calculatePhaseAndMagnitudeForFreq(freq: f32): void {
+        const w: f32 = 2 * Mathf.PI * freq / SAMPLERATE;
+      
+        const cos1: f32 = Mathf.cos(-1 * w);
+        const cos2: f32 = Mathf.cos(-2 * w);
+      
+        const sin1: f32 = Mathf.sin(-1 * w);
+        const sin2: f32 = Mathf.sin(-2 * w);
+      
+        const realZeros: f32 = this.b0 + this.b1 * cos1 + this.b2 * cos2;
+        const imagZeros: f32 = this.b1 * sin1 + this.b2 * sin2;
+      
+        const realPoles: f32 = 1 + this.a1 * cos1 + this.a2 * cos2;
+        const imagPoles: f32 = this.a1 * sin1 + this.a2 * sin2;
+      
+        const divider: f32 = realPoles * realPoles + imagPoles * imagPoles;
+      
+        const realHw: f32 = (realZeros * realPoles + imagZeros * imagPoles) / divider;
+        const imagHw: f32 = (imagZeros * realPoles - realZeros * imagPoles) / divider;
+      
+        this.magnitude = Mathf.sqrt(realHw * realHw + imagHw * imagHw);
+
+        const phase: f32 = Mathf.atan2(imagHw, realHw);
+      
+        this.phaseSamples = -(phase / (2*Mathf.PI)) * (SAMPLERATE / freq);
+    }
 }
 
 export class BiQuadFilter {
@@ -50,6 +81,15 @@ export class BiQuadFilter {
         this.y1 = out;
 
         return out;
+    }
+
+    clearBuffers(): void {
+        this.y1 = 0;
+        this.y2 = 0;
+        this.x1 = 0;
+        this.x2 = 0;
+        this.s1 = 0;
+        this.s2 = 0;            
     }
 
     /// Creates coefficients based on the biquad filter type, sampling and cutoff frequency, and Q
@@ -154,5 +194,17 @@ export class BiQuadFilter {
 
                 break;
         }
+    }
+}
+
+export class LoPassBiQuadFilter extends BiQuadFilter {
+    update(frequency: f32, Q: f32): void {
+        this.update_coeffecients(FilterType.LowPass, SAMPLERATE, frequency , Q);
+    }
+}
+
+export class HiPassBiQuadFilter extends BiQuadFilter {
+    update(frequency: f32, Q: f32): void {
+        this.update_coeffecients(FilterType.HighPass, SAMPLERATE, frequency , Q);
     }
 }

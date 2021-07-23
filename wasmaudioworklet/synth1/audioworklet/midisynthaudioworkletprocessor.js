@@ -18,6 +18,20 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           });
           this.wasmInstance = (await this.wasmInstancePromise).instance.exports;
           AudioWorkletGlobalScope.midisequencer.addMidiReceiver(this.wasmInstance.shortmessage);
+          if (msg.data.audio) {
+            const insertAudioInWasm = (buf) => {
+              const data = new Float32Array(buf);
+              const ptr = this.wasmInstance.allocateAudioBuffer(data.length);
+              const arr = new Float32Array(this.wasmInstance.memory.buffer,
+                ptr,
+                data.length);
+              arr.set(data);
+            };
+            msg.data.audio.forEach(audio => {
+              insertAudioInWasm(audio.leftbuffer);
+              insertAudioInWasm(audio.rightbuffer);
+            });            
+          }
           this.port.postMessage({ wasmloaded: true });
         }
 

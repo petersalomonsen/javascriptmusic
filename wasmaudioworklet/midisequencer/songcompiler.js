@@ -1,5 +1,5 @@
 import { resetTick, setBPM, nextTick, currentTime, waitForBeat } from './pattern.js';
-import { TrackerPattern, pitchbend, controlchange, createNoteFunctions } from './trackerpattern.js';
+import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunctionKeys } from './trackerpattern.js';
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from './sequenceconstants.js';
 
 let songmessages = [];
@@ -8,6 +8,7 @@ export let instrumentNames = [];
 export let recordingStartTimeMillis = 0;
 let muted = {};
 let solo = {};
+export let addedAudio = [];
 
 let trackerPatterns = [];
 
@@ -15,7 +16,7 @@ const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 const output = {
     sendMessage: (msg) => {
         const ch = msg[0] & 0x0f;
-        if (msg.length !==3 ||
+        if (msg.length !== 3 ||
             (!muted[ch] && !Object.keys(solo).length || solo[ch])
         ) {
             songmessages.push({
@@ -46,6 +47,7 @@ function stopRecording() {
     output.sendMessage([SEQ_MSG_STOP_RECORDING]);
 }
 
+const noteFunctions = createNoteFunctions();
 const songargs = {
     'output': output,
     'setBPM': setBPM,
@@ -54,9 +56,9 @@ const songargs = {
         const trackerPattern = new TrackerPattern({
             startTime: currentTime(),
             midievents: [],
-            sendMessage: function(msg) {
+            sendMessage: function (msg) {
                 this.midievents.push({
-                    time: currentTime()-this.startTime,
+                    time: currentTime() - this.startTime,
                     message: msg
                 });
                 output.sendMessage(msg);
@@ -74,9 +76,26 @@ const songargs = {
     'stopRecording': stopRecording,
     'mute': (channel) => muted[channel] = true,
     'solo': (channel) => solo[channel] = true,
-    'addInstrument': (instrument) => instrumentNames.push(instrument)
+    'addInstrument': (instrument) => instrumentNames.push(instrument),
+    'addAudio': async (url) => {
+        if (!addedAudio.find(audio => audio.url === url)) {
+            const audioObj = { url: url };
+
+            addedAudio.push(audioObj);
+
+            const buf = await fetch(url)
+                .then(response => response.arrayBuffer())
+                .then(buffer => new AudioContext().decodeAudioData(buffer));
+
+            audioObj.leftbuffer = buf.getChannelData(0).buffer;
+            audioObj.rightbuffer = buf.getChannelData(1).buffer;
+            console.log('loaded', url);
+        }
+    },
+    'note': (noteNumber, duration, velocity, offset) =>
+        noteFunctions[noteFunctionKeys[noteNumber]](duration, velocity, offset)
 };
-Object.assign(songargs, createNoteFunctions());
+Object.assign(songargs, noteFunctions);
 const songargkeys = Object.keys(songargs);
 
 export async function compileSong(songsource) {
@@ -145,15 +164,16 @@ export function convertEventListToByteArraySequence(eventlist) {
 
 export function createMultipatternSequence() {
     const outputPatterns = [];
-    for (let n = 0;n<trackerPatterns.length; n++) {
+    for (let n = 0; n < trackerPatterns.length; n++) {
         if (trackerPatterns[n]) {
             const pattern = trackerPatterns[n];
-            const outputPattern = { eventlist: convertEventListToByteArraySequence(pattern.output.midievents),
-                    startTimes: [pattern.output.startTime],
-                    channel: pattern.channel
-                };
-            trackerPatterns.forEach((p, ndx) => {                
-                if(ndx > n &&
+            const outputPattern = {
+                eventlist: convertEventListToByteArraySequence(pattern.output.midievents),
+                startTimes: [pattern.output.startTime],
+                channel: pattern.channel
+            };
+            trackerPatterns.forEach((p, ndx) => {
+                if (ndx > n &&
                     p &&
                     p.output.midievents.length === pattern.output.midievents.length &&
                     p.output.midievents.reduce((prevstate, midievent, midievtndx) =>
@@ -164,7 +184,7 @@ export function createMultipatternSequence() {
                     const noteCheckMap = {};
                     const p1 = p.output.midievents;
                     const p2 = pattern.output.midievents;
-                    for (let i=0; i<p1.length; i++) {
+                    for (let i = 0; i < p1.length; i++) {
                         const note1 = p1[i].message.join(',');
                         const note2 = p2[i].message.join(',');
 

@@ -1,11 +1,12 @@
 import { Pattern, currentBeat } from './pattern.js'
 
+export const noteFunctionKeys = new Array(128).fill(null).map((v, ndx) =>
+    (['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'])[ndx % 12] + '' + Math.floor(ndx / 12)
+);
+
 // Note functions - can be called with and without parameter (also without parantheses)
 export function createNoteFunctions() {
     const notefunctions = {};
-    const noteFunctionKeys = new Array(128).fill(null).map((v, ndx) =>
-        (['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'])[ndx % 12] + '' + Math.floor(ndx / 12)
-    );
 
     noteFunctionKeys.forEach((note, ndx) => notefunctions[note] = (duration, velocity, offset) => {
         const createNoteFunc = (notenumber, _velocity = velocity) => async (pattern, rowbeat) => {

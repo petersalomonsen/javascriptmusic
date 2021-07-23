@@ -1,5 +1,5 @@
 import { loadScript, loadCSS } from './common/scriptloader.js';
-import { compileSong as compileMidiSong, convertEventListToByteArraySequence, createMultipatternSequence, instrumentNames as midiInstrumentNames } from './midisequencer/songcompiler.js';
+import { addedAudio, compileSong as compileMidiSong, convertEventListToByteArraySequence, createMultipatternSequence, instrumentNames as midiInstrumentNames } from './midisequencer/songcompiler.js';
 import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
@@ -171,7 +171,8 @@ export async function initEditor(componentRoot) {
                             <h3>Select export</h3>
                             <p>
                                 <form>
-                                <label><input type="radio" name="exporttype" value="wav" checked="checked">WAV audio file</label><br />
+                                <label><input type="radio" name="exporttype" value="wav48k" checked="checked">WAV (48kHz samplerate)</label><br />
+                                <label><input type="radio" name="exporttype" value="wav">WAV (44.1kHz samplerate)</label><br />                                
                                 <label><input type="radio" name="exporttype" value="midilibmodule">WASM Library module</label><br />
                                 <label><input type="radio" name="exporttype" value="midimultipartmodule">WASM midi-multipart module</label><br />
                                 </form>
@@ -182,15 +183,16 @@ export async function initEditor(componentRoot) {
                             </button>
                         `);
 
-                        if (exportwasm === 'wav') {
+                        if (exportwasm === 'wav' || exportwasm === 'wav48k') {
                             toggleSpinner(true);
-                            const wasmBytes = systemSampleRate === 44100 ? window.WASM_SYNTH_BYTES : await compileWebAssemblySynth(
+                            const exportSampleRate = exportwasm === 'wav48k' ? 48000 : 44100;
+                            const wasmBytes = await compileWebAssemblySynth(
                                 synthsource + '\n',
                                 undefined,
-                                44100,
+                                exportSampleRate,
                                 false
                             );
-                            await exportToWav(eventlist, wasmBytes);
+                            await exportToWav(eventlist, wasmBytes, exportSampleRate);
                         } else if (exportwasm === 'midilibmodule') {
                             toggleSpinner(true);
                             await compileWebAssemblySynth(synthsource,
@@ -349,7 +351,8 @@ export async function initEditor(componentRoot) {
 
             if (song.synthwasm) {
                 audioworkletnode.port.postMessage({
-                    wasm: song.synthwasm
+                    wasm: song.synthwasm,
+                    audio: addedAudio
                 });
             }
 

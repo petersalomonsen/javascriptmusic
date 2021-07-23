@@ -9,6 +9,7 @@ import { modal } from '../../common/ui/modal.js';
 import { getAudioWorkletModuleUrl } from '../../common/audioworkletmodules.js';
 import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from './midisynthaudioworkletprocessor.js';
 import { AudioWorkletProcessorSequencerModule } from '../../midisequencer/audioworkletprocessorsequencer.js';
+import { addedAudio } from '../../midisequencer/songcompiler.js';
 
 export let audioworkletnode;
 
@@ -41,8 +42,10 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         samplerate: context.sampleRate,
         wasm: wasm_synth_bytes,
         sequencedata: sequencedata,
-        toggleSongPlay: toggleSongPlay
+        toggleSongPlay: toggleSongPlay,
+        audio: addedAudio
     }, (msg) => msg.wasmloaded);
+    
     if (!(context instanceof (OfflineAudioContext))) {
         setGetCurrentTimeFunction(getCurrentTime);
         attachSeek((time) => awn.port.postMessage({ seek: time }),
@@ -78,9 +81,8 @@ export async function getCurrentTime() {
     return currentTime;
 }
 
-export async function exportToWav(eventlist, wasm_synth_bytes) {
+export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate = 44100) {
     toggleSpinner(true);
-    const renderSampleRate = 44100;
     const duration = eventlist[eventlist.length - 1].time / 1000;
     const offlineCtx = new OfflineAudioContext(2,
         duration * renderSampleRate,

@@ -1,3 +1,5 @@
+import { AllPassFloat } from "./allpass";
+
 export class DelayLine {
     readonly bufferPointer: usize;
     index: usize = 0;
@@ -68,5 +70,38 @@ export class DelayLine {
         } else {
             this.index += 4;
         }
+    }
+}
+
+export class DelayLineFloat {
+    buffer: StaticArray<f32>;
+    frame: f64 = 0;
+  	numframes: f64 = 1;
+  	previous: f32;
+  	allpass: AllPassFloat = new AllPassFloat();
+  
+    constructor(private buffersizeframes: i32) {        
+        this.buffer = new StaticArray<f32>(buffersizeframes);
+    }
+
+    read(): f32 {        
+      const index = this.frame as i32 % this.buffer.length;
+      return this.allpass.process(this.buffer[index]);
+    }
+  	
+  	setNumFramesAndClear(numframes: f64): void {
+      this.numframes = Math.floor(numframes);
+      this.allpass.previousoutput = 0;
+      this.allpass.previousinput = 0;
+      this.allpass.setDelta ( (numframes - this.numframes) as f32 );
+      this.frame = 0;
+      for (let n = 0; n < numframes;n++) {	
+      	this.buffer[n] = 0;
+      }
+    }
+
+    write_and_advance(value: f32): void {
+      const index = ((this.frame++) + this.numframes) as i32 % this.buffer.length;
+      this.buffer[index] = value;
     }
 }
