@@ -1,7 +1,7 @@
 {
     "name": "wasm-music",
     "description": "Javascript/WebAssembly live coding environment for music and synthesis",
-    "version": "0.0.22",
+    "version": "0.0.23",
     "repository": {
         "url": "https://github.com/petersalomonsen/javascriptmusic"
     },
@@ -10,6 +10,10 @@
         "name": "Peter Salomonsen",
         "url": "https://petersalomonsen.com"
     },
+    "files": [
+        "*",
+        "midisequencer/ui/pianorolldemo/dist"
+    ],
     "type": "module",
     "scripts": {
         "test": "karma start --single-run --browsers ChromeHeadless_NoUserGestureRequired karma.conf.cjs",

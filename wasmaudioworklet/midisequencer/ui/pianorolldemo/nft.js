@@ -222,9 +222,6 @@ export function deserializeMusic(musicdata) {
         latest20element.appendChild(listitemcontainer);
     }
 
-
-    publicmixes.forEach(m => addMixToList(m));
-
     if (ownedmixes.length > 0) {
         const ownedMixesContent = (await Promise.all(ownedmixes.map(m => ({
             token_id: m[1].substr('nft:'.length),
@@ -238,6 +235,8 @@ export function deserializeMusic(musicdata) {
         }));
         ownedMixesContent.forEach(m => addMixToList(m));
     }
+
+    publicmixes.forEach(m => addMixToList(m));
 
     if (ownedmixes.length === 20) {
         hidePublishButton();
