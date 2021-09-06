@@ -9,10 +9,14 @@ export function AudioWorkletProcessorSequencerModule() {
       this.recorded = {};
     }
 
+    clearRecording() {
+      this.recorded = {};
+    }
+
     setSequenceData(sequencedata) {
       if (sequencedata.length > 0) {
         // clear recorded data
-        this.recorded = {};
+        this.clearRecording();
       }
       
       const startRecordingEntry = sequencedata.find(entry => entry.message.length === 1 && entry.message[0] === SEQ_MSG_START_RECORDING);

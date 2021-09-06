@@ -1,4 +1,4 @@
-const synthcompilerworker = new Worker('synth1/browsercompilerwebworker.js');
+const synthcompilerworker = new Worker(new URL('browsercompilerwebworker.js', import.meta.url));
 
 export async function compileWebAssemblySynth(synthsource, song, samplerate, exportmode, onlyReturnDownloadUrl = false) {
     synthcompilerworker.postMessage({

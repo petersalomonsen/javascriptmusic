@@ -10,7 +10,7 @@ import { toggleSpinner } from './common/ui/progress-spinner.js';
 import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener } from './wasmgit/wasmgitclient.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal } from './common/ui/modal.js';
-import { updateSong, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
 export let songsourceeditor;
@@ -350,10 +350,7 @@ export async function initEditor(componentRoot) {
             const song = await compileSong();
 
             if (song.synthwasm) {
-                audioworkletnode.port.postMessage({
-                    wasm: song.synthwasm,
-                    audio: addedAudio
-                });
+                await updateSynth(song.synthwasm,addedAudio);
             }
 
             if (song.eventlist) {

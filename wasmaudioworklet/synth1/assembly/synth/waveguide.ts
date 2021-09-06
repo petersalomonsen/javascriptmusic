@@ -166,7 +166,8 @@ export class AudioExciterWaveGuide {
             const filterphase: f32 = this.filterFeedback.coeffs.phaseSamples;
 
             this.filterFeedback.clearBuffers();
-
+            this.exciterFilter.clearBuffers();
+    
             this.feedbackFilterFreq = feedbackFilterFreq;
             this.delay.setNumFramesAndClear(
                 (SAMPLERATE /
@@ -174,6 +175,12 @@ export class AudioExciterWaveGuide {
                 ) - filterphase
             );
         }
+    }
+
+    reset(): void {
+        this.delay.reset();;
+        this.filterFeedback.clearBuffers();
+        this.exciterFilter.clearBuffers();
     }
 
     process(): f32 {

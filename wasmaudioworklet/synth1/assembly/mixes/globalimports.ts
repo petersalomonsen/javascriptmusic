@@ -50,6 +50,8 @@ export { AudioPlayer } from '../midi/instruments/audioplayer';
 export { MonoAudioPlayer } from '../midi/instruments/audioplayer';
 export { allocateAudioBuffer } from '../midi/instruments/audioplayer';
 export { DefaultInstrument } from '../midi/instruments/defaultinstrument';
+export { MAX_ACTIVE_VOICES_SHIFT } from '../midi/midisynth';
+export { MAX_ACTIVE_VOICES } from '../midi/midisynth';
 export { midichannels } from '../midi/midisynth';
 export { activeVoices } from '../midi/midisynth';
 export { numActiveVoices } from '../midi/midisynth';

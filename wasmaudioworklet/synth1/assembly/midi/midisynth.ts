@@ -6,8 +6,8 @@ import { Pan } from '../synth/pan.class';
 import { DefaultInstrument } from './instruments/defaultinstrument';
 // export { allocateAudioBuffer } from './instruments/audioplayer';
 
-const MAX_ACTIVE_VOICES_SHIFT = 5; // up to 32 voices playing simultaneously
-const MAX_ACTIVE_VOICES = 1 << MAX_ACTIVE_VOICES_SHIFT;
+export const MAX_ACTIVE_VOICES_SHIFT = 5; // up to 32 voices playing simultaneously
+export const MAX_ACTIVE_VOICES = 1 << MAX_ACTIVE_VOICES_SHIFT;
 
 export const midichannels = new StaticArray<MidiChannel>(16);
 export const activeVoices = new StaticArray<MidiVoice | null>(MAX_ACTIVE_VOICES);
@@ -35,8 +35,8 @@ export const outputline = new StereoSignal();
 export class MidiChannel {
     controllerValues: StaticArray<u8> = new StaticArray<u8>(128);
     voices: StaticArray<MidiVoice>;
-    sustainedVoices: StaticArray<MidiVoice | null> = new StaticArray<MidiVoice | null>(MAX_ACTIVE_VOICES);
-    sustainedVoicesIndex: i32 = 0;
+    sustainedVoices: StaticArray<MidiVoice | null> = new StaticArray<MidiVoice | null>(128);
+
     signal: StereoSignal = new StereoSignal();
     volume: f32 = midiLevelToGain(100);
     reverb: f32 = midiLevelToGain(7);
@@ -58,7 +58,7 @@ export class MidiChannel {
             case CONTROL_SUSTAIN:
                 // sustain
                 if (value < 64) {
-                    for (let n = 0; n < MAX_ACTIVE_VOICES; n++) {
+                    for (let n = 0; n < 128; n++) {
                         if (this.sustainedVoices[n] != null) {
                             (this.sustainedVoices[n] as MidiVoice).noteoff();
                             this.sustainedVoices[n] = null;
@@ -83,8 +83,7 @@ export class MidiChannel {
             const voice = this.voices[n];
             if (voice.note === note) {
                 if (this.controllerValues[CONTROL_SUSTAIN] >= 64) {
-                    this.sustainedVoices[this.sustainedVoicesIndex++] = voice;
-                    this.sustainedVoicesIndex &= ((1 << MAX_ACTIVE_VOICES_SHIFT) - 1);
+                    this.sustainedVoices[note] = voice;
                 } else {                    
                     voice.noteoff();
                 }
@@ -94,11 +93,7 @@ export class MidiChannel {
     }
 
     removeFromSustainedVoices(voice: MidiVoice): void {
-        for (let n = 0; n < this.sustainedVoices.length; n++) {
-            if (this.sustainedVoices[n] === voice) {
-                this.sustainedVoices[n] = null;
-            }
-        }
+        this.sustainedVoices[voice.note] = null;
     }
 
     activateVoice(note: u8, channelNo: u8): MidiVoice | null {
@@ -129,6 +124,7 @@ export class MidiChannel {
                 activeVoices[activeVoiceIndex] = availableVoice;
                 availableVoice.activeVoicesIndex = activeVoiceIndex;
                 numActiveVoices++;
+                availableVoice.activationCount = voiceActivationCount++;
                 return availableVoice;
             }
         }
@@ -174,7 +170,7 @@ export abstract class MidiVoice {
     note: u8;
     velocity: u8;
     activeVoicesIndex: i32 = -1;
-    activationCount: i32 = (voiceActivationCount++);
+    activationCount: i32;
     minnote: u8 = 0;
     maxnote: u8 = 127;
 

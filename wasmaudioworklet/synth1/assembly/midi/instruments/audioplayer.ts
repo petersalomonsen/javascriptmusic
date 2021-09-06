@@ -90,9 +90,10 @@ export class AudioPlayer extends MidiVoice {
 
 export class MonoAudioPlayer {
     position: i32 = 0;
+    audioBuffer: StaticArray<f32>;
 
-    constructor(private audioBufferNdx: i32) {
-
+    constructor(audioBufferNdx: i32) {
+        this.audioBuffer = audioBuffers[audioBufferNdx];
     }
 
     restart(): void {
@@ -100,7 +101,7 @@ export class MonoAudioPlayer {
     }
 
     nextframe(): f32 {
-        return audioBuffers[this.audioBufferNdx][this.position++ % audioBuffers[this.audioBufferNdx].length];
+        return this.audioBuffer[(this.position++) % this.audioBuffer.length];
     }
 }
 

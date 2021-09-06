@@ -89,15 +89,19 @@ export class DelayLineFloat {
       return this.allpass.process(this.buffer[index]);
     }
   	
+    reset(): void {
+        this.allpass.previousoutput = 0;
+        this.allpass.previousinput = 0;
+        for (let n = 0; n < this.numframes;n++) {	
+            this.buffer[n] = 0;
+        }
+        this.frame = 0;
+    }
+
   	setNumFramesAndClear(numframes: f64): void {
       this.numframes = Math.floor(numframes);
-      this.allpass.previousoutput = 0;
-      this.allpass.previousinput = 0;
       this.allpass.setDelta ( (numframes - this.numframes) as f32 );
-      this.frame = 0;
-      for (let n = 0; n < numframes;n++) {	
-      	this.buffer[n] = 0;
-      }
+      this.reset();
     }
 
     write_and_advance(value: f32): void {
