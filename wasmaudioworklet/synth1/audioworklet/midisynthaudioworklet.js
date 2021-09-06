@@ -30,6 +30,15 @@ export async function updateSong(sequencedata, toggleSongPlay) {
     visualizeSong(sequencedata);
 }
 
+export async function updateSynth(synthwasm, addedAudio) {
+    audioworkletnode.context.suspend();
+    await workerMessageHandler.callAndGetResult({
+        wasm: synthwasm,
+        audio: addedAudio
+    }, (msg) => msg.wasmloaded);
+    audioworkletnode.context.resume();
+}
+
 async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
     await context.audioWorklet.addModule(getAudioWorkletModuleUrl(AssemblyScriptMidiSynthAudioWorkletProcessorModule));
     const awn = new AudioWorkletNode(context, 'asc-midisynth-audio-worklet-processor', {
@@ -53,7 +62,7 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
             sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0);
     }
     awn.connect(context.destination);
-
+    context.resume();
     return { audioworkletnode: awn, workerMessageHandler: wmh };
 }
 

@@ -34,7 +34,7 @@ async function callAndWaitForWorker(message) {
 }
 
 export async function initWASMGitClient(gitrepo) {
-    worker = new Worker('./wasmgit/wasmgitworker.js');
+    worker = new Worker(new URL('wasmgitworker.js', import.meta.url));
     worker.onmessage = (msg) => {
         workerMessageListeners = workerMessageListeners.filter(listener => listener(msg) === true);
     }
@@ -104,6 +104,12 @@ export async function deletelocal() {
     `)) {
         location.reload();
     }
+}
+
+export async function pull() {
+    await callAndWaitForWorker({
+        command: 'pull'
+    });
 }
 
 export async function commitAndSyncRemote(commitmessage) {

@@ -41,6 +41,9 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         }
 
         if (msg.data.toggleSongPlay !== undefined) {
+          if (!this.playMidiSequence && msg.data.toggleSongPlay) {
+            AudioWorkletGlobalScope.midisequencer.clearRecording();
+          }
           this.playMidiSequence = msg.data.toggleSongPlay;
           if (msg.data.toggleSongPlay === false) {
             this.allNotesOff();

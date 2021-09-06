@@ -437,6 +437,11 @@ describe("midisynth", () => {
 
       fillSampleBuffer();
 
+      for (let n=1; n < 11; n++) {
+        const note: u8 = n as u8;        
+        expect<MidiVoice | null>(midichannels[0].sustainedVoices[n]).not.toBe(null);
+      }
+
       for (let n=0; n < numActiveVoices; n++) {
         expect<EnvelopeState>((activeVoices[n] as TestMidiInstrument).env.state)
                 .not.toBe(EnvelopeState.RELEASE, 'notes should not be in release');
@@ -444,11 +449,14 @@ describe("midisynth", () => {
 
       fillSampleBuffer();
       shortmessage(0x90, 10, 100); // reactivate note 10, and expect it not to be released
-      expect<i32>(midichannels[0].sustainedVoicesIndex).toBe(10);
-      expect<MidiVoice | null>(midichannels[0].sustainedVoices[0]).not.toBe(null);
+      expect<MidiVoice | null>(midichannels[0].sustainedVoices[10]).toBe(null);
+
       shortmessage(0xb0, 64, 0); // release all held by sustain
       expect<u8>(midichannels[0].controllerValues[64]).toBe(0);
-      expect<MidiVoice | null>(midichannels[0].sustainedVoices[0]).toBe(null);
+      for (let n=1; n < 11; n++) {
+        const note: u8 = n as u8;        
+        expect<MidiVoice | null>(midichannels[0].sustainedVoices[n]).toBe(null);
+      }
 
       expect<i32>(numActiveVoices).toBe(10, 'should be active voices');
       
@@ -472,7 +480,6 @@ describe("midisynth", () => {
       expect<EnvelopeState>((activeVoices[0] as TestMidiInstrument).env.state)
                 .toBe(EnvelopeState.SUSTAIN, 'one note should be in sustain');
       
-      const susIndex = midichannels[0].sustainedVoicesIndex;
       shortmessage(0xb0, 64, 127); // sustain control change
       shortmessage(0x90, 10, 0); // note 10 off, and expect it to be sustained
       fillSampleBuffer();
@@ -480,7 +487,6 @@ describe("midisynth", () => {
       expect<EnvelopeState>((activeVoices[0] as TestMidiInstrument).env.state)
                 .toBe(EnvelopeState.SUSTAIN, 'one note should be in sustain');
       
-      expect<i32>(midichannels[0].sustainedVoicesIndex).toBe(susIndex +1, 'sustainedVoices index should have been incremented by 1');
       shortmessage(0xb0, 64, 0); // release sustained
 
       while (numActiveVoices > 0) {
@@ -488,7 +494,6 @@ describe("midisynth", () => {
       }
       
       expect<i32>(numActiveVoices).toBe(0, 'all voices should be deactivated after release');
-
     });
     it("should handle midi volume control change", () => {
       midichannels[0] = new MidiChannel(1, (channel: MidiChannel) => new FlatSignalVoice(channel));

@@ -56,15 +56,15 @@ History and roadmap of the WebAssembly music project
 
 - More physical modeling synthesis ( https://youtu.be/QW97w8Ub5fU )
 - WebAssembly music stored on the NEAR protocol blockchain as Non-Fungible Token (NFT)
-  - https://youtu.be/hAvIm0F3scg
+- https://youtu.be/hAvIm0F3scg
+- NFT frontend with music player, music customizer (rearranging, looping and combining different parts), mixer, instrument player
+- User invitations/onboarding without a NEAR account (using NEAR implicit accounts)
 
 # Future ( 2021 - 2022 )
 
 - Make more and better music
-- User invitations/onboarding without a NEAR account (using NEAR implicit accounts)
 - More Wasm-git UIs
 - Web UI for playing WebAssembly music modules
-- NFT frontend with music player, music customizer (rearranging, looping and combining different parts), mixer, instrument player
 - Simplify synth programming with AssemblyScript
 - Improve clip detection and basic mastering tools
 - Physical modeling synth UI

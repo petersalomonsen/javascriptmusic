@@ -13,7 +13,7 @@ const synthsource = `<?xml version="1.0" encoding="UTF-8"?>`;
 const noteNumberToFreq = (notenumber) => 220 * Math.pow(2, (notenumber - 69)/12);
 
 describe("yoshimi", function() {
-    this.timeout(20000);
+    this.timeout(30000);
 
     let appElement;
     let analyser;

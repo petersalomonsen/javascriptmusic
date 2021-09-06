@@ -1,5 +1,4 @@
-
-import { showCamViewer } from './cameraviewer.js';
+import { isCameraActive } from './cameraviewer.js';
 
 let mediaRecorder;
 let captureStream;
@@ -21,7 +20,7 @@ export async function startVideoRecording(audioContext, audioNodeToRecord = null
             audioContext.createGain().connect(audioStreamDestination);
         }
 
-        if (sessionStorage.getItem('capturemic') === 'true') {
+        if (isCameraActive()) {
             const micstream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             const micsource = audioContext.createMediaStreamSource(new MediaStream(micstream.getAudioTracks()));
             const micgain = audioContext.createGain();

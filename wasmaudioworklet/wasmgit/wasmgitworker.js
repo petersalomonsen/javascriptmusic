@@ -149,7 +149,7 @@ onmessage = async (msg) => {
     lg.callMain(['merge', 'origin/master']);
     FS.syncfs(false, () => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ dircontents: FS.readdir('.') });
+      postMessage({ id: msg.data.id, dircontents: FS.readdir('.') });
     });
   } else if (msg.data.command === 'readfile') {
     try {
