@@ -47,14 +47,17 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
     awn.port.start();
 
     const wmh = new WorkerMessageHandler(awn.port);
+
+    toggleSpinner(true);
     await wmh.callAndGetResult({
         samplerate: context.sampleRate,
         wasm: wasm_synth_bytes,
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay,
-        audio: addedAudio
+        audio: await Promise.all(addedAudio)
     }, (msg) => msg.wasmloaded);
-    
+    toggleSpinner(false);
+
     if (!(context instanceof (OfflineAudioContext))) {
         setGetCurrentTimeFunction(getCurrentTime);
         attachSeek((time) => awn.port.postMessage({ seek: time }),
