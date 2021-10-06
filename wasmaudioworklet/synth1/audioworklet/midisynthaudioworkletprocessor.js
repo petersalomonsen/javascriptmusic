@@ -16,13 +16,14 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
               abort: () => console.log('webassembly synth abort, should not happen')
             }
           });
-          this.wasmInstance = (await this.wasmInstancePromise).instance.exports;
-          AudioWorkletGlobalScope.midisequencer.addMidiReceiver(this.wasmInstance.shortmessage);
+          
+          const wasmInstance = (await this.wasmInstancePromise).instance.exports;
+          AudioWorkletGlobalScope.midisequencer.addMidiReceiver(wasmInstance.shortmessage);
           if (msg.data.audio) {
             const insertAudioInWasm = (buf) => {
               const data = new Float32Array(buf);
-              const ptr = this.wasmInstance.allocateAudioBuffer(data.length);
-              const arr = new Float32Array(this.wasmInstance.memory.buffer,
+              const ptr = wasmInstance.allocateAudioBuffer(data.length);
+              const arr = new Float32Array(wasmInstance.memory.buffer,
                 ptr,
                 data.length);
               arr.set(data);
@@ -32,6 +33,7 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
               insertAudioInWasm(audio.rightbuffer);
             });            
           }
+          this.wasmInstance = wasmInstance;
           this.port.postMessage({ wasmloaded: true });
         }
 

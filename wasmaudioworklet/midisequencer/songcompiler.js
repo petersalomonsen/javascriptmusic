@@ -78,18 +78,22 @@ const songargs = {
     'solo': (channel) => solo[channel] = true,
     'addInstrument': (instrument) => instrumentNames.push(instrument),
     'addAudio': async (url) => {
-        if (!addedAudio.find(audio => audio.url === url)) {
-            const audioObj = { url: url };
+        if (!(await addedAudio.find(async audioPromise => (await audioPromise).url === url))) {
+            addedAudio.push(new Promise(async (resolve, reject) => {
+                const audioObj = { url: url };
+                try {
+                    const buf = await fetch(url)
+                        .then(response => response.arrayBuffer())
+                        .then(buffer => new AudioContext().decodeAudioData(buffer));
 
-            addedAudio.push(audioObj);
-
-            const buf = await fetch(url)
-                .then(response => response.arrayBuffer())
-                .then(buffer => new AudioContext().decodeAudioData(buffer));
-
-            audioObj.leftbuffer = buf.getChannelData(0).buffer;
-            audioObj.rightbuffer = buf.getChannelData(1).buffer;
-            console.log('loaded', url);
+                    audioObj.leftbuffer = buf.getChannelData(0).buffer;
+                    audioObj.rightbuffer = buf.getChannelData(1).buffer;
+                    console.log('loaded', url);
+                    resolve(audioObj);
+                } catch(e) {
+                    reject(e);
+                }
+            }));            
         }
     },
     'note': (noteNumber, duration, velocity, offset) =>
