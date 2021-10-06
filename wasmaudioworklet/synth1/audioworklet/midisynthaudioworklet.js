@@ -40,6 +40,9 @@ export async function updateSynth(synthwasm, addedAudio) {
 }
 
 async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
+    if (context.suspend) {
+        context.suspend();
+    }
     await context.audioWorklet.addModule(getAudioWorkletModuleUrl(AssemblyScriptMidiSynthAudioWorkletProcessorModule));
     const awn = new AudioWorkletNode(context, 'asc-midisynth-audio-worklet-processor', {
         outputChannelCount: [2]
