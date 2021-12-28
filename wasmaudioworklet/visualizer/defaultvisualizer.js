@@ -1,9 +1,10 @@
 "use strict";
 const fragmentShaderSource = `
 precision mediump float;
+uniform vec2 resolution;
 
 void main() {
-    gl_FragColor = vec4(gl_FragCoord.x * 0.01, gl_FragCoord.y * 0.01, 0.6, 1); // return redish-purple
+    gl_FragColor = vec4(gl_FragCoord.x / resolution.x, gl_FragCoord.y / resolution.y, 0.6, 1);
 }`;
 
 const vertexShaderSource = `
@@ -17,24 +18,30 @@ void main() {
 const targetNoteStates = new Array(128).fill(-1);
 let animationFrameRequest = null;
 let gl;
+let currentTimeSeconds;
+let useDefaultVisualizer = true;
 
-const positions = new Float32Array( 128 * 9);
-for(let note = 0; note < 128; note ++) {
-    const x = ((note * 2) / 128) - 1;
-    const ndx = note * 9;
-    positions[ndx] = x-0.1;
-    positions[ndx + 1] = -1;
-    positions[ndx + 2] = 1;
-    positions[ndx + 3] = x;      
-    positions[ndx + 4] = -1;
-    positions[ndx + 5] = 1;     
-    positions[ndx + 6] = x + 0.1;      
-    positions[ndx + 7] = -1;
-    positions[ndx + 8] = 1;       
+const positions = new Float32Array(128 * 9);
+export function clearPositions() {
+    for (let note = 0; note < 128; note++) {
+        const x = ((note * 2) / 128) - 1;
+        const ndx = note * 9;
+        positions[ndx] = x - 0.1;
+        positions[ndx + 1] = -1;
+        positions[ndx + 2] = 1;
+        positions[ndx + 3] = x;
+        positions[ndx + 4] = -1;
+        positions[ndx + 5] = 1;
+        positions[ndx + 6] = x + 0.1;
+        positions[ndx + 7] = -1;
+        positions[ndx + 8] = 1;
+    }
 }
+clearPositions();
 
-export async function initVisualizer(componentRoot) {    
+export async function initVisualizer(componentRoot) {
     const canvas = componentRoot.querySelector("#glCanvas");
+
     // Initialize the GL context
     gl = canvas.getContext("webgl");
 
@@ -42,14 +49,17 @@ export async function initVisualizer(componentRoot) {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     // Clear the color buffer with specified clear color
     gl.clear(gl.COLOR_BUFFER_BIT);
+    setupShaders();
+}
 
+function setupShaders() {
     function createShader(gl, type, source) {
         var shader = gl.createShader(type);
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
         var success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
         if (success) {
-        return shader;
+            return shader;
         }
 
         gl.deleteShader(shader);
@@ -62,7 +72,7 @@ export async function initVisualizer(componentRoot) {
         gl.linkProgram(program);
         var success = gl.getProgramParameter(program, gl.LINK_STATUS);
         if (success) {
-        return program;
+            return program;
         }
 
         gl.deleteProgram(program);
@@ -73,7 +83,10 @@ export async function initVisualizer(componentRoot) {
 
     const program = createProgram(gl, vertexShader, fragmentShader);
     // Tell it to use our program (pair of shaders)
-    gl.useProgram(program);    
+    gl.useProgram(program);
+    var resolutionUniformLocation = gl.getUniformLocation(program, "resolution");
+    gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+
     gl.enableVertexAttribArray(positionAttributeLocation);
 
     var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
@@ -98,23 +111,23 @@ export async function initVisualizer(componentRoot) {
 function repaint() {
     animationFrameRequest = null;
     let hasLevelsAboveZero = false;
-    for (let noteIndex=0; noteIndex<128; noteIndex++) {
+    for (let noteIndex = 0; noteIndex < 128; noteIndex++) {
         const levelIndex = noteIndex * 9 + 4;
-        
-        if(targetNoteStates[noteIndex]>positions[levelIndex]) {
+
+        if (useDefaultVisualizer && targetNoteStates[noteIndex] > positions[levelIndex]) {
             const inc = (targetNoteStates[noteIndex] - positions[levelIndex]) / 2;
             positions[levelIndex] += inc;
             hasLevelsAboveZero = true;
-        } else if(targetNoteStates[noteIndex]<positions[levelIndex] &&
+        } else if (
+            (!useDefaultVisualizer || targetNoteStates[noteIndex] < positions[levelIndex]) &&
             positions[levelIndex] > -1
-            ) {
+        ) {
             positions[levelIndex] -= 0.02;
             hasLevelsAboveZero = true;
         }
     }
-
-    if(hasLevelsAboveZero) {
     
+    if (hasLevelsAboveZero) {
         // Bind the position buffer.
         gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
         gl.drawArrays(gl.TRIANGLES, 0, positions.length / 3);
@@ -123,9 +136,9 @@ function repaint() {
 }
 
 export function visualizeNoteOn(note, velocity) {
-    targetNoteStates[note] = ((velocity / 127 ) * 2 - 1);
-    
-    if(!animationFrameRequest) {
+    targetNoteStates[note] = ((velocity / 127) * 2 - 1);
+
+    if (useDefaultVisualizer && !animationFrameRequest) {
         animationFrameRequest = requestAnimationFrame(repaint);
     }
 }
@@ -136,4 +149,26 @@ export function clearVisualization() {
 
 export function getTargetNoteStates() {
     return targetNoteStates;
+}
+
+export function setCurrentTimeSeconds(timeSeconds) {
+    currentTimeSeconds = timeSeconds;
+}
+
+export function getCurrentTimeSeconds() {
+    return currentTimeSeconds;
+}
+
+export function setUseDefaultVisualizer(state) {
+    useDefaultVisualizer = state;
+    if (state) {                
+        setupShaders();
+        if (!animationFrameRequest) {
+            animationFrameRequest = requestAnimationFrame(repaint);
+        }
+    }
+}
+
+export function getUseDefaultVisualizer() {
+    return useDefaultVisualizer;
 }

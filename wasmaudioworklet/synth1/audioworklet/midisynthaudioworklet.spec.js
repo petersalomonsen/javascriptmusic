@@ -1,7 +1,7 @@
 import { waitForAppReady } from '../../app.js';
 import { songsourceeditor, synthsourceeditor } from '../../editorcontroller.js';
 import { getCurrentTime, exportToWav } from './midisynthaudioworklet.js';
-import { getTargetNoteStates } from '../../visualizer/80sgrid.js';
+import { getTargetNoteStates } from '../../visualizer/defaultvisualizer.js';
 import { compileWebAssemblySynth } from '../browsersynthcompiler.js';
 import { compileSong as compileMidiSong } from '../../midisequencer/songcompiler.js';
 

@@ -5,7 +5,7 @@ let currentRepoRootDir;
 
 var Module = {
   locateFile: function (s) {
-    return 'https://unpkg.com/wasm-git@0.0.4/' + s;
+    return 'https://unpkg.com/wasm-git@0.0.7/' + s;
   },
   'print': function (text) {
     if (captureOutput) {
@@ -22,23 +22,19 @@ var Module = {
 };
 
 let accessToken = 'ANONYMOUS';
+let username = 'ANONYMOUS';
+let useremail = 'anonymous';
+let lastHttpRequest;
 XMLHttpRequest.prototype._open = XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
   this._open(method, url, async, user, password);
   this.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+  lastHttpRequest = this;
 }
-importScripts('https://unpkg.com/wasm-git@0.0.4/lg2.js');
-
-function writeGlobalConfig(username, useremail) {
-  FS.writeFile('/home/web_user/.gitconfig', '[user]\n' +
-    `name = ${username}\n` +
-    `email = ${useremail}`);
-
-}
+importScripts('https://unpkg.com/wasm-git@0.0.7/lg2.js');
 
 const lgPromise = new Promise(resolve => {
   Module.onRuntimeInitialized = () => {
-    writeGlobalConfig('Test user', 'test@example.com');
     resolve(Module);
   }
 });
@@ -58,18 +54,22 @@ onmessage = async (msg) => {
   }
 
   function repoHasChanges() {
-    callAndCaptureOutput(['status']);
-
+    try {
+      callAndCaptureOutput(['status']);
+    } catch(e) {
+      
+    }
     if (stdout.indexOf('Changes to be committed:') > -1) {
       return true;
     } else {
       return false;
-    }
+    }    
   }
 
   if (msg.data.accessToken) {
     accessToken = msg.data.accessToken;
-    writeGlobalConfig(msg.data.username, msg.data.useremail);
+    username = msg.data.username;
+    useremail = msg.data.useremail;
     postMessage({ accessTokenConfigured: true });
   } else if (msg.data.command === 'writefileandstage') {
     FS.writeFile(msg.data.filename, msg.data.contents);
@@ -78,20 +78,20 @@ onmessage = async (msg) => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
       postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
     });
-  } else if (msg.data.command === 'discardchanges') {
-    lg.callMain(['checkout', '--'].concat(msg.data.filenames));
-    FS.syncfs(false, () => {
-      console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
-    });
+  } else if(msg.data.command === 'dir') {
+    postMessage({id: msg.data.id, dircontents: FS.readdir('.')});
   } else if (msg.data.command === 'repohaschanges') {
     postMessage({ repohaschanges: repoHasChanges() });
   } else if (msg.data.command === 'commitpullpush') {
     if (repoHasChanges()) {
+      callMain(['config','user.name',username]);
+      callMain(['config','user.email',useremail]);
+  
       lg.callMain(['commit', '-m', msg.data.commitmessage]);
     }
 
     let err = null;
+    lastHttpRequest = null;
     try {
       callAndCaptureOutput(['fetch', 'origin']);
       if (stdout.indexOf('Received 0/0 objects') === -1) {
@@ -99,11 +99,14 @@ onmessage = async (msg) => {
       }
       callAndCaptureOutput(['push']);
     } catch (e) {
-      err = e;
+      err = e.message;
+      if (lastHttpRequest) {
+        err += ` http status: ${lastHttpRequest.status}`;
+      }
     }
     FS.syncfs(false, () => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ id: msg.data.id, error: err ? err.message : undefined, dircontents: FS.readdir('.') });
+      postMessage({ id: msg.data.id, error: err ? err : undefined, dircontents: FS.readdir('.') });
     });
   } else if (msg.data.command === 'synclocal') {
     currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
@@ -139,9 +142,13 @@ onmessage = async (msg) => {
       postMessage({ dircontents: FS.readdir('.') });
     });
   } else if (msg.data.command === 'diff') {
-    callAndCaptureOutput(['status']);
-    if (stdout.indexOf('On branch Not currently on any branch') === -1) {
-      callAndCaptureOutput(['diff', 'master']);
+    try {
+      callAndCaptureOutput(['status']);
+      if (stdout.indexOf('On branch Not currently on any branch') === -1) {
+        callAndCaptureOutput(['diff', 'master']);
+      }
+    } catch(e) {
+
     }
     postMessage({ diff: stdout });
   } else if (msg.data.command === 'pull') {
@@ -149,7 +156,7 @@ onmessage = async (msg) => {
     lg.callMain(['merge', 'origin/master']);
     FS.syncfs(false, () => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ id: msg.data.id, dircontents: FS.readdir('.') });
+      postMessage({ id: msg.data.id, dircontents: FS.readdir('.'), lastHttpStatus: lastHttpRequest.status });
     });
   } else if (msg.data.command === 'readfile') {
     try {
@@ -164,6 +171,16 @@ onmessage = async (msg) => {
     callAndCaptureOutput(['log']);
     postMessage({ log: stdout });
   } else {
-    lg.callMain([msg.data.command]);
+    const args = msg.data.args || [];
+    try {
+      callAndCaptureOutput([msg.data.command, ...args]);
+      if (msg.data.id) {
+        postMessage({id: msg.data.id, result: stdout});
+      }
+    } catch(e) {
+      if (msg.data.id) {
+        postMessage({id: msg.data.id, error: stderr});
+      }
+    }
   }
 };

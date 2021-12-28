@@ -1,4 +1,4 @@
-import { visualizeNoteOn, clearVisualization } from './80sgrid.js';
+import { visualizeNoteOn, clearVisualization } from './defaultvisualizer.js';
 import { SEQ_MSG_LOOP } from '../midisequencer/sequenceconstants.js';
 let visualizeEventIndex = 0;
 

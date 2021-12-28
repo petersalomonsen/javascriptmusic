@@ -1,6 +1,6 @@
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
 import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
-import { visualizeNoteOn, clearVisualization } from './visualizer/80sgrid.js';
+import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer } from './visualizer/defaultvisualizer.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
 import { detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
@@ -149,6 +149,11 @@ export function initAudioWorkletNode(componentRoot) {
     };
 
     window.toggleVisualizer = (status) => {
+        if (status) {
+            setUseDefaultVisualizer(true);
+        } else {
+            setUseDefaultVisualizer(false);
+        }
         if (status && !window.getNoteStatusInterval) {
             window.getNoteStatusInterval = setInterval(() => {
                 if (audioworkletnode) {

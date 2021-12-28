@@ -1,7 +1,7 @@
 {
     "name": "wasm-music",
     "description": "Javascript/WebAssembly live coding environment for music and synthesis",
-    "version": "0.0.26",
+    "version": "0.0.27",
     "repository": {
         "url": "https://github.com/petersalomonsen/javascriptmusic"
     },
@@ -22,7 +22,7 @@
         "test-watch": "karma start --browsers Chrome_NoUserGestureRequired karma.conf.cjs",
         "bundle-pianorolldemo": "(cd midisequencer/ui/pianorolldemo && rm -Rf dist && rollup -c rollup-config.js)",
         "patch-version": "npm --no-git-tag-version version patch",
-        "serve": "http-server -p 5000 ."
+        "serve": "http-server -p 8080 ."
     },
     "devDependencies": {
         "@web/rollup-plugin-html": "^1.9.0",

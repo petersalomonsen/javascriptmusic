@@ -1,6 +1,6 @@
 import { waitForAppReady} from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
-import { getTargetNoteStates } from './visualizer/80sgrid.js';
+import { getTargetNoteStates } from './visualizer/defaultvisualizer.js';
 
 describe('audioworkletnode', async function() {
     this.timeout(20000);

@@ -4,6 +4,7 @@ import { compileSong as compileMidiSong } from '../midisequencer/songcompiler.js
 import { getAudioWorkletModuleUrl } from '../common/audioworkletmodules.js';
 import { AudioWorkletProcessorSequencerModule } from '../midisequencer/audioworkletprocessorsequencer.js';
 import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from '../synth1/audioworklet/midisynthaudioworkletprocessor.js';
+import { setupWebGL } from '../visualizer/fragmentshader.js';
 
 function showStatus(statusstring) {
     const statusspan = document.getElementById('statusspan');
@@ -11,7 +12,7 @@ function showStatus(statusstring) {
 }
 
 async function playMusic() {
-    document.getElementById('playMusicButton').disabled = true;
+    document.getElementById('playMusicButton').remove();
 
     const audioctx = new AudioContext();
     audioctx.resume();
@@ -41,6 +42,10 @@ async function playMusic() {
     
     const setnumberinput = document.getElementById('setnumberinput');
     let setNumber = setnumberinput.valueAsNumber;
+    if (setNumber<1 || isNaN(setNumber)) {
+        setNumber = 1;
+    }
+    console.log(setNumber);
 
     const compileAndPostSong = async () => {
         const songsource = storedsongcode.replace(/const setNumber = [0-9]+/,`const setNumber = ${setNumber}`);
@@ -50,6 +55,7 @@ async function playMusic() {
             toggleSongPlay: true
         });
     }
+    
     audioworkletnode.port.postMessage({
         samplerate: audioctx.sampleRate,
         wasm: wasmsynth
@@ -61,9 +67,14 @@ async function playMusic() {
 
     let previoustime = 0;
 
-    setnumberinput.onchange = async () => {
-        setNumber = setnumberinput.valueAsNumber;
-        await compileAndPostSong();
+    setnumberinput.oninput = async () => {        
+        if (setnumberinput.valueAsNumber > 0 && !isNaN(setnumberinput.valueAsNumber)) {
+            setNumber = setnumberinput.valueAsNumber;
+            await compileAndPostSong();
+            showStatus(`play song with set number ${setNumber}`);
+        } else {
+            showStatus(`invalid set number`);
+        }
     }
 
     audioworkletnode.port.onmessage = async (msg) => {
@@ -76,5 +87,16 @@ async function playMusic() {
         previoustime = t;
         audioworkletnode.port.postMessage({ currentTime: true });
     };
+    
+    if (gitrepoconfig.fragmentshader) {
+        const shadercode = await readfile(gitrepoconfig.fragmentshader);
+        let animatedSetNumber = setNumber;
+        await setupWebGL(shadercode, document.documentElement, () => {
+            animatedSetNumber += (setNumber - animatedSetNumber) / 2.0;
+            return (((animatedSetNumber * 60) % 86400 ) + previoustime / 1000.0);
+        });
+        showStatus(`set up shader\n${shadercode}`);
+    }
+    showStatus(`play song with set number ${setNumber}`);
 }
 window.playMusic = playMusic;

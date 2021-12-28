@@ -55,12 +55,17 @@
       <input type="checkbox" id="preseteditortogglecheckbox" onclick="toggleEditors('presetsui', this.checked)" />
       <span>presets</span>
     </label>
+    <label title="shader">
+      <input type="checkbox" id="shadereditortogglecheckbox" onclick="toggleEditors('shadereditor', this.checked)" />
+      <span>shader</span>
+    </label>
     <span style="flex-grow: 1"></span>
   </div>
   <div class="editors">
     <div id="editor" class="editor"></div>
     <div id="assemblyscripteditor" class="editor"></div>
     <div id="presetsui" class="editor" style="display: none"><span>Not available</span></div>
+    <div id="shadereditor" class="editor"></div>
   </div>
 
   <div id="errormessages">

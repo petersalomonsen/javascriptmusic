@@ -3,25 +3,57 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
+            body {
+                background-color: black;
+                color: white;
+            }
+            .content {
+                margin: auto;
+                max-width: 1024px;
+                text-align: center;
+                font-size: 32px;
+            }
+            input {
+                font-size: 32px;
+                text-align: right;
+                background-color: rgba(255,255,255,0.5);
+            }
+            button {
+                font-size: 32px;
+            }
             #statusspan {
-                background-color: #555;
+                background-color: rgba(0,0,0,0);
                 color: #fff;
                 padding: 5px;
                 font-size: 10px;
             }
+            #glCanvas {
+                position: fixed;
+                top: 0;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: -1000;
+                height: 100%;
+                width: 100%;
+            }
         </style>
     </head>
     <body>
+        <div class="content">
+            
 
-        <button id="playMusicButton" onclick="playMusic()">Play music</button>
+            <p>
+                choose set<br />
+                <input type="number" id="setnumberinput" value="1">
+            </p>
 
-        <p>
-            set number <input type="number" id="setnumberinput" value="1">
-        </p>
+            <button id="playMusicButton" onclick="playMusic()">Play music</button>
+            <pre id="statusspan">
 
-        <pre id="statusspan">
-
-        </pre>
+            </pre>
+        </div>
+        <canvas id="glCanvas"></canvas>
     </body>
     <script type="module" src="infinitemusic.js?v=2"></script>
 </html>

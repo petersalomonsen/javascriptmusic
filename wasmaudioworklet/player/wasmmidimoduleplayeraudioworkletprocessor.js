@@ -9,7 +9,11 @@ class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor
 
         this.port.onmessage = async (msg) => {
             if (msg.data.wasm) {
-                this.wasmInstancePromise = WebAssembly.instantiate(msg.data.wasm, {});
+                this.wasmInstancePromise = WebAssembly.instantiate(msg.data.wasm, {
+                    environment: {
+                        SAMPLERATE: sampleRate || AudioWorkletGlobalScope.sampleRate
+                    }
+                });
                 this.wasmInstance = (await this.wasmInstancePromise).instance.exports;
 
                 this.port.postMessage({ wasmloaded: true });
