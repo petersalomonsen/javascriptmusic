@@ -75,9 +75,7 @@ describe('wasm-git client', async function () {
     });
     it('should discard changes', async () => {
         assert.isTrue(await repoHasChanges());
-        await discardchanges(['ababab2.txt', 'blabla2.txt']);
-        assert.isTrue(await repoHasChanges());
-        await discardchanges(['blabla.txt']);
+        await discardchanges();
         assert.isFalse(await repoHasChanges());
     });
     it('should be possible to create an empty repo', async () => {
@@ -100,11 +98,38 @@ describe('wasm-git client', async function () {
             await commitAndSyncRemote('first commit');
             assert.isTrue(false, 'should not be able to push to remote');
         } catch (e) {
-            assert(e.error.indexOf('early EOF') > -1, 'should receieve early EOF from remote');
+            assert(e.error.indexOf('http status: 404') > -1, 'should receieve http status 404 from remote. received: '+e.error);
             assert.isFalse(await repoHasChanges());
 
             const logResult = await log();
             assert.match(logResult, /.*first commit.*/);
+            assert.match(logResult, /.*\nAuthor: ANONYMOUS <anonymous>.*/);
+        }
+    });
+    it('should use near account to sign commits', async () => {
+        const keypair = nearApi.utils.KeyPairEd25519.fromRandom();
+        const accessobj = {
+            accountId: 'wasmmusictestaccount.near',
+            allKeys: [
+                keypair.toString()
+            ]
+        };
+        localStorage.setItem('undefined_wallet_auth_key', JSON.stringify(accessobj));
+        walletConnection._keyStore.setKey(undefined, accessobj.accountId, keypair);
+        const config = await initWASMGitClient('test');
+        const contentToWrite = 'blabla';
+        const filename = 'blabla.txt';
+        await writefileandstage(filename, contentToWrite);
+        
+        try {
+            await commitAndSyncRemote('commit with test account');
+            assert.isTrue(false, 'should not be able to push to remote');
+        } catch (e) {
+            assert(e.error.indexOf('http status: 403') > -1, 'should receieve http status 403 from remote. received: '+e.error);
+            assert.isFalse(await repoHasChanges());
+
+            const latestCommitFromLog = (await log()).split(/\ncommit [0-9a-f]+/)[0];
+            assert.match(latestCommitFromLog, /.*\nAuthor: wasmmusictestaccount\.near <wasmmusictestaccount\.near>.*/);
         }
     });
 });

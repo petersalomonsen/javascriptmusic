@@ -31,6 +31,9 @@ export function AudioWorkletProcessorSequencerModule() {
         // Replace while playing
         const currentTime = (this.currentFrame / sampleRate) * 1000;
         this.sequenceIndex = sequencedata.findIndex(evt => evt.time >= currentTime);
+        if (this.sequenceIndex == -1) {
+          this.sequenceIndex = 0;
+        }
       } else {
         // Start playing from the beginning
         this.sequenceIndex = 0;

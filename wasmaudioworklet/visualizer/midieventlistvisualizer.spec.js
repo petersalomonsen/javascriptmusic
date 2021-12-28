@@ -1,4 +1,4 @@
-import { initVisualizer, getTargetNoteStates } from './80sgrid.js';
+import { initVisualizer, getTargetNoteStates } from './defaultvisualizer.js';
 import { visualizeSong, setGetCurrentTimeFunction, isVisualizationLoopActive } from './midieventlistvisualizer.js';
 import { SEQ_MSG_LOOP } from '../midisequencer/sequenceconstants.js';
 

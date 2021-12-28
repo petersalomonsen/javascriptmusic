@@ -13,8 +13,11 @@ import { modal } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
+import { setupWebGL } from './visualizer/fragmentshader.js';
+
 export let songsourceeditor;
 export let synthsourceeditor;
+export let shadersourceeditor;
 let gitrepoconfig = null;
 
 async function loadCodeMirror() {
@@ -58,6 +61,14 @@ export async function initEditor(componentRoot) {
         gutters: ["CodeMirror-lint-markers"]
     });
 
+    shadersourceeditor = CodeMirror(componentRoot.getElementById("shadereditor"), {
+        value: "",
+        mode: "text/glsl",
+        theme: "monokai",
+        lineNumbers: true,
+        gutters: ["CodeMirror-lint-markers"]
+    });
+
     window.toggleEditors = (editorid, checked) => {
         componentRoot.getElementById(editorid).style.display = checked ? 'block' : 'none';
         const editors = componentRoot.querySelectorAll('.editor');
@@ -76,7 +87,8 @@ export async function initEditor(componentRoot) {
     toggleEditors('presetsui', false);
 
     let synthsource;
-
+    let shadersource;
+    
     componentRoot.getElementById('savesongbutton').onclick = () => compileAndPostSong();
 
     window.compileSong = async function (exportwasm = false) {
@@ -84,15 +96,26 @@ export async function initEditor(componentRoot) {
         const errorMessagesContentElement = errorMessagesElement.querySelector('span');
         errorMessagesContentElement.innerText = '';
         errorMessagesElement.style.display = 'none';
+        
+        const displayError = (err) => {
+            errorMessagesContentElement.innerText = err;
+            errorMessagesElement.style.display = 'block';
+        };
 
         const songsource = songsourceeditor.doc.getValue();
         const newsynthsource = synthsourceeditor.doc.getValue();
+        const newshadersource = shadersourceeditor.doc.getValue();
 
         if (gitrepoconfig) {
             let synthsourceupdated = false;
+            let shadersourceupdated = false;
             if (synthsource !== newsynthsource) {
                 synthsource = newsynthsource;
                 synthsourceupdated = true;
+            }
+            if (shadersource !== newshadersource) {
+                shadersource = newshadersource;
+                shadersourceupdated = true;
             }
             // Store to git repository
             (async () => {
@@ -106,12 +129,23 @@ export async function initEditor(componentRoot) {
                         gitrepoconfig.synthfilename = 'synth.ts';
                     }
                 }
-
+                if (!gitrepoconfig.fragmentshader) {
+                    gitrepoconfig.fragmentshader = 'shader.glsl';   
+                }
                 // Save asynchronously so that we don't have to wait for it
                 await writefileandstage(gitrepoconfig.songfilename, songsource);
 
                 if (synthsourceupdated) {
                     writefileandstage(gitrepoconfig.synthfilename, synthsource);
+                }
+
+                if (shadersourceupdated) {
+                    writefileandstage(gitrepoconfig.fragmentshader, shadersource);
+                    try {
+                        setupWebGL(shadersource, componentRoot);
+                    } catch (e) {
+                        displayError(`Error compiling shader:\n\n${e.message}`);
+                    }
                 }
             })();
         } else {
@@ -219,8 +253,7 @@ export async function initEditor(componentRoot) {
                 }
             } catch (e) {
                 toggleSpinner(false);
-                errorMessagesContentElement.innerText = e;
-                errorMessagesElement.style.display = 'block';
+                displayError(e);
                 throw e;
             }
         }
@@ -377,6 +410,7 @@ export async function initEditor(componentRoot) {
 
     let storedsongcode = localStorage.getItem('storedsongcode');
     let storedsynthcode = localStorage.getItem('storedsynthcode');
+    let storedshadercode = null;
 
     const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
     const gitrepoparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gitrepo=') === 0) : null;
@@ -404,11 +438,16 @@ export async function initEditor(componentRoot) {
         addRemoteSyncListener(async () => {
             storedsongcode = await readfile(gitrepoconfig.songfilename);
             storedsynthcode = await readfile(gitrepoconfig.synthfilename);
+            
             songsourceeditor.doc.setValue(storedsongcode);
             synthsourceeditor.doc.setValue(storedsynthcode);
+
+            storedshadercode = await readfile(gitrepoconfig.fragmentshader);
+            shadersourceeditor.doc.setValue(storedshadercode);
         });
         storedsongcode = await readfile(gitrepoconfig.songfilename);
         storedsynthcode = await readfile(gitrepoconfig.synthfilename);
+        storedshadercode = await readfile(gitrepoconfig.fragmentshader);
     }
 
     if (storedsongcode) {
@@ -421,6 +460,12 @@ export async function initEditor(componentRoot) {
         synthsourceeditor.doc.setValue(storedsynthcode);
     } else {
         synthsourceeditor.doc.setValue(await fetch('synth1/assembly/mixes/empty.mix.ts').then(r => r.text()));
+    }
+    if (storedshadercode) {
+        shadersourceeditor.doc.setValue(storedshadercode);
+        componentRoot.querySelector('#shadereditortogglecheckbox').checked = true;
+    } else {
+        toggleEditors('shadereditor', false);
     }
     CodeMirror.commands.save = compileAndPostSong;
 

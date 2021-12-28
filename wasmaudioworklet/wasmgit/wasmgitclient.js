@@ -1,4 +1,4 @@
-import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout, login } from './nearacl.js';
+import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
 
 import { modal } from '../common/ui/modal.js';
@@ -16,9 +16,7 @@ let workerMessageListeners = [];
 
 let msgId = 1;
 async function callAndWaitForWorker(message) {
-    message.id = msgId++;
-    worker.postMessage(message);
-    return await new Promise((resolve, reject) =>
+    return await new Promise((resolve, reject) => {
         workerMessageListeners.push((msg) => {
             if (msg.data.id === message.id) {
                 if (msg.data.error) {
@@ -29,8 +27,10 @@ async function callAndWaitForWorker(message) {
             } else {
                 return true;
             }
-        })
-    );
+        });
+        message.id = msgId++;
+        worker.postMessage(message);
+    });
 }
 
 export async function initWASMGitClient(gitrepo) {
@@ -61,11 +61,20 @@ export async function initWASMGitClient(gitrepo) {
     } else {
         console.log('Repository is already local');
     }
-
+    console.log ('dircontents', dircontents);
+    if (dircontents.indexOf('.git') === -1) {
+        console.log('no repository');
+        await callAndWaitForWorker({ command: 'init', args: ['.'] });
+        await callAndWaitForWorker({
+            command: 'remote',
+            args: ['add', 'origin', gitrepourl]
+        });
+    }
     const config = {
         songfilename: dircontents.find(filename => filename.endsWith('.js')),
         synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
-            dircontents.find(filename => filename.endsWith('.xml'))
+            dircontents.find(filename => filename.endsWith('.xml')),
+        fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
     };
     return config;
 }
@@ -153,17 +162,10 @@ export async function log() {
     return result;
 }
 
-export async function discardchanges(filenames) {
-    worker.postMessage({
-        command: 'discardchanges',
-        filenames: filenames
-    });
-    const result = await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges !== undefined ? resolve(msg.data) : true)
-    );
-    updateCommitAndSyncButtonState(result.repoHasChanges);
-    remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(result.dircontents));
-    return result;
+export async function discardchanges() {
+    await callAndWaitForWorker({ command: 'reset', args: ['--hard', 'HEAD'] });
+    updateCommitAndSyncButtonState(await repoHasChanges());
+    remoteSyncListeners.forEach(async remoteSyncListener => remoteSyncListener(await callAndWaitForWorker({ command: 'dir' })));
 }
 
 export function updateCommitAndSyncButtonState(changes) {
@@ -250,9 +252,8 @@ customElements.define('wasmgit-ui',
             };
 
             discardChangesButton = this.shadowRoot.getElementById('discardChangesButton');
-            discardChangesButton.onclick = async () => {
-                discardchanges(['song.js', 'synth.ts']);
-            };
+            discardChangesButton.onclick = () => discardchanges();
+
             deleteLocalButton = this.shadowRoot.getElementById('deleteLocalButton');
             deleteLocalButton.onclick = async () => {
                 if (await modal(`<h3>Are you sure?</h3>

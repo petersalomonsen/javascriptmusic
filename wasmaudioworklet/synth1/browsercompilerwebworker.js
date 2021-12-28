@@ -4,9 +4,9 @@
 
 self.require = (name) => self[name];
 
-importScripts('https://cdn.jsdelivr.net/npm/binaryen@101.0.0-nightly.20210904/index.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.19.16/dist/assemblyscript.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.19.16/dist/asc.js');
+importScripts('https://cdn.jsdelivr.net/npm/binaryen@102.0.0-nightly.20211028/index.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.19.22/dist/assemblyscript.js');
+importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.19.22/dist/asc.js');
 
 let mix_source = 'mixes/newyear.mix.ts';
 let index_source = 'index.ts';

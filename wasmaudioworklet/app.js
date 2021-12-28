@@ -1,6 +1,6 @@
 import { } from './audioworkletpolyfill.js';
 import { initAudioWorkletNode } from './audioworkletnode.js';
-import { initVisualizer } from './visualizer/80sgrid.js';
+import { initVisualizer, setCurrentTimeSeconds as setVisualizerCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { initEditor } from './editorcontroller.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 
@@ -92,6 +92,7 @@ export function attachSeek(seekFunc, getCurrentTimeFunc, max) {
       const currentTime = await getCurrentTimeFunc();
       componentRoot.querySelector("#timeindicator").value = Math.round(currentTime);
       componentRoot.querySelector("#timespan").innerHTML = formatTime(currentTime);
+      setVisualizerCurrentTimeSeconds(currentTime / 1000);
 
       if (seekAttached) {
         updateTimeIndicatorLoop();

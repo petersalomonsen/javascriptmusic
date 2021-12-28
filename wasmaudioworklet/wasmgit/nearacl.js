@@ -12,7 +12,7 @@ const nearconfig_testnet = {
     }
 };
 
-const nearconfig = {
+export const nearconfig = {
     nodeUrl: 'https://rpc.mainnet.near.org',
     walletUrl: 'https://wallet.near.org',
     helperUrl: 'https://helper.mainnet.near.org',
@@ -40,15 +40,14 @@ export async function logout() {
 }
 
 async function loadAccountData() {
-    let currentUser = {
-        accountId: walletConnection.getAccountId()
+    const currentUser = {
+        accountId: (await walletConnection.account()).accountId
     }
 
     const tokenMessage = btoa(JSON.stringify({ accountId: currentUser.accountId, iat: new Date().getTime() }));
     const signature = await walletConnection.account()
         .connection.signer
-        .signMessage(new TextEncoder().encode(tokenMessage), currentUser.accountId
-        );
+        .signMessage(new TextEncoder().encode(tokenMessage), currentUser.accountId, nearconfig.networkId);
 
     authdata = {
         accessToken: tokenMessage + '.' + btoa(String.fromCharCode(...signature.signature)),
@@ -65,10 +64,10 @@ export async function initNear() {
     const walletConnection = new nearApi.WalletConnection(near);
     window.walletConnection = walletConnection;
 
-    console.log(walletConnection);
-
     // Load in account data
-    if (walletConnection.getAccountId()) {
+    const accountId = (await walletConnection.account()).accountId;
+    if (accountId) {
+        console.log('logged in as', accountId);
         await loadAccountData();
     } else {
         console.log('no loggedin user');
