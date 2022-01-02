@@ -14,7 +14,8 @@ module.exports = function (config) {
       { pattern: '**/*.js', included: false, type: 'module' },
       { pattern: 'synth1/assembly/**/*.ts', included: false },
       { pattern: '**/*.json', included: false },
-      { pattern: '**/*.html', included: false }
+      { pattern: '**/*.html', included: false },
+      { pattern: '**/*.wasm', included: false }
     ],
 
     // list of files / patterns to exclude
