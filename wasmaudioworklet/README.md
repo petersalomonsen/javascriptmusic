@@ -74,4 +74,14 @@ Create wav directly from Wasmer by piping to sox:
 
 or use the exported WASM binary from nodejs or the browser.
 
+# Exporting Shader videos
+
+You can export video without sound from the web app. To mux it with the audio try using FFMPEG with this command:
+
+`ffmpeg -i video.mp4 -i exportedsong.wav -c:v copy -c:a aac -b:a 256k output.mp4`
+
+# Final words
+
 **`WASM` should be pronounced like `AWESOME` starting with a `W`**
+
+https://www.youtube.com/watch?v=C8j_ieOm4vE&t=1650s

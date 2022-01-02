@@ -13,7 +13,10 @@ import { modal } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
-import { setupWebGL } from './visualizer/fragmentshader.js';
+import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
+import { triggerDownload } from './common/filedownload.js';
+import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
+import { isWebCodecsSupported } from './visualizer/mp4.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
@@ -88,15 +91,15 @@ export async function initEditor(componentRoot) {
 
     let synthsource;
     let shadersource;
-    
+
     componentRoot.getElementById('savesongbutton').onclick = () => compileAndPostSong();
 
-    window.compileSong = async function (exportwasm = false) {
+    window.compileSong = async function (exportProject = false) {
         const errorMessagesElement = componentRoot.querySelector('#errormessages');
         const errorMessagesContentElement = errorMessagesElement.querySelector('span');
         errorMessagesContentElement.innerText = '';
         errorMessagesElement.style.display = 'none';
-        
+
         const displayError = (err) => {
             errorMessagesContentElement.innerText = err;
             errorMessagesElement.style.display = 'block';
@@ -106,17 +109,18 @@ export async function initEditor(componentRoot) {
         const newsynthsource = synthsourceeditor.doc.getValue();
         const newshadersource = shadersourceeditor.doc.getValue();
 
+        let synthsourceupdated = false;
+        let shadersourceupdated = false;
+        if (synthsource !== newsynthsource) {
+            synthsource = newsynthsource;
+            synthsourceupdated = true;
+        }
+        if (shadersource !== newshadersource) {
+            shadersource = newshadersource;
+            shadersourceupdated = true;
+        }
+
         if (gitrepoconfig) {
-            let synthsourceupdated = false;
-            let shadersourceupdated = false;
-            if (synthsource !== newsynthsource) {
-                synthsource = newsynthsource;
-                synthsourceupdated = true;
-            }
-            if (shadersource !== newshadersource) {
-                shadersource = newshadersource;
-                shadersourceupdated = true;
-            }
             // Store to git repository
             (async () => {
                 if (!gitrepoconfig.songfilename) {
@@ -130,31 +134,32 @@ export async function initEditor(componentRoot) {
                     }
                 }
                 if (!gitrepoconfig.fragmentshader) {
-                    gitrepoconfig.fragmentshader = 'shader.glsl';   
+                    gitrepoconfig.fragmentshader = 'shader.glsl';
                 }
                 // Save asynchronously so that we don't have to wait for it
-                await writefileandstage(gitrepoconfig.songfilename, songsource);
-
+                writefileandstage(gitrepoconfig.songfilename, songsource);
                 if (synthsourceupdated) {
                     writefileandstage(gitrepoconfig.synthfilename, synthsource);
                 }
-
                 if (shadersourceupdated) {
                     writefileandstage(gitrepoconfig.fragmentshader, shadersource);
-                    try {
-                        setupWebGL(shadersource, componentRoot);
-                    } catch (e) {
-                        displayError(`Error compiling shader:\n\n${e.message}`);
-                    }
                 }
             })();
         } else {
             // Store to localstorage
             localStorage.setItem('storedsongcode', songsource);
 
-            if (newsynthsource !== synthsource) {
+            if (synthsourceupdated) {
                 synthsource = newsynthsource;
                 localStorage.setItem('storedsynthcode', synthsource);
+            }
+        }
+
+        if (shadersourceupdated) {
+            try {
+                setupWebGL(shadersource, componentRoot.querySelector("#glCanvas"));
+            } catch (e) {
+                displayError(`Error compiling shader:\n\n${e.message}`);
             }
         }
 
@@ -183,7 +188,7 @@ export async function initEditor(componentRoot) {
                 if (midiInstrumentNames.length > 0) {
                     setInstrumentNames(midiInstrumentNames);
                 }
-                if (synthSourceIsXML && exportwasm) {
+                if (synthSourceIsXML && exportProject) {
                     await exportWAMAudio(eventlist, synthsource);
                 }
 
@@ -199,16 +204,18 @@ export async function initEditor(componentRoot) {
                         window.WASM_SYNTH_BYTES = synthwasm;
                         webassemblySynthUpdated = true;
                     }
-                    if (exportwasm) {
+                    if (exportProject) {
                         toggleSpinner(false);
-                        exportwasm = await modal(`
+                        exportProject = await modal(`
                             <h3>Select export</h3>
                             <p>
                                 <form>
-                                <label><input type="radio" name="exporttype" value="wav48k" checked="checked">WAV (48kHz samplerate)</label><br />
-                                <label><input type="radio" name="exporttype" value="wav">WAV (44.1kHz samplerate)</label><br />                                
-                                <label><input type="radio" name="exporttype" value="midilibmodule">WASM Library module</label><br />
-                                <label><input type="radio" name="exporttype" value="midimultipartmodule">WASM midi-multipart module</label><br />
+                                    <label><input type="radio" name="exporttype" value="wav48k" checked="checked">WAV (48kHz samplerate)</label><br />
+                                    <label><input type="radio" name="exporttype" value="wav">WAV (44.1kHz samplerate)</label><br />                                
+                                    <label><input type="radio" name="exporttype" value="midilibmodule">WASM Library module</label><br />
+                                    <label><input type="radio" name="exporttype" value="midimultipartmodule">WASM midi-multipart module</label><br />
+                                    <label><input type="radio" name="exporttype" value="pngsources">source code as PNG image</label><br />
+                                    ${isWebCodecsSupported() ? `<label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />` : ''}
                                 </form>
                             </p>
                             <button onclick="getRootNode().result(null)">Cancel</button>
@@ -217,9 +224,9 @@ export async function initEditor(componentRoot) {
                             </button>
                         `);
 
-                        if (exportwasm === 'wav' || exportwasm === 'wav48k') {
-                            toggleSpinner(true);
-                            const exportSampleRate = exportwasm === 'wav48k' ? 48000 : 44100;
+                        toggleSpinner(true);
+                        if (exportProject === 'wav' || exportProject === 'wav48k') {
+                            const exportSampleRate = exportProject === 'wav48k' ? 48000 : 44100;
                             const wasmBytes = await compileWebAssemblySynth(
                                 synthsource + '\n',
                                 undefined,
@@ -227,21 +234,28 @@ export async function initEditor(componentRoot) {
                                 false
                             );
                             await exportToWav(eventlist, wasmBytes, exportSampleRate);
-                        } else if (exportwasm === 'midilibmodule') {
-                            toggleSpinner(true);
+                        } else if (exportProject === 'midilibmodule') {
                             await compileWebAssemblySynth(synthsource,
                                 { eventlist: convertEventListToByteArraySequence(eventlist) },
                                 44100,
-                                exportwasm
+                                exportProject
                             );
-                        } else if (exportwasm === 'midimultipartmodule') {
-                            toggleSpinner(true);
+                        } else if (exportProject === 'midimultipartmodule') {
                             const multipartsequence = createMultipatternSequence();
                             await compileWebAssemblySynth(synthsource,
                                 multipartsequence,
                                 44100,
-                                exportwasm
+                                exportProject
                             );
+                        } else if (exportProject === 'pngsources') {
+                            const sourcesbytes = Buffer.from(JSON.stringify({
+                                song: songsource,
+                                synth: synthsource,
+                                shader: shadersource
+                            }));
+                            triggerDownload(encodeBufferAsPNG(sourcesbytes), 'wasmstuff.png');
+                        } else if (exportProject === 'video') {
+                            await exportVideo(shadersource, eventlist);
                         }
                     }
                     toggleSpinner(false);
@@ -286,9 +300,9 @@ export async function initEditor(componentRoot) {
                 // if not a precompiled wasm file available in WASM_SYNTH_LOCATION              
                 toggleSpinner(true);
 
-                if (exportwasm) {
+                if (exportProject) {
                     toggleSpinner(false);
-                    exportwasm = await modal(`
+                    exportProject = await modal(`
                         <h3>Select WASM module type to export</h3>
                         <p>
                             <form>
@@ -305,10 +319,10 @@ export async function initEditor(componentRoot) {
                 }
 
                 const synthwasm = await compileWebAssemblySynth(synthsource,
-                    exportwasm && songmode === 'WASM' ? song : undefined,
+                    exportProject && songmode === 'WASM' ? song : undefined,
                     songmode === 'protracker' ? 55856 :
                         new AudioContext().sampleRate,
-                    exportwasm
+                    exportProject
                 );
                 if (synthwasm) {
                     window.WASM_SYNTH_BYTES = synthwasm;
@@ -336,7 +350,7 @@ export async function initEditor(componentRoot) {
             songworker.postMessage({ WASM_SYNTH_BYTES: WASM_SYNTH_BYTES });
 
             const song = await modreciever;
-            if (exportwasm) {
+            if (exportProject) {
                 const linkElement = document.createElement('a');
                 linkElement.href = URL.createObjectURL(new Blob([song.modbytes]), 'application/octet-stream');
                 linkElement.download = `${song.name.replace(/[^A-Za-z0-9]+/g, '_').toLowerCase()}.mod`;
@@ -383,7 +397,7 @@ export async function initEditor(componentRoot) {
             const song = await compileSong();
 
             if (song.synthwasm) {
-                await updateSynth(song.synthwasm,addedAudio);
+                await updateSynth(song.synthwasm, addedAudio);
             }
 
             if (song.eventlist) {
@@ -414,6 +428,7 @@ export async function initEditor(componentRoot) {
 
     const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
     const gitrepoparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gitrepo=') === 0) : null;
+    const pngurlparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('pngurl=') === 0) : null;
 
     if (gistparam) {
         const gistid = gistparam.split('=')[1];
@@ -438,7 +453,7 @@ export async function initEditor(componentRoot) {
         addRemoteSyncListener(async () => {
             storedsongcode = await readfile(gitrepoconfig.songfilename);
             storedsynthcode = await readfile(gitrepoconfig.synthfilename);
-            
+
             songsourceeditor.doc.setValue(storedsongcode);
             synthsourceeditor.doc.setValue(storedsynthcode);
 
@@ -448,6 +463,12 @@ export async function initEditor(componentRoot) {
         storedsongcode = await readfile(gitrepoconfig.songfilename);
         storedsynthcode = await readfile(gitrepoconfig.synthfilename);
         storedshadercode = await readfile(gitrepoconfig.fragmentshader);
+    } else if (pngurlparam) {
+        const pngurl = pngurlparam.split('=')[1];
+        const obj = JSON.parse(new TextDecoder().decode(await decodeBufferFromPNG(pngurl)));
+        storedsongcode = obj.song;
+        storedsynthcode = obj.synth;
+        storedshadercode = obj.shader;
     }
 
     if (storedsongcode) {
