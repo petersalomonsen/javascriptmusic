@@ -191,41 +191,47 @@ onmessage = async function (msg) {
         index_source = 'index.ts';
     }
 
-    if (msg.data.song) {
-        assemblyscriptsynthsources[mix_source] = synthsource;
-        assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = 44100;`
-        createWebAssemblySongData(msg.data.song, msg.data.exportmode);
-        const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
-            {
-                "runtime": "stub",
-                "optimizeLevel": 3,
-                "shrinkLevel": 3,
-                // "noAssert": "",
-                "use": "abort="
-            },
-            wasi_main_src);
+    try {
+        if (msg.data.song) {
+            // Fully optimize if including song
+            assemblyscriptsynthsources[mix_source] = synthsource;
+            assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = 44100;`
+            console.log(msg.data.song, msg.data.exportmode);
+            createWebAssemblySongData(msg.data.song, msg.data.exportmode);
+            const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
+                {
+                    "runtime": "stub",
+                    "optimizeLevel": 3,
+                    "shrinkLevel": 3,
+                    // "noAssert": "",
+                    "use": "abort="
+                },
+                wasi_main_src);
 
-        postMessage({
-            error: stderr.toString(),
-            downloadWASMurl: binary ? URL.createObjectURL(new Blob([binary], { type: "octet/stream" })) : null
-        });
-    }
+            postMessage({
+                error: stderr.toString(),
+                binary: binary
+            }, binary ? [binary.buffer] : []);
+        } else if (assemblyscriptsynthsources[mix_source] !== synthsource) {
+            assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = ${samplerate};`
 
-    if (assemblyscriptsynthsources[mix_source] !== synthsource) {
-        assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = ${samplerate};`
+            assemblyscriptsynthsources[mix_source] = synthsource;
+            const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
+                { "runtime": "stub", "optimizeLevel": 0, "shrinkLevel": 0 },
+                index_source);
 
-        assemblyscriptsynthsources[mix_source] = synthsource;
-        const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
-            { "runtime": "stub", "optimizeLevel": 0, "shrinkLevel": 0 },
-            index_source);
-
-        postMessage({
-            error: stderr.toString(),
-            binary: binary
-        });
-    } else {
-        postMessage({
-            nochanges: true
+            postMessage({
+                error: stderr.toString(),
+                binary: binary
+            }, binary ? [binary.buffer] : []);
+        } else {
+            postMessage({
+                nochanges: true
+            });
+        }
+    } catch(err) {
+        this.postMessage({
+            error: err.message
         });
     }
 }
