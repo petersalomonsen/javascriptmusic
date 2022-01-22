@@ -206,14 +206,19 @@ export async function initEditor(componentRoot) {
                     }
                     if (exportProject) {
                         toggleSpinner(false);
+                        const EXPORT_MODE_MIDISYNTH_WASM_LIB = 'midilibmodule';
+                        const EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB = 'midimultipartmodule';
+                        const EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG = 'midimultipartmodulepng';
+
                         exportProject = await modal(`
                             <h3>Select export</h3>
                             <p>
                                 <form>
                                     <label><input type="radio" name="exporttype" value="wav48k" checked="checked">WAV (48kHz samplerate)</label><br />
                                     <label><input type="radio" name="exporttype" value="wav">WAV (44.1kHz samplerate)</label><br />                                
-                                    <label><input type="radio" name="exporttype" value="midilibmodule">WASM Library module</label><br />
-                                    <label><input type="radio" name="exporttype" value="midimultipartmodule">WASM midi-multipart module</label><br />
+                                    <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_WASM_LIB}">WASM Library module</label><br />
+                                    <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB}">WASM midi-multipart module</label><br />
+                                    <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG}">PNG compressed WASM midi-multipart module</label><br />
                                     <label><input type="radio" name="exporttype" value="pngsources">source code as PNG image</label><br />
                                     ${isWebCodecsSupported() ? `<label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />` : ''}
                                 </form>
@@ -234,19 +239,31 @@ export async function initEditor(componentRoot) {
                                 false
                             );
                             await exportToWav(eventlist, wasmBytes, exportSampleRate);
-                        } else if (exportProject === 'midilibmodule') {
+                        } else if (exportProject === EXPORT_MODE_MIDISYNTH_WASM_LIB) {
                             await compileWebAssemblySynth(synthsource,
                                 { eventlist: convertEventListToByteArraySequence(eventlist) },
                                 44100,
-                                exportProject
+                                exportProject,
+                                true
                             );
-                        } else if (exportProject === 'midimultipartmodule') {
+                        } else if (
+                                exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB ||
+                                exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG) {
                             const multipartsequence = createMultipatternSequence();
-                            await compileWebAssemblySynth(synthsource,
+                            const wasmbytes = await compileWebAssemblySynth(synthsource,
                                 multipartsequence,
                                 44100,
-                                exportProject
+                                EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB,
+                                exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB
                             );
+                            if (exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG) {
+                                const pngdataurl = encodeBufferAsPNG(wasmbytes);
+                                console.log(pngdataurl);
+                                console.log((await decodeBufferFromPNG(pngdataurl)).length, wasmbytes.length);
+                                triggerDownload(pngdataurl, 'song.wasm.png');
+                            } else {
+                                triggerDownload(URL.createObjectURL(new Blob([wasmbytes], { type: "octet/stream" })), 'song.wasm');
+                            }
                         } else if (exportProject === 'pngsources') {
                             const sourcesbytes = Buffer.from(JSON.stringify({
                                 song: songsource,
@@ -324,9 +341,14 @@ export async function initEditor(componentRoot) {
                         new AudioContext().sampleRate,
                     exportProject
                 );
+                                
                 if (synthwasm) {
-                    window.WASM_SYNTH_BYTES = synthwasm;
-                    webassemblySynthUpdated = true;
+                    if (exportProject) {
+                        triggerDownload(URL.createObjectURL(new Blob([synthwasm], {type: 'application/octet-stream'})), 'song.wasm');
+                    } else {
+                        window.WASM_SYNTH_BYTES = synthwasm;
+                        webassemblySynthUpdated = true;
+                    }
                 }
             }
         } catch (e) {
@@ -352,7 +374,7 @@ export async function initEditor(componentRoot) {
             const song = await modreciever;
             if (exportProject) {
                 const linkElement = document.createElement('a');
-                linkElement.href = URL.createObjectURL(new Blob([song.modbytes]), 'application/octet-stream');
+                linkElement.href = URL.createObjectURL(new Blob([song.modbytes], {type: 'application/octet-stream'}));
                 linkElement.download = `${song.name.replace(/[^A-Za-z0-9]+/g, '_').toLowerCase()}.mod`;
                 linkElement.click();
             }

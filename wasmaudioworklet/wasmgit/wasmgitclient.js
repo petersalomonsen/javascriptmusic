@@ -61,7 +61,7 @@ export async function initWASMGitClient(gitrepo) {
     } else {
         console.log('Repository is already local');
     }
-    console.log ('dircontents', dircontents);
+    console.log('dircontents', dircontents);
     if (dircontents.indexOf('.git') === -1) {
         console.log('no repository');
         await callAndWaitForWorker({ command: 'init', args: ['.'] });
@@ -70,13 +70,16 @@ export async function initWASMGitClient(gitrepo) {
             args: ['add', 'origin', gitrepourl]
         });
     }
-    const config = {
-        songfilename: dircontents.find(filename => filename.endsWith('.js')),
-        synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
-            dircontents.find(filename => filename.endsWith('.xml')),
-        fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
-    };
-    return config;
+    if (dircontents.indexOf('wasmmusic.config.json') > -1) {
+        return JSON.parse(await readfile('wasmmusic.config.json'));
+    } else {
+        return {
+            songfilename: dircontents.find(filename => filename.endsWith('.js')),
+            synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
+                dircontents.find(filename => filename.endsWith('.xml')),
+            fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
+        };
+    }
 }
 
 export function addRemoteSyncListener(remoteSyncListener) {

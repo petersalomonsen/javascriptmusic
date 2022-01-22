@@ -38,10 +38,10 @@ describe('browsersynthcompiler', function () {
         await compileSong(songsource);
 
         const multiPatternSequence = createMultipatternSequence();
-        const wasmbytes = await (await fetch(await compileWebAssemblySynth(synthsource,
+        const wasmbytes = await compileWebAssemblySynth(synthsource,
                         multiPatternSequence, 44100,
-                        'midimultipartmodule', true))).arrayBuffer();
-        console.log('wasm file length is '+wasmbytes.byteLength);
+                        'midimultipartmodule');
+        console.log('wasm file length is '+wasmbytes);
         const SAMPLERATE = 44100;
         const wasminstance = (await WebAssembly.instantiate(wasmbytes, {
             environment: {

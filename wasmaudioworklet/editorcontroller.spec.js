@@ -138,6 +138,20 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         assert.isAbove(audioWorkletMessage.wasm.length, 1000);
     });
 
+    it('should show compile errors', async () => {
+        songsourceeditor.doc.setValue(songsource);
+        synthsourceeditor.doc.setValue(synthsource+"ocreatcompileerr(\nhello");
+        const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
+
+        appElement.querySelector('#savesongbutton').click();
+        const errorMessagesContentElement = appElement.querySelector('#errormessages span');
+        while (!errorMessagesContentElement.innerText) {
+            await new Promise((resolve) => setTimeout(() => resolve(), 1000));
+        }
+
+        expect(errorMessagesContentElement.innerText).contains(`ERROR TS1005: ')' expected`);
+        expect(errorMessagesContentElement.innerText).contains(`hello`);
+    });
     it('should compile and export song to wasm with WASI main entry point', async () => {
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);
@@ -155,7 +169,6 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
             document._createElement = document.createElement;
             document.createElement = function (elementName, options) {
                 const elm = this._createElement(elementName, options);
-
                 if (elementName === 'a') {
                     elm.click = () => resolve(elm.href);
                 } else if (elementName === 'common-modal') {
