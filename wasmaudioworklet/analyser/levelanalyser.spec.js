@@ -1,7 +1,8 @@
-import { connectLevelAnalyser } from './levelanalysernode.js';
+import { connectLevelAnalyser, skipClipsWithinCentiSeconds } from './levelanalysernode.js';
 
 describe('levelanalyser', async function () {
     this.timeout(10000);
+    let stats;
     it('should analyse levels of audio input', async () => {
         const renderSampleRate = 44100;
         const duration = 5;
@@ -23,9 +24,13 @@ describe('levelanalyser', async function () {
 
         await offlineCtx.startRendering();
 
-        const stats = await getStats();
+        stats = await getStats();
         console.log('found', stats.clips.length, 'clips. latest timestamp:',
             stats.clips[stats.clips.length - 1].currentTime, stats.clips[stats.clips.length - 1].time);
+
         assert(stats.clips.length > 0);
+    });
+    it('display clips at least 10 milliseconds apart', async () => {
+        expect(skipClipsWithinCentiSeconds(stats.clips).length).lessThan(stats.clips.length / 100);
     });
 });

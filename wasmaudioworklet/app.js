@@ -3,6 +3,7 @@ import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer, setCurrentTimeSeconds as setVisualizerCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { initEditor } from './editorcontroller.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
+import { timeToBeat } from './midisequencer/pattern.js';
 
 let componentRoot;
 let appReadyPromises;
@@ -91,7 +92,7 @@ export function attachSeek(seekFunc, getCurrentTimeFunc, max) {
     requestAnimationFrame(async () => {
       const currentTime = await getCurrentTimeFunc();
       componentRoot.querySelector("#timeindicator").value = Math.round(currentTime);
-      componentRoot.querySelector("#timespan").innerHTML = formatTime(currentTime);
+      componentRoot.querySelector("#timespan").innerHTML = `${formatTime(currentTime)} (${timeToBeat(currentTime).toFixed(2)})`;
       setVisualizerCurrentTimeSeconds(currentTime / 1000);
 
       if (seekAttached) {

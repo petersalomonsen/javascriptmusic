@@ -240,12 +240,13 @@ export async function initEditor(componentRoot) {
                             );
                             await exportToWav(eventlist, wasmBytes, exportSampleRate);
                         } else if (exportProject === EXPORT_MODE_MIDISYNTH_WASM_LIB) {
-                            await compileWebAssemblySynth(synthsource,
+                            const wasmbytes = await compileWebAssemblySynth(synthsource,
                                 { eventlist: convertEventListToByteArraySequence(eventlist) },
                                 44100,
                                 exportProject,
                                 true
                             );
+                            triggerDownload(URL.createObjectURL(new Blob([wasmbytes], { type: "octet/stream" })), 'song.wasm');
                         } else if (
                                 exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB ||
                                 exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG) {
