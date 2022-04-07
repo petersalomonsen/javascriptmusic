@@ -4,7 +4,7 @@ import { toggleSpinner } from '../../common/ui/progress-spinner.js';
 import { setProgressbarValue } from '../../common/ui/progress-bar.js';
 import { attachSeek, formatTime } from '../../app.js';
 import { audioBufferToWav } from '../../common/audiobuffertowav.js';
-import { connectLevelAnalyser } from '../../analyser/levelanalysernode.js';
+import { connectLevelAnalyser, skipClipsWithinCentiSeconds } from '../../analyser/levelanalysernode.js';
 import { modal } from '../../common/ui/modal.js';
 import { getAudioWorkletModuleUrl } from '../../common/audioworkletmodules.js';
 import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from './midisynthaudioworkletprocessor.js';
@@ -125,7 +125,8 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
     console.log('finished rendering');
     const exportstats = await statfunc();
 
-    if (exportstats.clips.length > 0) {
+    const clips = skipClipsWithinCentiSeconds(exportstats.clips);
+    if (clips.length > 0) {
         rendering = false;
 
         toggleSpinner(false);
@@ -133,10 +134,10 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
         const maxClipsToShow = 1000;
         if (!await modal(`
             <h3>Warning: clipping in exported audio</h3>
-            <p>${exportstats.clips.length} clips ${exportstats.clips.length > maxClipsToShow ? `, showing the first ${maxClipsToShow}` : ''}</p>
+            <p>${clips.length} clips ${clips.length > maxClipsToShow ? `, showing the first ${maxClipsToShow}` : ''}</p>
             <div style="height: 80px; overflow: auto">
                 <table>
-                    ${exportstats.clips.slice(0, 100).map(clip => `<tr>
+                    ${clips.slice(0, 100).map(clip => `<tr>
                         <td>${formatTime(clip.time * 1000)}</td>
                         <td>${clip.channel ? 'right' : 'left'}</td>
                     </tr>`).join('')

@@ -16,11 +16,8 @@ export let startTime = currentTime();
 export let bpm = 110;
 export const setBPM = (tempo) => bpm = tempo;
 
-export const currentBeat = () =>
-    ((currentTime() -
-        startTime) /
-        (60 * 1000)
-    ) * bpm;
+export const timeToBeat = (time) => (time / (60 * 1000)) * bpm;
+export const currentBeat = () => timeToBeat(currentTime() - startTime);
 
 let pendingEvents = [];
 
