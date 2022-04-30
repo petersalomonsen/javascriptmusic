@@ -24,7 +24,7 @@ export async function startVideoRecording(audioContext, audioNodeToRecord = null
             const micstream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             const micsource = audioContext.createMediaStreamSource(new MediaStream(micstream.getAudioTracks()));
             const micgain = audioContext.createGain();
-            micgain.gain.value = 0.3;
+            micgain.gain.value = 0.6;
             micsource.connect(micgain);
             micgain.connect(audioStreamDestination);
         }

@@ -1,0 +1,1 @@
+export { compileSong, generateSong, songargkeys } from './songcompiler.js';

@@ -26,11 +26,13 @@ jobs:
           npm test
   firefoxxvfb:
     name: Firefox xvfb
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Firefox xvfb
         run: |
+          sudo apt-get install pulseaudio
+          pulseaudio -D --exit-idle-time=-1
           cd wasmaudioworklet
           npm install
           xvfb-run npm run test-firefox

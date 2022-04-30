@@ -1,6 +1,7 @@
 import { setProgressbarValue } from '../common/ui/progress-bar.js';
 import { getCurrentTimeSeconds, setUseDefaultVisualizer, getUseDefaultVisualizer, getTargetNoteStates, clearPositions } from './defaultvisualizer.js';
 import { setGetCurrentTimeFunction, visualizeSong } from './midieventlistvisualizer.js';
+import { getActiveVideo } from '../midisequencer/songcompiler.js';
 import loadMP4Module from './mp4.js';
 
 const vertexShaderSrc = `            
@@ -13,12 +14,53 @@ void main() {
 let exporting = false;
 let canvas;
 
+function initTexture(gl) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+    // Because video has to be download over the internet
+    // they might take a moment until it's ready so
+    // put a single pixel in the texture so we can
+    // use it immediately.
+    const level = 0;
+    const internalFormat = gl.RGBA;
+    const width = 1;
+    const height = 1;
+    const border = 0;
+    const srcFormat = gl.RGBA;
+    const srcType = gl.UNSIGNED_BYTE;
+    const pixel = new Uint8Array([0, 0, 255, 255]);  // opaque blue
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+        width, height, border, srcFormat, srcType,
+        pixel);
+
+    // Turn off mips and set  wrapping to clamp to edge so it
+    // will work regardless of the dimensions of the video.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+    return texture;
+}
+
+function updateTexture(gl, texture, video) {
+    const level = 0;
+    const internalFormat = gl.RGBA;
+    const srcFormat = gl.RGBA;
+    const srcType = gl.UNSIGNED_BYTE;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+        srcFormat, srcType, video);
+}
+
 function configureGLContext(source) {
     const glContext = canvas.getContext("webgl");
 
     glContext.viewport(0, 0, glContext.drawingBufferWidth, glContext.drawingBufferHeight);
     glContext.clearColor(0.0, 0.0, 0.0, 1.0);
     glContext.clear(glContext.COLOR_BUFFER_BIT);
+
+    const texture = initTexture(glContext);
 
     const vertexShader = glContext.createShader(glContext.VERTEX_SHADER);
     glContext.shaderSource(vertexShader, vertexShaderSrc);
@@ -81,7 +123,8 @@ function configureGLContext(source) {
         program,
         glContext,
         timeUniformLocation,
-        targetNoteStatesUniformLocation
+        targetNoteStatesUniformLocation,
+        texture
     };
 }
 
@@ -102,7 +145,8 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
         program,
         glContext,
         timeUniformLocation,
-        targetNoteStatesUniformLocation
+        targetNoteStatesUniformLocation,
+        texture
     } = configureGLContext(source);
 
     const render = () => {
@@ -112,9 +156,17 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
         if (glContext.getParameter(glContext.CURRENT_PROGRAM) != program) {
             return;
         }
-        glContext.uniform1f(timeUniformLocation, customGetTimeSeconds ? customGetTimeSeconds() : getCurrentTimeSeconds());
+        const currentTimeSeconds = customGetTimeSeconds ? customGetTimeSeconds() : getCurrentTimeSeconds();
+
+        const currentVideo = getActiveVideo(currentTimeSeconds * 1000);
+        if (currentVideo) {
+            updateTexture(glContext, texture, currentVideo);
+        }
+
+        glContext.uniform1f(timeUniformLocation, currentTimeSeconds);
         glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
+
         window.requestAnimationFrame(render);
     }
 
@@ -131,18 +183,19 @@ export async function exportVideo(source, eventlist) {
     const {
         glContext,
         timeUniformLocation,
-        targetNoteStatesUniformLocation
+        targetNoteStatesUniformLocation,
+        texture
     } = configureGLContext(source);
 
     const MP4 = await loadMP4Module();
 
-    const framerate = 30;
+    const framerate = 24;
 
     const encoder = MP4.createWebCodecsEncoder({
         width: width,
         height: height,
         fps: framerate,
-        bitrate: 10_000_000,
+        bitrate: 15_000_000,
         encoderOptions: {
             framerate: framerate,
         },
@@ -162,11 +215,18 @@ export async function exportVideo(source, eventlist) {
         setProgressbarValue(frame_counter / totalFrames);
         await new Promise(r => requestAnimationFrame(r));
 
-        glContext.uniform1f(timeUniformLocation, await currentTimeMillisFunc() / 1000);
+        const currentTimeMillis = await currentTimeMillisFunc();
+
+        const currentVideo = getActiveVideo(currentTimeMillis);
+        if (currentVideo) {
+            updateTexture(glContext, texture, currentVideo);
+        }
+
+        glContext.uniform1f(timeUniformLocation, currentTimeMillis / 1000);
         glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
 
-        const frame = new VideoFrame(canvas);
+        const frame = new VideoFrame(canvas, {timestamp: currentTimeMillis * 1000});
         encoder.addFrame(frame);
         frame.close();
     }

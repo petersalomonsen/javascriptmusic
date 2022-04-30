@@ -3,3 +3,5 @@ node_modules
 *.flac
 .DS_Store
 wavfiles
+*.jpeg
+*.png
