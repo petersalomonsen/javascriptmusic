@@ -394,7 +394,9 @@ describe('midisynth audio worklet', async function () {
 
         let soundFileDataPromise;
 
-        document._createElementOriginal = document.createElement;
+        if (!document._createElementOriginal) {
+            document._createElementOriginal = document.createElement;
+        }
         document.createElement = function (elementType) {
             const createdElement = this._createElementOriginal(elementType);
             if (elementType === 'a') {

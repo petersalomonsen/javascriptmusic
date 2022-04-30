@@ -1,4 +1,4 @@
-import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence } from './songcompiler.js';
+import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts } from './songcompiler.js';
 
 describe('songcompiler', async function () {
     it('should compile a simple song', async () => {
@@ -236,5 +236,63 @@ loopHere();
         assert.equal(multipatternsequence[3].startTimes.length, 1);
     }
     );
+    it('should define song parts', async () => {
+        const bpm = 110;
+        const songsource = `
+        setBPM(${bpm});
+    
+        const kickbeat = () => createTrack(1).steps(4, [
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,c5(1/8,30),
+              [c5],,,,        
+            ]);
+        
+        const blabla = () => createTrack(0).steps(4, [
+           c1,c2,c3    
+            ]);
+        
+        const tralala = () => createTrack(0).steps(4, [
+                d4,c3,c1,f6    
+                 ]);
+             
+        const hohoho = () => createTrack(0).steps(4, [
+            d3,d2,d1   
+        ]);
+        definePartStart('blabla');
+        blabla();
+        await kickbeat();
+        definePartEnd('blabla');
+        definePartStart('tralala');
+        tralala();
+        await kickbeat();
+        definePartStart('hohoho');
+        hohoho();
+        await kickbeat();
+        definePartEnd('tralala');
+        definePartEnd('hohoho');
+        loopHere();
+`;
+        await compileSong(songsource);
+        const parts = getSongParts().songParts;
+        expect(Object.keys(parts)).to.eql(['blabla', 'tralala', 'hohoho']);
+        expect(parts.blabla.startTime).to.eql(0);
+        expect(parts.tralala.startTime).equal(Math.floor(60 * 1000 * 8 / bpm));
+        expect(parts.blabla.endTime).equal(Math.floor(60 * 1000 * 8 / bpm));
+        expect(parts.hohoho.startTime).equal(Math.floor(60 * 1000 * 16 / bpm));
+        expect(parts.hohoho.endTime).equal(Math.floor(60 * 1000 * 24 / bpm));
+        expect(parts.tralala.endTime).equal(Math.floor(60 * 1000 * 24 / bpm));
+        Object.values(parts).forEach(part => {
+            part.patterns.forEach(pattern => {
+                pattern.startTimes.forEach(startTime => {
+                    expect(startTime).to.be.within(part.startTime, part.endTime);
+                })
+            });
+        });
+    });
 }
 );

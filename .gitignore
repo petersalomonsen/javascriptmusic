@@ -4,3 +4,6 @@ recordings/*
 *.flac
 .DS_Store
 out
+*.mp4
+*.webm
+dist

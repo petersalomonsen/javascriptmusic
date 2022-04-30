@@ -4,6 +4,9 @@ module.exports = function (config) {
     // base path that will be used to resolve all patterns (eg. files, exclude)
     basePath: '.',
 
+    listenAddress: 'localhost',
+    hostname: 'localhost',
+
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
     frameworks: ['mocha', 'chai'],
@@ -66,7 +69,7 @@ module.exports = function (config) {
 
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-    browsers: ['Chrome_NoUserGestureRequired', 'ChromeHeadless_NoUserGestureRequired', 'Safari', 'Firefox'],
+    browsers: ['Chrome_NoUserGestureRequired', 'ChromeHeadless_NoUserGestureRequired', 'Safari', 'FirefoxAutoplay'],
     // you can define custom flags
     customLaunchers: {
       Chrome_NoUserGestureRequired: {
@@ -76,6 +79,12 @@ module.exports = function (config) {
       ChromeHeadless_NoUserGestureRequired: {
         base: 'ChromeHeadless',
         flags: ['--autoplay-policy=no-user-gesture-required']
+      },
+      FirefoxAutoplay: {
+        base: 'FirefoxHeadless',
+        prefs: {
+            'media.autoplay.block-webaudio': false
+        }
       }
     },
 

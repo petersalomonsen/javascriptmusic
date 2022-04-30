@@ -9,8 +9,10 @@ export let recordingStartTimeMillis = 0;
 let muted = {};
 let solo = {};
 export let addedAudio = [];
+const addedVideo = {};
 
 let trackerPatterns = [];
+let songParts = {};
 
 const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 const output = {
@@ -47,6 +49,14 @@ function stopRecording() {
     output.sendMessage([SEQ_MSG_STOP_RECORDING]);
 }
 
+function startVideo(name, clipStartTime = 0) {
+    addedVideo[name].schedule.push({ startTime: currentTime(), clipStartTime });
+}
+
+function stopVideo(name) {
+    addedVideo[name].schedule[addedVideo[name].schedule.length - 1].stopTime = currentTime();
+}
+
 const noteFunctions = createNoteFunctions();
 const songargs = {
     'output': output,
@@ -74,6 +84,10 @@ const songargs = {
     'waitForBeat': waitForBeat,
     'startRecording': startRecording,
     'stopRecording': stopRecording,
+    'startVideo': startVideo,
+    'stopVideo': stopVideo,
+    'definePartStart': (partName) => songParts[partName] = { startTime: currentTime() },
+    'definePartEnd': (partName) => songParts[partName].endTime = currentTime(),
     'mute': (channel) => muted[channel] = true,
     'solo': (channel) => solo[channel] = true,
     'addInstrument': (instrument) => instrumentNames.push(instrument),
@@ -90,28 +104,48 @@ const songargs = {
                     audioObj.rightbuffer = buf.getChannelData(1).buffer;
                     console.log('loaded', url);
                     resolve(audioObj);
-                } catch(e) {
+                } catch (e) {
                     reject(e);
                 }
-            }));            
+            }));
+        }
+    },
+    'addVideo': async (name, url) => {
+        if (!addedVideo[name]) {
+            const videoElement = document.createElement('video');
+            videoElement.src = url;
+            videoElement.autoplay = false;
+            videoElement.muted = true;
+            addedVideo[name] = { videoElement, schedule: [] };
+        }
+    },
+    'addImage': async (name, url) => {
+        if (!addedVideo[name]) {
+            const imageElement = new Image();
+            imageElement.src = url;
+            addedVideo[name] = { imageElement, schedule: [] };
         }
     },
     'note': (noteNumber, duration, velocity, offset) =>
         noteFunctions[noteFunctionKeys[noteNumber]](duration, velocity, offset)
 };
 Object.assign(songargs, noteFunctions);
-const songargkeys = Object.keys(songargs);
+export const songargkeys = Object.keys(songargs);
 
 export async function compileSong(songsource) {
+    return await generateSong(new AsyncFunction(songargkeys, songsource));
+}
+
+export async function generateSong(songfunc) {
     songmessages = [];
     instrumentNames = [];
     trackerPatterns = [];
+    Object.values(addedVideo).forEach(vid => vid.schedule = []);
     muted = {};
     solo = {};
+    songParts = {};
 
-    console.log('compile song');
     resetTick();
-    const songfunc = new AsyncFunction(songargkeys, songsource);
 
     let playing = true;
     let err;
@@ -130,7 +164,6 @@ export async function compileSong(songsource) {
         await nextTick();
     }
 
-    console.log('song compiled');
     return songmessages;
 }
 
@@ -172,6 +205,7 @@ export function createMultipatternSequence() {
         if (trackerPatterns[n]) {
             const pattern = trackerPatterns[n];
             const outputPattern = {
+                eventlistuncompressed: pattern.output.midievents,
                 eventlist: convertEventListToByteArraySequence(pattern.output.midievents),
                 startTimes: [pattern.output.startTime],
                 channel: pattern.channel
@@ -224,4 +258,52 @@ export function createMultipatternSequence() {
     console.log(outputPatterns);
     console.log('created multipartsequence. Here is the patternmap', JSON.stringify(patternmap));
     return outputPatterns;
+}
+
+export function getSongParts() {
+    const multiPatternSequence = createMultipatternSequence();
+    Object.values(songParts).forEach(part => {
+        part.patterns = []
+        multiPatternSequence.forEach((pattern, patternNdx) => {
+            const patternStartTimes = pattern.startTimes.filter(startTime =>
+                startTime >= part.startTime &&
+                startTime < part.endTime
+            );
+            if (patternStartTimes.length > 0) {
+                part.patterns.push({
+                    patternIndex: patternNdx,
+                    startTimes: patternStartTimes
+                });
+            }
+        });
+    });
+    multiPatternSequence.forEach(pattern => {
+        delete pattern.eventlist;
+        delete pattern.startTimes;
+    });
+    return { multiPatternSequence: multiPatternSequence, songParts };
+}
+
+export function getActiveVideo(milliseconds) {
+    let activeSchedule;
+    const activeVideo = Object.values(addedVideo)
+        .find(vid =>
+            vid.schedule
+                .find(sch => {
+                    if (sch.startTime <= milliseconds && (!sch.stopTime || sch.stopTime > milliseconds)) {
+                        activeSchedule = sch;
+                        return true;
+                    } else {
+                        return false;
+                    }
+                })
+        );
+    if (activeVideo) {
+        if (activeVideo.videoElement) {
+            activeVideo.videoElement.currentTime = ((milliseconds - activeSchedule.startTime + activeSchedule.clipStartTime) / 1000).toFixed(2);
+            return activeVideo.videoElement;
+        } else if (activeVideo.imageElement && activeVideo.imageElement.complete) {
+            return activeVideo.imageElement;
+        }
+    }
 }

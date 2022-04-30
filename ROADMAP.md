@@ -52,13 +52,20 @@ History and roadmap of the WebAssembly music project
 - NEAR-protocol for access control and payments for server-side git repos https://youtu.be/KsMbWTq7Z7Q
 - Physical modeling synthesis: https://youtu.be/FHST7rLxhLM
 
-# 2021 (so far)
+# 2021
 
 - More physical modeling synthesis ( https://youtu.be/QW97w8Ub5fU )
 - WebAssembly music stored on the NEAR protocol blockchain as Non-Fungible Token (NFT)
 - https://youtu.be/hAvIm0F3scg
 - NFT frontend with music player, music customizer (rearranging, looping and combining different parts), mixer, instrument player
 - User invitations/onboarding without a NEAR account (using NEAR implicit accounts)
+- Audio player through the AssemblyScript synth
+
+# 2022
+
+- Simple, efficient and easy to use sequencer and midi-recording UI
+- Graphical effects triggered by the music ( shader support )
+- Video player through shader
 
 # Future ( 2021 - 2022 )
 
@@ -68,8 +75,6 @@ History and roadmap of the WebAssembly music project
 - Simplify synth programming with AssemblyScript
 - Improve clip detection and basic mastering tools
 - Physical modeling synth UI
-- Simple, efficient and easy to use sequencer and midi-recording UI
-- Graphical effects triggered by the music
 - Interactive apps with easy and entertaining UI for evolving and republishing music NFTs
 - NFT contracts with auction, commission
 - Support for audio files in IPFS for also being able to host regular audio file NFTs

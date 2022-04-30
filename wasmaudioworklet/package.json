@@ -1,7 +1,7 @@
 {
     "name": "wasm-music",
     "description": "Javascript/WebAssembly live coding environment for music and synthesis",
-    "version": "0.0.31",
+    "version": "0.0.32",
     "repository": {
         "url": "https://github.com/petersalomonsen/javascriptmusic"
     },
@@ -17,10 +17,11 @@
     "type": "module",
     "scripts": {
         "test": "karma start --single-run --browsers ChromeHeadless_NoUserGestureRequired karma.conf.cjs",
-        "test-firefox": "karma start --single-run --browsers Firefox karma.conf.cjs",
-        "test-firefox-watch": "karma start --browsers Firefox karma.conf.cjs",
+        "test-firefox": "karma start --single-run --browsers FirefoxAutoplay karma.conf.cjs",
+        "test-firefox-watch": "karma start --browsers FirefoxAutoplay karma.conf.cjs",
         "test-watch": "karma start --browsers Chrome_NoUserGestureRequired karma.conf.cjs",
         "bundle-pianorolldemo": "(cd midisequencer/ui/pianorolldemo && rm -Rf dist && rollup -c rollup-config.js)",
+        "bundle-songcompiler": "rollup -c rollup-config-songcompiler.js",
         "patch-version": "npm --no-git-tag-version version patch",
         "serve": "http-server -p 8080 ."
     },

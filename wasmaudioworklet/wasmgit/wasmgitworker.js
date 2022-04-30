@@ -2,6 +2,7 @@ let stdout;
 let stderr;
 let captureOutput = false;
 let currentRepoRootDir;
+const CONFIG_FILE = 'wasmmusic.config.json';
 
 var Module = {
   locateFile: function (s) {
@@ -39,6 +40,17 @@ const lgPromise = new Promise(resolve => {
   }
 });
 
+async function persistChanges() {
+  await new Promise((resolve) => FS.syncfs(false, () => resolve));
+}
+
+async function changeConfig(configPatch) {
+  const config = JSON.parse(FS.readFile(CONFIG_FILE, { encoding: 'utf8' }));
+  Object.assign(config, configPatch);
+  FS.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
+  await persistChanges();
+}
+
 onmessage = async (msg) => {
   const lg = await lgPromise;
 
@@ -56,14 +68,14 @@ onmessage = async (msg) => {
   function repoHasChanges() {
     try {
       callAndCaptureOutput(['status']);
-    } catch(e) {
-      
+    } catch (e) {
+
     }
     if (stdout.indexOf('Changes to be committed:') > -1) {
       return true;
     } else {
       return false;
-    }    
+    }
   }
 
   if (msg.data.accessToken) {
@@ -78,15 +90,15 @@ onmessage = async (msg) => {
       console.log(currentRepoRootDir, 'stored to indexeddb');
       postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
     });
-  } else if(msg.data.command === 'dir') {
-    postMessage({id: msg.data.id, dircontents: FS.readdir('.')});
+  } else if (msg.data.command === 'dir') {
+    postMessage({ id: msg.data.id, dircontents: FS.readdir('.') });
   } else if (msg.data.command === 'repohaschanges') {
     postMessage({ repohaschanges: repoHasChanges() });
   } else if (msg.data.command === 'commitpullpush') {
     if (repoHasChanges()) {
-      callMain(['config','user.name',username]);
-      callMain(['config','user.email',useremail]);
-  
+      callMain(['config', 'user.name', username]);
+      callMain(['config', 'user.email', useremail]);
+
       lg.callMain(['commit', '-m', msg.data.commitmessage]);
     }
 
@@ -147,7 +159,7 @@ onmessage = async (msg) => {
       if (stdout.indexOf('On branch Not currently on any branch') === -1) {
         callAndCaptureOutput(['diff', 'master']);
       }
-    } catch(e) {
+    } catch (e) {
 
     }
     postMessage({ diff: stdout });
@@ -175,11 +187,11 @@ onmessage = async (msg) => {
     try {
       callAndCaptureOutput([msg.data.command, ...args]);
       if (msg.data.id) {
-        postMessage({id: msg.data.id, result: stdout});
+        postMessage({ id: msg.data.id, result: stdout });
       }
-    } catch(e) {
+    } catch (e) {
       if (msg.data.id) {
-        postMessage({id: msg.data.id, error: stderr});
+        postMessage({ id: msg.data.id, error: stderr });
       }
     }
   }

@@ -9,7 +9,6 @@ export async function compileWebAssemblySynth(synthsource, song, samplerate, exp
     });
 
     const result = await new Promise((resolve) => synthcompilerworker.onmessage = (msg) => resolve(msg));
-    console.log('got result', result.data);
     if (result.data.binary) {
         console.log('successfully compiled webassembly synth');
         return result.data.binary;

@@ -34,7 +34,7 @@ export async function updateSynth(synthwasm, addedAudio) {
     audioworkletnode.context.suspend();
     await workerMessageHandler.callAndGetResult({
         wasm: synthwasm,
-        audio: addedAudio
+        audio: await Promise.all(addedAudio)
     }, (msg) => msg.wasmloaded);
     audioworkletnode.context.resume();
 }
