@@ -3,10 +3,11 @@ let stderr;
 let captureOutput = false;
 let currentRepoRootDir;
 const CONFIG_FILE = 'wasmmusic.config.json';
+const WASM_GIT_BASE_URL = 'https://unpkg.com/wasm-git@0.0.9/';
 
 var Module = {
   locateFile: function (s) {
-    return 'https://unpkg.com/wasm-git@0.0.7/' + s;
+    return WASM_GIT_BASE_URL + s;
   },
   'print': function (text) {
     if (captureOutput) {
@@ -32,7 +33,7 @@ XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
   this.setRequestHeader('Authorization', `Bearer ${accessToken}`);
   lastHttpRequest = this;
 }
-importScripts('https://unpkg.com/wasm-git@0.0.7/lg2.js');
+importScripts(WASM_GIT_BASE_URL + 'lg2.js');
 
 const lgPromise = new Promise(resolve => {
   Module.onRuntimeInitialized = () => {
