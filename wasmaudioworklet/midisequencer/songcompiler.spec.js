@@ -1,6 +1,6 @@
-import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts } from './songcompiler.js';
+import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts, reassembleSongParts } from './songcompiler.js';
 
-describe('songcompiler', async function () {
+describe.only('songcompiler', async function () {
     it('should compile a simple song', async () => {
         const bpm = 80;
         const songsource = `
@@ -293,6 +293,120 @@ loopHere();
                 })
             });
         });
+    });
+    it('should be able to reassemble song parts', async () => {
+        const bpm = 110;
+        const songsource = `
+        setBPM(${bpm});
+    
+        const kickbeat = () => createTrack(1).steps(4, [
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,c5(1/8,30),
+              [c5],,,,        
+            ]);
+        
+        const blabla = () => createTrack(0).steps(4, [
+           c1,c2,c3    
+            ]);
+        
+        const tralala = () => createTrack(0).steps(4, [
+                d4,c3,c1,f6    
+                 ]);
+             
+        const hohoho = () => createTrack(0).steps(4, [
+            d3,d2,d1   
+        ]);
+        definePartStart('blabla');
+        blabla();
+        await kickbeat();
+        definePartEnd('blabla');
+        definePartStart('tralala');
+        tralala();
+        await kickbeat();
+        definePartEnd('tralala');
+        definePartStart('hohoho');
+        hohoho();
+        await kickbeat();        
+        hohoho();
+        await kickbeat();
+        definePartEnd('hohoho');
+        loopHere();
+`;
+        const eventlist = await compileSong(songsource);
+        const parts = getSongParts();
+        const reassembledPartsEventList = reassembleSongParts(parts);
+
+        const compareObj = (a,b) => JSON.stringify(a) == JSON.stringify(b);
+
+        eventlist.filter(e => e.message.length == 3).forEach(originalEvent => {
+            const ndx = reassembledPartsEventList.findIndex(e => compareObj(e.message, originalEvent.message));
+            expect(ndx).not.to.lt(0);
+            expect(Math.abs(reassembledPartsEventList[ndx].time - originalEvent.time)).lt(2);
+            reassembledPartsEventList.splice(ndx, 1);
+        });
+        expect(reassembledPartsEventList.length).to.equal(0);
+    });
+    it('should be able to reassemble selected song parts', async () => {
+        const bpm = 110;
+        const songsource = `
+        setBPM(${bpm});
+    
+        const kickbeat = () => createTrack(1).steps(4, [
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,c5(1/8,30),
+              [c5],,,,        
+            ]);
+        
+        const blabla = () => createTrack(0).steps(4, [
+           c1,c2,c3    
+            ]);
+        
+        const tralala = () => createTrack(0).steps(4, [
+                d4,c3,c1,f6    
+                 ]);
+             
+        const hohoho = () => createTrack(0).steps(4, [
+            d3,d2,d1   
+        ]);
+        definePartStart('blabla');
+        blabla();
+        await kickbeat();
+        definePartEnd('blabla');
+        definePartStart('tralala');
+        tralala();
+        await kickbeat();
+        definePartEnd('tralala');
+        definePartStart('hohoho');
+        hohoho();
+        await kickbeat();        
+        hohoho();
+        await kickbeat();
+        definePartEnd('hohoho');
+        loopHere();
+`;
+        const eventlist = await compileSong(songsource);
+        const parts = getSongParts();
+        const reassembledPartsEventList = reassembleSongParts(parts, ['tralala', 'hohoho']);
+
+        const compareObj = (a,b) => JSON.stringify(a) == JSON.stringify(b);
+
+        eventlist.filter(e => e.message.length == 3).forEach(originalEvent => {
+            const ndx = reassembledPartsEventList.findIndex(e => compareObj(e.message, originalEvent.message));
+            expect(ndx).not.to.lt(0);
+            expect(Math.abs(reassembledPartsEventList[ndx].time - originalEvent.time)).lt(2);
+            reassembledPartsEventList.splice(ndx, 1);
+        });
+        expect(reassembledPartsEventList.length).to.equal(0);
     });
 }
 );

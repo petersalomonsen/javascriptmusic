@@ -255,8 +255,6 @@ export function createMultipatternSequence() {
             patternmap[pattern.channel].push(ndx);
         }
     });
-    console.log(outputPatterns);
-    console.log('created multipartsequence. Here is the patternmap', JSON.stringify(patternmap));
     return outputPatterns;
 }
 
@@ -284,6 +282,26 @@ export function getSongParts() {
     return { multiPatternSequence: multiPatternSequence, songParts };
 }
 
+export function reassembleSongParts(parts, selectedParts) {
+    const songParts = parts.songParts;
+    const eventList = [];
+    Object.keys(songParts).filter(part => selectedParts ? selectedParts.find(p => p == part) : true).forEach(songPartName => {
+        const songPart = songParts[songPartName];
+        songPart.patterns.forEach(patternref => {
+            patternref.startTimes.forEach(startTime => {
+                const patternData = parts.multiPatternSequence[patternref.patternIndex];
+                const patternEvents = patternData.eventlistuncompressed.map(evt => ({
+                    time: evt.time + startTime,
+                    message: evt.message
+                }));
+                eventList.push(...patternEvents);
+            });
+        });
+    });
+    eventList.sort((a,b) => a.time - b.time);
+    return eventList;
+}
+
 export function getActiveVideo(milliseconds) {
     let activeSchedule;
     const activeVideo = Object.values(addedVideo)
@@ -307,3 +325,4 @@ export function getActiveVideo(milliseconds) {
         }
     }
 }
+
