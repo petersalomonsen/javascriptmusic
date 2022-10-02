@@ -286,15 +286,15 @@ export function reassembleSongParts(parts, partsArrangement) {
     const songParts = parts.songParts;
     const eventList = [];
     let lastPartEndTime = 0;
-    Object.keys(partsArrangement).forEach(songPartName => {
-        const songPart = songParts[songPartName];
+    partsArrangement.forEach(arrangedPart => {
+        const songPart = songParts[arrangedPart.songPartName];
         const songPartDuration = songPart.endTime - songPart.startTime;
         const songPartStartTime = lastPartEndTime;
         lastPartEndTime += songPartDuration;
         songPart.patterns.forEach(patternref => {
             patternref.startTimes.forEach(startTime => {
                 const patternData = parts.multiPatternSequence[patternref.patternIndex];
-                const selectedChannels = partsArrangement[songPartName];
+                const selectedChannels = arrangedPart.selectedChannels;
                 if (selectedChannels.findIndex(ch => ch == patternData.channel) > -1) {
                     const patternEvents = patternData.eventlistuncompressed.map(evt => ({
                         time: evt.time + startTime - songPart.startTime + songPartStartTime,

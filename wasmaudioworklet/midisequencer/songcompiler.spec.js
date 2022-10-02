@@ -339,11 +339,17 @@ loopHere();
 `;
         const eventlist = await compileSong(songsource);
         const parts = getSongParts();
-        const reassembledPartsEventList = reassembleSongParts(parts,{
-            blabla: [0,1,2,3],
-            tralala: [0,1,2,3],
-            hohoho: [0,1,2,3] 
-        });
+        const reassembledPartsEventList = reassembleSongParts(parts,[{
+            songPartName: 'blabla',
+            selectedChannels: [0,1]
+        }, {
+            songPartName: 'tralala',
+            selectedChannels: [1,2]
+        },
+        {
+            songPartName: 'hohoho',
+            selectedChannels: [1,3]
+        }]);
 
         const compareObj = (a,b) => JSON.stringify(a) == JSON.stringify(b);
 
@@ -400,10 +406,13 @@ loopHere();
 `;
         const eventlist = await compileSong(songsource);
         const parts = getSongParts();
-        const reassembledPartsEventList = reassembleSongParts(parts, {
-            blabla: [0],            
-            hohoho: [3] 
-        });
+        const reassembledPartsEventList = reassembleSongParts(parts, [{
+            songPartName: 'blabla',
+            selectedChannels: [0]
+        },{
+            songPartName: 'hohoho',
+            selectedChannels: [3]
+        }]);
 
         expect(reassembledPartsEventList.filter(e => [1].findIndex(ch => ch == (e.message[0] & 0xf)) > -1).length).to.equal(0);
 
