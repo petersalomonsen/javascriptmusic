@@ -1,6 +1,6 @@
 import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts, reassembleSongParts } from './songcompiler.js';
 
-describe.only('songcompiler', async function () {
+describe('songcompiler', async function () {
     it('should compile a simple song', async () => {
         const bpm = 80;
         const songsource = `
@@ -314,11 +314,11 @@ loopHere();
            c1,c2,c3    
             ]);
         
-        const tralala = () => createTrack(0).steps(4, [
+        const tralala = () => createTrack(2).steps(4, [
                 d4,c3,c1,f6    
                  ]);
              
-        const hohoho = () => createTrack(0).steps(4, [
+        const hohoho = () => createTrack(3).steps(4, [
             d3,d2,d1   
         ]);
         definePartStart('blabla');
@@ -339,7 +339,11 @@ loopHere();
 `;
         const eventlist = await compileSong(songsource);
         const parts = getSongParts();
-        const reassembledPartsEventList = reassembleSongParts(parts);
+        const reassembledPartsEventList = reassembleSongParts(parts,{
+            blabla: [0,1,2,3],
+            tralala: [0,1,2,3],
+            hohoho: [0,1,2,3] 
+        });
 
         const compareObj = (a,b) => JSON.stringify(a) == JSON.stringify(b);
 
@@ -351,7 +355,7 @@ loopHere();
         });
         expect(reassembledPartsEventList.length).to.equal(0);
     });
-    it('should be able to reassemble selected song parts', async () => {
+    it('should be able to reassemble selected song parts or channels', async () => {
         const bpm = 110;
         const songsource = `
         setBPM(${bpm});
@@ -371,11 +375,11 @@ loopHere();
            c1,c2,c3    
             ]);
         
-        const tralala = () => createTrack(0).steps(4, [
+        const tralala = () => createTrack(2).steps(4, [
                 d4,c3,c1,f6    
                  ]);
              
-        const hohoho = () => createTrack(0).steps(4, [
+        const hohoho = () => createTrack(3).steps(4, [
             d3,d2,d1   
         ]);
         definePartStart('blabla');
@@ -396,14 +400,27 @@ loopHere();
 `;
         const eventlist = await compileSong(songsource);
         const parts = getSongParts();
-        const reassembledPartsEventList = reassembleSongParts(parts, ['tralala', 'hohoho']);
+        const reassembledPartsEventList = reassembleSongParts(parts, {
+            blabla: [0],            
+            hohoho: [3] 
+        });
+
+        expect(reassembledPartsEventList.filter(e => [1].findIndex(ch => ch == (e.message[0] & 0xf)) > -1).length).to.equal(0);
 
         const compareObj = (a,b) => JSON.stringify(a) == JSON.stringify(b);
 
-        eventlist.filter(e => e.message.length == 3).forEach(originalEvent => {
+        const partTralalaDuration = parts.songParts['tralala'].endTime - parts.songParts['tralala'].startTime;
+
+        eventlist.filter(e => e.message.length == 3)
+            .filter(e => [0,3].findIndex(ch => ch == (e.message[0] & 0xf)) > -1)
+            .forEach(originalEvent => {
             const ndx = reassembledPartsEventList.findIndex(e => compareObj(e.message, originalEvent.message));
             expect(ndx).not.to.lt(0);
-            expect(Math.abs(reassembledPartsEventList[ndx].time - originalEvent.time)).lt(2);
+            const reassembledEvent = reassembledPartsEventList[ndx];
+            if ((reassembledEvent.message[0] & 0x0f) == 3) {
+                originalEvent.time-=partTralalaDuration;
+            }
+            expect(Math.abs(reassembledEvent.time - originalEvent.time)).lt(2);
             reassembledPartsEventList.splice(ndx, 1);
         });
         expect(reassembledPartsEventList.length).to.equal(0);
