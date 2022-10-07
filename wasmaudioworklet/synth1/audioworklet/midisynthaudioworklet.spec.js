@@ -519,4 +519,32 @@ export function postprocess(): void {
         assert(document.querySelector('common-modal') === null);
         await exportWavPromise;
     });
+    it('should not call suspend/resume on offlineaudiocontext when exporting to wav', async () => {
+        const eventlist = await compileMidiSong(`setBPM(60);await createTrack(0).steps(1, [c4,d4,e4,f4])`);
+        const wasm_synth_bytes = await compileWebAssemblySynth(synthsource + '\n', null, 44100, null);
+
+        let soundFileDataPromise;
+
+        if (!document._createElementOriginal) {
+            document._createElementOriginal = document.createElement;
+        }
+        document.createElement = function (elementType) {
+            const createdElement = this._createElementOriginal(elementType);
+            if (elementType === 'a') {
+                soundFileDataPromise = new Promise(async resolve => {
+                    createdElement.click = async () => {
+                        const sounddata = await (await fetch(createdElement.href)).arrayBuffer();
+                        console.log('sounddata length', sounddata.byteLength)
+                        resolve(sounddata);
+                    };
+                });
+            }
+            return createdElement;
+        }
+        OfflineAudioContext.prototype.suspend = () => { throw new Error('should not call suspend'); }
+        OfflineAudioContext.prototype.resume = () => { throw new Error('should not call resume'); }
+        await exportToWav(eventlist, wasm_synth_bytes);
+
+        document.createElement = document._createElementOriginal;
+    });
 });
