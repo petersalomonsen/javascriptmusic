@@ -1,6 +1,6 @@
 import {
     initWASMGitClient, commitAndSyncRemote, repoHasChanges,
-    writefileandstage, worker, readfile, diff, discardchanges, log
+    writefileandstage, worker, readfile, diff, discardchanges, log, changeCurrentSong, getConfig, listSongs
 } from './wasmgitclient.js';
 
 describe('wasm-git client', async function () {
@@ -98,7 +98,7 @@ describe('wasm-git client', async function () {
             await commitAndSyncRemote('first commit');
             assert.isTrue(false, 'should not be able to push to remote');
         } catch (e) {
-            assert(e.error.indexOf('http status: 404') > -1, 'should receieve http status 404 from remote. received: '+e.error);
+            assert(e.error.indexOf('http status: 404') > -1, 'should receieve http status 404 from remote. received: ' + e.error);
             assert.isFalse(await repoHasChanges());
 
             const logResult = await log();
@@ -120,16 +120,92 @@ describe('wasm-git client', async function () {
         const contentToWrite = 'blabla';
         const filename = 'blabla.txt';
         await writefileandstage(filename, contentToWrite);
-        
+
         try {
             await commitAndSyncRemote('commit with test account');
             assert.isTrue(false, 'should not be able to push to remote');
         } catch (e) {
-            assert(e.error.indexOf('http status: 403') > -1, 'should receieve http status 403 from remote. received: '+e.error);
+            assert(e.error.indexOf('http status: 403') > -1, 'should receieve http status 403 from remote. received: ' + e.error);
             assert.isFalse(await repoHasChanges());
 
             const latestCommitFromLog = (await log()).split(/\ncommit [0-9a-f]+/)[0];
             assert.match(latestCommitFromLog, /.*\nAuthor: wasmmusictestaccount\.near <wasmmusictestaccount\.near>.*/);
         }
+    });
+    it('should be able to have multiple songs in a git repository', async () => {
+        const existingWasmGitUI = document.documentElement.getElementsByTagName('wasmgit-ui');
+        if (existingWasmGitUI.length > 0) {
+            existingWasmGitUI.item(0).remove();
+        }
+        window.indexedDB.deleteDatabase(`/multiplesongstest`);
+        await initWASMGitClient('multiplesongstest');
+
+        assert.isFalse(await repoHasChanges());
+
+        const configobj = {
+            "songfilename": "fall/song.js",
+            "synthfilename": "fall/synth.ts",
+            "allsongs": [{
+                "name": "Fall",
+                "songfilename": "fall/song.js",
+                "synthfilename": "fall/synth.ts"
+            }, {
+                "name": "Noise and madness",
+                "songfilename": "noiseandmadness/song.js",
+                "synthfilename": "noiseandmadness/synth.ts",
+            },
+            {
+                "name": "Good times",
+                "songfilename": "goodtimes/song.js",
+                "synthfilename": "goodtimes/synth.ts",
+            },
+            {
+                "name": "Groove is in the code",
+                "songfilename": "grooveisinthecode/song.js",
+                "synthfilename": "grooveisinthecode/synth.ts",
+            }]
+        };
+        const contentToWrite = JSON.stringify(configobj);
+        const filename = 'wasmmusic.config.json';
+        await writefileandstage(filename, contentToWrite);
+        worker.terminate();
+        await initWASMGitClient('multiplesongstest');
+        await changeCurrentSong(1);
+        const config = await getConfig();
+        expect(config.songfilename).to.equal(config.allsongs[1].songfilename);
+        expect(config.synthfilename).to.equal(config.allsongs[1].synthfilename);
+        const songs = await listSongs();
+        expect(songs.length).to.equal(4);
+        expect(songs[3].name).to.equal("Groove is in the code");
+
+        const wasmGuiElement = document.documentElement.appendChild(document.createElement('wasmgit-ui'));
+
+        const switchSongButton = await new Promise(resolve => {
+            const observer = new MutationObserver((mutationList, observer) => {
+                const btn = wasmGuiElement.shadowRoot.getElementById('switchSongButton');
+                if (btn) {
+                    resolve(btn);
+                }
+            });
+            observer.observe(wasmGuiElement.shadowRoot, { childList: true, subtree: true });
+        });
+        switchSongButton.click();
+        const songselect = await new Promise(resolve => {
+            const observer = new MutationObserver((mutationList, observer) => {
+                const modal = document.querySelector('common-modal');
+                const songselect = modal.shadowRoot.getElementById('songselect');
+
+                if (songselect) {
+                    resolve(songselect);
+                }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+        });
+        const options = songselect.querySelectorAll('option');
+
+        expect(options.length).to.equal(configobj.allsongs.length);
+        configobj.allsongs.forEach((song, ndx) => {
+            expect(options.item(ndx).innerHTML).to.equal(song.name);
+        });
     });
 });

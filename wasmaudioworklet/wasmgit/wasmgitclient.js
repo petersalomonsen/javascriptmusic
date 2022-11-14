@@ -1,7 +1,8 @@
 import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
-
 import { modal } from '../common/ui/modal.js';
+
+export const CONFIG_FILE = 'wasmmusic.config.json';
 
 export let worker;
 
@@ -9,6 +10,7 @@ let gitrepourl;
 let commitAndPushButton;
 let discardChangesButton;
 let deleteLocalButton;
+let switchSongButton;
 
 const remoteSyncListeners = [];
 
@@ -205,6 +207,25 @@ export async function repoHasChanges() {
     return result;
 }
 
+export async function getConfig() {
+    const config = await readfile(CONFIG_FILE);
+    if (config) {
+        return JSON.parse(config);
+    } else {
+        return [];
+    }
+}
+
+export async function listSongs() {
+    return await getConfig().then(c => c.allsongs);
+}
+
+export async function changeCurrentSong(songNdx) {
+    const config = JSON.parse(await readfile(CONFIG_FILE));
+    Object.assign(config, config.allsongs[songNdx]);
+    await writefileandstage(CONFIG_FILE, JSON.stringify(config));
+}
+
 customElements.define('wasmgit-ui',
     class extends HTMLElement {
         constructor() {
@@ -267,6 +288,22 @@ customElements.define('wasmgit-ui',
                     deletelocal();
                 }
             };
+
+            switchSongButton = this.shadowRoot.getElementById('switchSongButton');
+            switchSongButton.addEventListener('click', async () => {
+                const selectedSongNdx = await modal(`<h3>Switch to another song</h3>                
+                    <p>
+                    <select id="songselect">
+                        ${await listSongs().then(songs => songs.map((song, ndx) => `<option value=${ndx}>${song.name}</option>`))}
+                    </select>
+                    </p>
+                    <button onclick="getRootNode().result(null)">Cancel</button>
+                    <button onclick="getRootNode().result(getRootNode().querySelector('#songselect').value)">Ok</button>
+                `);
+                if (selectedSongNdx != null) {
+                    await changeCurrentSong(selectedSongNdx);                    
+                }
+            });
             if (nearAuthData) {
                 this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';
