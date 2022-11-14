@@ -193,19 +193,34 @@ describe('wasm-git client', async function () {
         const songselect = await new Promise(resolve => {
             const observer = new MutationObserver((mutationList, observer) => {
                 const modal = document.querySelector('common-modal');
-                const songselect = modal.shadowRoot.getElementById('songselect');
+                if (modal) {
+                    const songselect = modal.shadowRoot.getElementById('songselect');
 
-                if (songselect) {
-                    resolve(songselect);
+                    if (songselect) {
+                        resolve(songselect);
+                    }
                 }
             });
             observer.observe(document.documentElement, { childList: true, subtree: true });
         });
         const options = songselect.querySelectorAll('option');
 
+        expect(songselect.value).to.equal('1');
+        expect(options.item(1).selected).to.equal(true);
         expect(options.length).to.equal(configobj.allsongs.length);
         configobj.allsongs.forEach((song, ndx) => {
             expect(options.item(ndx).innerHTML).to.equal(song.name);
         });
+        options.item(2).selected = true;
+
+        document.querySelector('common-modal').shadowRoot.getElementById('songSelectOkButton').click();
+        let newConfig = await getConfig();
+        while(newConfig.songfilename != newConfig.allsongs[2].songfilename) {
+            newConfig = await getConfig();
+            await new Promise(r => setTimeout(() => r(), 100));
+        }
+
+        expect(newConfig.songfilename).to.equal(newConfig.allsongs[2].songfilename);
+        expect(newConfig.synthfilename).to.equal(newConfig.allsongs[2].synthfilename);
     });
 });

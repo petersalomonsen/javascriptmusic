@@ -224,6 +224,7 @@ export async function changeCurrentSong(songNdx) {
     const config = JSON.parse(await readfile(CONFIG_FILE));
     Object.assign(config, config.allsongs[songNdx]);
     await writefileandstage(CONFIG_FILE, JSON.stringify(config));
+    remoteSyncListeners.forEach(async remoteSyncListener => remoteSyncListener(await callAndWaitForWorker({ command: 'dir' })));
 }
 
 customElements.define('wasmgit-ui',
@@ -291,14 +292,17 @@ customElements.define('wasmgit-ui',
 
             switchSongButton = this.shadowRoot.getElementById('switchSongButton');
             switchSongButton.addEventListener('click', async () => {
+                const config = await getConfig();
+                const songs = config.allsongs;
+                const currentSelectedSongNdx = songs.findIndex(song => song.songfilename == config.songfilename);
                 const selectedSongNdx = await modal(`<h3>Switch to another song</h3>                
                     <p>
                     <select id="songselect">
-                        ${await listSongs().then(songs => songs.map((song, ndx) => `<option value=${ndx}>${song.name}</option>`))}
+                        ${songs.map((song, ndx) => `<option value="${ndx}" ${currentSelectedSongNdx==ndx ? 'selected' : ''}>${song.name}</option>`)}
                     </select>
                     </p>
                     <button onclick="getRootNode().result(null)">Cancel</button>
-                    <button onclick="getRootNode().result(getRootNode().querySelector('#songselect').value)">Ok</button>
+                    <button id="songSelectOkButton" onclick="getRootNode().result(getRootNode().querySelector('#songselect').value)">Ok</button>
                 `);
                 if (selectedSongNdx != null) {
                     await changeCurrentSong(selectedSongNdx);                    
