@@ -56,3 +56,13 @@ jobs:
             cd wasmaudioworklet
             npm install
             npm run bundle-pianorolldemo
+  bundle-songcompiler:
+    name: Bundle songcompiler
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v2
+        - name: Bundle songcompiler
+          run: |
+            cd wasmaudioworklet
+            npm install
+            npm run bundle-songcompiler
