@@ -72,16 +72,19 @@ export async function initWASMGitClient(gitrepo) {
             args: ['add', 'origin', gitrepourl]
         });
     }
-    if (dircontents.indexOf('wasmmusic.config.json') > -1) {
-        return JSON.parse(await readfile('wasmmusic.config.json'));
-    } else {
-        return {
-            songfilename: dircontents.find(filename => filename.endsWith('.js')),
-            synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
-                dircontents.find(filename => filename.endsWith('.xml')),
-            fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
-        };
+    if (dircontents.indexOf(CONFIG_FILE) > -1) {
+        try {
+            return JSON.parse(await readfile(CONFIG_FILE));
+        } catch(e) {
+            console.error(e);
+        }
     }
+    return {
+        songfilename: dircontents.find(filename => filename.endsWith('.js')),
+        synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
+            dircontents.find(filename => filename.endsWith('.xml')),
+        fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
+    };
 }
 
 export function addRemoteSyncListener(remoteSyncListener) {
