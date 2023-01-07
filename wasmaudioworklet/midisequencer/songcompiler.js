@@ -255,8 +255,6 @@ export function createMultipatternSequence() {
             patternmap[pattern.channel].push(ndx);
         }
     });
-    console.log(outputPatterns);
-    console.log('created multipartsequence. Here is the patternmap', JSON.stringify(patternmap));
     return outputPatterns;
 }
 
@@ -284,6 +282,33 @@ export function getSongParts() {
     return { multiPatternSequence: multiPatternSequence, songParts };
 }
 
+export function reassembleSongParts(parts, partsArrangement) {
+    const songParts = parts.songParts;
+    const eventList = [];
+    let lastPartEndTime = 0;
+    partsArrangement.forEach(arrangedPart => {
+        const songPart = songParts[arrangedPart.songPartName];
+        const songPartDuration = songPart.endTime - songPart.startTime;
+        const songPartStartTime = lastPartEndTime;
+        lastPartEndTime += songPartDuration;
+        songPart.patterns.forEach(patternref => {
+            patternref.startTimes.forEach(startTime => {
+                const patternData = parts.multiPatternSequence[patternref.patternIndex];
+                const selectedChannels = arrangedPart.selectedChannels;
+                if (selectedChannels.findIndex(ch => ch == patternData.channel) > -1) {
+                    const patternEvents = patternData.eventlistuncompressed.map(evt => ({
+                        time: evt.time + startTime - songPart.startTime + songPartStartTime,
+                        message: evt.message
+                    }));
+                    eventList.push(...patternEvents);
+                }
+            });
+        });
+    });
+    eventList.sort((a,b) => a.time - b.time);
+    return eventList;
+}
+
 export function getActiveVideo(milliseconds) {
     let activeSchedule;
     const activeVideo = Object.values(addedVideo)
@@ -307,3 +332,4 @@ export function getActiveVideo(milliseconds) {
         }
     }
 }
+

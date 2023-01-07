@@ -1,4 +1,4 @@
-import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts } from './songcompiler.js';
+import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts, reassembleSongParts } from './songcompiler.js';
 
 describe('songcompiler', async function () {
     it('should compile a simple song', async () => {
@@ -293,6 +293,146 @@ loopHere();
                 })
             });
         });
+    });
+    it('should be able to reassemble song parts', async () => {
+        const bpm = 110;
+        const songsource = `
+        setBPM(${bpm});
+    
+        const kickbeat = () => createTrack(1).steps(4, [
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,c5(1/8,30),
+              [c5],,,,        
+            ]);
+        
+        const blabla = () => createTrack(0).steps(4, [
+           c1,c2,c3    
+            ]);
+        
+        const tralala = () => createTrack(2).steps(4, [
+                d4,c3,c1,f6    
+                 ]);
+             
+        const hohoho = () => createTrack(3).steps(4, [
+            d3,d2,d1   
+        ]);
+        definePartStart('blabla');
+        blabla();
+        await kickbeat();
+        definePartEnd('blabla');
+        definePartStart('tralala');
+        tralala();
+        await kickbeat();
+        definePartEnd('tralala');
+        definePartStart('hohoho');
+        hohoho();
+        await kickbeat();        
+        hohoho();
+        await kickbeat();
+        definePartEnd('hohoho');
+        loopHere();
+`;
+        const eventlist = await compileSong(songsource);
+        const parts = getSongParts();
+        const reassembledPartsEventList = reassembleSongParts(parts,[{
+            songPartName: 'blabla',
+            selectedChannels: [0,1]
+        }, {
+            songPartName: 'tralala',
+            selectedChannels: [1,2]
+        },
+        {
+            songPartName: 'hohoho',
+            selectedChannels: [1,3]
+        }]);
+
+        const compareObj = (a,b) => JSON.stringify(a) == JSON.stringify(b);
+
+        eventlist.filter(e => e.message.length == 3).forEach(originalEvent => {
+            const ndx = reassembledPartsEventList.findIndex(e => compareObj(e.message, originalEvent.message));
+            expect(ndx).not.to.lt(0);
+            expect(Math.abs(reassembledPartsEventList[ndx].time - originalEvent.time)).lt(2);
+            reassembledPartsEventList.splice(ndx, 1);
+        });
+        expect(reassembledPartsEventList.length).to.equal(0);
+    });
+    it('should be able to reassemble selected song parts or channels', async () => {
+        const bpm = 110;
+        const songsource = `
+        setBPM(${bpm});
+    
+        const kickbeat = () => createTrack(1).steps(4, [
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,,
+              [c5],,,,
+              c5,,,c5(1/8,30),
+              [c5],,,,        
+            ]);
+        
+        const blabla = () => createTrack(0).steps(4, [
+           c1,c2,c3    
+            ]);
+        
+        const tralala = () => createTrack(2).steps(4, [
+                d4,c3,c1,f6    
+                 ]);
+             
+        const hohoho = () => createTrack(3).steps(4, [
+            d3,d2,d1   
+        ]);
+        definePartStart('blabla');
+        blabla();
+        await kickbeat();
+        definePartEnd('blabla');
+        definePartStart('tralala');
+        tralala();
+        await kickbeat();
+        definePartEnd('tralala');
+        definePartStart('hohoho');
+        hohoho();
+        await kickbeat();        
+        hohoho();
+        await kickbeat();
+        definePartEnd('hohoho');
+        loopHere();
+`;
+        const eventlist = await compileSong(songsource);
+        const parts = getSongParts();
+        const reassembledPartsEventList = reassembleSongParts(parts, [{
+            songPartName: 'blabla',
+            selectedChannels: [0]
+        },{
+            songPartName: 'hohoho',
+            selectedChannels: [3]
+        }]);
+
+        expect(reassembledPartsEventList.filter(e => [1].findIndex(ch => ch == (e.message[0] & 0xf)) > -1).length).to.equal(0);
+
+        const compareObj = (a,b) => JSON.stringify(a) == JSON.stringify(b);
+
+        const partTralalaDuration = parts.songParts['tralala'].endTime - parts.songParts['tralala'].startTime;
+
+        eventlist.filter(e => e.message.length == 3)
+            .filter(e => [0,3].findIndex(ch => ch == (e.message[0] & 0xf)) > -1)
+            .forEach(originalEvent => {
+            const ndx = reassembledPartsEventList.findIndex(e => compareObj(e.message, originalEvent.message));
+            expect(ndx).not.to.lt(0);
+            const reassembledEvent = reassembledPartsEventList[ndx];
+            if ((reassembledEvent.message[0] & 0x0f) == 3) {
+                originalEvent.time-=partTralalaDuration;
+            }
+            expect(Math.abs(reassembledEvent.time - originalEvent.time)).lt(2);
+            reassembledPartsEventList.splice(ndx, 1);
+        });
+        expect(reassembledPartsEventList.length).to.equal(0);
     });
 }
 );

@@ -40,7 +40,7 @@ export async function updateSynth(synthwasm, addedAudio) {
 }
 
 async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
-    if (context.suspend) {
+    if (!(context instanceof (OfflineAudioContext)) && context.suspend) {
         context.suspend();
     }
     await context.audioWorklet.addModule(getAudioWorkletModuleUrl(AssemblyScriptMidiSynthAudioWorkletProcessorModule));
@@ -68,7 +68,9 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
             sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0);
     }
     awn.connect(context.destination);
-    context.resume();
+    if (!(context instanceof (OfflineAudioContext))) {
+        context.resume();
+    }
     return { audioworkletnode: awn, workerMessageHandler: wmh };
 }
 

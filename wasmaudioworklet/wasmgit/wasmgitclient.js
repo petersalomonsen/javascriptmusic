@@ -1,7 +1,8 @@
 import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
-
 import { modal } from '../common/ui/modal.js';
+
+export const CONFIG_FILE = 'wasmmusic.config.json';
 
 export let worker;
 
@@ -9,6 +10,7 @@ let gitrepourl;
 let commitAndPushButton;
 let discardChangesButton;
 let deleteLocalButton;
+let switchSongButton;
 
 const remoteSyncListeners = [];
 
@@ -70,16 +72,19 @@ export async function initWASMGitClient(gitrepo) {
             args: ['add', 'origin', gitrepourl]
         });
     }
-    if (dircontents.indexOf('wasmmusic.config.json') > -1) {
-        return JSON.parse(await readfile('wasmmusic.config.json'));
-    } else {
-        return {
-            songfilename: dircontents.find(filename => filename.endsWith('.js')),
-            synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
-                dircontents.find(filename => filename.endsWith('.xml')),
-            fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
-        };
+    if (dircontents.indexOf(CONFIG_FILE) > -1) {
+        try {
+            return JSON.parse(await readfile(CONFIG_FILE));
+        } catch(e) {
+            console.error(e);
+        }
     }
+    return {
+        songfilename: dircontents.find(filename => filename.endsWith('.js')),
+        synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
+            dircontents.find(filename => filename.endsWith('.xml')),
+        fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
+    };
 }
 
 export function addRemoteSyncListener(remoteSyncListener) {
@@ -205,6 +210,26 @@ export async function repoHasChanges() {
     return result;
 }
 
+export async function getConfig() {
+    const config = await readfile(CONFIG_FILE);
+    if (config) {
+        return JSON.parse(config);
+    } else {
+        return [];
+    }
+}
+
+export async function listSongs() {
+    return await getConfig().then(c => c.allsongs);
+}
+
+export async function changeCurrentSong(songNdx) {
+    const config = JSON.parse(await readfile(CONFIG_FILE));
+    Object.assign(config, config.allsongs[songNdx]);
+    await writefileandstage(CONFIG_FILE, JSON.stringify(config));
+    remoteSyncListeners.forEach(async remoteSyncListener => remoteSyncListener(await callAndWaitForWorker({ command: 'dir' })));
+}
+
 customElements.define('wasmgit-ui',
     class extends HTMLElement {
         constructor() {
@@ -267,6 +292,25 @@ customElements.define('wasmgit-ui',
                     deletelocal();
                 }
             };
+
+            switchSongButton = this.shadowRoot.getElementById('switchSongButton');
+            switchSongButton.addEventListener('click', async () => {
+                const config = await getConfig();
+                const songs = config.allsongs;
+                const currentSelectedSongNdx = songs.findIndex(song => song.songfilename == config.songfilename);
+                const selectedSongNdx = await modal(`<h3>Switch to another song</h3>                
+                    <p>
+                    <select id="songselect">
+                        ${songs.map((song, ndx) => `<option value="${ndx}" ${currentSelectedSongNdx==ndx ? 'selected' : ''}>${song.name}</option>`)}
+                    </select>
+                    </p>
+                    <button onclick="getRootNode().result(null)">Cancel</button>
+                    <button id="songSelectOkButton" onclick="getRootNode().result(getRootNode().querySelector('#songselect').value)">Ok</button>
+                `);
+                if (selectedSongNdx != null) {
+                    await changeCurrentSong(selectedSongNdx);                    
+                }
+            });
             if (nearAuthData) {
                 this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';

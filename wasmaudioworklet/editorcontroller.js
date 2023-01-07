@@ -7,7 +7,7 @@ import { } from './webaudiomodules/preseteditor.js';
 import { setInstrumentNames, appendToSubtoolbar1 } from './app.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 
-import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener } from './wasmgit/wasmgitclient.js';
+import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener, getConfig } from './wasmgit/wasmgitclient.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
@@ -480,6 +480,7 @@ export async function initEditor(componentRoot) {
         appendToSubtoolbar1(document.createElement('wasmgit-ui'));
 
         addRemoteSyncListener(async () => {
+            gitrepoconfig = await getConfig();
             storedsongcode = await readfile(gitrepoconfig.songfilename);
             storedsynthcode = await readfile(gitrepoconfig.synthfilename);
 

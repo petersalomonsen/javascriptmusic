@@ -22,7 +22,7 @@ export const modalTemplate = (modalcontent) => `<style>
         max-width: 800px;
         border-radius: 50px;
     }
-    button, textarea {
+    button, textarea, select {
         font-family: monospace;
         background-color: #cfc;
         border-color: #4a4;
