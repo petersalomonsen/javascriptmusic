@@ -226,7 +226,7 @@ export async function listSongs() {
 export async function changeCurrentSong(songNdx) {
     const config = JSON.parse(await readfile(CONFIG_FILE));
     Object.assign(config, config.allsongs[songNdx]);
-    await writefileandstage(CONFIG_FILE, JSON.stringify(config));
+    await writefileandstage(CONFIG_FILE, JSON.stringify(config, null, 1));
     remoteSyncListeners.forEach(async remoteSyncListener => remoteSyncListener(await callAndWaitForWorker({ command: 'dir' })));
 }
 
