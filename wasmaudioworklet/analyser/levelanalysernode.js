@@ -1,6 +1,6 @@
 
 export async function connectLevelAnalyser(audioNode) {
-    await audioNode.context.audioWorklet.addModule(new URL('/analyser/levelanalyserprocessor.js', import.meta.url));
+    await audioNode.context.audioWorklet.addModule(new URL('levelanalyserprocessor.js', import.meta.url));
     const levelAnalyserNode = new AudioWorkletNode(audioNode.context, 'levelanalyserprocessor');
     levelAnalyserNode.port.start();
     audioNode.connect(levelAnalyserNode);
