@@ -1,6 +1,6 @@
 import { connectLevelAnalyser, skipClipsWithinCentiSeconds } from './levelanalysernode.js';
 
-describe.only('levelanalyser', async function () {
+describe('levelanalyser', async function () {
     this.timeout(10000);
     let stats;
     it('should analyse levels of audio input', async () => {
