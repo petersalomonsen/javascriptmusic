@@ -173,6 +173,10 @@ export async function generateSong(songfunc) {
         })
     );
     videoSchedule.sort((a, b) => b.startTime - a.startTime);
+    const loopMessageIndex = songmessages.findIndex(evt => evt.message == SEQ_MSG_LOOP);
+    if (loopMessageIndex > -1) {
+        songmessages = songmessages.slice(0, loopMessageIndex + 1);
+    }
     return songmessages;
 }
 
