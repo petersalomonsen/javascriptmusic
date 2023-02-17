@@ -10,6 +10,7 @@ let muted = {};
 let solo = {};
 export let addedAudio = [];
 const addedVideo = {};
+let videoSchedule = [];
 
 let trackerPatterns = [];
 let songParts = {};
@@ -140,6 +141,7 @@ export async function generateSong(songfunc) {
     songmessages = [];
     instrumentNames = [];
     trackerPatterns = [];
+    videoSchedule = [];
     Object.values(addedVideo).forEach(vid => vid.schedule = []);
     muted = {};
     solo = {};
@@ -164,6 +166,13 @@ export async function generateSong(songfunc) {
         await nextTick();
     }
 
+    Object.values(addedVideo).forEach(vid =>
+        vid.schedule.forEach(sch => {
+            sch.video = vid;
+            videoSchedule.push(sch);
+        })
+    );
+    videoSchedule.sort((a, b) => b.startTime - a.startTime);
     return songmessages;
 }
 
@@ -305,24 +314,20 @@ export function reassembleSongParts(parts, partsArrangement) {
             });
         });
     });
-    eventList.sort((a,b) => a.time - b.time);
+    eventList.sort((a, b) => a.time - b.time);
     return eventList;
 }
 
 export function getActiveVideo(milliseconds) {
     let activeSchedule;
-    const activeVideo = Object.values(addedVideo)
-        .find(vid =>
-            vid.schedule
-                .find(sch => {
-                    if (sch.startTime <= milliseconds && (!sch.stopTime || sch.stopTime > milliseconds)) {
-                        activeSchedule = sch;
-                        return true;
-                    } else {
-                        return false;
-                    }
-                })
-        );
+    const activeVideo = videoSchedule.find(sch => {
+        if (sch.startTime <= milliseconds && (!sch.stopTime || sch.stopTime > milliseconds)) {
+            activeSchedule = sch;
+            return true;
+        } else {
+            return false;
+        }
+    })?.video;
     if (activeVideo) {
         if (activeVideo.videoElement) {
             activeVideo.videoElement.currentTime = ((milliseconds - activeSchedule.startTime + activeSchedule.clipStartTime) / 1000).toFixed(2);
