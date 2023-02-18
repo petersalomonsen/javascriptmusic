@@ -1,4 +1,4 @@
-import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts, reassembleSongParts } from './songcompiler.js';
+import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getActiveVideo, addedVideo, getSongParts, reassembleSongParts } from './songcompiler.js';
 
 describe('songcompiler', async function () {
     it('should compile a simple song', async () => {
@@ -433,6 +433,35 @@ loopHere();
             reassembledPartsEventList.splice(ndx, 1);
         });
         expect(reassembledPartsEventList.length).to.equal(0);
+    });
+    it('should be able to schedule video', async () => {
+        const bpm = 120;
+        const img1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mMMXBFYDwAEZwHL1c3acAAAAABJRU5ErkJggg==';
+        const img2 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNcURRYDwAFIQHsvNeWdwAAAABJRU5ErkJggg==';
+        const img3 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mMMbFhRDwAEnQH6sTtwiwAAAABJRU5ErkJggg==';
+        const img4 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNcETi9HgAFSgIR+S1DRAAAAABJRU5ErkJggg==';
+        const songsource = `
+        setBPM(${bpm});
+    
+        addImage('img1', '${img1}');
+        addImage('img2', '${img2}');
+        addImage('img3', '${img3}');
+        addImage('img4', '${img4}');
+        await createTrack(0).steps(4, [
+              () => startVideo('img1'),,,,
+              () => startVideo('img2'),,,,
+              () => startVideo('img3'),,,,
+              () => startVideo('img4'),,,,
+            ]);
+        loopHere();
+`;
+        await compileSong(songsource);
+        await Promise.all(Object.values(addedVideo).map(vid => new Promise(resolve => vid.imageElement.onload = () => resolve())));
+
+        expect(getActiveVideo(0).src).to.equal(img1);
+        expect(getActiveVideo(500).src).to.equal(img2);
+        expect(getActiveVideo(1000).src).to.equal(img3);
+        expect(getActiveVideo(1500).src).to.equal(img4);
     });
 }
 );

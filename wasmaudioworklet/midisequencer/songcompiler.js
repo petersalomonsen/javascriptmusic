@@ -9,7 +9,7 @@ export let recordingStartTimeMillis = 0;
 let muted = {};
 let solo = {};
 export let addedAudio = [];
-const addedVideo = {};
+export const addedVideo = {};
 let videoSchedule = [];
 
 let trackerPatterns = [];
@@ -173,6 +173,7 @@ export async function generateSong(songfunc) {
         })
     );
     videoSchedule.sort((a, b) => b.startTime - a.startTime);
+
     const loopMessageIndex = songmessages.findIndex(evt => evt.message == SEQ_MSG_LOOP);
     if (loopMessageIndex > -1) {
         songmessages = songmessages.slice(0, loopMessageIndex + 1);
@@ -323,21 +324,19 @@ export function reassembleSongParts(parts, partsArrangement) {
 }
 
 export function getActiveVideo(milliseconds) {
-    let activeSchedule;
-    const activeVideo = videoSchedule.find(sch => {
+    const activeSchedule = videoSchedule.find(sch => {
         if (sch.startTime <= milliseconds && (!sch.stopTime || sch.stopTime > milliseconds)) {
-            activeSchedule = sch;
             return true;
         } else {
             return false;
         }
-    })?.video;
-    if (activeVideo) {
-        if (activeVideo.videoElement) {
-            activeVideo.videoElement.currentTime = ((milliseconds - activeSchedule.startTime + activeSchedule.clipStartTime) / 1000).toFixed(2);
-            return activeVideo.videoElement;
-        } else if (activeVideo.imageElement && activeVideo.imageElement.complete) {
-            return activeVideo.imageElement;
+    });
+    if (activeSchedule) {
+        if (activeSchedule.video.AsyncFunctionvideoElement) {
+            activeSchedule.video.videoElement.currentTime = ((milliseconds - activeSchedule.startTime + activeSchedule.clipStartTime) / 1000).toFixed(2);
+            return activeSchedule.video.videoElement;
+        } else if (activeSchedule.video.imageElement && activeSchedule.video.imageElement.complete) {
+            return activeSchedule.video.imageElement;
         }
     }
 }
