@@ -4,7 +4,7 @@ module.exports = function (config) {
     // base path that will be used to resolve all patterns (eg. files, exclude)
     basePath: '.',
 
-    listenAddress: 'localhost',
+    listenAddress: '0.0.0.0',
     hostname: 'localhost',
 
     // frameworks to use
