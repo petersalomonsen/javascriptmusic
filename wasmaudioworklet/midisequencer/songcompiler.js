@@ -114,6 +114,7 @@ const songargs = {
     'addVideo': async (name, url) => {
         if (!addedVideo[name]) {
             const videoElement = document.createElement('video');
+            videoElement.crossOrigin = 'anonymous';
             videoElement.src = url;
             videoElement.autoplay = false;
             videoElement.muted = true;
@@ -123,6 +124,7 @@ const songargs = {
     'addImage': async (name, url) => {
         if (!addedVideo[name]) {
             const imageElement = new Image();
+            imageElement.crossOrigin = 'anonymous';
             imageElement.src = url;
             addedVideo[name] = { imageElement, schedule: [] };
         }
