@@ -23,7 +23,7 @@ jobs:
         run: |
           cd wasmaudioworklet
           npm install
-          npm test
+          xvfb-run npm run test-watch
   firefoxxvfb:
     name: Firefox xvfb
     runs-on: ubuntu-latest

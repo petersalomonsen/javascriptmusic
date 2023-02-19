@@ -4,6 +4,7 @@ import { initVisualizer, setCurrentTimeSeconds as setVisualizerCurrentTimeSecond
 import { initEditor } from './editorcontroller.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 import { timeToBeat } from './midisequencer/pattern.js';
+import apphtml from './app.html.js';
 
 let componentRoot;
 let appReadyPromises;
@@ -20,7 +21,6 @@ customElements.define('app-javascriptmusic',
 
     async init() {
       console.log('initialize app');
-      const apphtml = await fetch('app.html').then(r => r.text());
       this.shadowRoot.innerHTML = apphtml;
       this.shadowRoot.getElementById('copyrighttoyear').innerHTML = new Date().getFullYear();
       initAudioWorkletNode(this.shadowRoot);
