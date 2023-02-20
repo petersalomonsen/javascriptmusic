@@ -201,8 +201,8 @@ export async function exportVideo(source, eventlist) {
         },
         // groupOfPictures: 2,
         // sequential: true,
-        // format: "avc",
-        // codec: "avc1.420034",
+        format: "avc",
+        codec: "avc1.420034",
     });
 
     let frame_counter = 0;
