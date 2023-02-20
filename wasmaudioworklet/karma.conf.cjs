@@ -78,7 +78,7 @@ module.exports = function (config) {
       },
       ChromeHeadless_NoUserGestureRequired: {
         base: 'Chrome',
-        flags: ['--autoplay-policy=no-user-gesture-required']
+        flags: ['--autoplay-policy=no-user-gesture-required','--headless']
       },
       FirefoxAutoplay: {
         base: 'FirefoxHeadless',
