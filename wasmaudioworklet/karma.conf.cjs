@@ -4,7 +4,7 @@ module.exports = function (config) {
     // base path that will be used to resolve all patterns (eg. files, exclude)
     basePath: '.',
 
-    listenAddress: 'localhost',
+    listenAddress: '0.0.0.0',
     hostname: 'localhost',
 
     // frameworks to use
@@ -77,8 +77,8 @@ module.exports = function (config) {
         flags: ['--autoplay-policy=no-user-gesture-required']
       },
       ChromeHeadless_NoUserGestureRequired: {
-        base: 'ChromeHeadless',
-        flags: ['--autoplay-policy=no-user-gesture-required']
+        base: 'Chrome',
+        flags: ['--autoplay-policy=no-user-gesture-required','--headless=new']
       },
       FirefoxAutoplay: {
         base: 'FirefoxHeadless',
