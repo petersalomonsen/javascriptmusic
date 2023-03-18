@@ -25,6 +25,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             }
             if (msg.data.terminate) {
                 this.processorActive = false;
+                console.log('terminate');
             }
         };
         this.port.start();
@@ -35,7 +36,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
         const output = outputs[0];
 
         if (this.wasmInstance && this.samplepos < this.samplebuf.length) {
-            this.wasmInstance.render();
+            this.wasmInstance.render();            
 
             let bufpos = this.samplepos * 2;
             for (let i = 0; i < SAMPLE_FRAMES && this.samplepos < this.samplebuf.length; i++) {                

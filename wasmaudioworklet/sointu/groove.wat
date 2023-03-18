@@ -84,14 +84,14 @@
 
 (func $render (param)
     (local $rendersamplecount i32) 
-    (if (i32.eq (global.get $sample) (i32.const 0))
-        (then
-            (call $su_update_voices)
-        )
-    )
     (i32.const 0)
     (local.set $rendersamplecount)
     (loop $sample_loop
+        (if (i32.eq (global.get $sample) (i32.const 0))
+            (then
+                (call $su_update_voices)
+            )
+        )
         (global.set $COM (i32.const 504))
         (global.set $VAL (i32.const 609))
         (global.set $WRK (i32.const 1472))
@@ -108,7 +108,6 @@
             (then
                 (global.set $sample (i32.const 0))
                 (global.set $row (i32.add (global.get $row) (i32.const 1)))
-                (call $su_update_voices)
             )
         )
         (local.set $rendersamplecount (i32.add (local.get $rendersamplecount) (i32.const 1)))      

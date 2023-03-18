@@ -59,7 +59,7 @@ export function initAudioWorkletNode(componentRoot) {
                 });
             } else if(true) {
                 bytes = await getSointuWasm();
-                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?17', import.meta.url));
+                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?'+new Date().getTime(), import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'sointu-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
