@@ -6,6 +6,7 @@ import { detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
 import { getAudioWorkletModuleUrl } from './common/audioworkletmodules.js';
 import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkletprocessorsequencer.js';
+import { getSointuWasm } from './sointu/playsointu.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -52,8 +53,14 @@ export function initAudioWorkletNode(componentRoot) {
                 bytes = await fetch('https://unpkg.com/wasm-mod-player@0.0.3/wasm-mod-player.wasm')
                     .then(r => r.arrayBuffer());
 
-                await context.audioWorklet.addModule('./modaudioworkletprocessor.js');
+                await context.audioWorklet.addModule(new URL('modaudioworkletprocessor.js', import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'mod-audio-worklet-processor', {
+                    outputChannelCount: [2]
+                });
+            } else if(true) {
+                bytes = await getSointuWasm();
+                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?17', import.meta.url));
+                audioworkletnode = new AudioWorkletNode(context, 'sointu-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
             } else {
@@ -78,6 +85,7 @@ export function initAudioWorkletNode(componentRoot) {
             });
 
             if (song.instrumentPatternLists) {
+                console.log(song);
                 const activenotes = new Array(song.instrumentPatternLists.length).fill(0);
 
                 audioworkletnode.port.onmessage = msg => {
