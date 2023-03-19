@@ -58,7 +58,7 @@ export function initAudioWorkletNode(componentRoot) {
                     outputChannelCount: [2]
                 });
             } else if(true) {
-                bytes = await getSointuWasm();
+                bytes = await getSointuWasm(song);
                 await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?'+new Date().getTime(), import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'sointu-audio-worklet-processor', {
                     outputChannelCount: [2]
@@ -85,7 +85,6 @@ export function initAudioWorkletNode(componentRoot) {
             });
 
             if (song.instrumentPatternLists) {
-                console.log(song);
                 const activenotes = new Array(song.instrumentPatternLists.length).fill(0);
 
                 audioworkletnode.port.onmessage = msg => {

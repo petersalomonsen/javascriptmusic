@@ -316,7 +316,8 @@ export async function initEditor(componentRoot) {
         const song = {
             instrumentPatternLists: instrumentPatternLists,
             patterns: patterns, BPM: patternToolsGlobal.bpm,
-            patternsize: 1 << patternToolsGlobal.pattern_size_shift
+            patternsize: 1 << patternToolsGlobal.pattern_size_shift,
+            instruments: patternToolsGlobal.instrumentNames.map(instrumentName => patternToolsGlobal.instrumentDefs[instrumentName])
         };
 
         try {
