@@ -14,7 +14,7 @@ export function initAudioWorkletNode(componentRoot) {
     let onmidi = () => { };
     let playing = false;
 
-    const context = new AudioContext();
+    const context = new AudioContext({sampleRate: 44100});
 
     /**
      * Should be called from UI event for Safari / iOS

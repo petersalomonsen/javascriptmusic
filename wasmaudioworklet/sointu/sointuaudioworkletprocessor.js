@@ -31,15 +31,14 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
         const output = outputs[0];
 
         if (this.wasmInstance && this.samplepos < this.samplebuf.length) {
-            this.wasmInstance.render_128_samples();
+            let bufpos = this.wasmInstance.tick.value * 2;
+            this.wasmInstance.render_128_samples();            
             
-            let bufpos = this.samplepos * 2;
-
             for (let i = 0; i < SAMPLE_FRAMES && this.samplepos < this.samplebuf.length; i++) {                
                 output[0][i] = this.samplebuf[bufpos++];
                 output[1][i] = this.samplebuf[bufpos++];                
             }
-            this.samplepos += SAMPLE_FRAMES;
+
         }
 
         return this.processorActive;
