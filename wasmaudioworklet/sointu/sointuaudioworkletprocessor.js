@@ -37,6 +37,11 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     this.wasmInstance.l.value / 4
                 );
             }
+
+            if(msg.data.channel!==undefined && msg.data.note!==undefined) {
+                this.wasmInstance.update_single_voice(msg.data.channel, msg.data.note);   
+            }
+              
             if (msg.data.terminate) {
                 this.processorActive = false;
                 console.log('terminate');
