@@ -3,6 +3,10 @@ import { loadScript } from "../common/scriptloader.js";
 let scriptspromise;
 let jsYamlPromise;
 
+export function isSointuSong(song) {
+    return song.instruments.findIndex(instr => instr.sointu) > -1;
+}
+
 export async function getSointuWasm(song) {
     if (!scriptspromise) {
         globalThis.exports = {};

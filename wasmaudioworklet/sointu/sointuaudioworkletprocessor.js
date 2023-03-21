@@ -7,16 +7,35 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
         this.port.onmessage = async (msg) => {
             if (msg.data.wasm) {
                 let tick = 0;
-                if (this.wasmInstance && msg.data.livewasmreplace) {
-                    tick = this.wasmInstance.getTick();
-                }
-                this.wasmInstance = (await WebAssembly.instantiate(msg.data.wasm, {                   
-                })).instance.exports;
+                let row = 0;
+                let pattern = 0;
+                let sample = 0;
+                let outputBufPtr;
 
-                this.samplebuf = new Float32Array(this.wasmInstance.m.buffer,
+                if (this.wasmInstance && msg.data.livewasmreplace) {
+                    tick = this.wasmInstance.tick.value;
+                    row = this.wasmInstance.row.value;
+                    pattern = this.wasmInstance.pattern.value;
+                    sample = this.wasmInstance.sample.value;
+                    outputBufPtr = this.wasmInstance.outputBufPtr.value;
+                }
+
+                this.wasmInstance = (await WebAssembly.instantiate(msg.data.wasm, {})).instance.exports;
+
+                console.log('replacing wasm', tick, pattern, row, sample);
+                this.wasmInstance.tick.value = tick;
+                this.wasmInstance.pattern.value = pattern;
+                this.wasmInstance.row.value = row;
+                this.wasmInstance.sample.value = sample;
+                if (outputBufPtr) {
+                    this.wasmInstance.outputBufPtr.value = outputBufPtr;
+                }
+
+                this.samplebuf = new Float32Array(
+                    this.wasmInstance.m.buffer,
                     this.wasmInstance.s.value,
-                    this.wasmInstance.l.value / 4);
-                this.samplepos = 0;
+                    this.wasmInstance.l.value / 4
+                );
             }
             if (msg.data.terminate) {
                 this.processorActive = false;
@@ -30,15 +49,14 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
     process(inputs, outputs, parameters) {
         const output = outputs[0];
 
-        if (this.wasmInstance && this.samplepos < this.samplebuf.length) {
+        if (this.wasmInstance) {
             let bufpos = this.wasmInstance.tick.value * 2;
-            this.wasmInstance.render_128_samples();            
-            
-            for (let i = 0; i < SAMPLE_FRAMES && this.samplepos < this.samplebuf.length; i++) {                
-                output[0][i] = this.samplebuf[bufpos++];
-                output[1][i] = this.samplebuf[bufpos++];                
-            }
+            this.wasmInstance.render_128_samples();
 
+            for (let i = 0; i < SAMPLE_FRAMES; i++) {
+                output[0][i] = this.samplebuf[bufpos++];
+                output[1][i] = this.samplebuf[bufpos++];
+            }
         }
 
         return this.processorActive;

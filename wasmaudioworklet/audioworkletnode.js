@@ -6,7 +6,7 @@ import { detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
 import { getAudioWorkletModuleUrl } from './common/audioworkletmodules.js';
 import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkletprocessorsequencer.js';
-import { getSointuWasm } from './sointu/playsointu.js';
+import { getSointuWasm, isSointuSong } from './sointu/playsointu.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -57,7 +57,7 @@ export function initAudioWorkletNode(componentRoot) {
                 audioworkletnode = new AudioWorkletNode(context, 'mod-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
-            } else if(true) {
+            } else if(isSointuSong(song)) {
                 bytes = await getSointuWasm(song);
                 await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?'+new Date().getTime(), import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'sointu-audio-worklet-processor', {

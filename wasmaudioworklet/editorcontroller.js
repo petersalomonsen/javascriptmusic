@@ -17,6 +17,7 @@ import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
 import { isWebCodecsSupported } from './visualizer/mp4.js';
+import { isSointuSong, getSointuWasm } from './sointu/playsointu.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
@@ -343,12 +344,18 @@ export async function initEditor(componentRoot) {
                     toggleSpinner(true);
                 }
 
-                const synthwasm = await compileWebAssemblySynth(synthsource,
-                    exportProject && songmode === 'WASM' ? song : undefined,
-                    songmode === 'protracker' ? 55856 :
-                        new AudioContext().sampleRate,
-                    exportProject
-                );
+                let synthwasm;
+                
+                if (isSointuSong(song)) {
+                    synthwasm = await getSointuWasm(song);
+                } else {
+                    synthwasm = await compileWebAssemblySynth(synthsource,
+                        exportProject && songmode === 'WASM' ? song : undefined,
+                        songmode === 'protracker' ? 55856 :
+                            new AudioContext().sampleRate,
+                        exportProject
+                    );
+                }
                                 
                 if (synthwasm) {
                     if (exportProject) {
