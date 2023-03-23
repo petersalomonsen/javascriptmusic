@@ -21,6 +21,8 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 }
 
                 this.wasmInstance = (await WebAssembly.instantiate(msg.data.wasm, {})).instance.exports;
+                this.wasmInstance.update_voices();
+                this.channelValues = {};
 
                 console.log('replacing wasm', tick, pattern, row, sample);
                 this.wasmInstance.tick.value = tick;
@@ -39,7 +41,12 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             }
 
             if(msg.data.channel!==undefined && msg.data.note!==undefined) {
-                this.wasmInstance.update_single_voice(msg.data.channel, msg.data.note);   
+                this.wasmInstance.update_single_voice(msg.data.channel, msg.data.note);
+                if (msg.data.note > 0) {
+                    this.channelValues[msg.data.channel] = msg.data.note;
+                } else {
+                    delete this.channelValues[msg.data.channel];
+                }
             }
               
             if (msg.data.terminate) {
@@ -56,7 +63,13 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
 
         if (this.wasmInstance) {
             let bufpos = this.wasmInstance.tick.value * 2;
-            this.wasmInstance.render_128_samples();
+            
+            if (this.wasmInstance.render_128_samples()==1) {
+                for (let channel in this.channelValues) {
+                    this.wasmInstance.set_current_pattern_value(channel, 1);
+                }
+                this.wasmInstance.update_voices();
+            }
 
             for (let i = 0; i < SAMPLE_FRAMES; i++) {
                 output[0][i] = this.samplebuf[bufpos++];
