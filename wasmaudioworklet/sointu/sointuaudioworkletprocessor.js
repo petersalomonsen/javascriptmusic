@@ -23,7 +23,6 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
 
                 this.wasmInstance = (await WebAssembly.instantiate(msg.data.wasm, {})).instance.exports;
                 this.wasmInstance.update_voices();
-                this.channelValues = {};
 
                 console.log('replacing wasm', tick, pattern, row, sample);
                 this.wasmInstance.tick.value = tick;
@@ -41,16 +40,54 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 );
             }
 
+            if (msg.data.song) {
+                this.song = msg.data.song;
+                this.patternsize = this.song.patterns[0].length;
+                
+                this.patternsbuffersize = 256 * this.patternsize;
+                this.availablePatternIndex = this.song.patterns.length + 1;
+                this.songlength = this.song.instrumentPatternLists[0].length;
+                this.instrumentpatternslistsize = this.song.instrumentPatternLists.length * this.songlength;
+            }
+
             if (msg.data.channel !== undefined && msg.data.note !== undefined) {
                 this.wasmInstance.update_single_voice(msg.data.channel, msg.data.note);
-                if (msg.data.note) {
-                    this.channelValues[msg.data.channel] = msg.data.note;
-                } else {
-                    delete this.channelValues[msg.data.channel];
+
+                if (this.playing) {
+                    const patternsbuffer = new Uint8Array(this.wasmInstance.m.buffer, 0, this.patternsbuffersize);
+                    const instrumentpatternslist = new Uint8Array(this.wasmInstance.m.buffer, this.patternsbuffersize, this.instrumentpatternslistsize);
+
+                    const quantizedTick = this.wasmInstance.row.value;
+                    const patternIndex = Math.floor(quantizedTick / this.patternsize) % this.songlength;
+                    const patternNoteIndex = quantizedTick % this.patternsize;
+
+                    const currentInstrumentPatternIndex = msg.data.channel * this.songlength + patternIndex;
+
+                    let patternNo = instrumentpatternslist[currentInstrumentPatternIndex];
+
+                    if (patternNo === 0) {
+                        patternNo = (this.availablePatternIndex++);
+                        instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
+                    }
+                    if (msg.data.note > 0) {
+                        patternsbuffer[patternNo * this.patternsize + patternNoteIndex] = msg.data.note;
+                    }
+
+                    // send pattern back to main thread for storing
+                    this.port.postMessage({
+                        instrumentPatternIndex: patternIndex,
+                        channel: msg.data.channel,
+                        recordedPatternNo: patternNo,
+                        patternData: Array.from(patternsbuffer.slice(
+                            patternNo * this.patternsize,
+                            patternNo * this.patternsize + this.patternsize
+                        )
+                        )
+                    });
                 }
             }
 
-            if(msg.data.toggleSongPlay!==undefined) {    
+            if (msg.data.toggleSongPlay !== undefined) {
                 this.playing = msg.data.toggleSongPlay;
             }
 

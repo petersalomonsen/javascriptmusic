@@ -321,6 +321,12 @@ export async function initEditor(componentRoot) {
             instruments: patternToolsGlobal.instrumentNames.map(instrumentName => patternToolsGlobal.instrumentDefs[instrumentName])
         };
 
+        globalThis.instrumentNames = patternToolsGlobal.instrumentNames;
+        globalThis.instrumentDefs = patternToolsGlobal.instrumentDefs;
+        globalThis.instrumentGroupMap = patternToolsGlobal.instrumentGroupMap;
+        globalThis.ticksperbeat = patternToolsGlobal.ticksperbeat;
+        globalThis.noteValues = patternToolsGlobal.noteValues;
+
         try {
             if (!window.WASM_SYNTH_LOCATION) {
                 // if not a precompiled wasm file available in WASM_SYNTH_LOCATION              
