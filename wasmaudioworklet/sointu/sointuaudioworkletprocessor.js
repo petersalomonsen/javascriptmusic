@@ -4,6 +4,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
         this.processorActive = true;
+        this.playing = true;
         this.port.onmessage = async (msg) => {
             if (msg.data.wasm) {
                 let tick = 0;
@@ -40,15 +41,19 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 );
             }
 
-            if(msg.data.channel!==undefined && msg.data.note!==undefined) {
+            if (msg.data.channel !== undefined && msg.data.note !== undefined) {
                 this.wasmInstance.update_single_voice(msg.data.channel, msg.data.note);
-                if (msg.data.note > 0) {
+                if (msg.data.note) {
                     this.channelValues[msg.data.channel] = msg.data.note;
                 } else {
                     delete this.channelValues[msg.data.channel];
                 }
             }
-              
+
+            if(msg.data.toggleSongPlay!==undefined) {    
+                this.playing = msg.data.toggleSongPlay;
+            }
+
             if (msg.data.terminate) {
                 this.processorActive = false;
                 console.log('terminate');
@@ -63,11 +68,9 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
 
         if (this.wasmInstance) {
             let bufpos = this.wasmInstance.tick.value * 2;
-            
-            if (this.wasmInstance.render_128_samples()==1) {
-                for (let channel in this.channelValues) {
-                    this.wasmInstance.set_current_pattern_value(channel, 1);
-                }
+
+            const shouldUpdateVoices = this.wasmInstance.render_128_samples();
+            if (this.playing && shouldUpdateVoices) {
                 this.wasmInstance.update_voices();
             }
 
