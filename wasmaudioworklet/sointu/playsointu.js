@@ -19,6 +19,7 @@ export async function getSointuWasm(song) {
     const yaml = jsYaml.dump({
         bpm: song.BPM,
         rowsperbeat: 4,
+        createemptypatterns: true,
         score: {
             length: song.instrumentPatternLists[0].length,
             rowsperpattern: song.patternsize,
