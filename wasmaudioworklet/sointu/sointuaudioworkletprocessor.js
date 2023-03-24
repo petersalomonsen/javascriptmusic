@@ -12,6 +12,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 let pattern = 0;
                 let sample = 0;
                 let outputBufPtr;
+                this.channelHoldStartIndices = {};
 
                 if (this.wasmInstance && msg.data.livewasmreplace) {
                     tick = this.wasmInstance.tick.value;
@@ -45,7 +46,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 this.patternsize = this.song.patterns[0].length;
                 
                 this.patternsbuffersize = 256 * this.patternsize;
-                this.availablePatternIndex = this.song.patterns.length + 1;
+                this.availablePatternIndex = this.song.patterns.length;
                 this.songlength = this.song.instrumentPatternLists[0].length;
                 this.instrumentpatternslistsize = this.song.instrumentPatternLists.length * this.songlength;
             }
@@ -53,7 +54,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             if (msg.data.channel !== undefined && msg.data.note !== undefined) {
                 this.wasmInstance.update_single_voice(msg.data.channel, msg.data.note);
 
-                if (this.playing) {
+                if (this.playing) {                    
                     const patternsbuffer = new Uint8Array(this.wasmInstance.m.buffer, 0, this.patternsbuffersize);
                     const instrumentpatternslist = new Uint8Array(this.wasmInstance.m.buffer, this.patternsbuffersize, this.instrumentpatternslistsize);
 
@@ -69,8 +70,16 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                         patternNo = (this.availablePatternIndex++);
                         instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
                     }
-                    if (msg.data.note > 0) {
-                        patternsbuffer[patternNo * this.patternsize + patternNoteIndex] = msg.data.note;
+                    const patternsBufferNdx = patternNo * this.patternsize + patternNoteIndex;
+                    if (msg.data.note > 0) {                        
+                        patternsbuffer[patternsBufferNdx] = msg.data.note;
+                        this.channelHoldStartIndices[msg.data.channel] = patternsBufferNdx;
+                    } else {
+                        let channelPatternIndex = this.channelHoldStartIndices[msg.data.channel] +1;
+
+                        while (channelPatternIndex < patternsBufferNdx) {
+                            patternsbuffer[channelPatternIndex++] = 1;
+                        }
                     }
 
                     // send pattern back to main thread for storing
@@ -89,6 +98,10 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
 
             if (msg.data.toggleSongPlay !== undefined) {
                 this.playing = msg.data.toggleSongPlay;
+            }
+
+            if (msg.data.songPositionMillis) {
+                this.wasmInstance.setMilliSecondPosition(this.wasmInstance.tick.value  / 44100);
             }
 
             if (msg.data.terminate) {
