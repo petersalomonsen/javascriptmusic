@@ -16,18 +16,37 @@ export async function getSointuWasm(song) {
     await scriptspromise;
     const jsYaml = await jsYamlPromise;
 
-    const yaml = jsYaml.dump({
+    let unitId = 1;
+
+    song.instruments.forEach((instr, ndx) => {
+        const unitIdMap = {};
+
+        instr.sointu = JSON.parse(JSON.stringify(instr.sointu));
+        instr.sointu.units.forEach(unit => {
+            if (unit.id) {
+                unitIdMap[unit.id] = unitId;
+            }
+            unit.id = unitId++;
+        });
+        instr.sointu.units.forEach(unit => {
+            if (unit.parameters?.target) {
+                unit.parameters.target = unitIdMap[unit.parameters.target];
+            }
+        });
+    });
+
+    const sointusong = {
         bpm: song.BPM,
         rowsperbeat: song.rowsperbeat,
         createemptypatterns: true,
         score: {
             length: song.instrumentPatternLists[0].length,
             rowsperpattern: song.patternsize,
-            tracks: song.instrumentPatternLists.slice(0, 7).map(track => {
+            tracks: song.instrumentPatternLists.map(track => {
                 const patternMap = {};
                 track.forEach(patternIndex => {
                     if (patternIndex > 0) {
-                        patternMap[`${patternIndex}`] = song.patterns[patternIndex-1];
+                        patternMap[`${patternIndex}`] = song.patterns[patternIndex - 1];
                     } else {
                         patternMap[`${patternIndex}`] = new Array(song.patternsize).fill(0);
                     }
@@ -45,14 +64,14 @@ export async function getSointuWasm(song) {
             })
         },
         patch: song.instruments.map(instr => instr.sointu)
-    });
+    };
 
     const wat = await fetch('http://localhost:10000/process', {
         method: 'POST',
         headers: {
             'content-type': 'application/json'
         },
-        body: JSON.stringify({ content: yaml })
+        body: JSON.stringify({ content: jsYaml.dump(sointusong) })
     }).then(r => r.text());
 
     const wabt = await exports.WabtModule();

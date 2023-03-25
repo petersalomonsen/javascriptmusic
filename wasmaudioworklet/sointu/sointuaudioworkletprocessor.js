@@ -38,7 +38,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     this.wasmInstance.m.buffer,
                     this.wasmInstance.s.value,
                     this.wasmInstance.l.value / 4
-                );    
+                );
             }
 
             if (msg.data.song) {
@@ -46,9 +46,9 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 this.patternsize = this.song.patterns[0].length;
 
                 this.patternsbuffersize = 256 * this.patternsize;
-                this.availablePatternNo = this.song.patterns.length;
+                this.availablePatternNo = this.song.patterns.length + 1;
                 this.songlength = this.song.instrumentPatternLists[0].length;
-                this.instrumentpatternslistsize = this.song.instrumentPatternLists.length * this.songlength;                
+                this.instrumentpatternslistsize = this.song.instrumentPatternLists.length * this.songlength;
             }
 
             if (msg.data.channel !== undefined && msg.data.note !== undefined) {
@@ -76,7 +76,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     const patternsBufferNdx = patternNo * this.patternsize + patternNoteIndex;
                     if (msg.data.note > 0) {
                         patternsbuffer[patternsBufferNdx] = msg.data.note;
-                        this.channelHoldStartIndices[msg.data.channel] = {patternIndex, patternNoteIndex};
+                        this.channelHoldStartIndices[msg.data.channel] = { patternIndex, patternNoteIndex };
                     } else {
                         const holdStartIndices = this.channelHoldStartIndices[msg.data.channel];
                         let holdPatternIndex = holdStartIndices.patternIndex;
@@ -88,10 +88,10 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                                 const holdInstrumentPatternIndex = msg.data.channel * this.songlength + holdPatternIndex;
                                 const holdPatternNo = instrumentpatternslist[holdInstrumentPatternIndex];
                                 patternsbuffer[holdPatternNo * this.patternsize + holdPatternNoteIndex] = 1;
-                                
+
                             }
 
-                            holdPatternNoteIndex ++;
+                            holdPatternNoteIndex++;
                             if (holdPatternNoteIndex == this.patternsize) {
                                 holdPatternNoteIndex = 0;
                                 holdPatternIndex++;
