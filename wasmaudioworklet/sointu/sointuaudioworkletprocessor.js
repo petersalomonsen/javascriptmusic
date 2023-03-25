@@ -1,4 +1,5 @@
 const SAMPLE_FRAMES = 128;
+const SAMPLE_RATE = 44100;
 
 class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
     constructor() {
@@ -57,7 +58,11 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     const patternsbuffer = new Uint8Array(this.wasmInstance.m.buffer, 0, this.patternsbuffersize);
                     const instrumentpatternslist = new Uint8Array(this.wasmInstance.m.buffer, this.patternsbuffersize, this.instrumentpatternslistsize);
 
-                    const quantizedTick = this.wasmInstance.row.value;
+                    const timePositionSeconds = (this.wasmInstance.tick.value / SAMPLE_RATE);
+                    const currentBeat = (timePositionSeconds / 60) * this.song.BPM;
+                    const currentTick = this.song.rowsperbeat * currentBeat;
+
+                    const quantizedTick = Math.round(currentTick);
                     const patternIndex = Math.floor(quantizedTick / this.patternsize) % this.songlength;
                     const patternNoteIndex = quantizedTick % this.patternsize;
 
@@ -68,6 +73,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     if (patternNo === 0) {
                         patternNo = (this.availablePatternIndex++);
                         instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
+                        console.log('increasing pattern no', patternNo);
                     }
                     const patternsBufferNdx = patternNo * this.patternsize + patternNoteIndex;
                     if (msg.data.note > 0) {
@@ -103,7 +109,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             }
 
             if (msg.data.songPositionMillis) {
-                this.wasmInstance.setMilliSecondPosition(this.wasmInstance.tick.value / 44100);
+                // this.wasmInstance.setMilliSecondPosition(this.wasmInstance.tick.value / SAMPLE_RATE);
             }
 
             if (msg.data.terminate) {
@@ -131,6 +137,9 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             let bufpos = this.wasmInstance.tick.value * 2;
 
             const shouldUpdateVoices = this.wasmInstance.render_128_samples();
+            if (this.wasmInstance.tick.value == 0) {
+                console.log('loop', this.wasmInstance.tick.value);
+            }
             if (this.playing && shouldUpdateVoices) {
                 this.wasmInstance.update_voices();
             }

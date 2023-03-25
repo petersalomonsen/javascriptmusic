@@ -2,7 +2,7 @@ import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, w
 import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer } from './visualizer/defaultvisualizer.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
-import { detachSeek } from './app.js';
+import { attachSeek, detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
 import { getAudioWorkletModuleUrl } from './common/audioworkletmodules.js';
 import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkletprocessorsequencer.js';
@@ -14,7 +14,7 @@ export function initAudioWorkletNode(componentRoot) {
     let onmidi = () => { };
     let playing = false;
 
-    const context = new AudioContext({sampleRate: 44100});
+    const context = new AudioContext({ sampleRate: 44100 });
 
     /**
      * Should be called from UI event for Safari / iOS
@@ -57,9 +57,9 @@ export function initAudioWorkletNode(componentRoot) {
                 audioworkletnode = new AudioWorkletNode(context, 'mod-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
-            } else if(isSointuSong(song)) {
+            } else if (isSointuSong(song)) {
                 bytes = await getSointuWasm(song);
-                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?'+new Date().getTime(), import.meta.url));
+                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?' + new Date().getTime(), import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'sointu-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
@@ -106,8 +106,15 @@ export function initAudioWorkletNode(componentRoot) {
                         window.recordedSongData.patterns[msg.data.recordedPatternNo - 1] = msg.data.patternData;
                         window.recordedSongData.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] =
                             msg.data.recordedPatternNo;
+                        console.log(window.recordedSongData);
                     }
                 };
+
+                /*attachSeek((time) => awn.port.postMessage({ songPositionMillis: true }),
+                    getCurrentTime,
+                        song.instrumentPatternLists[0].length * song.patternsize * 60000 / (song.rowsperbeat * song.BPM)
+                    );
+                */
             }
             audioworkletnode.connect(context.destination);
         }

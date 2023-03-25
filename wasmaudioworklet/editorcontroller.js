@@ -314,10 +314,12 @@ export async function initEditor(componentRoot) {
         }
         const patterns = patternToolsGlobal.generatePatterns();
         const instrumentPatternLists = patternToolsGlobal.generateInstrumentPatternLists();
+
         const song = {
             instrumentPatternLists: instrumentPatternLists,
             patterns: patterns, BPM: patternToolsGlobal.bpm,
             patternsize: 1 << patternToolsGlobal.pattern_size_shift,
+            rowsperbeat: 1 << patternToolsGlobal.pattern_size_shift >> patternToolsGlobal.beats_per_pattern_shift,
             instruments: patternToolsGlobal.instrumentNames.map(instrumentName => patternToolsGlobal.instrumentDefs[instrumentName])
         };
 
