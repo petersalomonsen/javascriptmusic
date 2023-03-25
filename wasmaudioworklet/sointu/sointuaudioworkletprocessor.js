@@ -96,6 +96,9 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                                 holdPatternNoteIndex = 0;
                                 holdPatternIndex++;
                             }
+                            if (holdPatternIndex == this.songlength) {
+                                break;
+                            }
                         }
                     }
 
