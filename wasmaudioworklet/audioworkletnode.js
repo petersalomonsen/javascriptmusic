@@ -106,7 +106,6 @@ export function initAudioWorkletNode(componentRoot) {
                         window.recordedSongData.patterns[msg.data.recordedPatternNo - 1] = msg.data.patternData;
                         window.recordedSongData.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] =
                             msg.data.recordedPatternNo;
-                        console.log(window.recordedSongData);
                     }
                 };
 

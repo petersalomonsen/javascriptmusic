@@ -38,7 +38,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     this.wasmInstance.m.buffer,
                     this.wasmInstance.s.value,
                     this.wasmInstance.l.value / 4
-                );
+                );    
             }
 
             if (msg.data.song) {
@@ -46,9 +46,9 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 this.patternsize = this.song.patterns[0].length;
 
                 this.patternsbuffersize = 256 * this.patternsize;
-                this.availablePatternIndex = this.song.patterns.length;
+                this.availablePatternNo = this.song.patterns.length;
                 this.songlength = this.song.instrumentPatternLists[0].length;
-                this.instrumentpatternslistsize = this.song.instrumentPatternLists.length * this.songlength;
+                this.instrumentpatternslistsize = this.song.instrumentPatternLists.length * this.songlength;                
             }
 
             if (msg.data.channel !== undefined && msg.data.note !== undefined) {
@@ -57,7 +57,6 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 if (this.playing) {
                     const patternsbuffer = new Uint8Array(this.wasmInstance.m.buffer, 0, this.patternsbuffersize);
                     const instrumentpatternslist = new Uint8Array(this.wasmInstance.m.buffer, this.patternsbuffersize, this.instrumentpatternslistsize);
-
                     const timePositionSeconds = (this.wasmInstance.tick.value / SAMPLE_RATE);
                     const currentBeat = (timePositionSeconds / 60) * this.song.BPM;
                     const currentTick = this.song.rowsperbeat * currentBeat;
@@ -71,19 +70,32 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     let patternNo = instrumentpatternslist[currentInstrumentPatternIndex];
 
                     if (patternNo === 0) {
-                        patternNo = (this.availablePatternIndex++);
+                        patternNo = (this.availablePatternNo++);
                         instrumentpatternslist[currentInstrumentPatternIndex] = patternNo;
-                        console.log('increasing pattern no', patternNo);
                     }
                     const patternsBufferNdx = patternNo * this.patternsize + patternNoteIndex;
                     if (msg.data.note > 0) {
                         patternsbuffer[patternsBufferNdx] = msg.data.note;
-                        this.channelHoldStartIndices[msg.data.channel] = patternsBufferNdx;
+                        this.channelHoldStartIndices[msg.data.channel] = {patternIndex, patternNoteIndex};
                     } else {
-                        let channelPatternIndex = this.channelHoldStartIndices[msg.data.channel] + 1;
+                        const holdStartIndices = this.channelHoldStartIndices[msg.data.channel];
+                        let holdPatternIndex = holdStartIndices.patternIndex;
+                        let holdPatternNoteIndex = holdStartIndices.patternNoteIndex;
 
-                        while (channelPatternIndex < patternsBufferNdx) {
-                            patternsbuffer[channelPatternIndex++] = 1;
+                        while (holdPatternIndex != patternIndex || holdPatternNoteIndex != patternNoteIndex) {
+                            if (holdPatternIndex != holdStartIndices.patternIndex ||
+                                holdPatternNoteIndex != holdStartIndices.patternNoteIndex) {
+                                const holdInstrumentPatternIndex = msg.data.channel * this.songlength + holdPatternIndex;
+                                const holdPatternNo = instrumentpatternslist[holdInstrumentPatternIndex];
+                                patternsbuffer[holdPatternNo * this.patternsize + holdPatternNoteIndex] = 1;
+                                
+                            }
+
+                            holdPatternNoteIndex ++;
+                            if (holdPatternNoteIndex == this.patternsize) {
+                                holdPatternNoteIndex = 0;
+                                holdPatternIndex++;
+                            }
                         }
                     }
 
@@ -137,9 +149,6 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             let bufpos = this.wasmInstance.tick.value * 2;
 
             const shouldUpdateVoices = this.wasmInstance.render_128_samples();
-            if (this.wasmInstance.tick.value == 0) {
-                console.log('loop', this.wasmInstance.tick.value);
-            }
             if (this.playing && shouldUpdateVoices) {
                 this.wasmInstance.update_voices();
             }

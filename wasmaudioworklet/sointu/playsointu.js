@@ -26,7 +26,11 @@ export async function getSointuWasm(song) {
             tracks: song.instrumentPatternLists.slice(0, 7).map(track => {
                 const patternMap = {};
                 track.forEach(patternIndex => {
-                    patternMap[`${patternIndex}`] = song.patterns[patternIndex-1];
+                    if (patternIndex > 0) {
+                        patternMap[`${patternIndex}`] = song.patterns[patternIndex-1];
+                    } else {
+                        patternMap[`${patternIndex}`] = new Array(song.patternsize).fill(0);
+                    }
                 });
                 const patternIndices = Object.keys(patternMap);
                 const patterns = patternIndices.map(patternIndex => patternMap[`${patternIndex}`]);
