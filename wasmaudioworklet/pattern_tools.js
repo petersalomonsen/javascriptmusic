@@ -163,11 +163,11 @@ export function createPatternToolsGlobal() {
 		}
 	};
 
-	global.logCurrentSongTime = () => {
+	global.logCurrentSongTime = (name) => {
 		const elapsedTicks = (currentPatternPosition * global.patternsize);
-		const elapsedBeats = elapsedTicks / ticksperbeat();
-		const minutes = elapsedBeats / bpm;
-		console.error(currentPatternPosition, Math.floor(minutes) + ':' + Math.floor((minutes * 60) % 60));
+		const elapsedBeats = elapsedTicks / global.ticksperbeat();
+		const minutes = elapsedBeats / global.bpm;
+		console.log(name, (minutes * 60).toFixed(2));
 	};
 
 	global.playPatterns = (patterns, incrementPosition = 1, logPosition = false) => { 
@@ -176,7 +176,7 @@ export function createPatternToolsGlobal() {
 		}
 		playPatternsList.push(() => {
 			if(logPosition) {
-				logCurrentSongTime();
+				global.logCurrentSongTime(logPosition);
 			}
 			playPatternsFunc(patterns, incrementPosition);
 		});
