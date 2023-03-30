@@ -120,7 +120,8 @@ export function initAudioWorkletNode(componentRoot) {
                         return await currentTimePromise;
                     },
                     song.instrumentPatternLists[0].length * song.patternsize * 60000 /
-                    (song.rowsperbeat * song.BPM)
+                    (song.rowsperbeat * song.BPM),
+                    song.BPM
                 );
             }
             audioworkletnode.connect(context.destination);
