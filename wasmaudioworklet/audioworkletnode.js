@@ -113,7 +113,7 @@ export function initAudioWorkletNode(componentRoot) {
                         currentTimePromiseResolve(msg.data.currentTime);
                     }
                 };
-                attachSeek((time) => awn.port.postMessage({ songPositionMillis: time }),
+                attachSeek((time) => audioworkletnode.port.postMessage({ songPositionMillis: time }),
                     async () => {
                         const currentTimePromise = new Promise((resolve) => currentTimePromiseResolve = resolve);
                         audioworkletnode.port.postMessage({ currentTime: true });

@@ -23,6 +23,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     outputBufPtr = this.wasmInstance.outputBufPtr.value;
                 }
 
+
                 this.wasmInstance = (await WebAssembly.instantiate(msg.data.wasm, {})).instance.exports;
                 this.allNotesOff();
 
@@ -124,14 +125,28 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             }
 
             if (msg.data.songPositionMillis) {
-                // this.wasmInstance.setMilliSecondPosition(this.wasmInstance.tick.value / SAMPLE_RATE);
+                const tick = Math.round(msg.data.songPositionMillis * SAMPLE_RATE / 1000);
+                this.wasmInstance.tick.value = tick;
+
+                const samplesPerBeat = (60 / this.song.BPM ) * SAMPLE_RATE;
+
+                const samplesPerRow = samplesPerBeat / this.song.rowsperbeat;
+                this.wasmInstance.sample.value = tick % samplesPerRow;
+
+                const row = Math.floor(tick / samplesPerRow);
+                this.wasmInstance.row.value = Math.floor(row % this.song.patternsize);
+                this.wasmInstance.pattern.value = Math.floor(row / this.song.patternsize);
+
+                this.wasmInstance.outputBufPtr.value = this.wasmInstance.s.value + (tick * 8);
+
+                this.allNotesOff();
             }
 
             if (msg.data.currentTime) {
                 this.port.postMessage({
-                  currentTime:
-                    this.processorActive ?
-                      this.wasmInstance.tick.value  * 1000/ SAMPLE_RATE : null
+                    currentTime:
+                        this.processorActive ?
+                            this.wasmInstance.tick.value * 1000 / SAMPLE_RATE : null
                 });
             }
             if (msg.data.terminate) {
