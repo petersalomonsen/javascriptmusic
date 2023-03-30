@@ -127,6 +127,13 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                 // this.wasmInstance.setMilliSecondPosition(this.wasmInstance.tick.value / SAMPLE_RATE);
             }
 
+            if (msg.data.currentTime) {
+                this.port.postMessage({
+                  currentTime:
+                    this.processorActive ?
+                      this.wasmInstance.tick.value  * 1000/ SAMPLE_RATE : null
+                });
+            }
             if (msg.data.terminate) {
                 this.processorActive = false;
                 console.log('terminate');

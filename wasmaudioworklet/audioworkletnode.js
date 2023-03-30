@@ -86,6 +86,7 @@ export function initAudioWorkletNode(componentRoot) {
 
             if (song.instrumentPatternLists) {
                 const activenotes = new Array(song.instrumentPatternLists.length).fill(0);
+                let currentTimePromiseResolve;
 
                 audioworkletnode.port.onmessage = msg => {
                     if (msg.data.channelvalues) {
@@ -107,13 +108,20 @@ export function initAudioWorkletNode(componentRoot) {
                         window.recordedSongData.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] =
                             msg.data.recordedPatternNo;
                     }
-                };
 
-                /*attachSeek((time) => awn.port.postMessage({ songPositionMillis: true }),
-                    getCurrentTime,
-                        song.instrumentPatternLists[0].length * song.patternsize * 60000 / (song.rowsperbeat * song.BPM)
-                    );
-                */
+                    if (msg.data.currentTime != undefined) {
+                        currentTimePromiseResolve(msg.data.currentTime);
+                    }
+                };
+                attachSeek((time) => awn.port.postMessage({ songPositionMillis: time }),
+                    async () => {
+                        const currentTimePromise = new Promise((resolve) => currentTimePromiseResolve = resolve);
+                        audioworkletnode.port.postMessage({ currentTime: true });
+                        return await currentTimePromise;
+                    },
+                    song.instrumentPatternLists[0].length * song.patternsize * 60000 /
+                    (song.rowsperbeat * song.BPM)
+                );
             }
             audioworkletnode.connect(context.destination);
         }
