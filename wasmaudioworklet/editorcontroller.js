@@ -3,7 +3,7 @@ import { addedAudio, compileSong as compileMidiSong, convertEventListToByteArray
 import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
-import { } from './webaudiomodules/preseteditor.js';
+import './webaudiomodules/preseteditor.js';
 import { setInstrumentNames, appendToSubtoolbar1 } from './app.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 
@@ -377,6 +377,7 @@ export async function initEditor(componentRoot) {
         } catch (e) {
             errorMessagesContentElement.innerText = e;
             errorMessagesElement.style.display = 'block';
+            toggleSpinner(false);
             throw e;
         }
         toggleSpinner(false);
