@@ -149,6 +149,14 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                             this.wasmInstance.tick.value * 1000 / SAMPLE_RATE : null
                 });
             }
+            if(msg.data.getNoteStatus) {
+                const channelvaluesbuffer = new Float32Array(this.wasmInstance.m.buffer, 
+                    this.wasmInstance.sync,
+                    this.song.instrumentPatternLists.length);        
+
+                const channelValuesTransformed = channelvaluesbuffer.slice(0).map((v, ndx) => v > 0.8 ? (ndx+1) * 10 : 0);
+                this.port.postMessage({channelvalues: channelValuesTransformed});
+            }
             if (msg.data.terminate) {
                 this.processorActive = false;
                 console.log('terminate');
@@ -175,6 +183,11 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
 
             const shouldUpdateVoices = this.wasmInstance.render_128_samples();
             if (this.playing && shouldUpdateVoices) {
+                /*console.log(this.wasmInstance.tick.value,
+                    this.wasmInstance.row.value,
+                    this.wasmInstance.pattern.value,
+                    this.wasmInstance.sample.value,
+                    this.wasmInstance.outputBufPtr.value);*/
                 this.wasmInstance.update_voices();
             }
 
