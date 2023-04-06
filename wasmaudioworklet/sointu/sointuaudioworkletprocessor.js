@@ -154,7 +154,7 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
                     this.wasmInstance.sync,
                     this.song.instrumentPatternLists.length);        
 
-                const channelValuesTransformed = channelvaluesbuffer.slice(0).map((v, ndx) => v > 0.8 ? (ndx+1) * 10 : 0);
+                const channelValuesTransformed = channelvaluesbuffer.slice(0).map((v) => Math.round((v + 1) * 64));
                 this.port.postMessage({channelvalues: channelValuesTransformed});
             }
             if (msg.data.terminate) {
@@ -181,6 +181,15 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
         if (this.wasmInstance) {
             let bufpos = this.wasmInstance.tick.value * 2;
 
+            if (bufpos + SAMPLE_FRAMES * 2 >= this.samplebuf.length) {
+                this.wasmInstance.tick.value = 0;
+                this.wasmInstance.row.value = 0;
+                this.wasmInstance.pattern.value = 0;
+                this.wasmInstance.sample.value = 0;
+                this.wasmInstance.outputBufPtr.value = this.wasmInstance.s.value;
+                bufpos = 0;
+                this.allNotesOff();                
+            }
             const shouldUpdateVoices = this.wasmInstance.render_128_samples();
             if (this.playing && shouldUpdateVoices) {
                 /*console.log(this.wasmInstance.tick.value,
