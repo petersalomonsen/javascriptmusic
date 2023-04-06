@@ -39,6 +39,7 @@ export async function getSointuWasm(song) {
         bpm: song.BPM,
         rowsperbeat: song.rowsperbeat,
         createemptypatterns: true,
+        wasmdisablerenderonstart: true,
         score: {
             length: song.instrumentPatternLists[0].length,
             rowsperpattern: song.patternsize,
