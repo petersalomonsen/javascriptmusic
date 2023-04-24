@@ -16,7 +16,6 @@ import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
-import { isWebCodecsSupported } from './visualizer/mp4.js';
 import { isSointuSong, getSointuWasm } from './sointu/playsointu.js';
 
 export let songsourceeditor;
@@ -223,7 +222,7 @@ export async function initEditor(componentRoot) {
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG}">PNG compressed WASM midi-multipart module</label><br />
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDIPARTS_JSON}">MIDI parts as JSON</label><br />
                                     <label><input type="radio" name="exporttype" value="pngsources">source code as PNG image</label><br />
-                                    ${isWebCodecsSupported() ? `<label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />` : ''}
+                                    <label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />
                                 </form>
                             </p>
                             <button onclick="getRootNode().result(null)">Cancel</button>
