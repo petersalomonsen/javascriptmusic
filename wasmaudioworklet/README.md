@@ -84,7 +84,7 @@ If you choose to export the Wasm as a png file you can also compress it further 
 
 You can export video without sound from the web app. To mux it with the audio try using FFMPEG with this command:
 
-`ffmpeg -i video.mp4 -i exportedsong.wav -c:v copy -c:a aac -b:a 256k output.mp4`
+`ffmpeg -i video.webm -i exportedsong.wav -c:v copy -c:a libopus -b:a 256k output.webm`
 
 Often when creating videos like this you'd want them to be able to loop seamless. Unfortunately most players will have a very small, but noticable delay when looping. An alternative is to use ffmpeg to loop the output video:
 
