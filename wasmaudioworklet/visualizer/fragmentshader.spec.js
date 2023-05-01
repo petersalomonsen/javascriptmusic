@@ -1,5 +1,4 @@
 import { exportVideo, setupWebGL } from './fragmentshader.js';
-import { isWebCodecsSupported } from './mp4.js';
 
 describe('fragmentshader', function() {
     this.timeout(20000);
@@ -12,7 +11,7 @@ describe('fragmentshader', function() {
         document.documentElement.removeChild(document.getElementById('glCanvas'));
     });
     it('should export a video from the fragment shader', async () => {
-        if (!isWebCodecsSupported() || /\bHeadlessChrome\//.test(navigator.userAgent)) {
+        if (!('VideoEncoder' in window) || /\bHeadlessChrome\//.test(navigator.userAgent)) {
             return;
         }
         const shadersource = `
