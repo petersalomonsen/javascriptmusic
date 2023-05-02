@@ -27,3 +27,13 @@ export async function modalYesNo(title, question) {
         <button onclick="getRootNode().result(true)">Yes</button>
     </p>`);
 }
+
+export async function modalOkCancel(title, info, cancelText, okText) {
+    return modal(`
+    <h3>${title}</h3>
+    <p>${info}</p>
+    <p>
+        <button onclick="getRootNode().result(false)">${cancelText}</button>
+        <button onclick="getRootNode().result(true)">${okText}</button>
+    </p>`);
+}

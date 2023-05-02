@@ -6,7 +6,8 @@ import { attachSeek, detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
 import { getAudioWorkletModuleUrl } from './common/audioworkletmodules.js';
 import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkletprocessorsequencer.js';
-import { getSointuWasm, isSointuSong } from './sointu/playsointu.js';
+import { isSointuSong } from './sointu/playsointu.js';
+import { modalOkCancel } from './common/ui/modal.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -14,7 +15,10 @@ export function initAudioWorkletNode(componentRoot) {
     let onmidi = () => { };
     let playing = false;
 
-    const context = new AudioContext({ sampleRate: 44100 });
+    const sessionSampleRate = sessionStorage.getItem('samplerate');
+    const context = sessionSampleRate ?
+        new AudioContext({ sampleRate: parseInt(sessionSampleRate) }) :
+        new AudioContext();
 
     /**
      * Should be called from UI event for Safari / iOS
@@ -58,8 +62,17 @@ export function initAudioWorkletNode(componentRoot) {
                     outputChannelCount: [2]
                 });
             } else if (isSointuSong(song)) {
+                if (context.sampleRate != 44100) {
+                    if (await modalOkCancel('Wrong samplerate', `
+                    Sointu needs samplerate to be 44100, but current samplerate is ${context.sampleRate}.
+                    A reload is required to get the correct samplerate                    
+                    `, 'cancel', 'ok')) {
+                        sessionStorage.setItem('samplerate', '44100');
+                        location.reload();
+                    }
+                }
                 bytes = window.WASM_SYNTH_BYTES;
-                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js?' + new Date().getTime(), import.meta.url));
+                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js', import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'sointu-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
