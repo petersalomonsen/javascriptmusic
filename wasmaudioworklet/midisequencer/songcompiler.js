@@ -121,8 +121,8 @@ const songargs = {
             addedVideo[name] = { videoElement, schedule: [] };
         }
     },
-    'addImage': async (name, url) => {
-        if (!addedVideo[name]) {
+    'addImage': async (name, url, cache = true) => {
+        if (!cache || !addedVideo[name]) {
             const imageElement = new Image();
             imageElement.crossOrigin = 'anonymous';
             imageElement.src = url;
