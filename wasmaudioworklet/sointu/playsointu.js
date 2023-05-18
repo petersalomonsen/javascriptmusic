@@ -67,7 +67,7 @@ export async function getSointuWasm(song) {
         patch: song.instruments.map(instr => instr.sointu)
     };
 
-    const wat = await fetch('http://localhost:10000/process', {
+    const wat = await fetch('http://35.222.223.189:10000/process', {
         method: 'POST',
         headers: {
             'content-type': 'application/json'
