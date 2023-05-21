@@ -3,7 +3,6 @@ import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer, setCurrentTimeSeconds as setVisualizerCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { initEditor } from './editorcontroller.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
-import { timeToBeat } from './midisequencer/pattern.js';
 import apphtml from './app.html.js';
 
 let componentRoot;
@@ -81,12 +80,14 @@ export function formatTime(currentTime) {
     padNumber(Math.floor(currentTime % (1000)), 3);
 }
 
-export function attachSeek(seekFunc, getCurrentTimeFunc, max) {
+export function attachSeek(seekFunc, getCurrentTimeFunc, max, bpm) {
   const timeindicatorelement = componentRoot.querySelector("#timeindicator");
   componentRoot.querySelector("#timeindicator").style.display = 'block';
   componentRoot.querySelector("#timespan").style.display = 'block';
   timeindicatorelement.max = max;
   timeindicatorelement.oninput = () => seekFunc(timeindicatorelement.value);
+
+  const timeToBeat = (time) => (time / (60 * 1000)) * bpm;
 
   const updateTimeIndicatorLoop = () =>
     requestAnimationFrame(async () => {

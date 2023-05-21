@@ -3,7 +3,7 @@ import { addedAudio, compileSong as compileMidiSong, convertEventListToByteArray
 import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
-import { } from './webaudiomodules/preseteditor.js';
+import './webaudiomodules/preseteditor.js';
 import { setInstrumentNames, appendToSubtoolbar1 } from './app.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 
@@ -16,7 +16,7 @@ import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
-import { isWebCodecsSupported } from './visualizer/mp4.js';
+import { isSointuSong, getSointuWasm } from './sointu/playsointu.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
@@ -222,7 +222,7 @@ export async function initEditor(componentRoot) {
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG}">PNG compressed WASM midi-multipart module</label><br />
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDIPARTS_JSON}">MIDI parts as JSON</label><br />
                                     <label><input type="radio" name="exporttype" value="pngsources">source code as PNG image</label><br />
-                                    ${isWebCodecsSupported() ? `<label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />` : ''}
+                                    <label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />
                                 </form>
                             </p>
                             <button onclick="getRootNode().result(null)">Cancel</button>
@@ -313,11 +313,20 @@ export async function initEditor(componentRoot) {
         }
         const patterns = patternToolsGlobal.generatePatterns();
         const instrumentPatternLists = patternToolsGlobal.generateInstrumentPatternLists();
+
         const song = {
             instrumentPatternLists: instrumentPatternLists,
             patterns: patterns, BPM: patternToolsGlobal.bpm,
-            patternsize: 1 << patternToolsGlobal.pattern_size_shift
+            patternsize: 1 << patternToolsGlobal.pattern_size_shift,
+            rowsperbeat: 1 << patternToolsGlobal.pattern_size_shift >> patternToolsGlobal.beats_per_pattern_shift,
+            instruments: patternToolsGlobal.instrumentNames.map(instrumentName => patternToolsGlobal.instrumentDefs[instrumentName])
         };
+
+        globalThis.instrumentNames = patternToolsGlobal.instrumentNames;
+        globalThis.instrumentDefs = patternToolsGlobal.instrumentDefs;
+        globalThis.instrumentGroupMap = patternToolsGlobal.instrumentGroupMap;
+        globalThis.ticksperbeat = patternToolsGlobal.ticksperbeat;
+        globalThis.noteValues = patternToolsGlobal.noteValues;
 
         try {
             if (!window.WASM_SYNTH_LOCATION) {
@@ -342,12 +351,18 @@ export async function initEditor(componentRoot) {
                     toggleSpinner(true);
                 }
 
-                const synthwasm = await compileWebAssemblySynth(synthsource,
-                    exportProject && songmode === 'WASM' ? song : undefined,
-                    songmode === 'protracker' ? 55856 :
-                        new AudioContext().sampleRate,
-                    exportProject
-                );
+                let synthwasm;
+                
+                if (isSointuSong(song)) {
+                    synthwasm = await getSointuWasm(song);
+                } else {
+                    synthwasm = await compileWebAssemblySynth(synthsource,
+                        exportProject && songmode === 'WASM' ? song : undefined,
+                        songmode === 'protracker' ? 55856 :
+                            new AudioContext().sampleRate,
+                        exportProject
+                    );
+                }
                                 
                 if (synthwasm) {
                     if (exportProject) {
@@ -361,6 +376,7 @@ export async function initEditor(componentRoot) {
         } catch (e) {
             errorMessagesContentElement.innerText = e;
             errorMessagesElement.style.display = 'block';
+            toggleSpinner(false);
             throw e;
         }
         toggleSpinner(false);

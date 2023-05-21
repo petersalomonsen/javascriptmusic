@@ -2,10 +2,12 @@ import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, w
 import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer } from './visualizer/defaultvisualizer.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
-import { detachSeek } from './app.js';
+import { attachSeek, detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
 import { getAudioWorkletModuleUrl } from './common/audioworkletmodules.js';
 import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkletprocessorsequencer.js';
+import { isSointuSong } from './sointu/playsointu.js';
+import { modalOkCancel } from './common/ui/modal.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -13,7 +15,10 @@ export function initAudioWorkletNode(componentRoot) {
     let onmidi = () => { };
     let playing = false;
 
-    const context = new AudioContext();
+    const sessionSampleRate = sessionStorage.getItem('samplerate');
+    const context = sessionSampleRate ?
+        new AudioContext({ sampleRate: parseInt(sessionSampleRate) }) :
+        new AudioContext();
 
     /**
      * Should be called from UI event for Safari / iOS
@@ -52,8 +57,23 @@ export function initAudioWorkletNode(componentRoot) {
                 bytes = await fetch('https://unpkg.com/wasm-mod-player@0.0.3/wasm-mod-player.wasm')
                     .then(r => r.arrayBuffer());
 
-                await context.audioWorklet.addModule('./modaudioworkletprocessor.js');
+                await context.audioWorklet.addModule(new URL('modaudioworkletprocessor.js', import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'mod-audio-worklet-processor', {
+                    outputChannelCount: [2]
+                });
+            } else if (isSointuSong(song)) {
+                if (context.sampleRate != 44100) {
+                    if (await modalOkCancel('Wrong samplerate', `
+                    Sointu needs samplerate to be 44100, but current samplerate is ${context.sampleRate}.
+                    A reload is required to get the correct samplerate                    
+                    `, 'cancel', 'ok')) {
+                        sessionStorage.setItem('samplerate', '44100');
+                        location.reload();
+                    }
+                }
+                bytes = window.WASM_SYNTH_BYTES;
+                await context.audioWorklet.addModule(new URL('sointu/sointuaudioworkletprocessor.js', import.meta.url));
+                audioworkletnode = new AudioWorkletNode(context, 'sointu-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
             } else {
@@ -79,6 +99,7 @@ export function initAudioWorkletNode(componentRoot) {
 
             if (song.instrumentPatternLists) {
                 const activenotes = new Array(song.instrumentPatternLists.length).fill(0);
+                let currentTimePromiseResolve;
 
                 audioworkletnode.port.onmessage = msg => {
                     if (msg.data.channelvalues) {
@@ -100,7 +121,21 @@ export function initAudioWorkletNode(componentRoot) {
                         window.recordedSongData.instrumentPatternLists[msg.data.channel][msg.data.instrumentPatternIndex] =
                             msg.data.recordedPatternNo;
                     }
+
+                    if (msg.data.currentTime != undefined) {
+                        currentTimePromiseResolve(msg.data.currentTime);
+                    }
                 };
+                attachSeek((time) => audioworkletnode.port.postMessage({ songPositionMillis: time }),
+                    async () => {
+                        const currentTimePromise = new Promise((resolve) => currentTimePromiseResolve = resolve);
+                        audioworkletnode.port.postMessage({ currentTime: true });
+                        return await currentTimePromise;
+                    },
+                    song.instrumentPatternLists[0].length * song.patternsize * 60000 /
+                    (song.rowsperbeat * song.BPM),
+                    song.BPM
+                );
             }
             audioworkletnode.connect(context.destination);
         }

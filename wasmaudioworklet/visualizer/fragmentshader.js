@@ -2,7 +2,6 @@ import { setProgressbarValue } from '../common/ui/progress-bar.js';
 import { getCurrentTimeSeconds, setUseDefaultVisualizer, getUseDefaultVisualizer, getTargetNoteStates, clearPositions } from './defaultvisualizer.js';
 import { setGetCurrentTimeFunction, visualizeSong } from './midieventlistvisualizer.js';
 import { getActiveVideo } from '../midisequencer/songcompiler.js';
-import loadMP4Module from './mp4.js';
 
 const vertexShaderSrc = `            
 attribute vec2 a_position;
@@ -176,6 +175,17 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
 export async function exportVideo(source, eventlist) {
     exporting = true;
 
+    const { Muxer, ArrayBufferTarget } = (await import('https://cdn.jsdelivr.net/npm/webm-muxer@3.0.3/+esm')).default;
+
+    let muxer = new Muxer({
+        target: new ArrayBufferTarget(),
+        video: {
+            codec: 'V_VP9',
+            width: 1280,
+            height: 720
+        }
+    });
+
     const width = 1920, height = 1080;
     canvas.width = width;
     canvas.height = height;
@@ -187,24 +197,26 @@ export async function exportVideo(source, eventlist) {
         texture
     } = configureGLContext(source);
 
-    const MP4 = await loadMP4Module();
+    const framerate = 30;
 
-    const framerate = 24;
+    const init = {
+        output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+        error: (e) => {
+          console.log(e.message);
+        },
+    };
 
-    const encoder = MP4.createWebCodecsEncoder({
+    const config = {
+        codec: 'vp09.00.10.08',
         width: width,
         height: height,
-        fps: framerate,
-        bitrate: 15_000_000,
-        encoderOptions: {
-            framerate: framerate,
-        },
-        // groupOfPictures: 2,
-        // sequential: true,
-        format: "avc",
-        codec: "avc1.420034",
-    });
+        bitrate: 2_000_000, // 2 Mbps
+        framerate: framerate,
+    };
 
+    const encoder = new VideoEncoder(init);
+    encoder.configure(config);
+    
     let frame_counter = 0;
     const currentTimeMillisFunc = async () => frame_counter * 1000 / framerate;
     setGetCurrentTimeFunction(currentTimeMillisFunc);
@@ -227,17 +239,19 @@ export async function exportVideo(source, eventlist) {
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
 
         const frame = new VideoFrame(canvas, {timestamp: currentTimeMillis * 1000});
-        encoder.addFrame(frame);
+        encoder.encode(frame, {keyFrame: (frame_counter % framerate) == 0});
         frame.close();
     }
-    const buf = await encoder.end();
-
+    
+    await encoder.flush();
+    muxer.finalize();
     setProgressbarValue(null);
 
-    let url = window.URL.createObjectURL(new Blob([buf], { type: 'video/mp4' }));
+    const { buffer } = muxer.target;
+    let url = window.URL.createObjectURL(new Blob([buffer], { type: 'application/octet-stream' }));
     let a = document.createElement('a');
     a.href = url;
-    a.download = "video.mp4";
+    a.download = "video.webm";
     a.click();
     console.log('finished export');
     exporting = false;

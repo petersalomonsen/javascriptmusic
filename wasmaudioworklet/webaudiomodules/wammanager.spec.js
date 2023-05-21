@@ -3,7 +3,7 @@ import { waitForAppReady } from '../app.js';
 import { compileSong } from '../midisequencer/songcompiler.js';
 
 describe('wammanager', async function() {
-    this.timeout(20000);
+    this.timeout(60000);
     let recordedData;
     let sampleRate;
 

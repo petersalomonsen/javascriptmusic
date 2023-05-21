@@ -9,7 +9,8 @@ import { modal } from '../../common/ui/modal.js';
 import { getAudioWorkletModuleUrl } from '../../common/audioworkletmodules.js';
 import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from './midisynthaudioworkletprocessor.js';
 import { AudioWorkletProcessorSequencerModule } from '../../midisequencer/audioworkletprocessorsequencer.js';
-import { addedAudio } from '../../midisequencer/songcompiler.js';
+import { addedAudio } from '../../midisequencer/songcompiler.js';
+import { bpm } from '../../midisequencer/pattern.js';
 
 export let audioworkletnode;
 
@@ -65,7 +66,8 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         setGetCurrentTimeFunction(getCurrentTime);
         attachSeek((time) => awn.port.postMessage({ seek: time }),
             getCurrentTime,
-            sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0);
+            sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0,
+            bpm);
     }
     awn.connect(context.destination);
     if (!(context instanceof (OfflineAudioContext))) {
