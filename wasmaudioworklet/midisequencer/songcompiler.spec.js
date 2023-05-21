@@ -1,4 +1,5 @@
-import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getActiveVideo, addedVideo, getSongParts, reassembleSongParts } from './songcompiler.js';
+import { getActiveVideo } from '../visualizer/videoscheduler.js';
+import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, addedVideo, getSongParts, reassembleSongParts } from './songcompiler.js';
 
 describe('songcompiler', async function () {
     it('should compile a simple song', async () => {
@@ -458,7 +459,7 @@ loopHere();
         await compileSong(songsource);
         await Promise.all(Object.values(addedVideo).map(vid => new Promise(resolve => vid.imageElement.onload = () => resolve())));
 
-        expect(getActiveVideo(0).src).to.equal(img1);
+        expect(getActiveVideoiveVideo(0).src).to.equal(img1);
         expect(getActiveVideo(500).src).to.equal(img2);
         expect(getActiveVideo(1000).src).to.equal(img3);
         expect(getActiveVideo(1500).src).to.equal(img4);
