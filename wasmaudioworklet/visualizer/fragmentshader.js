@@ -47,9 +47,7 @@ function updateTexture(gl, texture, video) {
     const internalFormat = gl.RGBA;
     const srcFormat = gl.RGBA;
     const srcType = gl.UNSIGNED_BYTE;
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
-        srcFormat, srcType, video);
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, video);
 }
 
 function configureGLContext(source) {
@@ -175,18 +173,27 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
 export async function exportVideo(source, eventlist) {
     exporting = true;
 
-    const { Muxer, ArrayBufferTarget } = (await import('https://cdn.jsdelivr.net/npm/webm-muxer@3.0.3/+esm')).default;
+    const { Muxer, FileSystemWritableFileStreamTarget } = (await import('https://cdn.jsdelivr.net/npm/webm-muxer@3.0.3/+esm')).default;
 
+    let fileHandle = await window.showSaveFilePicker({
+         suggestedName: `video.webm`,
+         types: [{
+             description: 'Video File',
+             accept: { 'video/webm': ['.webm'] }
+         }],
+     });
+     let fileStream = await fileHandle.createWritable();
+
+    const width = 1280, height = 720;
     let muxer = new Muxer({
-        target: new ArrayBufferTarget(),
+        target: new FileSystemWritableFileStreamTarget(fileStream),        
         video: {
             codec: 'V_VP9',
-            width: 1280,
-            height: 720
+            width,
+            height
         }
     });
 
-    const width = 1920, height = 1080;
     canvas.width = width;
     canvas.height = height;
 
@@ -202,21 +209,22 @@ export async function exportVideo(source, eventlist) {
     const init = {
         output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
         error: (e) => {
-          console.log(e.message);
+            console.log(e.message);
         },
     };
 
     const config = {
         codec: 'vp09.00.10.08',
-        width: width,
-        height: height,
+        hardwareAcceleration: 'prefer-software',
+        width,
+        height,
         bitrate: 2_000_000, // 2 Mbps
-        framerate: framerate,
+        framerate,
     };
 
     const encoder = new VideoEncoder(init);
     encoder.configure(config);
-    
+
     let frame_counter = 0;
     const currentTimeMillisFunc = async () => frame_counter * 1000 / framerate;
     setGetCurrentTimeFunction(currentTimeMillisFunc);
@@ -238,21 +246,21 @@ export async function exportVideo(source, eventlist) {
         glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
 
-        const frame = new VideoFrame(canvas, {timestamp: currentTimeMillis * 1000});
-        encoder.encode(frame, {keyFrame: (frame_counter % framerate) == 0});
+        const frame = new VideoFrame(canvas, { timestamp: currentTimeMillis * 1000 });
+        const keyFrame = (frame_counter % framerate) == 0;
+        encoder.encode(frame, { keyFrame });
+        if (keyFrame) {
+            await encoder.flush();
+        }
         frame.close();
     }
-    
-    await encoder.flush();
-    muxer.finalize();
-    setProgressbarValue(null);
 
-    const { buffer } = muxer.target;
-    let url = window.URL.createObjectURL(new Blob([buffer], { type: 'application/octet-stream' }));
-    let a = document.createElement('a');
-    a.href = url;
-    a.download = "video.webm";
-    a.click();
-    console.log('finished export');
-    exporting = false;
+    console.log('Flushing encoder');
+    await encoder.flush();
+    console.log('Finalizing mixer');
+    muxer.finalize();
+    console.log('Closing filestream');
+    await fileStream.close();
+    setProgressbarValue(null);
+    
 }
