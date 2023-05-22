@@ -334,8 +334,8 @@ export function getActiveVideo(milliseconds) {
         }
     });
     if (activeSchedule) {
-        if (activeSchedule.video.AsyncFunctionvideoElement) {
-            activeSchedule.video.videoElement.currentTime = ((milliseconds - activeSchedule.startTime + activeSchedule.clipStartTime) / 1000).toFixed(2);
+        if (activeSchedule.video.videoElement) {            
+            activeSchedule.video.videoElement.currentTime = ((milliseconds - activeSchedule.startTime + activeSchedule.clipStartTime) / 1000).toFixed(2);            
             return activeSchedule.video.videoElement;
         } else if (activeSchedule.video.imageElement && activeSchedule.video.imageElement.complete) {
             return activeSchedule.video.imageElement;
