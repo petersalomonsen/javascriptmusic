@@ -3,7 +3,7 @@ import { setupWebGL } from '../../visualizer/fragmentshader.js';
 import videoschedule from '../../mediacontent/videoschedule.js';
 import { setVideoSchedule } from '../../visualizer/videoscheduler.js';
 
-const pngbytes = await fetch('/mediacontent/ufo.wasm.png').then(r => r.arrayBuffer());
+const pngbytes = await fetch(new URL('ufo.wasm.png', import.meta.url)).then(r => r.arrayBuffer());
 const wasmBytes = await decodeBufferFromPNG(URL.createObjectURL(new Blob([pngbytes], {type: 'image/png'})));
 
 const sampleRate = 44100;
@@ -84,7 +84,7 @@ playbutton.onclick = () => {
 videoschedule.forEach(sch => {
     const imageElement = new Image();
     imageElement.crossOrigin = 'anonymous';
-    imageElement.src = sch.imageUrl;
+    imageElement.src = 'https://ipfs.web4.near.page/ipfs/bafybeigkce5cwsexdffhoyiixqavwoifpbl457eyeprmtxcm4y4p2iwiie/ufo/' + sch.imageUrl;
     sch.video = {
         imageElement
     };    

@@ -2,15 +2,17 @@ let videoSchedule = [];
 
 export function setVideoSchedule(schedule) {
     videoSchedule = schedule;
+}
+
+export function exportVideoSchedule() {
     const exportObj = videoSchedule.map(sch => ({
         startTime: sch.startTime,
         stopTime: sch.stopTime,
         clipStartTime: sch.clipStartTime,
         videoUrl: sch.video.videoElement?.src ?? undefined,
         imageUrl: sch.video.imageElement?.src ?? undefined,
-
     }));
-    console.log(JSON.stringify(exportObj));
+    return JSON.stringify(exportObj, null, 1);
 }
 
 export function getActiveVideo(milliseconds) {
