@@ -12,7 +12,7 @@ const sampleRate = 44100;
 const durationFrames = sampleRate - (sampleRate % 128);
 const durationMillis = durationFrames * 1000.0 / sampleRate;
 const numBuffers = Math.floor(150000 / durationMillis);
-let imagesloaded = false;
+
 let songStartTime;
 
 let audioCtx;
@@ -80,32 +80,37 @@ playbutton.onclick = async () => {
     }
     audioCtx = new AudioContext();
 
-    if (!imagesloaded) {
-        let numConcurrent = 0;
-        await Promise.all(videoschedule.map(async (schedule, ndx) => {
-            const imageElement = new Image();
-            imageElement.crossOrigin = 'anonymous';
-            if (schedule.imageUrl.indexOf('data:') == 0) {
-                imageElement.src = schedule.imageUrl;
-            } else {
-                while (numConcurrent > 10) {
-                    await new Promise(resolve => setTimeout(() => resolve(), 1));
-                }
-                numConcurrent++;
-                const imagedata = await fetch('https://ipfs.web4.near.page/ipfs/bafybeigkce5cwsexdffhoyiixqavwoifpbl457eyeprmtxcm4y4p2iwiie/ufo/' + schedule.imageUrl).then(r => r.arrayBuffer());
-                imageElement.src = URL.createObjectURL(new Blob([imagedata], { type: 'image/jpg' }));
-                numConcurrent--;
-                setProgressbarValue(videoschedule.filter(sch => sch.video != undefined).length / videoschedule.length);
+    let numConcurrent = 0;
+    setProgressbarValue(0);
+    await Promise.all(videoschedule.map(async (schedule, ndx) => {
+        const imageElement = new Image();
+        imageElement.crossOrigin = 'anonymous';
+        if (schedule.imageUrl.indexOf('data:') == 0) {
+            imageElement.src = schedule.imageUrl;
+        } else {
+            while (numConcurrent > 10) {
+                await new Promise(resolve => setTimeout(() => resolve(), 1));
             }
-            schedule.video = {
-                imageElement
-            };
-        }));
-        setVideoSchedule(videoschedule);
-        imagesloaded = true;
-        setProgressbarValue(null);
+            numConcurrent++;
+            const imagedata = await fetch('https://ipfs.web4.near.page/ipfs/bafybeigkce5cwsexdffhoyiixqavwoifpbl457eyeprmtxcm4y4p2iwiie/ufo/' + schedule.imageUrl).then(r => r.arrayBuffer());
+            imageElement.src = URL.createObjectURL(new Blob([imagedata], { type: 'image/jpg' }));
+            numConcurrent--;
+            setProgressbarValue(videoschedule.filter(sch => sch.video != undefined).length / videoschedule.length);
+        }
+        schedule.video = {
+            imageElement
+        };
+    }));
+    setVideoSchedule(videoschedule);
 
-        setupWebGL(`
+    setProgressbarValue(null);
+
+    try {
+        await document.documentElement.requestFullscreen();
+    } catch(e) {
+        console.error('full screen not possible');
+    }
+    setupWebGL(`
         precision highp float;
         uniform vec2 resolution;
         uniform sampler2D uSampler;
@@ -141,8 +146,8 @@ playbutton.onclick = async () => {
               gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
           }
         }
-        `, document.getElementById('videocanvas'), () => audioCtx?.currentTime-songStartTime ?? 0);
-    }
+        `, document.getElementById('videocanvas'), () => audioCtx?.currentTime - songStartTime ?? 0);
+
     const bufferingtime = 0.2;
     chunkStartTime = audioCtx.currentTime + bufferingtime;
     songStartTime = chunkStartTime;
