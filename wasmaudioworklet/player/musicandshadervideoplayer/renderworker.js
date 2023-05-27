@@ -47,10 +47,6 @@ onmessage = async (msg) => {
             rightview.setFloat32(framepos * 4, wasmrightbuffer[n], isLittleEndian);
             framepos++;
         }
-
-        postMessage({
-            progress: framepos / durationFrames
-        });
     }
     postMessage({ leftbuffer, rightbuffer }, [leftbuffer, rightbuffer]);
 };

@@ -41,14 +41,13 @@ async function createBuffers(sendWasm = false) {
     });
     buffers.push({ leftbuffer, rightbuffer });
 }
-createBuffers(true);
 
 let chunkStartTime;
 
 const startAudioBufSrcNode = async () => {
     for (let bufferNdx = 0; audioCtx && bufferNdx < numBuffers; bufferNdx++) {
-        if (!buffers[bufferNdx]) {
-            await createBuffers();
+        while (!buffers[bufferNdx]) {
+            await new Promise(r => setTimeout(() => r(), 1));
         }
         const audioBuf = audioCtx.createBuffer(2, durationFrames, sampleRate);
         audioBuf.getChannelData(0).set(new Float32Array(buffers[bufferNdx].leftbuffer));
@@ -82,6 +81,19 @@ playbutton.onclick = async () => {
 
     let numConcurrent = 0;
     setProgressbarValue(0);
+
+    let renderStartTime = new Date().getTime();
+    let estimatedRenderTimeLeft;
+    (async () => {
+        await createBuffers(true);
+        for (let n=1;n<numBuffers;n++) {
+            await createBuffers();
+            
+            estimatedRenderTimeLeft = 1.5 * ((numBuffers - n) * (new Date().getTime()-renderStartTime) / n);
+            console.log(n,' / ',numBuffers, estimatedRenderTimeLeft);
+        }
+    })();
+
     await Promise.all(videoschedule.map(async (schedule, ndx) => {
         const imageElement = new Image();
         imageElement.crossOrigin = 'anonymous';
@@ -102,6 +114,12 @@ playbutton.onclick = async () => {
         };
     }));
     setVideoSchedule(videoschedule);
+
+    const totalDuration = durationMillis * numBuffers;
+    while (estimatedRenderTimeLeft > totalDuration) {
+        setProgressbarValue( totalDuration / estimatedRenderTimeLeft );
+        await new Promise(r => setTimeout(() => r(), 1));
+    }
 
     setProgressbarValue(null);
 
