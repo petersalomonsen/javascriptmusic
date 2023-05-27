@@ -459,7 +459,7 @@ loopHere();
         await compileSong(songsource);
         await Promise.all(Object.values(addedVideo).map(vid => new Promise(resolve => vid.imageElement.onload = () => resolve())));
 
-        expect(getActiveVideoiveVideo(0).src).to.equal(img1);
+        expect(getActiveVideo(0).src).to.equal(img1);
         expect(getActiveVideo(500).src).to.equal(img2);
         expect(getActiveVideo(1000).src).to.equal(img3);
         expect(getActiveVideo(1500).src).to.equal(img4);
