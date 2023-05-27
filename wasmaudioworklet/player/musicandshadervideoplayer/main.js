@@ -83,15 +83,21 @@ playbutton.onclick = async () => {
     setProgressbarValue(0);
 
     let renderStartTime = new Date().getTime();
-    let estimatedRenderTimeLeft;
+    
+    const totalDurationMillis = durationMillis * numBuffers;
+    let timeNotYetRendered = totalDurationMillis;
+    let estimatedRenderTimeLeft = timeNotYetRendered * 2;
     (async () => {
         await createBuffers(true);
+        timeNotYetRendered -= durationMillis;
         for (let n=1;n<numBuffers;n++) {
             await createBuffers();
-            
-            estimatedRenderTimeLeft = 1.5 * ((numBuffers - n) * (new Date().getTime()-renderStartTime) / n);
-            console.log(n,' / ',numBuffers, estimatedRenderTimeLeft);
+
+            estimatedRenderTimeLeft = ((numBuffers - n) * (new Date().getTime()-renderStartTime) / n);
+            timeNotYetRendered = durationMillis * (numBuffers - n);
         }
+        estimatedRenderTimeLeft = 0;
+        timeNotYetRendered = 0;
     })();
 
     await Promise.all(videoschedule.map(async (schedule, ndx) => {
@@ -107,7 +113,7 @@ playbutton.onclick = async () => {
             const imagedata = await fetch('https://ipfs.web4.near.page/ipfs/bafybeigkce5cwsexdffhoyiixqavwoifpbl457eyeprmtxcm4y4p2iwiie/ufo/' + schedule.imageUrl).then(r => r.arrayBuffer());
             imageElement.src = URL.createObjectURL(new Blob([imagedata], { type: 'image/jpg' }));
             numConcurrent--;
-            setProgressbarValue(videoschedule.filter(sch => sch.video != undefined).length / videoschedule.length);
+            setProgressbarValue(videoschedule.filter(sch => sch.video != undefined).length / videoschedule.length, 'loading images');
         }
         schedule.video = {
             imageElement
@@ -115,9 +121,8 @@ playbutton.onclick = async () => {
     }));
     setVideoSchedule(videoschedule);
 
-    const totalDuration = durationMillis * numBuffers;
-    while (estimatedRenderTimeLeft > totalDuration) {
-        setProgressbarValue( totalDuration / estimatedRenderTimeLeft );
+    while (estimatedRenderTimeLeft > timeNotYetRendered) {
+        setProgressbarValue( (totalDurationMillis - timeNotYetRendered) / totalDurationMillis, 'rendering audio' );
         await new Promise(r => setTimeout(() => r(), 1));
     }
 
