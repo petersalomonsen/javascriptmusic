@@ -176,17 +176,17 @@ export async function exportVideo(source, eventlist) {
     const { Muxer, FileSystemWritableFileStreamTarget } = (await import('https://cdn.jsdelivr.net/npm/webm-muxer@3.0.3/+esm')).default;
 
     let fileHandle = await window.showSaveFilePicker({
-         suggestedName: `video.webm`,
-         types: [{
-             description: 'Video File',
-             accept: { 'video/webm': ['.webm'] }
-         }],
-     });
-     let fileStream = await fileHandle.createWritable();
+        suggestedName: `video.webm`,
+        types: [{
+            description: 'Video File',
+            accept: { 'video/webm': ['.webm'] }
+        }],
+    });
+    let fileStream = await fileHandle.createWritable();
 
     const width = 1280, height = 720;
     let muxer = new Muxer({
-        target: new FileSystemWritableFileStreamTarget(fileStream),        
+        target: new FileSystemWritableFileStreamTarget(fileStream),
         video: {
             codec: 'V_VP9',
             width,
@@ -262,5 +262,5 @@ export async function exportVideo(source, eventlist) {
     console.log('Closing filestream');
     await fileStream.close();
     setProgressbarValue(null);
-    
+
 }
