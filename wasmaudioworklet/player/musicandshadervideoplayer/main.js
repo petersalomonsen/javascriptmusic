@@ -1,10 +1,11 @@
 import { decodeBufferFromPNG } from '../../common/png.js';
 import { setupWebGL } from '../../visualizer/fragmentshader.js';
-import videoschedule from '../../mediacontent/videoschedule.js';
+
 import { setVideoSchedule } from '../../visualizer/videoscheduler.js';
 import { setProgressbarValue } from '../../common/ui/progress-bar.js';
 
-const pngbytes = await fetch(new URL('https://ipfs.web4.near.page/ipfs/bafybeiekwcj5yz2z2ziorq6jga4mzwtceuren2msn6gjvjasctdvx3njhq/ufoplayer/ufo.wasm.png', import.meta.url)).then(r => r.arrayBuffer());
+const videoschedule = await fetch('https://ipfs.web4.near.page/ipfs/bafkreidfijq3nuaadxcq53nwe2dc4desh6qkpkqfdpastvpz4ygrxfa3pu?filename=videoschedule.json').then(r => r.json());
+const pngbytes = await fetch('https://ipfs.web4.near.page/ipfs/bafybeiekwcj5yz2z2ziorq6jga4mzwtceuren2msn6gjvjasctdvx3njhq/ufoplayer/ufo.wasm.png').then(r => r.arrayBuffer());
 const wasmBytes = await decodeBufferFromPNG(URL.createObjectURL(new Blob([pngbytes], { type: 'image/png' })));
 
 const sampleRate = 44100;
