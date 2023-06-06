@@ -43,6 +43,51 @@ async function createBuffers(sendWasm = false) {
     buffers.push({ leftbuffer, rightbuffer });
 }
 
+const result = await fetch('https://rpc.mainnet.near.org', {
+    method: 'POST',
+    headers: {
+        'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+        "jsonrpc": "2.0",
+        "id": "dontcare",
+        "method": "query",
+        "params": {
+            "request_type": "call_function",
+            "finality": "final",
+            "account_id": "jsinrustnft.near",
+            "method_name": "nft_token",
+            "args_base64": btoa(JSON.stringify({ token_id: '22' }))
+        }
+    })
+}).then(r => r.json());
+const nftdata = JSON.parse(result.result.result.map(c => String.fromCharCode(c)).join(''));
+
+async function createWelcomeImage() {
+
+    // Create the offscreen canvas element
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+
+    // Set canvas dimensions based on the text size
+    canvas.width = 1152;
+    canvas.height = 1280;
+
+    // Set canvas size and drawing context
+    context.font = "70px Arial";
+
+    // Set text color and draw text onto the canvas
+    context.fillStyle = '#fff';
+    const owner_width = context.measureText(nftdata.owner_id).width;
+    const id_width = context.measureText(nftdata.token_id).width;
+    
+    context.fillText(nftdata.owner_id, (canvas.width - owner_width) / 2, 400);
+    context.fillText('proudly presents', 350, 500);
+    context.fillText(nftdata.token_id, (canvas.width - id_width) / 2, 600);
+
+    return canvas.toDataURL();
+}
+
 let chunkStartTime;
 
 const startAudioBufSrcNode = async () => {
@@ -107,6 +152,8 @@ playbutton.onclick = async () => {
             }
         })();
 
+        const welcomeImageUrl = await createWelcomeImage();
+
         await Promise.all(videoschedule.map(async (schedule, ndx) => {
             const imageElement = new Image();
             imageElement.crossOrigin = 'anonymous';
@@ -121,8 +168,14 @@ playbutton.onclick = async () => {
                 let lasterror;
                 for (let retrycount = 0; retrycount < 3 && !imagedata; retrycount++) {
                     try {
-                        imagedata = await fetch('https://ipfs.web4.near.page/ipfs/bafybeigkce5cwsexdffhoyiixqavwoifpbl457eyeprmtxcm4y4p2iwiie/ufo/' + schedule.imageUrl).then(r => r.arrayBuffer());
-                        imageElement.src = URL.createObjectURL(new Blob([imagedata], { type: 'image/jpg' }));
+                        if (schedule.startTime <= 2000) {
+                            imagedata = welcomeImageUrl;
+                            imageElement.src = imagedata;
+                        } else {
+                            imagedata = await fetch('https://ipfs.web4.near.page/ipfs/bafybeigkce5cwsexdffhoyiixqavwoifpbl457eyeprmtxcm4y4p2iwiie/ufo/' + schedule.imageUrl).then(r => r.arrayBuffer());
+                            imageElement.src = URL.createObjectURL(new Blob([imagedata], { type: 'image/jpg' }));
+                        }
+
                         numConcurrent--;
                         setProgressbarValue(videoschedule.filter(sch => sch.video != undefined).length / videoschedule.length, 'loading images');
                     } catch (e) {
