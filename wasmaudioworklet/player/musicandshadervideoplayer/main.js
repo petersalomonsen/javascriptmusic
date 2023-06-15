@@ -5,8 +5,7 @@ import { setVideoSchedule } from '../../visualizer/videoscheduler.js';
 import { setProgressbarValue } from '../../common/ui/progress-bar.js';
 
 const videoschedule = await fetch('https://ipfs.web4.near.page/ipfs/bafkreidfijq3nuaadxcq53nwe2dc4desh6qkpkqfdpastvpz4ygrxfa3pu?filename=videoschedule.json').then(r => r.json());
-const pngbytes = await fetch('https://ipfs.web4.near.page/ipfs/bafybeiekwcj5yz2z2ziorq6jga4mzwtceuren2msn6gjvjasctdvx3njhq/ufoplayer/ufo.wasm.png').then(r => r.arrayBuffer());
-const wasmBytes = await decodeBufferFromPNG(URL.createObjectURL(new Blob([pngbytes], { type: 'image/png' })));
+const wasmBytes = await fetch('https://ipfs.web4.near.page/ipfs/bafkreia4im6lcfcgdy4wqeulmmt6v73nkmzabwwlaiivcmlgc7lt4f7nve?filename=ufo.wasm').then(r => r.arrayBuffer());
 
 const sampleRate = 44100;
 
@@ -43,7 +42,7 @@ async function createBuffers(sendWasm = false) {
     buffers.push({ leftbuffer, rightbuffer });
 }
 
-const result = await fetch('https://rpc.mainnet.near.org', {
+const result = await fetch('https://rpc.testnet.near.org', {
     method: 'POST',
     headers: {
         'content-type': 'application/json'
@@ -55,9 +54,9 @@ const result = await fetch('https://rpc.mainnet.near.org', {
         "params": {
             "request_type": "call_function",
             "finality": "final",
-            "account_id": "jsinrustnft.near",
+            "account_id": "superduper77.testnet",
             "method_name": "nft_token",
-            "args_base64": btoa(JSON.stringify({ token_id: '22' }))
+            "args_base64": btoa(JSON.stringify({ token_id: 'aliens_close_test' }))
         }
     })
 }).then(r => r.json());
