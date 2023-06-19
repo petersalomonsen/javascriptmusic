@@ -42,7 +42,7 @@ async function createBuffers(sendWasm = false) {
     buffers.push({ leftbuffer, rightbuffer });
 }
 
-const result = await fetch('https://rpc.testnet.near.org', {
+const result = await fetch('https://rpc.mainnet.near.org', {
     method: 'POST',
     headers: {
         'content-type': 'application/json'
@@ -54,9 +54,9 @@ const result = await fetch('https://rpc.testnet.near.org', {
         "params": {
             "request_type": "call_function",
             "finality": "final",
-            "account_id": "superduper77.testnet",
+            "account_id": "jsinrustnft.near",
             "method_name": "nft_token",
-            "args_base64": btoa(JSON.stringify({ token_id: 'aliens_close_test' }))
+            "args_base64": btoa(JSON.stringify({ token_id: 'aliens_close' }))
         }
     })
 }).then(r => r.json());
