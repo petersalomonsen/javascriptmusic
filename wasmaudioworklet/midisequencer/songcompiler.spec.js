@@ -1,4 +1,5 @@
-import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, getActiveVideo, addedVideo, getSongParts, reassembleSongParts } from './songcompiler.js';
+import { getActiveVideo } from '../visualizer/videoscheduler.js';
+import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, addedVideo, getSongParts, reassembleSongParts } from './songcompiler.js';
 
 describe('songcompiler', async function () {
     it('should compile a simple song', async () => {

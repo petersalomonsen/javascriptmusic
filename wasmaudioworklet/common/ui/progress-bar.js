@@ -56,17 +56,18 @@ customElements.define('progress-bar', class ProgressBar extends HTMLElement {
     }
 
     setValue(val) {
-        this.shadowRoot.querySelector('.progress-text').innerHTML = `${(val * 100).toFixed(0)}%`;
+        this.shadowRoot.querySelector('.progress-text').innerHTML = `${this.customText ?? (val * 100).toFixed(0) + '%'}`;
         this.shadowRoot.querySelector('.progress-fill').style.width = `${(val * 100).toFixed(2)}%`;
     }
 });
 
-export function setProgressbarValue(val) {
+export function setProgressbarValue(val, customText) {
     if (val !== null) {
         if (!progressbar) {
             progressbar = document.createElement('progress-bar');
             document.documentElement.appendChild(progressbar);
         }
+        progressbar.customText = customText;
         progressbar.setValue(val);
     } else if (progressbar) {
         progressbar.remove();

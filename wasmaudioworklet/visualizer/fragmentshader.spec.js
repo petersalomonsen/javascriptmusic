@@ -77,6 +77,10 @@ describe('fragmentshader', function() {
             }
         `;
         await setupWebGL(shadersource, document.querySelector('canvas'));
+        window.showSaveFilePicker = () => ({createWritable: () => ({
+            write: () => null,
+            close: () => null
+        })});
         await exportVideo(shadersource,[
             { time: 0, message: [144, 62, 127 ]},
             { time: 1, message: [144, 62, 0 ]},

@@ -1,6 +1,7 @@
 import { resetTick, setBPM, nextTick, currentTime, waitForBeat } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunctionKeys } from './trackerpattern.js';
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from './sequenceconstants.js';
+import { setVideoSchedule } from '../visualizer/videoscheduler.js';
 
 let songmessages = [];
 export let instrumentNames = [];
@@ -10,7 +11,6 @@ let muted = {};
 let solo = {};
 export let addedAudio = [];
 export const addedVideo = {};
-let videoSchedule = [];
 
 let trackerPatterns = [];
 let songParts = {};
@@ -143,7 +143,7 @@ export async function generateSong(songfunc) {
     songmessages = [];
     instrumentNames = [];
     trackerPatterns = [];
-    videoSchedule = [];
+    const videoSchedule = [];
     Object.values(addedVideo).forEach(vid => vid.schedule = []);
     muted = {};
     solo = {};
@@ -175,6 +175,7 @@ export async function generateSong(songfunc) {
         })
     );
     videoSchedule.sort((a, b) => b.startTime - a.startTime);
+    setVideoSchedule(videoSchedule);
 
     const loopMessageIndex = songmessages.findIndex(evt => evt.message == SEQ_MSG_LOOP);
     if (loopMessageIndex > -1) {
@@ -325,21 +326,4 @@ export function reassembleSongParts(parts, partsArrangement) {
     return eventList;
 }
 
-export function getActiveVideo(milliseconds) {
-    const activeSchedule = videoSchedule.find(sch => {
-        if (sch.startTime <= milliseconds && (!sch.stopTime || sch.stopTime > milliseconds)) {
-            return true;
-        } else {
-            return false;
-        }
-    });
-    if (activeSchedule) {
-        if (activeSchedule.video.AsyncFunctionvideoElement) {
-            activeSchedule.video.videoElement.currentTime = ((milliseconds - activeSchedule.startTime + activeSchedule.clipStartTime) / 1000).toFixed(2);
-            return activeSchedule.video.videoElement;
-        } else if (activeSchedule.video.imageElement && activeSchedule.video.imageElement.complete) {
-            return activeSchedule.video.imageElement;
-        }
-    }
-}
 
