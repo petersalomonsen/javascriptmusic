@@ -143,7 +143,7 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
                 <table>
                     ${clips.slice(0, 100).map(clip => `<tr>
                         <td>${formatTime(clip.time * 1000)}</td>
-                        <td>${clip.channel ? 'right' : 'left'}</td>
+                        <td>${clip.channel ? 'right' : 'left'}: ${clip.value}</td>
                     </tr>`).join('')
             }
                 </table>

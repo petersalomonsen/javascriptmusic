@@ -18,17 +18,18 @@ class LevelAnalyserProcessor extends AudioWorkletProcessor {
 
     process(inputs, outputs, parameters) {
         const numChannels = inputs[0].length;
-        const threshold = 0.9;
+        const threshold = 1.0;
 
         for (let ch = 0; ch < numChannels; ch++) {
             const channeldata = inputs[0][ch];
             for (let n = 0; n < channeldata.length; n++) {
-                if (Math.abs(channeldata[n]) >= threshold) {
+                if (Math.abs(channeldata[n]) > threshold) {
                     this.stats.clips.push({
                         channel: ch,
                         position: this.position + n,
                         time: ((this.position + n) / sampleRate),
-                        currentTime: currentTime
+                        currentTime: currentTime,
+                        value: channeldata[n]
                     });
                 }
 
