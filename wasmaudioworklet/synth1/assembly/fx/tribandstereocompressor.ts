@@ -3,8 +3,6 @@ import { StereoSignal } from "../synth/stereosignal.class";
 import { StereoCompressor } from "./stereocompressor";
 import { SAMPLERATE } from "../environment";
 
-let COMPRESSOR_NUM_SAMPLES: usize = (SAMPLERATE * 0.2) as usize;
-
 export class TriBandStereoCompressor {
     lowerbandl: EQBand;    
     midbandl: EQBand;    
@@ -14,13 +12,17 @@ export class TriBandStereoCompressor {
     midbandr: EQBand;    
     hibandr: EQBand;
     
-    compressorLow: StereoCompressor = new StereoCompressor(COMPRESSOR_NUM_SAMPLES);
-    compressorMid: StereoCompressor = new StereoCompressor(COMPRESSOR_NUM_SAMPLES);
-    compressorHigh: StereoCompressor = new StereoCompressor(COMPRESSOR_NUM_SAMPLES);
+    compressorLow: StereoCompressor;
+    compressorMid: StereoCompressor;
+    compressorHigh: StereoCompressor;
 
     stereosignal: StereoSignal = new StereoSignal();
 
-    constructor(low: f32, midlo: f32, midhi: f32, high: f32) {
+    constructor(compressor_delay: f32, low: f32, midlo: f32, midhi: f32, high: f32) {
+        this.compressorLow = new StereoCompressor((SAMPLERATE * compressor_delay) as usize);
+        this.compressorMid = new StereoCompressor((SAMPLERATE * compressor_delay) as usize);
+        this.compressorHigh = new StereoCompressor((SAMPLERATE * compressor_delay) as usize);
+
         this.lowerbandl = new EQBand(low, midlo);
         this.lowerbandr = new EQBand(low, midlo);
         
