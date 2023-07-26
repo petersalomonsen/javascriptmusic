@@ -17,7 +17,7 @@ describe('levelanalyser', async function () {
         oscNode.start(0);
 
         const gainNode = offlineCtx.createGain();
-        gainNode.gain.setValueAtTime(1, 0);
+        gainNode.gain.setValueAtTime(1.1, 0);
         oscNode.connect(gainNode);
 
         const getStats = await connectLevelAnalyser(gainNode);
