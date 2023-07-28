@@ -55,11 +55,26 @@ export class DelayLine {
             this.currentPeakSamplesToLive = this.numsamples;
         } else if (this.currentPeakSamplesToLive > 0) {
             this.currentPeakSamplesToLive--;
-            if (this.currentPeakSamplesToLive === 0) {
-                this.currentPeak = 0;
-            }
+        }
+        if (this.currentPeakSamplesToLive == 0) {
+            this.currentPeak = this.calculatePeakValue();
         }
         return this.currentPeak;
+    }
+
+    private calculatePeakValue(): f32 {
+        let peak: f32 = 0.0;
+        for (let i: usize = 0; i < this.length; i += 4) {
+            let value = load<f32>(this.bufferPointer + i);
+            if (value < 0) {
+                value = -value;
+            }
+            if (value > peak) {
+                peak = value;
+                this.currentPeakSamplesToLive = ((i >= this.index) ? (i - this.index) : ((this.length) - this.index) + i) >> 2;
+            }
+        }
+        return peak;
     }
 
     write_and_advance(value: f32): void {
@@ -76,36 +91,36 @@ export class DelayLine {
 export class DelayLineFloat {
     buffer: StaticArray<f32>;
     frame: f64 = 0;
-  	numframes: f64 = 1;
-  	previous: f32;
-  	allpass: AllPassFloat = new AllPassFloat();
-  
-    constructor(private buffersizeframes: i32) {        
+    numframes: f64 = 1;
+    previous: f32;
+    allpass: AllPassFloat = new AllPassFloat();
+
+    constructor(private buffersizeframes: i32) {
         this.buffer = new StaticArray<f32>(buffersizeframes);
     }
 
-    read(): f32 {        
-      const index = this.frame as i32 % this.buffer.length;
-      return this.allpass.process(this.buffer[index]);
+    read(): f32 {
+        const index = this.frame as i32 % this.buffer.length;
+        return this.allpass.process(this.buffer[index]);
     }
-  	
+
     reset(): void {
         this.allpass.previousoutput = 0;
         this.allpass.previousinput = 0;
-        for (let n = 0; n < this.numframes;n++) {	
+        for (let n = 0; n < this.numframes; n++) {
             this.buffer[n] = 0;
         }
         this.frame = 0;
     }
 
-  	setNumFramesAndClear(numframes: f64): void {
-      this.numframes = Math.floor(numframes);
-      this.allpass.setDelta ( (numframes - this.numframes) as f32 );
-      this.reset();
+    setNumFramesAndClear(numframes: f64): void {
+        this.numframes = Math.floor(numframes);
+        this.allpass.setDelta((numframes - this.numframes) as f32);
+        this.reset();
     }
 
     write_and_advance(value: f32): void {
-      const index = ((this.frame++) + this.numframes) as i32 % this.buffer.length;
-      this.buffer[index] = value;
+        const index = ((this.frame++) + this.numframes) as i32 % this.buffer.length;
+        this.buffer[index] = value;
     }
 }
