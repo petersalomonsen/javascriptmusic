@@ -7,7 +7,7 @@ export function isSointuSong(song) {
     return song.instruments.findIndex(instr => instr.sointu) > -1;
 }
 
-export async function getSointuWasm(song) {
+export async function getSointuYaml(song) {
     if (!scriptspromise) {
         globalThis.exports = {};
         scriptspromise = loadScript('https://cdn.jsdelivr.net/npm/wabt@1.0.32/index.js');
@@ -66,13 +66,16 @@ export async function getSointuWasm(song) {
         },
         patch: song.instruments.map(instr => instr.sointu)
     };
+    return jsYaml.dump(sointusong);
+}
 
+export async function getSointuWasm(song) {
     const wat = await fetch('https://sointu-server-c6w7hd53ia-uc.a.run.app/process', {
         method: 'POST',
         headers: {
             'content-type': 'application/json'
         },
-        body: JSON.stringify({ content: jsYaml.dump(sointusong) })
+        body: JSON.stringify({ content: await getSointuYaml(song) })
     }).then(r => r.text());
 
     const wabt = await exports.WabtModule();
