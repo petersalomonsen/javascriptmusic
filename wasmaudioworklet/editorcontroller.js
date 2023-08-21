@@ -339,6 +339,7 @@ export async function initEditor(componentRoot) {
 
                 if (isSointuSong(song)) {
                     songmode = SONG_MODE_SOINTU;
+                    toggleEditors('assemblyscripteditor', false);
                 }
     
                 if (exportProject) {

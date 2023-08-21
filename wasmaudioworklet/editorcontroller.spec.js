@@ -1,6 +1,7 @@
 import { waitForAppReady } from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { commitAndSyncRemote, log } from './wasmgit/wasmgitclient.js';
+import { songsource as sointutestsong, expectedYaml } from './sointu/sointutestsong.js';
 
 describe('editorcontroller', async function () {
     this.timeout(30000);
@@ -225,6 +226,117 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
 
         assert.isAbove(wasmbinary.byteLength, 1000);
         assert.isDefined((await WebAssembly.instantiate(wasmbinary)).instance.exports.fillSampleBuffer);
+        document.createElement = document._createElement;
+    });
+});
+
+
+describe('editorcontroller with sointu source', async function () {
+    this.timeout(30000);
+    this.beforeAll(async () => {
+        document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
+        await waitForAppReady();
+    });
+    this.afterAll(async () => {
+        window.stopaudio();
+        window.audioworkletnode = undefined;
+        document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
+    });
+
+    const songsource = sointutestsong;
+
+    it('should compile sointu test song', async () => {
+        songsourceeditor.doc.setValue(songsource);
+        synthsourceeditor.doc.setValue('');
+        const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
+        let audioWorkletMessage;
+        window.audioworkletnode = {
+            port: {
+                postMessage: msg => audioWorkletMessage = msg
+            },
+            context: {
+                sampleRate: 44100
+            }
+        };
+        appElement.querySelector('#savesongbutton').click();
+        while (!audioWorkletMessage) {
+            await new Promise((resolve) => setTimeout(() => resolve(), 1000));
+        }
+        assert.equal(localStorage.getItem('storedsynthcode'), '');
+        assert.equal(localStorage.getItem('storedsongcode'), songsource);
+        assert.equal(audioWorkletMessage.song.instrumentPatternLists.length, 5);
+        assert.equal(audioWorkletMessage.song.patterns.length, 4);
+        assert.equal(appElement.getElementById('assemblyscripteditor').style.display, 'none');
+    });
+
+    it('should compile and export song to sointu yaml', async () => {
+        songsourceeditor.doc.setValue(songsource);
+        synthsourceeditor.doc.setValue('');
+        const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
+        let audioWorkletMessage;
+        window.audioworkletnode = {
+            port: {
+                postMessage: msg => audioWorkletMessage = msg
+            },
+            context: {
+                sampleRate: 44100
+            }
+        };
+        const downloadPromise = new Promise(resolve => {
+            document._createElement = document.createElement;
+            document.createElement = function (elementName, options) {
+                const elm = this._createElement(elementName, options);
+                if (elementName === 'a') {
+                    elm.click = () => resolve(elm.href);
+                } else if (elementName === 'common-modal') {
+                    elm.shadowRoot.result('sointuyaml');
+                }
+                return elm;
+            }
+        });
+
+        appElement.querySelector('#exportbutton').click();
+        const url = await downloadPromise;
+
+        const sointuyaml = await fetch(url).then(r => r.text());
+        
+        assert.equal(sointuyaml, expectedYaml);
+        document.createElement = document._createElement;
+    });
+    it('should compile and export song to wasm with lib functions exported', async () => {
+        songsourceeditor.doc.setValue(songsource);
+        synthsourceeditor.doc.setValue('');
+        const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
+        let audioWorkletMessage;
+        window.audioworkletnode = {
+            port: {
+                postMessage: msg => audioWorkletMessage = msg
+            },
+            context: {
+                sampleRate: 44100
+            }
+        };
+        const downloadPromise = new Promise(resolve => {
+            document._createElement = document.createElement;
+            document.createElement = function (elementName, options) {
+                const elm = this._createElement(elementName, options);
+
+                if (elementName === 'a') {
+                    elm.click = () => resolve(elm.href);
+                } else if (elementName === 'common-modal') {
+                    elm.shadowRoot.result('wasmmodule');
+                }
+                return elm;
+            }
+        });
+
+        appElement.querySelector('#exportbutton').click();
+        const url = await downloadPromise;
+
+        const wasmbinary = await fetch(url).then(r => r.arrayBuffer());
+
+        assert.isAbove(wasmbinary.byteLength, 1000);
+        assert.isDefined((await WebAssembly.instantiate(wasmbinary)).instance.exports.render_128_samples);
         document.createElement = document._createElement;
     });
 });
