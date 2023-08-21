@@ -3,7 +3,7 @@ let stderr;
 let captureOutput = false;
 let currentRepoRootDir;
 const CONFIG_FILE = 'wasmmusic.config.json';
-const WASM_GIT_BASE_URL = 'https://unpkg.com/wasm-git@0.0.9/';
+const WASM_GIT_BASE_URL = 'https://unpkg.com/wasm-git@0.0.11/';
 
 var Module = {
   locateFile: function (s) {

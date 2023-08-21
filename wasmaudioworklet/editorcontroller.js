@@ -16,12 +16,16 @@ import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
-import { isSointuSong, getSointuWasm } from './sointu/playsointu.js';
+import { isSointuSong, getSointuWasm, getSointuYaml } from './sointu/playsointu.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
 export let shadersourceeditor;
 let gitrepoconfig = null;
+
+const SONG_MODE_WASM = 'WASM';
+const SONG_MODE_SOINTU = 'sointu';
+const SONG_MODE_PROTRACKER = 'protracker';
 
 async function loadCodeMirror() {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js');
@@ -166,11 +170,11 @@ export async function initEditor(componentRoot) {
         let songmode = 'midi';
         if (songsource.indexOf('SONGMODE=PROTRACKER') >= 0) {
             // special mode: we are building an amiga protracker module
-            songmode = 'protracker';
+            songmode = SONG_MODE_PROTRACKER;
         } else if (
             songsource.indexOf('global.pattern_size_shift') > -1 ||
             songsource.indexOf('global.bpm') > -1) {
-            songmode = 'WASM';
+            songmode = SONG_MODE_WASM;
             window.insertRecording = () => insertRecording4klang(insertStringIntoEditor);
         } else {
             const synthSourceIsXML = synthsource.startsWith('<?xml');
@@ -250,8 +254,8 @@ export async function initEditor(componentRoot) {
                             );
                             triggerDownload(URL.createObjectURL(new Blob([wasmbytes], { type: "octet/stream" })), 'song.wasm');
                         } else if (
-                                exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB ||
-                                exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG) {
+                            exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB ||
+                            exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG) {
                             const multipartsequence = createMultipatternSequence();
                             const wasmbytes = await compileWebAssemblySynth(synthsource,
                                 multipartsequence,
@@ -277,9 +281,9 @@ export async function initEditor(componentRoot) {
                         } else if (exportProject === 'video') {
                             await exportVideo(shadersource, eventlist);
                         } else if (exportProject === EXPORT_MODE_MIDIPARTS_JSON) {
-                            const songParts = getSongParts();                            
+                            const songParts = getSongParts();
                             triggerDownload(URL.createObjectURL(new Blob([JSON.stringify(songParts)],
-                                            { type: "application/json" })), 'songmidiparts.json');
+                                { type: "application/json" })), 'songmidiparts.json');
                         }
                     }
                     toggleSpinner(false);
@@ -299,7 +303,7 @@ export async function initEditor(componentRoot) {
         const patternToolsGlobal = createPatternToolsGlobal();
         try {
             window.WASM_SYNTH_LOCATION = null;
-            if (songmode === 'WASM') {
+            if (songmode == SONG_MODE_WASM) {
                 const songfunc = new Function(
                     ['global'].concat(Object.keys(patternToolsGlobal)),
                     songsource);
@@ -333,40 +337,76 @@ export async function initEditor(componentRoot) {
                 // if not a precompiled wasm file available in WASM_SYNTH_LOCATION              
                 toggleSpinner(true);
 
+                if (isSointuSong(song)) {
+                    songmode = SONG_MODE_SOINTU;
+                    toggleEditors('assemblyscripteditor', false);
+                }
+    
                 if (exportProject) {
                     toggleSpinner(false);
-                    exportProject = await modal(`
-                        <h3>Select WASM module type to export</h3>
-                        <p>
-                            <form>
-                            <label><input type="radio" name="exporttype" value="wasimain" checked="checked">Self executable WASI module</label><br />
-                            <label><input type="radio" name="exporttype" value="libmodule">Library module</label><br />
-                            </form>
-                        </p>
-                        <button onclick="getRootNode().result(null)">Cancel</button>
-                        <button onclick="getRootNode().result(new FormData(getRootNode().querySelector('form')).get('exporttype'))">
-                            Generate WASM module
-                        </button>
-                    `);
+                    if (songmode == SONG_MODE_WASM) {
+                        exportProject = await modal(`
+                            <h3>Select WASM module type to export</h3>
+                            <p>
+                                <form>
+                                <label><input type="radio" name="exporttype" value="wasimain" checked="checked">Self executable WASI module</label><br />
+                                <label><input type="radio" name="exporttype" value="libmodule">Library module</label><br />
+                                </form>
+                            </p>
+                            <button onclick="getRootNode().result(null)">Cancel</button>
+                            <button onclick="getRootNode().result(new FormData(getRootNode().querySelector('form')).get('exporttype'))">
+                                Generate WASM module
+                            </button>
+                        `);
+                    } else if (songmode == SONG_MODE_SOINTU) {
+                        exportProject = await modal(`
+                            <h3>Select export type</h3>
+                            <p>
+                                <form>
+                                <label><input type="radio" name="exporttype" value="wasmmodule" checked="checked">Wasm module</label><br />
+                                <label><input type="radio" name="exporttype" value="sointuyaml">Sointu YAML</label><br />
+                                </form>
+                            </p>
+                            <button onclick="getRootNode().result(null)">Cancel</button>
+                            <button onclick="getRootNode().result(new FormData(getRootNode().querySelector('form')).get('exporttype'))">
+                                Export
+                            </button>
+                        `);
+                    } else if (songmode == SONG_MODE_PROTRACKER) {
+                        exportProject = await modal(`
+                            <h3>Select export type</h3>
+                            <p>
+                                <form>
+                                <label><input type="radio" name="exporttype" value="protrackermodule" checked="checked">Protracker module</label><br />
+                                </form>
+                            </p>
+                            <button onclick="getRootNode().result(null)">Cancel</button>
+                            <button onclick="getRootNode().result(new FormData(getRootNode().querySelector('form')).get('exporttype'))">
+                                Export
+                            </button>
+                        `);
+                    }
                     toggleSpinner(true);
                 }
 
                 let synthwasm;
-                
-                if (isSointuSong(song)) {
+
+                if (songmode == SONG_MODE_SOINTU) {
                     synthwasm = await getSointuWasm(song);
                 } else {
                     synthwasm = await compileWebAssemblySynth(synthsource,
-                        exportProject && songmode === 'WASM' ? song : undefined,
-                        songmode === 'protracker' ? 55856 :
+                        exportProject && songmode === SONG_MODE_WASM ? song : undefined,
+                        songmode === SONG_MODE_PROTRACKER ? 55856 :
                             new AudioContext().sampleRate,
                         exportProject
                     );
                 }
-                                
+
                 if (synthwasm) {
-                    if (exportProject) {
-                        triggerDownload(URL.createObjectURL(new Blob([synthwasm], {type: 'application/octet-stream'})), 'song.wasm');
+                    if (exportProject == 'sointuyaml') {
+                        triggerDownload(URL.createObjectURL(new Blob([await getSointuYaml(song)], { type: 'application/yaml' })), 'song.yaml');
+                    } if (exportProject) {
+                        triggerDownload(URL.createObjectURL(new Blob([synthwasm], { type: 'application/octet-stream' })), 'song.wasm');
                     } else {
                         window.WASM_SYNTH_BYTES = synthwasm;
                         webassemblySynthUpdated = true;
@@ -382,7 +422,7 @@ export async function initEditor(componentRoot) {
         toggleSpinner(false);
         console.log('song mode', songmode);
 
-        if (songmode === 'protracker') {
+        if (songmode === SONG_MODE_PROTRACKER) {
             const songworker = new Worker(
                 URL.createObjectURL(new Blob([
                     songsource.split("from './lib/").join(`from '${location.origin}${location.pathname === '/' ? '' : location.pathname}/synth1/modformat/lib/`)
@@ -397,7 +437,7 @@ export async function initEditor(componentRoot) {
             const song = await modreciever;
             if (exportProject) {
                 const linkElement = document.createElement('a');
-                linkElement.href = URL.createObjectURL(new Blob([song.modbytes], {type: 'application/octet-stream'}));
+                linkElement.href = URL.createObjectURL(new Blob([song.modbytes], { type: 'application/octet-stream' }));
                 linkElement.download = `${song.name.replace(/[^A-Za-z0-9]+/g, '_').toLowerCase()}.mod`;
                 linkElement.click();
             }

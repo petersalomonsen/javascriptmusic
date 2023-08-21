@@ -192,11 +192,6 @@ class SointuAudioWorkletProcessor extends AudioWorkletProcessor {
             }
             const shouldUpdateVoices = this.wasmInstance.render_128_samples();
             if (this.playing && shouldUpdateVoices) {
-                /*console.log(this.wasmInstance.tick.value,
-                    this.wasmInstance.row.value,
-                    this.wasmInstance.pattern.value,
-                    this.wasmInstance.sample.value,
-                    this.wasmInstance.outputBufPtr.value);*/
                 this.wasmInstance.update_voices();
             }
 
