@@ -16,6 +16,7 @@
         }
     },
     "options": {
+        "initialMemory": 1024,
         "exportMemory": true,
         "outFile": "output.wasm",
         "textFile": "output.wat",
