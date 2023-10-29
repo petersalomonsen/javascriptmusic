@@ -33,8 +33,8 @@
     },
     "devDependencies": {
         "@as-pect/cli": "^8.1.0",
-        "@rollup/plugin-terser": "^0.3.0",
-        "@web/rollup-plugin-html": "^1.11.0",
+        "@rollup/plugin-terser": "^0.4.4",
+        "@web/rollup-plugin-html": "^2.0.1",
         "chai": "^4.3.7",
         "http-server": "^14.1.1",
         "karma": "^6.4.1",
@@ -44,7 +44,7 @@
         "karma-mocha": "^2.0.1",
         "karma-safari-launcher": "^1.0.0",
         "mocha": "^10.2.0",
-        "rollup": "^3.9.1",
+        "rollup": "^4.1.5",
         "rollup-plugin-terser": "^7.0.2"
     },
     "dependencies": {

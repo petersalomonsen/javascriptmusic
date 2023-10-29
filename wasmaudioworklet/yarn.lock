@@ -206,14 +206,74 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@rollup/plugin-terser@^0.3.0":
-  version "0.3.0"
-  resolved "https://registry.yarnpkg.com/@rollup/plugin-terser/-/plugin-terser-0.3.0.tgz#43ee908fed27ed2bc876496fb9aab8033a0566ac"
-  integrity sha512-mYTkNW9KjOscS/3QWU5LfOKsR3/fAAVDaqcAe2TZ7ng6pN46f+C7FOZbITuIW/neA+PhcjoKl7yMyB3XcmA4gw==
+"@rollup/plugin-terser@^0.4.4":
+  version "0.4.4"
+  resolved "https://registry.yarnpkg.com/@rollup/plugin-terser/-/plugin-terser-0.4.4.tgz#15dffdb3f73f121aa4fbb37e7ca6be9aeea91962"
+  integrity sha512-XHeJC5Bgvs8LfukDwWZp7yeqin6ns8RTl2B9avbejt6tZqsqvVoWI7ZTQrcNsfKEDWBTnTxM8nMDkO2IFFbd0A==
   dependencies:
-    serialize-javascript "^6.0.0"
-    smob "^0.0.6"
-    terser "^5.15.1"
+    serialize-javascript "^6.0.1"
+    smob "^1.0.0"
+    terser "^5.17.4"
+
+"@rollup/rollup-android-arm-eabi@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-android-arm-eabi/-/rollup-android-arm-eabi-4.1.5.tgz#aa13d291631fe72552ca2adba50f8d58ef2cde6f"
+  integrity sha512-/fwx6GS8cIbM2rTNyLMxjSCOegHywOdXO+kN9yFy018iCULcKZCyA3xvzw4bxyKbYfdSxQgdhbsl0egNcxerQw==
+
+"@rollup/rollup-android-arm64@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-android-arm64/-/rollup-android-arm64-4.1.5.tgz#b17d7262f00654296e8167b8b7a6708b79a29dc1"
+  integrity sha512-tmXh7dyEt+JEz/NgDJlB1UeL/1gFV0v8qYzUAU42WZH4lmUJ5rp6/HkR2qUNC5jCgYEwd8/EfbHKtGIEfS4CUg==
+
+"@rollup/rollup-darwin-arm64@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-darwin-arm64/-/rollup-darwin-arm64-4.1.5.tgz#7ddfe2dc9f369fc9560d007a5297492e2d289f45"
+  integrity sha512-lTDmLxdEVhzI3KCesZUrNbl3icBvPrDv/85JasY5gh4P2eAuDFmM4uj9HC5DdH0anLC0fwJ+1Uzasr4qOXcjRQ==
+
+"@rollup/rollup-darwin-x64@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-darwin-x64/-/rollup-darwin-x64-4.1.5.tgz#76d4b023964bfbf9dcfb9d968e3707841935f198"
+  integrity sha512-v6qEHZyjWnIgcc4oiy8AIeFsUJAx+Kg0sLj+RE7ICwv3u7YC/+bSClxAiBASRjMzqsq0Z+I/pfxj+OD8mjBYxg==
+
+"@rollup/rollup-linux-arm-gnueabihf@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-linux-arm-gnueabihf/-/rollup-linux-arm-gnueabihf-4.1.5.tgz#ed0bff049b47126635908b095d421c699fe11996"
+  integrity sha512-WngCfwPEDUNbZR1FNO2TCROYUwJvRlbvPi3AS85bDUkkoRDBcjUIz42cuB1j4PKilmnZascL5xTMF/yU8YFayA==
+
+"@rollup/rollup-linux-arm64-gnu@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-linux-arm64-gnu/-/rollup-linux-arm64-gnu-4.1.5.tgz#a79023f1fa1ca7f0fc8bec343e87ee48ce67d159"
+  integrity sha512-Q2A/PEP/UTPTOBwgar3mmCaApahoezai/8e/7f4GCLV6XWCpnU4YwkQQtla7d7nUnc792Ps7g1G0WMovzIknrA==
+
+"@rollup/rollup-linux-arm64-musl@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-linux-arm64-musl/-/rollup-linux-arm64-musl-4.1.5.tgz#d9629d2cdd3a16a9001715e13a53de27030b9ba6"
+  integrity sha512-84aBKNAVzTU/eG3tb2+kR4NGRAtm2YVW/KHwkGGDR4z1k4hyrDbuImsfs/6J74t6y0YLOe9HOSu7ejRjzUBGVQ==
+
+"@rollup/rollup-linux-x64-gnu@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-linux-x64-gnu/-/rollup-linux-x64-gnu-4.1.5.tgz#1867e169a32f6d9d302df443dd0fbef25f5b34e0"
+  integrity sha512-mldtP9UEBurIq2+GYMdNeiqCLW1fdgf4KdkMR/QegAeXk4jFHkKQl7p0NITrKFVyVqzISGXH5gR6GSTBH4wszw==
+
+"@rollup/rollup-linux-x64-musl@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-linux-x64-musl/-/rollup-linux-x64-musl-4.1.5.tgz#fcd449c2838c61c2c320ae8de717961dc5c98d1b"
+  integrity sha512-36p+nMcSxjAEzfU47+by102HolUtf/EfgBAidocTKAofJMTqG5QD50qzaFLk4QO+z7Qvg4qd0wr99jGAwnKOig==
+
+"@rollup/rollup-win32-arm64-msvc@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-win32-arm64-msvc/-/rollup-win32-arm64-msvc-4.1.5.tgz#d4a674b472b0a31d8a8f9406b79933a6ccdb9efb"
+  integrity sha512-5oxhubo0A3J8aF/tG+6jHBg785HF8/88kl1YnfbDKmnqMxz/EFiAQDH9cq6lbnxofjn8tlq5KiTf0crJGOGThg==
+
+"@rollup/rollup-win32-ia32-msvc@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-win32-ia32-msvc/-/rollup-win32-ia32-msvc-4.1.5.tgz#a54c21255306f21429abf2a5c8b05909fe27b0e1"
+  integrity sha512-uVQyBREKX9ErofL8KAZ4iVlqzSZOXSIG+BOLYuz5FD+Cg6jh1eLIeUa3Q4SgX0QaTRFeeAgSNqCC+8kZrZBpSw==
+
+"@rollup/rollup-win32-x64-msvc@4.1.5":
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/@rollup/rollup-win32-x64-msvc/-/rollup-win32-x64-msvc-4.1.5.tgz#121eb95664a46afbc58d4fe2226b9dd9f8dcc59b"
+  integrity sha512-FQ5qYqRJ2vUBSom3Fos8o/6UvAMOvlus4+HGCAifH1TagbbwVnVVe0o01J1V52EWnQ8kmfpJDJ0FMrfM5yzcSA==
 
 "@socket.io/component-emitter@~3.1.0":
   version "3.1.0"
@@ -257,20 +317,20 @@
   resolved "https://registry.yarnpkg.com/@types/parse5/-/parse5-6.0.3.tgz#705bb349e789efa06f43f128cef51240753424cb"
   integrity sha512-SuT16Q1K51EAVPz1K29DJ/sXjhSQ0zjvsypYJ6tlwVsRV9jwW5Adq2ch8Dq8kDBCkYnELS7N7VNCSB5nC56t/g==
 
-"@web/parse5-utils@^1.3.1":
-  version "1.3.1"
-  resolved "https://registry.yarnpkg.com/@web/parse5-utils/-/parse5-utils-1.3.1.tgz#6727be4d7875a9ecb96a5b3003bd271da763f8b4"
-  integrity sha512-haCgDchZrAOB9EhBJ5XqiIjBMsS/exsM5Ru7sCSyNkXVEJWskyyKuKMFk66BonnIGMPpDtqDrTUfYEis5Zi3XA==
+"@web/parse5-utils@^2.0.0":
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/@web/parse5-utils/-/parse5-utils-2.0.2.tgz#263df67fb4262738c891314199b666f5bd96781b"
+  integrity sha512-TogrPNt36zOSjbEd8zoDmUGsN2dqMbk4U+2DrxsnbVxtUIBRCNPIuZ+XeoGF8gpxe2/Yf0dIVz+HW5+wEnqkCg==
   dependencies:
     "@types/parse5" "^6.0.1"
     parse5 "^6.0.1"
 
-"@web/rollup-plugin-html@^1.11.0":
-  version "1.11.1"
-  resolved "https://registry.yarnpkg.com/@web/rollup-plugin-html/-/rollup-plugin-html-1.11.1.tgz#1d34d47faf92c3f91f8a91c831e3df20d9307808"
-  integrity sha512-E7dzkyC55vfR2jxNjTTpJ35PBF+Pp8EldOC4HZtXXUrwiAR1DsoDXeSxhbbtcVwNxqJBrJxMobOLfFrmVstAZA==
+"@web/rollup-plugin-html@^2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@web/rollup-plugin-html/-/rollup-plugin-html-2.0.1.tgz#735e5febd8c7874d573a206bb6d594f876a60412"
+  integrity sha512-4z0whGiRar8IYNqdid0QBgah3rPib/I4SFt2cB2mqLkQNHXWNCjRrIzhdrZPaTxUlshJNhbTHtEi/epT1mhLkQ==
   dependencies:
-    "@web/parse5-utils" "^1.3.1"
+    "@web/parse5-utils" "^2.0.0"
     glob "^7.1.6"
     html-minifier-terser "^7.1.0"
     parse5 "^6.0.1"
@@ -4079,11 +4139,23 @@ rollup-plugin-terser@^7.0.2:
     serialize-javascript "^4.0.0"
     terser "^5.0.0"
 
-rollup@^3.9.1:
-  version "3.29.4"
-  resolved "https://registry.yarnpkg.com/rollup/-/rollup-3.29.4.tgz#4d70c0f9834146df8705bfb69a9a19c9e1109981"
-  integrity sha512-oWzmBZwvYrU0iJHtDmhsm662rC15FRXmcjCk1xD771dFDx5jJ02ufAQQTn0etB2emNk4J9EZg/yWKpsn9BWGRw==
+rollup@^4.1.5:
+  version "4.1.5"
+  resolved "https://registry.yarnpkg.com/rollup/-/rollup-4.1.5.tgz#0838662dbf56f4b3fdbe4de5f232212a302b198c"
+  integrity sha512-AEw14/q4NHYQkQlngoSae2yi7hDBeT9w84aEzdgCr39+2RL+iTG84lGTkgC1Wp5igtquN64cNzuzZKVz+U6jOg==
   optionalDependencies:
+    "@rollup/rollup-android-arm-eabi" "4.1.5"
+    "@rollup/rollup-android-arm64" "4.1.5"
+    "@rollup/rollup-darwin-arm64" "4.1.5"
+    "@rollup/rollup-darwin-x64" "4.1.5"
+    "@rollup/rollup-linux-arm-gnueabihf" "4.1.5"
+    "@rollup/rollup-linux-arm64-gnu" "4.1.5"
+    "@rollup/rollup-linux-arm64-musl" "4.1.5"
+    "@rollup/rollup-linux-x64-gnu" "4.1.5"
+    "@rollup/rollup-linux-x64-musl" "4.1.5"
+    "@rollup/rollup-win32-arm64-msvc" "4.1.5"
+    "@rollup/rollup-win32-ia32-msvc" "4.1.5"
+    "@rollup/rollup-win32-x64-msvc" "4.1.5"
     fsevents "~2.3.2"
 
 run-queue@^1.0.0, run-queue@^1.0.3:
@@ -4158,7 +4230,7 @@ serialize-javascript@^4.0.0:
   dependencies:
     randombytes "^2.1.0"
 
-serialize-javascript@^6.0.0:
+serialize-javascript@^6.0.1:
   version "6.0.1"
   resolved "https://registry.yarnpkg.com/serialize-javascript/-/serialize-javascript-6.0.1.tgz#b206efb27c3da0b0ab6b52f48d170b7996458e5c"
   integrity sha512-owoXEFjWRllis8/M1Q+Cw5k8ZH40e3zhp/ovX+Xr/vi1qj6QesbyXXViFbpNvWvPNAD62SutwEXavefrLJWj7w==
@@ -4246,10 +4318,10 @@ smart-buffer@^4.1.0:
   resolved "https://registry.yarnpkg.com/smart-buffer/-/smart-buffer-4.2.0.tgz#6e1d71fa4f18c05f7d0ff216dd16a481d0e8d9ae"
   integrity sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg==
 
-smob@^0.0.6:
-  version "0.0.6"
-  resolved "https://registry.yarnpkg.com/smob/-/smob-0.0.6.tgz#09b268fea916158a2781c152044c6155adbb8aa1"
-  integrity sha512-V21+XeNni+tTyiST1MHsa84AQhT1aFZipzPpOFAVB8DkHzwJyjjAmt9bgwnuZiZWnIbMo2duE29wybxv/7HWUw==
+smob@^1.0.0:
+  version "1.4.1"
+  resolved "https://registry.yarnpkg.com/smob/-/smob-1.4.1.tgz#66270e7df6a7527664816c5b577a23f17ba6f5b5"
+  integrity sha512-9LK+E7Hv5R9u4g4C3p+jjLstaLe11MDsL21UpYaCNmapvMkYhqCV4A/f/3gyH8QjMyh6l68q9xC85vihY9ahMQ==
 
 socket.io-adapter@~2.5.2:
   version "2.5.2"
@@ -4610,7 +4682,7 @@ term-size@^1.2.0:
   dependencies:
     execa "^0.7.0"
 
-terser@^5.0.0, terser@^5.15.1:
+terser@^5.0.0, terser@^5.15.1, terser@^5.17.4:
   version "5.22.0"
   resolved "https://registry.yarnpkg.com/terser/-/terser-5.22.0.tgz#4f18103f84c5c9437aafb7a14918273310a8a49d"
   integrity sha512-hHZVLgRA2z4NWcN6aS5rQDc+7Dcy58HOf2zbYwmFcQ+ua3h6eEFf5lIDKTzbWwlazPyOZsFQO8V80/IjVNExEw==

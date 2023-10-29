@@ -13,6 +13,6 @@ const importMap = {
 
 importShim.addImportMap(importMap);
 importShim('./browsercompilerwebworker.js').then((res) => {
-        console.log("module has been loaded");
-    })
+    console.log("module has been loaded");
+})
     .catch(e => setTimeout(() => { throw e; }));
