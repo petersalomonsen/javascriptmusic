@@ -23,6 +23,7 @@ jobs:
         run: |
           cd wasmaudioworklet
           yarn install
+          yarn createbrowsersourcebundle
           yarn test
   firefoxxvfb:
     name: Firefox xvfb

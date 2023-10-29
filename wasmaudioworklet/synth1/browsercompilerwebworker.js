@@ -69,9 +69,9 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
             }
         }
 
-        songlength = song.instrumentPatternLists[0].length;
+        const songlength = song.instrumentPatternLists[0].length;
 
-        instrumentpatternslistsize = song.instrumentPatternLists.length * songlength;
+        const instrumentpatternslistsize = song.instrumentPatternLists.length * songlength;
         const instrumentpatternslist = new Array(instrumentpatternslistsize);
 
         for (let instrIndex = 0;
