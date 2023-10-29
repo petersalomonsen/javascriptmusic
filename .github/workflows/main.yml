@@ -43,6 +43,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Assemblyscript synth
         run: |
+          cd wasmaudioworklet
           yarn install
           yarn test-asc-synth:ci
   bundle-pianorolldemo:
