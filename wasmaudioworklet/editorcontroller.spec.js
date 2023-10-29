@@ -153,45 +153,6 @@ export function mixernext(leftSampleBufferPtr: usize, rightSampleBufferPtr: usiz
         expect(errorMessagesContentElement.innerText).contains(`ERROR TS1005: ')' expected`);
         expect(errorMessagesContentElement.innerText).contains(`hello`);
     });
-    it('should compile and export song to wasm with WASI main entry point', async () => {
-        songsourceeditor.doc.setValue(songsource);
-        synthsourceeditor.doc.setValue(synthsource);
-        const appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
-        let audioWorkletMessage;
-        window.audioworkletnode = {
-            port: {
-                postMessage: msg => audioWorkletMessage = msg
-            },
-            context: {
-                sampleRate: 44100
-            }
-        };
-        const downloadPromise = new Promise(resolve => {
-            document._createElement = document.createElement;
-            document.createElement = function (elementName, options) {
-                const elm = this._createElement(elementName, options);
-                if (elementName === 'a') {
-                    elm.click = () => resolve(elm.href);
-                } else if (elementName === 'common-modal') {
-                    elm.shadowRoot.result('wasimain');
-                }
-                return elm;
-            }
-        });
-
-        appElement.querySelector('#exportbutton').click();
-        const url = await downloadPromise;
-
-        const wasmbinary = await fetch(url).then(r => r.arrayBuffer());
-
-        assert.isAbove(wasmbinary.byteLength, 1000);
-        assert.isDefined((await WebAssembly.instantiate(wasmbinary, {
-            wasi_snapshot_preview1: {
-                fd_write: () => 0
-            }
-        })).instance.exports._start);
-        document.createElement = document._createElement;
-    });
     it('should compile and export song to wasm with lib functions exported', async () => {
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);

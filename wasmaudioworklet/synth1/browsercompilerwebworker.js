@@ -8,7 +8,6 @@ const wasi_main_src = 'wasi_main.ts';
 
 let assemblyscriptsynthsources;
 
-const EXPORT_MODE_WASI_MAIN = 'wasimain';
 const EXPORT_MODE_WASM_LIB = 'libmodule';
 const EXPORT_MODE_MIDISYNTH_WASM_LIB = 'midilibmodule';
 const EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB = 'midimultipartmodule';
@@ -21,7 +20,7 @@ const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json'
     }));
 
 
-function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
+function createWebAssemblySongData(song, mode = EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB) {
     if (mode === EXPORT_MODE_MIDISYNTH_WASM_LIB) {
         console.log('exporting midisynth WASM lib module');
         assemblyscriptsynthsources['environment.ts'] = `export declare const SAMPLERATE: f32;`
@@ -84,37 +83,7 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
             }
         }
 
-        if (mode === EXPORT_MODE_WASI_MAIN) {
-            console.log('exporting WASM module with WASI main');
-            assemblyscriptsynthsources[wasi_main_src] = `
-    import { fd_write, iovec} from 'bindings/wasi';
-    import { allocateSampleBuffer, getTick, setBPM, setPatternsPtr, setInstrumentPatternListPtr, fillSampleBufferInterleaved } from './index';
-
-    const patterns: u8[] = [${patternsbuffer.map(v => '' + v).join(',')}];
-    const instrumentspatternlists: u8[] = [${instrumentpatternslist.map(v => '' + v).join(',')}];
-
-    export function _start(): void {
-        const samplebuf = allocateSampleBuffer(128);
-        setPatternsPtr(load<usize>(changetype<usize>(patterns)));
-        setInstrumentPatternListPtr(load<usize>(changetype<usize>(instrumentspatternlists)),
-                    ${songlength}, ${song.instrumentPatternLists.length});
-        setBPM(${song.BPM});
-        
-        const iov = new iovec();
-        iov.buf = samplebuf;
-        iov.buf_len = 128 * 8;
-        
-        const written_ptr = changetype<usize>(new ArrayBuffer(sizeof<usize>()));
-        
-        let previousTick: f64;
-        do {
-            previousTick = getTick();
-            fillSampleBufferInterleaved();
-            fd_write(1, changetype<usize>(iov), 1, written_ptr);
-        } while(previousTick < getTick())
-    }    
-    `;
-        } else if (mode === EXPORT_MODE_WASM_LIB) {
+        if (mode === EXPORT_MODE_WASM_LIB) {
             console.log('exporting WASM lib module');
             assemblyscriptsynthsources[wasi_main_src] = `
     import { allocateSampleBuffer, getTick, setBPM, setPatternsPtr, setInstrumentPatternListPtr, fillSampleBufferInterleaved } from './index';

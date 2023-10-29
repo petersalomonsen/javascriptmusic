@@ -349,7 +349,6 @@ export async function initEditor(componentRoot) {
                             <h3>Select WASM module type to export</h3>
                             <p>
                                 <form>
-                                <label><input type="radio" name="exporttype" value="wasimain" checked="checked">Self executable WASI module</label><br />
                                 <label><input type="radio" name="exporttype" value="libmodule">Library module</label><br />
                                 </form>
                             </p>
