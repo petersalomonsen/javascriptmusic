@@ -13,6 +13,7 @@ module.exports = function (config) {
 
     // list of files / patterns to load in the browser
     files: [
+      { pattern: 'https://cdn.jsdelivr.net/npm/assemblyscript@0.27.14/dist/web.js' },
       { pattern: '**/*.spec.js', type: 'module' },
       { pattern: '**/*.js', included: false, type: 'module' },
       { pattern: 'synth1/assembly/**/*.ts', included: false },
@@ -78,12 +79,12 @@ module.exports = function (config) {
       },
       ChromeHeadless_NoUserGestureRequired: {
         base: 'Chrome',
-        flags: ['--autoplay-policy=no-user-gesture-required','--headless=new']
+        flags: ['--autoplay-policy=no-user-gesture-required', '--headless=new']
       },
       FirefoxAutoplay: {
         base: 'FirefoxHeadless',
         prefs: {
-            'media.autoplay.block-webaudio': false
+          'media.autoplay.block-webaudio': false
         }
       }
     },
@@ -94,6 +95,6 @@ module.exports = function (config) {
 
     // Concurrency level
     // how many browser should be started simultaneous
-    concurrency: Infinity
+    concurrency: Infinity,
   })
 }
