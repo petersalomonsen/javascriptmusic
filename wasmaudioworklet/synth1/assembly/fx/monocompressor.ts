@@ -9,9 +9,9 @@ export class MonoCompressor {
     releasesamplecount: f64;
 
     constructor(numsamples: usize) {
+        this.delay = new DelayLine(numsamples);
         this.delaybuffersamplecount = numsamples as f64;
         this.releasesamplecount = this.delaybuffersamplecount;
-        this.delay = new DelayLine(numsamples);
     }
 
     setRelaseSampleCount(releasesamplecount: f64): void {

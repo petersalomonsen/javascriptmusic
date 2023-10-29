@@ -24,7 +24,7 @@ import { TriBandStereoCompressor } from "../fx/tribandstereocompressor";
 export const PATTERN_SIZE_SHIFT: usize = 4;
 export const BEATS_PER_PATTERN_SHIFT: usize = 2;
 
-const tribandstereocompressor = new TriBandStereoCompressor(20,500,7000,19500);
+const tribandstereocompressor = new TriBandStereoCompressor(0.05, 25,150,1500,20000);
 const ENABLE_MULTIBAND_COMPRESSOR = true;
 
 const gain: f32 = 0.5;
