@@ -13,7 +13,7 @@ module.exports = function (config) {
 
     // list of files / patterns to load in the browser
     files: [
-      { pattern: 'https://cdn.jsdelivr.net/npm/assemblyscript@0.27.14/dist/web.js' },
+      { pattern: 'node_modules/assemblyscript/dist/web.js' },
       { pattern: '**/*.spec.js', type: 'module' },
       { pattern: '**/*.js', included: false, type: 'module' },
       { pattern: 'synth1/assembly/**/*.ts', included: false },

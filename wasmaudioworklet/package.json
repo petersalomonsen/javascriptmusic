@@ -20,6 +20,11 @@
         "test-firefox": "karma start --single-run --browsers FirefoxAutoplay karma.conf.cjs",
         "test-firefox-watch": "karma start --browsers FirefoxAutoplay karma.conf.cjs",
         "test-watch": "karma start --browsers Chrome_NoUserGestureRequired karma.conf.cjs",
+        "asbuild": "(cd synth1 && asc --runtime stub assembly/index.ts -o build/index.wasm -Oz)",
+        "fastbuild": "(cd synth1 && asc --runtime stub assembly/index.ts -o build/index.wasm -t build/index.wat)",
+        "createbrowsersourcebundle": "(cd synth1 && node createbrowsertsbundle.js)",
+        "test-asc-synth": "(cd synth1 && asp --verbose)",
+        "test-asc-synth:ci": "(cd synth1 && asp --summary)",
         "bundle-pianorolldemo": "(cd midisequencer/ui/pianorolldemo && rm -Rf dist && rollup -c rollup-config.js)",
         "bundle-songcompiler": "rollup -c rollup-config-songcompiler.js",
         "bundle-musicandshadervideoplayer": "(cd player/musicandshadervideoplayer && rollup -c rollup.config.js)",
@@ -27,6 +32,7 @@
         "serve": "http-server -p 8080 ."
     },
     "devDependencies": {
+        "@as-pect/cli": "^8.1.0",
         "@rollup/plugin-terser": "^0.3.0",
         "@web/rollup-plugin-html": "^1.11.0",
         "chai": "^4.3.7",
@@ -40,5 +46,8 @@
         "mocha": "^10.2.0",
         "rollup": "^3.9.1",
         "rollup-plugin-terser": "^7.0.2"
+    },
+    "dependencies": {
+        "assemblyscript": "^0.27.14"
     }
 }

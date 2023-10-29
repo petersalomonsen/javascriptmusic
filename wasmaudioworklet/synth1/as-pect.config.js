@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   /**
    * A set of globs passed to the glob package that qualify typescript files for testing.
    */
