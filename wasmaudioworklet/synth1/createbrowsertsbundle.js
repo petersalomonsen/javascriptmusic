@@ -1,7 +1,7 @@
 /**
  * Create JSON bundle with sources of the webassembly synth to be compiled directly in the browser
  */
-const fs = require('fs');
+import fs from 'fs';
 
 function walkSync(dir, filelist) {
   if (dir.indexOf('__tests__') > -1) {
