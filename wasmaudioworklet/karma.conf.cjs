@@ -13,7 +13,6 @@ module.exports = function (config) {
 
     // list of files / patterns to load in the browser
     files: [
-      { pattern: 'node_modules/assemblyscript/dist/web.js' },
       { pattern: '**/*.spec.js', type: 'module' },
       { pattern: '**/*.js', included: false, type: 'module' },
       { pattern: 'synth1/assembly/**/*.ts', included: false },
