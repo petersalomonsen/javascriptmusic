@@ -1,7 +1,5 @@
 import asc from 'assemblyscript/asc';
 
-console.log('hello from wroker');
-
 let mix_source = 'mixes/newyear.mix.ts';
 let index_source = 'index.ts';
 const wasi_main_src = 'wasi_main.ts';
