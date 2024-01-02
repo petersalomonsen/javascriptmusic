@@ -16,6 +16,7 @@
     ],
     "type": "module",
     "scripts": {
+        "test-wtr": "wtr",
         "test": "karma start --single-run --browsers ChromeHeadless_NoUserGestureRequired karma.conf.cjs",
         "test-firefox": "karma start --single-run --browsers FirefoxAutoplay karma.conf.cjs",
         "test-firefox-watch": "karma start --browsers FirefoxAutoplay karma.conf.cjs",
@@ -32,10 +33,12 @@
         "serve": "http-server -p 8080 ."
     },
     "devDependencies": {
-        "assemblyscript": "^0.27.14",
         "@as-pect/cli": "^8.1.0",
+        "@esm-bundle/chai": "^4.3.4-fix.0",
         "@rollup/plugin-terser": "^0.4.4",
         "@web/rollup-plugin-html": "^2.0.1",
+        "@web/test-runner": "^0.18.0",
+        "assemblyscript": "^0.27.14",
         "chai": "^4.3.7",
         "http-server": "^14.1.1",
         "karma": "^6.4.1",
