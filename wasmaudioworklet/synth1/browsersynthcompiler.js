@@ -1,14 +1,18 @@
-const synthcompilerworker = new Worker(new URL('moduleworkerloader.js', import.meta.url));
+const synthcompilerworker = new Promise(resolve => {
+    const worker = new Worker(new URL('moduleworkerloader.js', import.meta.url));
+    worker.onmessage = () => resolve(worker);
+});
 
 export async function compileWebAssemblySynth(synthsource, song, samplerate, exportmode) {
-    synthcompilerworker.postMessage({
+    const worker = await synthcompilerworker;
+    worker.postMessage({
         synthsource: synthsource,
         samplerate: samplerate,
         song: song,
         exportmode: exportmode
     });
 
-    const result = await new Promise((resolve) => synthcompilerworker.onmessage = (msg) => resolve(msg));
+    const result = await new Promise((resolve) => worker.onmessage = (msg) => resolve(msg));
     if (result.data.binary) {
         console.log('successfully compiled webassembly synth');
         return result.data.binary;

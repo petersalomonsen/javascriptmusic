@@ -1,7 +1,7 @@
 import { chromeLauncher } from '@web/test-runner';
 
 export default {
-    concurrency: 1,
+    concurrency: 10,
     watch: true,
     testRunnerHtml: testRunnerImport =>
     `<html>
