@@ -1,7 +1,11 @@
 import { chromeLauncher } from '@web/test-runner';
 
 export default {
-    concurrency: 10,
+    files: [
+      '**/*.spec.js', // include `.spec.ts` files
+      '!./node_modules/**/*', // exclude any node modules
+    ],
+    concurrency: 1,
     watch: true,
     testRunnerHtml: testRunnerImport =>
     `<html>
