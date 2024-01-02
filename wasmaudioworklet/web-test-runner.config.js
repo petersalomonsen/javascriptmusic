@@ -1,13 +1,14 @@
 import { chromeLauncher } from '@web/test-runner';
+import { playwrightLauncher } from '@web/test-runner-playwright';
 
 export default {
-    files: [
-      '**/*.spec.js', // include `.spec.ts` files
-      '!./node_modules/**/*', // exclude any node modules
-    ],
-    concurrency: 1,
-    watch: true,
-    testRunnerHtml: testRunnerImport =>
+  files: [
+    '**/*.spec.js', // include `.spec.ts` files
+    '!./node_modules/**/*', // exclude any node modules
+  ],
+  concurrency: 1,
+  watch: true,
+  testRunnerHtml: testRunnerImport =>
     `<html>
       <body>
         <script type="module">
@@ -17,6 +18,11 @@ export default {
         </script>        
         <script type="module" src="${testRunnerImport}"></script>
       </body>
-    </html>`,  
-    browsers: [chromeLauncher({ launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } })],
+    </html>`,
+  browsers: [
+    chromeLauncher({ launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } }),
+    playwrightLauncher({ product: 'chromium' }),
+    playwrightLauncher({ product: 'firefox' }),
+    playwrightLauncher({ product: 'webkit' })
+  ],
 };
