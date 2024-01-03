@@ -1,4 +1,3 @@
-import { chromeLauncher } from '@web/test-runner';
 import { playwrightLauncher } from '@web/test-runner-playwright';
 
 export default {
@@ -20,7 +19,6 @@ export default {
       </body>
     </html>`,
   browsers: [
-    chromeLauncher({ launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } }),
     playwrightLauncher({ product: 'chromium', launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } }),
     playwrightLauncher({
       product: 'firefox', launchOptions: {
