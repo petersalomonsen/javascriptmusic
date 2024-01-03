@@ -24,11 +24,15 @@ export default {
     playwrightLauncher({ product: 'chromium', launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } }),
     playwrightLauncher({
       product: 'firefox', launchOptions: {
+        headless: true,
         firefoxUserPrefs: {
           'media.autoplay.block-webaudio': false
         }
       }
     }),
-    playwrightLauncher({ product: 'webkit' })
+    playwrightLauncher({
+      headless: true,
+      product: 'webkit'
+    })
   ],
 };
