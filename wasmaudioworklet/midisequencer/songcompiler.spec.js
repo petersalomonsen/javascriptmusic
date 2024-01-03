@@ -37,7 +37,7 @@ loopHere();
         try {
             await compileSong(`createTrack(5).steps(4,[controlChange(91, 100)]);`);
         } catch (e) {
-            assert.equal('controlChange is not defined', e.message);
+            assert.isTrue(e.message === 'controlChange is not defined' || e.message === "Can't find variable: controlChange");
             hasError = true;
         }
         assert.equal(hasError, true);
