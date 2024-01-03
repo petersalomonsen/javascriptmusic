@@ -7,7 +7,7 @@ export default {
     '!./node_modules/**/*', // exclude any node modules
   ],
   concurrency: 1,
-  watch: true,
+  watch: false,
   testRunnerHtml: testRunnerImport =>
     `<html>
       <body>
@@ -24,7 +24,7 @@ export default {
     playwrightLauncher({ product: 'chromium', launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } }),
     playwrightLauncher({
       product: 'firefox', launchOptions: {
-        prefs: {
+        firefoxUserPrefs: {
           'media.autoplay.block-webaudio': false
         }
       }

@@ -14,29 +14,18 @@ jobs:
         run: |
           grep -rq --include '*.spec.js' \.only\( . && echo 'You have .only() in your tests!' && exit 1
           exit 0
-  chromeheadless:
-    name: Chrome headless
+  web-test-runner:
+    name: Web Test Runner
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Chrome headless
+      - name: Web Test Runner
         run: |
           cd wasmaudioworklet
           yarn install
+          yarn playwright install
           yarn createbrowsersourcebundle
-          yarn test
-  firefoxxvfb:
-    name: Firefox xvfb
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Firefox xvfb
-        run: |
-          sudo apt-get install pulseaudio
-          pulseaudio -D --exit-idle-time=-1
-          cd wasmaudioworklet
-          yarn install
-          xvfb-run yarn test-firefox
+          yarn wtr
   assemblyscriptsynth:
     name: AssemblyScript synth
     runs-on: ubuntu-latest
