@@ -21,9 +21,9 @@ jobs:
       - uses: actions/checkout@v2
       - name: Web Test Runner
         run: |
+          npx playwright install --with-deps
           cd wasmaudioworklet
           yarn install
-          yarn playwright install
           yarn createbrowsersourcebundle
           yarn wtr
   assemblyscriptsynth:
