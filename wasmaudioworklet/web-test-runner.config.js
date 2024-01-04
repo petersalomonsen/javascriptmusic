@@ -28,10 +28,10 @@ export default {
         }
       }
     }),
-    playwrightLauncher({
+    /*playwrightLauncher({
       product: 'webkit',launchOptions: {
         headless: false
       }
-    })
+    })*/
   ],
 };
