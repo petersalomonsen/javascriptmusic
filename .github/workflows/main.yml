@@ -20,13 +20,15 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Web Test Runner
-        run: |          
+        run: |
+          sudo apt-get install -y pulseaudio
+          pulseaudio -D --exit-idle-time=-1
           cd wasmaudioworklet
           yarn install
           yarn playwright install
           yarn playwright install-deps
           yarn createbrowsersourcebundle
-          yarn wtr
+          xvfb-run yarn wtr
   assemblyscriptsynth:
     name: AssemblyScript synth
     runs-on: ubuntu-latest
