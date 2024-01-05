@@ -16,12 +16,14 @@ jobs:
         export VERSION=`npm view wasm-music dist-tags.latest`
         export NEWVERSION=`node -p "require('./package.json').version"`
         echo $VERSION $NEWVERSION
-        if [ "$VERSION" != "$NEWVERSION" ]
-        then
-          npm install
-          echo "creating pianorolldemo bundle"
-          npm run bundle-pianorolldemo
-          echo "publishing new version"
+        yarn install
+        echo "creating pianorolldemo bundle"
+        yarn bundle-pianorolldemo
+        echo "publishing new version"
+        if [[ "$VERSION" = "$NEWVERSION" || "$BRANCH" != "master" ]]; then
+          echo "version change is $VERSION->$NEWVERSION, branch is $BRANCH, not publishing, only dry-run"
+          npm publish --dry-run
+        else
           npm publish
         fi
       env:
