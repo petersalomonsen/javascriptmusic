@@ -1,12 +1,4 @@
-/**
- * Web worker to compile web assembly synth in the browser
- */
-
-self.require = (name) => self[name];
-
-importScripts('https://cdn.jsdelivr.net/npm/binaryen@102.0.0-nightly.20211028/index.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.19.22/dist/assemblyscript.js');
-importScripts('https://cdn.jsdelivr.net/npm/assemblyscript@0.19.22/dist/asc.js');
+import asc from 'assemblyscript/asc';
 
 let mix_source = 'mixes/newyear.mix.ts';
 let index_source = 'index.ts';
@@ -14,7 +6,6 @@ const wasi_main_src = 'wasi_main.ts';
 
 let assemblyscriptsynthsources;
 
-const EXPORT_MODE_WASI_MAIN = 'wasimain';
 const EXPORT_MODE_WASM_LIB = 'libmodule';
 const EXPORT_MODE_MIDISYNTH_WASM_LIB = 'midilibmodule';
 const EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB = 'midimultipartmodule';
@@ -27,7 +18,7 @@ const ready = new Promise(resolve => fetch('wasmsynthassemblyscriptsources.json'
     }));
 
 
-function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
+function createWebAssemblySongData(song, mode = EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB) {
     if (mode === EXPORT_MODE_MIDISYNTH_WASM_LIB) {
         console.log('exporting midisynth WASM lib module');
         assemblyscriptsynthsources['environment.ts'] = `export declare const SAMPLERATE: f32;`
@@ -47,18 +38,17 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
             `;
     } else if (mode === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB) {
         console.log('exporting midisynth multipart WASM lib module');
-        
+
         assemblyscriptsynthsources['environment.ts'] = `export declare const SAMPLERATE: f32;`
         assemblyscriptsynthsources['midi/sequencer/midiparts.ts'] = `
             import { MidiSequencerPart, MidiSequencerPartSchedule } from "./midisequencerpart";
 
-            export const midiparts: MidiSequencerPart[] = [${song.map(part => 'new MidiSequencerPart(['+part.eventlist.join(',')+'])')}];            
-            export const midipartschedule: MidiSequencerPartSchedule[] = [${
-                song.reduce((p, c, ndx) => p.concat(c.startTimes.map(t =>
-                        ({startTime: t, patternIndex: ndx})
-                    )), []).sort((a, b) => a.startTime - b.startTime)
-                    .map(schedule => `new MidiSequencerPartSchedule(${schedule.patternIndex}, ${schedule.startTime})`)
-                    .join(',')
+            export const midiparts: MidiSequencerPart[] = [${song.map(part => 'new MidiSequencerPart([' + part.eventlist.join(',') + '])')}];            
+            export const midipartschedule: MidiSequencerPartSchedule[] = [${song.reduce((p, c, ndx) => p.concat(c.startTimes.map(t =>
+            ({ startTime: t, patternIndex: ndx })
+        )), []).sort((a, b) => a.startTime - b.startTime)
+                .map(schedule => `new MidiSequencerPartSchedule(${schedule.patternIndex}, ${schedule.startTime})`)
+                .join(',')
             }];
         `;
         assemblyscriptsynthsources[wasi_main_src] = `
@@ -76,9 +66,9 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
             }
         }
 
-        songlength = song.instrumentPatternLists[0].length;
+        const songlength = song.instrumentPatternLists[0].length;
 
-        instrumentpatternslistsize = song.instrumentPatternLists.length * songlength;
+        const instrumentpatternslistsize = song.instrumentPatternLists.length * songlength;
         const instrumentpatternslist = new Array(instrumentpatternslistsize);
 
         for (let instrIndex = 0;
@@ -91,37 +81,7 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
             }
         }
 
-        if (mode === EXPORT_MODE_WASI_MAIN) {
-            console.log('exporting WASM module with WASI main');
-            assemblyscriptsynthsources[wasi_main_src] = `
-    import { fd_write, iovec} from 'bindings/wasi';
-    import { allocateSampleBuffer, getTick, setBPM, setPatternsPtr, setInstrumentPatternListPtr, fillSampleBufferInterleaved } from './index';
-
-    const patterns: u8[] = [${patternsbuffer.map(v => '' + v).join(',')}];
-    const instrumentspatternlists: u8[] = [${instrumentpatternslist.map(v => '' + v).join(',')}];
-
-    export function _start(): void {
-        const samplebuf = allocateSampleBuffer(128);
-        setPatternsPtr(load<usize>(changetype<usize>(patterns)));
-        setInstrumentPatternListPtr(load<usize>(changetype<usize>(instrumentspatternlists)),
-                    ${songlength}, ${song.instrumentPatternLists.length});
-        setBPM(${song.BPM});
-        
-        const iov = new iovec();
-        iov.buf = samplebuf;
-        iov.buf_len = 128 * 8;
-        
-        const written_ptr = changetype<usize>(new ArrayBuffer(sizeof<usize>()));
-        
-        let previousTick: f64;
-        do {
-            previousTick = getTick();
-            fillSampleBufferInterleaved();
-            fd_write(1, changetype<usize>(iov), 1, written_ptr);
-        } while(previousTick < getTick())
-    }    
-    `;
-        } else if (mode === EXPORT_MODE_WASM_LIB) {
+        if (mode === EXPORT_MODE_WASM_LIB) {
             console.log('exporting WASM lib module');
             assemblyscriptsynthsources[wasi_main_src] = `
     import { allocateSampleBuffer, getTick, setBPM, setPatternsPtr, setInstrumentPatternListPtr, fillSampleBufferInterleaved } from './index';
@@ -139,14 +99,14 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_WASI_MAIN) {
     }
 }
 
-function compileAssemblyScript(sources, options, entrypoint) {
+async function compileAssemblyScript(sources, options, entrypoint) {
     if (typeof sources === "string") sources = { "input.ts": sources };
     const output = Object.create({
         stdout: asc.createMemoryStream(),
         stderr: asc.createMemoryStream()
     });
     var argv = [
-        "--binaryFile", "binary",
+        "--outFile", "binary",
         "--textFile", "text",
     ];
     Object.keys(options || {}).forEach(key => {
@@ -154,7 +114,7 @@ function compileAssemblyScript(sources, options, entrypoint) {
         if (Array.isArray(val)) val.forEach(val => argv.push("--" + key, String(val)));
         else argv.push("--" + key, String(val));
     });
-    asc.main(entrypoint ? argv.concat(entrypoint) : argv.concat(Object.keys(sources)), {
+    await asc.main(entrypoint ? argv.concat(entrypoint) : argv.concat(Object.keys(sources)), {
         stdout: output.stdout,
         stderr: output.stderr,
         readFile: name => sources.hasOwnProperty(name) ? sources[name] : null,
@@ -185,7 +145,7 @@ onmessage = async function (msg) {
             midisynthsource = midisynthsource.replace(/\n(export.*allocateAudioBuffer[^\n]+)/, '\n// $1');
         }
         assemblyscriptsynthsources[index_source] = midisynthsource;
-        
+
     } else {
         mix_source = 'mixes/newyear.mix.ts';
         index_source = 'index.ts';
@@ -198,7 +158,7 @@ onmessage = async function (msg) {
             assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = 44100;`
             console.log(msg.data.song, msg.data.exportmode);
             createWebAssemblySongData(msg.data.song, msg.data.exportmode);
-            const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
+            const { stderr, text, binary } = await compileAssemblyScript(assemblyscriptsynthsources,
                 {
                     "runtime": "stub",
                     "optimizeLevel": 3,
@@ -216,7 +176,7 @@ onmessage = async function (msg) {
             assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = ${samplerate};`
 
             assemblyscriptsynthsources[mix_source] = synthsource;
-            const { stderr, text, binary } = compileAssemblyScript(assemblyscriptsynthsources,
+            const { stderr, text, binary } = await compileAssemblyScript(assemblyscriptsynthsources,
                 { "runtime": "stub", "optimizeLevel": 0, "shrinkLevel": 0 },
                 index_source);
 
@@ -229,7 +189,7 @@ onmessage = async function (msg) {
                 nochanges: true
             });
         }
-    } catch(err) {
+    } catch (err) {
         this.postMessage({
             error: err.message
         });

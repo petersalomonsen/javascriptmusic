@@ -81,7 +81,7 @@ export function initAudioWorkletNode(componentRoot) {
                     response.arrayBuffer()
                 ) : window.WASM_SYNTH_BYTES;
 
-                await context.audioWorklet.addModule('./audioworkletprocessor.js');
+                await context.audioWorklet.addModule(new URL('audioworkletprocessor.js', import.meta.url));
                 audioworkletnode = new AudioWorkletNode(context, 'pattern-seq-audio-worklet-processor', {
                     outputChannelCount: [2]
                 });
@@ -102,7 +102,7 @@ export function initAudioWorkletNode(componentRoot) {
                 let currentTimePromiseResolve;
 
                 audioworkletnode.port.onmessage = msg => {
-                    if (msg.data.channelvalues) {
+                                        if (msg.data.channelvalues) {
                         const channelvalues = msg.data.channelvalues;
                         for (let n = 0; n < channelvalues.length; n++) {
                             const note = channelvalues[n];
@@ -138,7 +138,7 @@ export function initAudioWorkletNode(componentRoot) {
                 );
             }
             audioworkletnode.connect(context.destination);
-        }
+                    }
         recordAudioNode(audioworkletnode);
         componentRoot.getElementById('startaudiobutton').style.display = 'none';
         componentRoot.getElementById('stopaudiobutton').style.display = 'block';

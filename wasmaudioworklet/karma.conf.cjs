@@ -78,12 +78,12 @@ module.exports = function (config) {
       },
       ChromeHeadless_NoUserGestureRequired: {
         base: 'Chrome',
-        flags: ['--autoplay-policy=no-user-gesture-required','--headless=new']
+        flags: ['--autoplay-policy=no-user-gesture-required', '--headless=new']
       },
       FirefoxAutoplay: {
         base: 'FirefoxHeadless',
         prefs: {
-            'media.autoplay.block-webaudio': false
+          'media.autoplay.block-webaudio': false
         }
       }
     },
@@ -94,6 +94,6 @@ module.exports = function (config) {
 
     // Concurrency level
     // how many browser should be started simultaneous
-    concurrency: Infinity
+    concurrency: Infinity,
   })
 }

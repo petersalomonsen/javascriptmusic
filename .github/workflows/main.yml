@@ -14,28 +14,21 @@ jobs:
         run: |
           grep -rq --include '*.spec.js' \.only\( . && echo 'You have .only() in your tests!' && exit 1
           exit 0
-  chromeheadless:
-    name: Chrome headless
+  web-test-runner:
+    name: Web Test Runner
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Chrome headless
+      - name: Web Test Runner
         run: |
-          cd wasmaudioworklet
-          npm install
-          npm test
-  firefoxxvfb:
-    name: Firefox xvfb
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Firefox xvfb
-        run: |
-          sudo apt-get install pulseaudio
+          sudo apt-get install -y pulseaudio
           pulseaudio -D --exit-idle-time=-1
           cd wasmaudioworklet
-          npm install
-          xvfb-run npm run test-firefox
+          yarn install
+          yarn playwright install
+          yarn playwright install-deps
+          yarn createbrowsersourcebundle
+          xvfb-run yarn wtr
   assemblyscriptsynth:
     name: AssemblyScript synth
     runs-on: ubuntu-latest
@@ -43,9 +36,9 @@ jobs:
       - uses: actions/checkout@v2
       - name: Assemblyscript synth
         run: |
-          cd wasmaudioworklet/synth1
-          npm install
-          npm run test:ci
+          cd wasmaudioworklet
+          yarn install
+          yarn test-asc-synth:ci
   bundle-pianorolldemo:
     name: Bundle pianorolldemo
     runs-on: ubuntu-latest
@@ -54,8 +47,8 @@ jobs:
         - name: Bundle pianorolldemo
           run: |
             cd wasmaudioworklet
-            npm install
-            npm run bundle-pianorolldemo
+            yarn install
+            yarn bundle-pianorolldemo
   bundle-songcompiler:
     name: Bundle songcompiler
     runs-on: ubuntu-latest
@@ -64,5 +57,5 @@ jobs:
         - name: Bundle songcompiler
           run: |
             cd wasmaudioworklet
-            npm install
-            npm run bundle-songcompiler
+            yarn install
+            yarn bundle-songcompiler

@@ -18,7 +18,7 @@ export class TriBandStereoCompressor {
 
     stereosignal: StereoSignal = new StereoSignal();
 
-    constructor(compressor_delay: f32, low: f32, midlo: f32, midhi: f32, high: f32) {
+    constructor(low: f32, midlo: f32, midhi: f32, high: f32, compressor_delay: f32 = 0.2) {
         this.compressorLow = new StereoCompressor((SAMPLERATE * compressor_delay) as usize);
         this.compressorMid = new StereoCompressor((SAMPLERATE * compressor_delay) as usize);
         this.compressorHigh = new StereoCompressor((SAMPLERATE * compressor_delay) as usize);

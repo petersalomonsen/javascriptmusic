@@ -1,7 +1,7 @@
 {
     "name": "wasm-music",
     "description": "Javascript/WebAssembly live coding environment for music and synthesis",
-    "version": "0.0.39",
+    "version": "0.0.40",
     "repository": {
         "url": "https://github.com/petersalomonsen/javascriptmusic"
     },
@@ -16,10 +16,12 @@
     ],
     "type": "module",
     "scripts": {
-        "test": "karma start --single-run --browsers ChromeHeadless_NoUserGestureRequired karma.conf.cjs",
-        "test-firefox": "karma start --single-run --browsers FirefoxAutoplay karma.conf.cjs",
-        "test-firefox-watch": "karma start --browsers FirefoxAutoplay karma.conf.cjs",
-        "test-watch": "karma start --browsers Chrome_NoUserGestureRequired karma.conf.cjs",
+        "test-wtr": "wtr",
+        "asbuild": "(cd synth1 && asc --runtime stub assembly/index.ts -o build/index.wasm -Oz)",
+        "fastbuild": "(cd synth1 && asc --runtime stub assembly/index.ts -o build/index.wasm -t build/index.wat)",
+        "createbrowsersourcebundle": "(cd synth1 && node createbrowsertsbundle.js)",
+        "test-asc-synth": "(cd synth1 && asp --verbose)",
+        "test-asc-synth:ci": "(cd synth1 && asp --summary)",
         "bundle-pianorolldemo": "(cd midisequencer/ui/pianorolldemo && rm -Rf dist && rollup -c rollup-config.js)",
         "bundle-songcompiler": "rollup -c rollup-config-songcompiler.js",
         "bundle-musicandshadervideoplayer": "(cd player/musicandshadervideoplayer && rollup -c rollup.config.js)",
@@ -27,18 +29,18 @@
         "serve": "http-server -p 8080 ."
     },
     "devDependencies": {
-        "@rollup/plugin-terser": "^0.3.0",
-        "@web/rollup-plugin-html": "^1.11.0",
+        "@as-pect/cli": "^8.1.0",
+        "@esm-bundle/chai": "^4.3.4-fix.0",
+        "@rollup/plugin-terser": "^0.4.4",
+        "@web/rollup-plugin-html": "^2.0.1",
+        "@web/test-runner": "^0.18.0",
+        "@web/test-runner-playwright": "^0.11.0",
+        "assemblyscript": "^0.27.14",
         "chai": "^4.3.7",
         "http-server": "^14.1.1",
-        "karma": "^6.4.1",
-        "karma-chai": "^0.1.0",
-        "karma-chrome-launcher": "^3.1.1",
-        "karma-firefox-launcher": "^2.1.2",
-        "karma-mocha": "^2.0.1",
-        "karma-safari-launcher": "^1.0.0",
         "mocha": "^10.2.0",
-        "rollup": "^3.9.1",
+        "rollup": "^4.1.5",
         "rollup-plugin-terser": "^7.0.2"
-    }
+    },
+    "dependencies": {}
 }
