@@ -72,6 +72,7 @@ export { allNotesOff } from '../midi/midisynth';
 export { cleanupInactiveVoices } from '../midi/midisynth';
 export { playActiveVoices } from '../midi/midisynth';
 export { fillSampleBuffer } from '../midi/midisynth';
+export { fillSampleBufferWithNumSamples } from '../midi/midisynth';
 export { Q_BUTTERWORTH } from '../synth/biquad';
 export { FilterType } from '../synth/biquad';
 export { Coefficients } from '../synth/biquad';

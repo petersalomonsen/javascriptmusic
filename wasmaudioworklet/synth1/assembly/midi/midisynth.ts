@@ -21,7 +21,6 @@ export const sampleBufferBytesPerChannel = sampleBufferFrames * 4;
 export const sampleBufferChannels = 2;
 export const samplebuffer = new StaticArray<f32>(sampleBufferFrames * sampleBufferChannels);
 const bufferposstart = changetype<usize>(samplebuffer);
-const bufferposend = changetype<usize>(samplebuffer) + sampleBufferBytesPerChannel;
 
 const CONTROL_SUSTAIN: u8 = 64;
 const CONTROL_VOLUME: u8 = 7;
@@ -285,6 +284,12 @@ export function playActiveVoices(): void {
 }
 
 export function fillSampleBuffer(): void {
+    fillSampleBufferWithNumSamples(sampleBufferFrames);
+}
+
+export function fillSampleBufferWithNumSamples(numSamples: i32): void {
+    const bufferposend = changetype<usize>(samplebuffer) + 4 * numSamples;
+
     cleanupInactiveVoices();
 
     let voiceTransitionBufferNdx = 0;
