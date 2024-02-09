@@ -29,7 +29,7 @@ const CONTROL_REVERB: u8 = 91;
 
 const mainline = new StereoSignal();
 const reverbline = new StereoSignal();
-const freeverb = new Freeverb();
+export const freeverb = new Freeverb();
 export const outputline = new StereoSignal();
 export class MidiChannel {
     controllerValues: StaticArray<u8> = new StaticArray<u8>(128);

@@ -1,4 +1,4 @@
-import { samplebuffer, sampleBufferFrames, playActiveVoices, cleanupInactiveVoices, shortmessage, activeVoices, MidiVoice, midichannels, MidiChannel, numActiveVoices, fillSampleBuffer, allNotesOff, getActiveVoicesStatusSnapshot } from '../../midi/midisynth';
+import { freeverb, samplebuffer, sampleBufferFrames, playActiveVoices, cleanupInactiveVoices, shortmessage, activeVoices, MidiVoice, midichannels, MidiChannel, numActiveVoices, fillSampleBuffer, allNotesOff, getActiveVoicesStatusSnapshot, fillSampleBufferWithNumSamples } from '../../midi/midisynth';
 import { SineOscillator } from '../../synth/sineoscillator.class';
 import { Envelope, EnvelopeState } from '../../synth/envelope.class';
 import { notefreq } from '../../synth/note';
@@ -6,8 +6,6 @@ import { SAMPLERATE } from '../../environment';
 import { Pan } from '../../synth/pan.class';
 
 let signal: f32 = 0;
-
-midichannels[1] = midichannels[0];
 
 class TestMidiInstrument extends MidiVoice {
   osc: SineOscillator = new SineOscillator();
@@ -114,6 +112,18 @@ class UpperKeys extends MidiVoice {
 
   nextframe(): void {
     this.channel.signal.add(-0.6, 0.6);
+  }
+}
+
+class LinearVoice extends MidiVoice {
+  pos: f32 = 0.0;
+  nextframe(): void {    
+    const val = this.pos / 128;
+    this.channel.signal.add(val, val);
+    this.pos++;
+    if (this.pos === 128.0) {
+      this.pos = 0;
+    }
   }
 }
 
@@ -653,5 +663,49 @@ describe("midisynth", () => {
     expect<u8>(load<u8>(activeVoicesShapshotLocation + 6)).toBe(0);
     expect<u8>(load<u8>(activeVoicesShapshotLocation + 7)).toBe(0);
     expect<u8>(load<u8>(activeVoicesShapshotLocation + 8)).toBe(0);
+  });
+  it("should be able to fill variable sized blocks in the sample buffer", () => {
+    expect<i32>(numActiveVoices).toBe(0, 'should be no active voices');
+    freeverb.set_wet(0.0);
+    const channel = new MidiChannel(1, (channel: MidiChannel) => new LinearVoice(channel));
+    midichannels[0] = channel;
+    channel.volume = 1.0;
+    channel.pan.leftLevel = 1.0;
+    channel.pan.rightLevel = 1.0;
+
+    fillSampleBuffer();
+    for (let n = 0; n < samplebuffer.length; n++) {
+      expect<f32>(samplebuffer[n]).toBe(0);
+    }
+
+    shortmessage(0x90, 69, 100);
+
+    expect<i32>(numActiveVoices).toBe(1, 'should be one active voice');
+
+    fillSampleBufferWithNumSamples(64);
+    for (let n = 0; n < 64; n++) {
+      expect<f32>(samplebuffer[n]).toBe((n / 128.0) as f32);
+    }
+    
+    for (let n = 64; n < 128; n++) {
+      expect<f32>(samplebuffer[n]).toBe(0);
+    }
+
+    fillSampleBufferWithNumSamples(64);
+    
+    for (let n = 0; n < 64; n++) {
+      expect<f32>(samplebuffer[n]).toBe(((n+64) / 128.0) as f32);
+    }
+    
+    for (let n = 64; n < 128; n++) {
+      expect<f32>(samplebuffer[n]).toBe(0);
+    }
+
+    shortmessage(0x90, 69, 0);
+
+    fillSampleBufferWithNumSamples(64);
+    for (let n = 0; n < samplebuffer.length; n++) {
+      expect<f32>(samplebuffer[n]).toBe(0, 'signal should be quiet');
+    }
   });
 });  
