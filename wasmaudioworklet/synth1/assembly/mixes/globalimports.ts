@@ -63,6 +63,7 @@ export { sampleBufferFrames } from '../midi/midisynth';
 export { sampleBufferBytesPerChannel } from '../midi/midisynth';
 export { sampleBufferChannels } from '../midi/midisynth';
 export { samplebuffer } from '../midi/midisynth';
+export { freeverb } from '../midi/midisynth';
 export { outputline } from '../midi/midisynth';
 export { MidiChannel } from '../midi/midisynth';
 export { MidiVoice } from '../midi/midisynth';

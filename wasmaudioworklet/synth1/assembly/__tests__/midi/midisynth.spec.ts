@@ -117,7 +117,7 @@ class UpperKeys extends MidiVoice {
 
 class LinearVoice extends MidiVoice {
   pos: f32 = 0.0;
-  nextframe(): void {    
+  nextframe(): void {
     const val = this.pos / 128;
     this.channel.signal.add(val, val);
     this.pos++;
@@ -686,17 +686,17 @@ describe("midisynth", () => {
     for (let n = 0; n < 64; n++) {
       expect<f32>(samplebuffer[n]).toBe((n / 128.0) as f32);
     }
-    
+
     for (let n = 64; n < 128; n++) {
       expect<f32>(samplebuffer[n]).toBe(0);
     }
 
     fillSampleBufferWithNumSamples(64);
-    
+
     for (let n = 0; n < 64; n++) {
-      expect<f32>(samplebuffer[n]).toBe(((n+64) / 128.0) as f32);
+      expect<f32>(samplebuffer[n]).toBe(((n + 64) / 128.0) as f32);
     }
-    
+
     for (let n = 64; n < 128; n++) {
       expect<f32>(samplebuffer[n]).toBe(0);
     }

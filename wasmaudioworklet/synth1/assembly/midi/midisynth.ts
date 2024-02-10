@@ -83,7 +83,7 @@ export class MidiChannel {
             if (voice.note === note) {
                 if (this.controllerValues[CONTROL_SUSTAIN] >= 64) {
                     this.sustainedVoices[note] = voice;
-                } else {                    
+                } else {
                     voice.noteoff();
                 }
                 break;
@@ -142,15 +142,15 @@ export class MidiChannel {
         }
         if (oldestVoice !== null) {
             const voice = (oldestVoice as MidiVoice);
-            for (let n = 0;n<sampleBufferFrames;n++) {
+            for (let n = 0; n < sampleBufferFrames; n++) {
                 voice.nextframe();
                 const fact: f32 = ((sampleBufferFrames as f32) - (n as f32)) / (sampleBufferFrames as f32);
-                this.voiceTransitionBuffer[n<<1] += this.signal.left * fact;
-                this.voiceTransitionBuffer[(n<<1) + 1] += this.signal.right * fact;
+                this.voiceTransitionBuffer[n << 1] += this.signal.left * fact;
+                this.voiceTransitionBuffer[(n << 1) + 1] += this.signal.right * fact;
                 this.signal.clear();
             }
             voice.activationCount = voiceActivationCount++;
-            this.removeFromSustainedVoices(voice);                        
+            this.removeFromSustainedVoices(voice);
         }
         return oldestVoice;
     }
@@ -237,10 +237,10 @@ export function shortmessage(val1: u8, val2: u8, val3: u8): void {
 }
 
 export function getActiveVoicesStatusSnapshot(): usize {
-    for (let n=0;n<activeVoices.length;n++) {
+    for (let n = 0; n < activeVoices.length; n++) {
         const activeVoicesStatusSnapshotIndex = n * 3;
-        if (activeVoices[n] != null) {    
-            const voice = (activeVoices[n] as MidiVoice);        
+        if (activeVoices[n] != null) {
+            const voice = (activeVoices[n] as MidiVoice);
             activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex] = voice.channelNo;
             activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 1] = voice.note;
             activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 2] = voice.velocity;
@@ -303,11 +303,11 @@ export function fillSampleBufferWithNumSamples(numSamples: i32): void {
 
             channelsignal.left += midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx];
             midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx] = 0;
-            channelsignal.right +=midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx+1];
-            midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx+1] = 0;
-            
-            midichannel.preprocess();            
-                        
+            channelsignal.right += midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx + 1];
+            midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx + 1] = 0;
+
+            midichannel.preprocess();
+
             channelsignal.left *= midichannel.pan.leftLevel * midichannel.volume;
             channelsignal.right *= midichannel.pan.rightLevel * midichannel.volume;
 
