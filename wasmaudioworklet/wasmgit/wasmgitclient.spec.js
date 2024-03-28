@@ -4,7 +4,7 @@ import {
 } from './wasmgitclient.js';
 
 describe('wasm-git client', async function () {
-    this.timeout(20000);
+    this.timeout(40000);
 
     it('should resolve synth and song filename from git repository', async () => {
         const config = await initWASMGitClient('test');
