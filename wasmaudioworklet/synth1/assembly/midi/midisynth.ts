@@ -21,7 +21,6 @@ export const sampleBufferBytesPerChannel = sampleBufferFrames * 4;
 export const sampleBufferChannels = 2;
 export const samplebuffer = new StaticArray<f32>(sampleBufferFrames * sampleBufferChannels);
 const bufferposstart = changetype<usize>(samplebuffer);
-const bufferposend = changetype<usize>(samplebuffer) + sampleBufferBytesPerChannel;
 
 const CONTROL_SUSTAIN: u8 = 64;
 const CONTROL_VOLUME: u8 = 7;
@@ -30,7 +29,7 @@ const CONTROL_REVERB: u8 = 91;
 
 const mainline = new StereoSignal();
 const reverbline = new StereoSignal();
-const freeverb = new Freeverb();
+export const freeverb = new Freeverb();
 export const outputline = new StereoSignal();
 export class MidiChannel {
     controllerValues: StaticArray<u8> = new StaticArray<u8>(128);
@@ -84,7 +83,7 @@ export class MidiChannel {
             if (voice.note === note) {
                 if (this.controllerValues[CONTROL_SUSTAIN] >= 64) {
                     this.sustainedVoices[note] = voice;
-                } else {                    
+                } else {
                     voice.noteoff();
                 }
                 break;
@@ -143,15 +142,15 @@ export class MidiChannel {
         }
         if (oldestVoice !== null) {
             const voice = (oldestVoice as MidiVoice);
-            for (let n = 0;n<sampleBufferFrames;n++) {
+            for (let n = 0; n < sampleBufferFrames; n++) {
                 voice.nextframe();
                 const fact: f32 = ((sampleBufferFrames as f32) - (n as f32)) / (sampleBufferFrames as f32);
-                this.voiceTransitionBuffer[n<<1] += this.signal.left * fact;
-                this.voiceTransitionBuffer[(n<<1) + 1] += this.signal.right * fact;
+                this.voiceTransitionBuffer[n << 1] += this.signal.left * fact;
+                this.voiceTransitionBuffer[(n << 1) + 1] += this.signal.right * fact;
                 this.signal.clear();
             }
             voice.activationCount = voiceActivationCount++;
-            this.removeFromSustainedVoices(voice);                        
+            this.removeFromSustainedVoices(voice);
         }
         return oldestVoice;
     }
@@ -238,10 +237,10 @@ export function shortmessage(val1: u8, val2: u8, val3: u8): void {
 }
 
 export function getActiveVoicesStatusSnapshot(): usize {
-    for (let n=0;n<activeVoices.length;n++) {
+    for (let n = 0; n < activeVoices.length; n++) {
         const activeVoicesStatusSnapshotIndex = n * 3;
-        if (activeVoices[n] != null) {    
-            const voice = (activeVoices[n] as MidiVoice);        
+        if (activeVoices[n] != null) {
+            const voice = (activeVoices[n] as MidiVoice);
             activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex] = voice.channelNo;
             activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 1] = voice.note;
             activeVoicesStatusSnapshot[activeVoicesStatusSnapshotIndex + 2] = voice.velocity;
@@ -285,6 +284,12 @@ export function playActiveVoices(): void {
 }
 
 export function fillSampleBuffer(): void {
+    fillSampleBufferWithNumSamples(sampleBufferFrames);
+}
+
+export function fillSampleBufferWithNumSamples(numSamples: i32): void {
+    const bufferposend = changetype<usize>(samplebuffer) + 4 * numSamples;
+
     cleanupInactiveVoices();
 
     let voiceTransitionBufferNdx = 0;
@@ -298,11 +303,11 @@ export function fillSampleBuffer(): void {
 
             channelsignal.left += midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx];
             midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx] = 0;
-            channelsignal.right +=midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx+1];
-            midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx+1] = 0;
-            
-            midichannel.preprocess();            
-                        
+            channelsignal.right += midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx + 1];
+            midichannel.voiceTransitionBuffer[voiceTransitionBufferNdx + 1] = 0;
+
+            midichannel.preprocess();
+
             channelsignal.left *= midichannel.pan.leftLevel * midichannel.volume;
             channelsignal.right *= midichannel.pan.rightLevel * midichannel.volume;
 
