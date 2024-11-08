@@ -31,15 +31,15 @@ async function loadCodeMirror() {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/codemirror.min.js');
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/mode/javascript/javascript.js');
 
-    await loadScript('https://codemirror.net/5/addon/search/search.js');
-    await loadScript('https://codemirror.net/5/addon/search/searchcursor.js');
-    await loadScript('https://codemirror.net/5/addon/search/jump-to-line.js');
-    await loadScript('https://codemirror.net/5/addon/dialog/dialog.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/search/search.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/search/searchcursor.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/search/jump-to-line.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/dialog/dialog.js');
 
     await loadScript('https://unpkg.com/jshint@2.9.6/dist/jshint.js');
-    await loadScript('https://codemirror.net/5/addon/lint/lint.js');
-    await loadScript('https://codemirror.net/5/addon/lint/javascript-lint.js');
-    await loadCSS('https://codemirror.net/5/addon/lint/lint.css');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/lint/lint.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/lint/javascript-lint.js');
+    await loadCSS('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.55.0/addon/lint/lint.css');
 }
 
 let webassemblySynthUpdated = false;
