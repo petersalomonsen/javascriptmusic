@@ -9,7 +9,7 @@ jobs:
     name: Detect use of .only
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Detect use of .only
         run: |
           grep -rq --include '*.spec.js' \.only\( . && echo 'You have .only() in your tests!' && exit 1
@@ -18,7 +18,11 @@ jobs:
     name: Web Test Runner
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
       - name: Web Test Runner
         run: |
           sudo apt-get install -y pulseaudio
@@ -33,7 +37,11 @@ jobs:
     name: AssemblyScript synth
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
       - name: Assemblyscript synth
         run: |
           cd wasmaudioworklet
@@ -43,7 +51,11 @@ jobs:
     name: Bundle pianorolldemo
     runs-on: ubuntu-latest
     steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v4
+        - name: Use Node.js 20.x
+          uses: actions/setup-node@v3
+          with:
+            node-version: '20'
         - name: Bundle pianorolldemo
           run: |
             cd wasmaudioworklet
@@ -53,7 +65,11 @@ jobs:
     name: Bundle songcompiler
     runs-on: ubuntu-latest
     steps:
-        - uses: actions/checkout@v2
+        - uses: actions/checkout@v4
+        - name: Use Node.js 20.x
+          uses: actions/setup-node@v3
+          with:
+            node-version: '20'
         - name: Bundle songcompiler
           run: |
             cd wasmaudioworklet
