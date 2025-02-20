@@ -1,6 +1,6 @@
-export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.48.2/codemirror.min.css">
-<link rel="stylesheet" href="https://codemirror.net/5/addon/dialog/dialog.css">
-<link rel="stylesheet" href="https://codemirror.net/5/addon/lint/lint.css">
+export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/dialog/dialog.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/lint/lint.css">
 <link rel="stylesheet" type="text/css" href="codemirror-monokai.css">
 <link rel="stylesheet" type="text/css" href="style.css">
 <div id="appcontainer">

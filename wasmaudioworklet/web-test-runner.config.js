@@ -24,7 +24,12 @@ export default {
       product: 'firefox', launchOptions: {
         headless: false,
         firefoxUserPrefs: {
-          'media.autoplay.block-webaudio': false
+          'media.autoplay.block-webaudio': false,  // Allow Web Audio autoplay
+          'media.autoplay.default': 0,            // Allow autoplay for all media
+          'media.autoplay.allow-extension-background-pages': true,
+          'media.autoplay.blocking_policy': 0,
+          'dom.require_user_interaction_for_audio': false, // Remove user gesture requirement
+          'dom.audiochannel.mutedByDefault': false
         }
       }
     }),

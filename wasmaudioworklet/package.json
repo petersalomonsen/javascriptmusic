@@ -1,7 +1,7 @@
 {
     "name": "wasm-music",
     "description": "Javascript/WebAssembly live coding environment for music and synthesis",
-    "version": "0.0.42",
+    "version": "0.0.43",
     "repository": {
         "url": "https://github.com/petersalomonsen/javascriptmusic"
     },
@@ -31,9 +31,10 @@
     "devDependencies": {
         "@as-pect/cli": "^8.1.0",
         "@esm-bundle/chai": "^4.3.4-fix.0",
+        "@playwright/test": "^1.50.1",
         "@rollup/plugin-terser": "^0.4.4",
         "@web/rollup-plugin-html": "^2.0.1",
-        "@web/test-runner": "^0.18.0",
+        "@web/test-runner": "^0.20.0",
         "@web/test-runner-playwright": "^0.11.0",
         "assemblyscript": "^0.27.14",
         "chai": "^4.3.7",
