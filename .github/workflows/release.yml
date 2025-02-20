@@ -13,6 +13,7 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: '20'
+        registry-url: 'https://registry.npmjs.org'
     - run: |
         cd wasmaudioworklet
         export VERSION=`npm view wasm-music dist-tags.latest`
