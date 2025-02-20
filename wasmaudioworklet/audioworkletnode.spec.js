@@ -15,9 +15,6 @@ describe('audioworkletnode', async function() {
     });
 
     it('should start audioworklet and play a note that triggers the visualizer', async () => {
-        if (navigator.userAgent.includes("Firefox/")) {
-            return;
-        }
         const synthsource = `
 import { Kick2 } from "../instruments/drums/kick2.class";
 import { SineOscillator } from '../synth/sineoscillator.class';
