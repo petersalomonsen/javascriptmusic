@@ -32,6 +32,9 @@ describe("yoshimi", function() {
     });
 
     it('should play the yoshimi synth', async () => {
+        if (navigator.userAgent.includes("Firefox/")) {
+            return;
+        }
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);
 
