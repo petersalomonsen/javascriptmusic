@@ -1,0 +1,5 @@
+*.tar.gz*
+build
+WasmEdge-*
+JUCE
+juce*
