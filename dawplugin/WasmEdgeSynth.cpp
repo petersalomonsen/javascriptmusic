@@ -1,6 +1,21 @@
 #include <JuceHeader.h>
 #include <wasmedge/wasmedge.h>
 
+class WasmEdgeSynth; // Forward declare
+
+class WasmEdgeSynthEditor : public juce::AudioProcessorEditor,
+                            private juce::ComboBox::Listener
+{
+public:
+    explicit WasmEdgeSynthEditor(WasmEdgeSynth &p);
+    void resized() override;
+
+private:
+    void comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged) override;
+
+    WasmEdgeSynth &processor;
+    juce::ComboBox instrumentSelector;
+};
 class WasmEdgeSynth final : public AudioProcessor
 {
 public:
@@ -63,6 +78,12 @@ public:
         printf("Prepare completed\n");
     }
 
+    void selectInstrument(int instrumentId)
+    {
+        selectedInstrumentId = instrumentId;
+        printf("Selected instrument ID: %d\n", instrumentId);
+    }
+
     void releaseResources() override
     {
     }
@@ -74,13 +95,16 @@ public:
             MidiMessage message = metadata.getMessage();
             const uint8 *rawmessage = message.getRawData();
 
+            // Copy the message so we can modify the channel
+            uint8_t msg0 = (rawmessage[0] & 0xF0) | ((selectedInstrumentId - 1) & 0x0F);
+
             WasmEdge_Value args[3];
-            args[0] = WasmEdge_ValueGenI32((uint8_t)rawmessage[0]); // Replace param1, param2, param3 with actual values
+            args[0] = WasmEdge_ValueGenI32(msg0);
             args[1] = WasmEdge_ValueGenI32((uint8_t)rawmessage[1]);
             args[2] = WasmEdge_ValueGenI32((uint8_t)rawmessage[2]);
-            WasmEdge_VMExecute(vm_cxt, WasmEdge_StringCreateByCString("shortmessage"), args, 3, NULL, 0); // Adjust return count as necessary
+            WasmEdge_VMExecute(vm_cxt, WasmEdge_StringCreateByCString("shortmessage"), args, 3, NULL, 0);
 
-            printf("sent midi to wasm synth: %d, %d, %d\n", rawmessage[0], rawmessage[1], rawmessage[2]);
+            printf("sent midi to wasm synth: %d, %d, %d (channel %d)\n", msg0, rawmessage[1], rawmessage[2], (selectedInstrumentId - 1));
         }
 
         int numSamples = buffer.getNumSamples();
@@ -108,8 +132,15 @@ public:
     double getTailLengthSeconds() const override { return 0.0; }
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return true; }
-    AudioProcessorEditor *createEditor() override { return nullptr; }
-    bool hasEditor() const override { return false; }
+    AudioProcessorEditor *createEditor() override
+    {
+        return new WasmEdgeSynthEditor(*this);
+    }
+
+    bool hasEditor() const override
+    {
+        return true;
+    }
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}
@@ -119,6 +150,7 @@ public:
     void setStateInformation(const void *, int) override {}
 
 private:
+    int selectedInstrumentId = 1; // Default to 1 (Piano)
     WasmEdge_VMContext *vm_cxt;
     WasmEdge_ModuleInstanceContext *environmentModuleInstanceContext;
     WasmEdge_String fillSampleBufferFuncNameString;
@@ -126,6 +158,29 @@ private:
     Synthesiser synth;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WasmEdgeSynth)
 };
+
+WasmEdgeSynthEditor::WasmEdgeSynthEditor(WasmEdgeSynth &p)
+    : juce::AudioProcessorEditor(p), processor(p)
+{
+    setSize(400, 200);
+    instrumentSelector.addItem("Piano", 1);
+    instrumentSelector.addItem("Guitar", 2);
+    instrumentSelector.addItem("Drums", 3);
+    instrumentSelector.setSelectedId(1);
+    instrumentSelector.addListener(this);
+    addAndMakeVisible(instrumentSelector);
+}
+
+void WasmEdgeSynthEditor::resized()
+{
+    instrumentSelector.setBounds(10, 10, getWidth() - 20, 30);
+}
+
+void WasmEdgeSynthEditor::comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged)
+{
+    if (comboBoxThatHasChanged == &instrumentSelector)
+        processor.selectInstrument(instrumentSelector.getSelectedId());
+}
 
 juce::AudioProcessor *JUCE_CALLTYPE createPluginFilter()
 {
