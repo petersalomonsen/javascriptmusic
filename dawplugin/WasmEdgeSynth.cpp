@@ -164,8 +164,15 @@ WasmEdgeSynthEditor::WasmEdgeSynthEditor(WasmEdgeSynth &p)
 {
     setSize(400, 200);
     instrumentSelector.addItem("Piano", 1);
-    instrumentSelector.addItem("Guitar", 2);
+    instrumentSelector.addItem("Strings", 2);
     instrumentSelector.addItem("Drums", 3);
+    instrumentSelector.addItem("Guitar", 4);
+    instrumentSelector.addItem("Bass", 5);
+    instrumentSelector.addItem("Tube", 6);
+    instrumentSelector.addItem("Flute", 7);
+    instrumentSelector.addItem("Padsynth", 8);
+    instrumentSelector.addItem("Brass", 9);
+    instrumentSelector.addItem("Choir", 10);
     instrumentSelector.setSelectedId(1);
     instrumentSelector.addListener(this);
     addAndMakeVisible(instrumentSelector);
