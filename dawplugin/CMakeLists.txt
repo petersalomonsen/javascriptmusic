@@ -13,7 +13,7 @@ juce_add_plugin(WasmEdgeSynth
     COPY_PLUGIN_AFTER_BUILD TRUE
     PLUGIN_MANUFACTURER_CODE WaMu
     PLUGIN_CODE Wedg
-    FORMATS AU Standalone)
+    FORMATS AU)
 
 target_sources(WasmEdgeSynth
     PRIVATE
@@ -23,14 +23,21 @@ target_compile_definitions(WasmEdgeSynth
     PRIVATE
         JUCE_VST3_CAN_REPLACE_VST2=0)
 
+target_include_directories(WasmEdgeSynth
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/wasmedge/build/include/api
+)
+
 target_link_libraries(WasmEdgeSynth
     PRIVATE
         juce::juce_audio_utils
-        wasmedge
+        ${CMAKE_CURRENT_SOURCE_DIR}/wasmedge/build/_deps/fmt-build/libfmt.a
+        ${CMAKE_CURRENT_SOURCE_DIR}/wasmedge/build/lib/api/libwasmedge.a
         z
         ncurses
         pthread # For -pthread, commonly needed for threading support
         m # For -lm, math library
+        xar
     PUBLIC
         juce::juce_audio_plugin_client
         juce::juce_dsp

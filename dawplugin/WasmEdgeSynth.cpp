@@ -51,11 +51,11 @@ public:
             WasmEdge_ModuleInstanceDelete(environmentModuleInstanceContext);
         }
         environmentModuleInstanceContext = WasmEdge_ModuleInstanceCreate(WasmEdge_StringCreateByCString("environment"));
-        WasmEdge_VMRegisterModuleFromImport(vm_cxt, environmentModuleInstanceContext);
-       
-        WasmEdge_GlobalTypeContext *SAMPLERATE_type = WasmEdge_GlobalTypeCreate(WasmEdge_ValType_F32, WasmEdge_Mutability_Const);
+        
+        WasmEdge_GlobalTypeContext *SAMPLERATE_type = WasmEdge_GlobalTypeCreate(WasmEdge_ValTypeGenF32(), WasmEdge_Mutability_Const);
         WasmEdge_GlobalInstanceContext *SAMPLERATE_global = WasmEdge_GlobalInstanceCreate(SAMPLERATE_type, WasmEdge_ValueGenF32(newSampleRate));
         WasmEdge_ModuleInstanceAddGlobal(environmentModuleInstanceContext, WasmEdge_StringCreateByCString("SAMPLERATE"), SAMPLERATE_global);
+        WasmEdge_VMRegisterModuleFromImport(vm_cxt, environmentModuleInstanceContext);
 
         WasmEdge_VMValidate(vm_cxt);
         printf("Wasm module validatedf\n");
