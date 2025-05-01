@@ -31,13 +31,6 @@ unzip juce-8.0.7-osx.zip
 cmake -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release
 ```
 
-## Install the plugin
-
-```bash
-cp -R build/WasmEdgeSynth_artefacts/Release/AU/WasmEdgeSynth.component ~/Library/Audio/Plug-Ins/Components/
-codesign --deep --force --sign - ~/Library/Audio/Plug-Ins/Components/WasmEdgeSynth.component
-```
-
 # Verify the plugin
 
 ```bash

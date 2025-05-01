@@ -1,25 +1,25 @@
 #include <JuceHeader.h>
 #include <wasmedge/wasmedge.h>
 
-class WasmEdgeSynth; // Forward declare
+class WebAssemblyMusicSynth; // Forward declare
 
-class WasmEdgeSynthEditor : public juce::AudioProcessorEditor,
+class WebAssemblyMusicSynthEditor : public juce::AudioProcessorEditor,
                             private juce::ComboBox::Listener
 {
 public:
-    explicit WasmEdgeSynthEditor(WasmEdgeSynth &p);
+    explicit WebAssemblyMusicSynthEditor(WebAssemblyMusicSynth &p);
     void resized() override;
 
 private:
     void comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged) override;
 
-    WasmEdgeSynth &processor;
+    WebAssemblyMusicSynth &processor;
     juce::ComboBox instrumentSelector;
 };
-class WasmEdgeSynth final : public AudioProcessor
+class WebAssemblyMusicSynth final : public AudioProcessor
 {
 public:
-    WasmEdgeSynth()
+    WebAssemblyMusicSynth()
         : AudioProcessor(BusesProperties().withOutput("Output", AudioChannelSet::stereo()))
     {
         WasmEdge_ConfigureContext *ConfCxt = WasmEdge_ConfigureCreate();
@@ -134,7 +134,7 @@ public:
     bool producesMidi() const override { return true; }
     AudioProcessorEditor *createEditor() override
     {
-        return new WasmEdgeSynthEditor(*this);
+        return new WebAssemblyMusicSynthEditor(*this);
     }
 
     bool hasEditor() const override
@@ -156,10 +156,10 @@ private:
     WasmEdge_String fillSampleBufferFuncNameString;
     float32_t *renderbuf;
     Synthesiser synth;
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WasmEdgeSynth)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebAssemblyMusicSynth)
 };
 
-WasmEdgeSynthEditor::WasmEdgeSynthEditor(WasmEdgeSynth &p)
+WebAssemblyMusicSynthEditor::WebAssemblyMusicSynthEditor(WebAssemblyMusicSynth &p)
     : juce::AudioProcessorEditor(p), processor(p)
 {
     setSize(400, 200);
@@ -178,12 +178,12 @@ WasmEdgeSynthEditor::WasmEdgeSynthEditor(WasmEdgeSynth &p)
     addAndMakeVisible(instrumentSelector);
 }
 
-void WasmEdgeSynthEditor::resized()
+void WebAssemblyMusicSynthEditor::resized()
 {
     instrumentSelector.setBounds(10, 10, getWidth() - 20, 30);
 }
 
-void WasmEdgeSynthEditor::comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged)
+void WebAssemblyMusicSynthEditor::comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged)
 {
     if (comboBoxThatHasChanged == &instrumentSelector)
         processor.selectInstrument(instrumentSelector.getSelectedId());
@@ -191,5 +191,5 @@ void WasmEdgeSynthEditor::comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged
 
 juce::AudioProcessor *JUCE_CALLTYPE createPluginFilter()
 {
-    return new WasmEdgeSynth();
+    return new WebAssemblyMusicSynth();
 }
