@@ -1,5 +1,6 @@
 #include <JuceHeader.h>
 #include <wasmedge/wasmedge.h>
+#include <string> // Add this for std::string
 
 class WebAssemblyMusicSynth; // Forward declare
 
@@ -24,15 +25,18 @@ public:
     {
         WasmEdge_ConfigureContext *ConfCxt = WasmEdge_ConfigureCreate();
 
+        juce::File tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory);
+        juce::String tempWasmSo = tempDir.getChildFile("song.wasm.so").getFullPathName();
+
         printf("Creating WasmEdge compiler context\n");
         WasmEdge_CompilerContext *CompilerCxt = WasmEdge_CompilerCreate(ConfCxt);
-        WasmEdge_CompilerCompile(CompilerCxt, "/Users/peter/song.wasm", "/Users/peter/song.wasm.so");
+        WasmEdge_CompilerCompile(CompilerCxt, "/Users/peter/song.wasm", tempWasmSo.toRawUTF8());
 
         WasmEdge_CompilerDelete(CompilerCxt);
         WasmEdge_ConfigureDelete(ConfCxt);
 
         vm_cxt = WasmEdge_VMCreate(NULL, NULL);
-        WasmEdge_Result result = WasmEdge_VMLoadWasmFromFile(vm_cxt, "/Users/peter/song.wasm.so");
+        WasmEdge_Result result = WasmEdge_VMLoadWasmFromFile(vm_cxt, tempWasmSo.toRawUTF8());
 
         printf("Loaded Wasm file, result: %d\n", result.Code);
     }
