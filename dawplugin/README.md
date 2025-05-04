@@ -33,7 +33,7 @@ export CC="$(brew --prefix)/opt/llvm@16/bin/clang"
 export CXX="$(brew --prefix)/opt/llvm@16/bin/clang++"
 ```
 
-## Build WasmEdge
+## Download and build WasmEdge
 
 ```bash
 wget https://github.com/WasmEdge/WasmEdge/releases/download/0.14.1/WasmEdge-0.14.1-src.tar.gz

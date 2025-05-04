@@ -24,9 +24,10 @@ jobs:
           export CC="$(brew --prefix)/opt/llvm@16/bin/clang"
           export CXX="$(brew --prefix)/opt/llvm@16/bin/clang++"
 
-      - name: Build WasmEdge
+      - name: Download and Build WasmEdge
         run: |
           cd dawplugin
+          wget https://github.com/WasmEdge/WasmEdge/releases/download/0.14.1/WasmEdge-0.14.1-src.tar.gz
           tar -xvzf WasmEdge-0.14.1-src.tar.gz
           cd wasmedge
           cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_LINK_LLVM_STATIC=ON -DWASMEDGE_BUILD_SHARED_LIB=Off -DWASMEDGE_BUILD_STATIC_LIB=On -DWASMEDGE_LINK_TOOLS_STATIC=On -DWASMEDGE_BUILD_PLUGINS=Off
