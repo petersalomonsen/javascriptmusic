@@ -17,15 +17,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Download and Build WasmEdge
         run: |
           brew install llvm@16 ninja cmake
           export LLVM_DIR="$(brew --prefix)/opt/llvm@16/lib/cmake"
           export CC="$(brew --prefix)/opt/llvm@16/bin/clang"
           export CXX="$(brew --prefix)/opt/llvm@16/bin/clang++"
 
-      - name: Download and Build WasmEdge
-        run: |
           cd dawplugin
           wget https://github.com/WasmEdge/WasmEdge/releases/download/0.14.1/WasmEdge-0.14.1-src.tar.gz
           tar -xvzf WasmEdge-0.14.1-src.tar.gz
