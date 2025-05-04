@@ -1,12 +1,8 @@
 name: CI
 on:
   push:
-    paths:
-      - 'wasmaudioworklet/**'
     branches: [ master ]
   pull_request:
-    paths:
-      - 'wasmaudioworklet/**'
     branches: [ master ]
 jobs:
   detectonly:
