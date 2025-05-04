@@ -1,0 +1,46 @@
+name: Build JUCE Plugin on macOS
+
+on:
+  push:
+    paths:
+      - 'dawplugin/**'
+      - '.github/workflows/macos-build.yml'
+    branches: [ master ]
+  pull_request:
+    paths:
+      - 'dawplugin/**'
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build WasmEdge static library
+        run: |
+          brew install llvm@16 ninja cmake
+          export LLVM_DIR="$(brew --prefix)/opt/llvm@16/lib/cmake"
+          export CC="$(brew --prefix)/opt/llvm@16/bin/clang"
+          export CXX="$(brew --prefix)/opt/llvm@16/bin/clang++"
+
+          cd dawplugin
+          wget https://github.com/WasmEdge/WasmEdge/releases/download/0.14.1/WasmEdge-0.14.1-src.tar.gz
+          tar -xvzf WasmEdge-0.14.1-src.tar.gz
+          cd wasmedge
+          cmake -Bbuild -GNinja -DCMAKE_BUILD_TYPE=Release -DWASMEDGE_LINK_LLVM_STATIC=ON -DWASMEDGE_BUILD_SHARED_LIB=Off -DWASMEDGE_BUILD_STATIC_LIB=On -DWASMEDGE_LINK_TOOLS_STATIC=On -DWASMEDGE_BUILD_PLUGINS=Off
+          cmake --build build
+
+      - name: Download JUCE
+        run: |
+          cd dawplugin
+          wget https://github.com/juce-framework/JUCE/releases/download/8.0.7/juce-8.0.7-osx.zip
+          unzip juce-8.0.7-osx.zip
+
+      - name: Build Plugin
+        run: |
+          cd dawplugin
+          cmake -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release
+
