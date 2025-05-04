@@ -5,7 +5,8 @@
 class WebAssemblyMusicSynth; // Forward declare
 
 class WebAssemblyMusicSynthEditor : public juce::AudioProcessorEditor,
-                            private juce::ComboBox::Listener
+                            private juce::ComboBox::Listener,
+                            private juce::Button::Listener
 {
 public:
     explicit WebAssemblyMusicSynthEditor(WebAssemblyMusicSynth &p);
@@ -13,9 +14,13 @@ public:
 
 private:
     void comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged) override;
+    void buttonClicked(juce::Button* button) override;
 
     WebAssemblyMusicSynth &processor;
     juce::ComboBox instrumentSelector;
+    juce::TextButton browseButton { "Browse Wasm File" };
+    juce::Label wasmFileLabel;
+    std::unique_ptr<juce::FileChooser> wasmChooser;
 };
 class WebAssemblyMusicSynth final : public AudioProcessor
 {
@@ -23,22 +28,40 @@ public:
     WebAssemblyMusicSynth()
         : AudioProcessor(BusesProperties().withOutput("Output", AudioChannelSet::stereo()))
     {
-        WasmEdge_ConfigureContext *ConfCxt = WasmEdge_ConfigureCreate();
+    }
 
+    void compileAndLoadWasm(const juce::String& wasmPath)
+    {
+        juce::File wasmFile(wasmPath);
         juce::File tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory);
-        juce::String tempWasmSo = tempDir.getChildFile("song.wasm.so").getFullPathName();
+        juce::String baseName = wasmFile.getFileName();
+        juce::String tempWasmSo = tempDir.getChildFile(baseName + ".so").getFullPathName();
 
-        printf("Creating WasmEdge compiler context\n");
+        printf("Compiling Wasm file: %s\n", wasmPath.toRawUTF8());
+        WasmEdge_ConfigureContext *ConfCxt = WasmEdge_ConfigureCreate();
         WasmEdge_CompilerContext *CompilerCxt = WasmEdge_CompilerCreate(ConfCxt);
-        WasmEdge_CompilerCompile(CompilerCxt, "/Users/peter/song.wasm", tempWasmSo.toRawUTF8());
-
+        WasmEdge_Result compResult = WasmEdge_CompilerCompile(CompilerCxt, wasmPath.toRawUTF8(), tempWasmSo.toRawUTF8());
         WasmEdge_CompilerDelete(CompilerCxt);
         WasmEdge_ConfigureDelete(ConfCxt);
 
-        vm_cxt = WasmEdge_VMCreate(NULL, NULL);
-        WasmEdge_Result result = WasmEdge_VMLoadWasmFromFile(vm_cxt, tempWasmSo.toRawUTF8());
+        if (!WasmEdge_ResultOK(compResult)) {
+            printf("Failed to compile Wasm file. Error code: %u\n", compResult.Code);
+            return;
+        }
 
-        printf("Loaded Wasm file, result: %d\n", result.Code);
+        if (vm_cxt) {
+            WasmEdge_VMDelete(vm_cxt);
+            renderbuf == NULL;
+        }
+        vm_cxt = WasmEdge_VMCreate(NULL, NULL);
+        WasmEdge_Result loadResult = WasmEdge_VMLoadWasmFromFile(vm_cxt, tempWasmSo.toRawUTF8());
+        if (WasmEdge_ResultOK(loadResult)) {
+            WasmEdge_VMValidate(vm_cxt);
+            WasmEdge_VMInstantiate(vm_cxt);
+            printf("Wasm file loaded and instantiated successfully.\n");
+        } else {
+            printf("Failed to load Wasm file. Error code: %u\n", loadResult.Code);
+        }
     }
 
     static String getIdentifier()
@@ -50,7 +73,15 @@ public:
     {
         synth.setCurrentPlaybackSampleRate(newSampleRate);
         printf("Samplerate is %f\n", newSampleRate);
+        prepareWasm();
+    }
 
+    void prepareWasm() {
+        if (vm_cxt == NULL) {
+            printf("Wasm VM context is NULL\n");
+            return;
+        }
+        double newSampleRate = synth.getSampleRate();
         if (environmentModuleInstanceContext != NULL) {
             WasmEdge_ModuleInstanceDelete(environmentModuleInstanceContext);
         }
@@ -88,12 +119,22 @@ public:
         printf("Selected instrument ID: %d\n", instrumentId);
     }
 
+    void loadWasmFile(const juce::String& filePath)
+    {
+        compileAndLoadWasm(filePath);
+        prepareWasm();
+    }
+
     void releaseResources() override
     {
     }
 
     void processBlock(AudioBuffer<float> &buffer, MidiBuffer &midiMessages) override
     {
+        if (renderbuf == NULL)
+        {
+            return;
+        }
         for (const auto metadata : midiMessages)
         {
             MidiMessage message = metadata.getMessage();
@@ -158,7 +199,7 @@ private:
     WasmEdge_VMContext *vm_cxt;
     WasmEdge_ModuleInstanceContext *environmentModuleInstanceContext;
     WasmEdge_String fillSampleBufferFuncNameString;
-    float32_t *renderbuf;
+    float32_t *renderbuf = NULL;
     Synthesiser synth;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebAssemblyMusicSynth)
 };
@@ -167,30 +208,67 @@ WebAssemblyMusicSynthEditor::WebAssemblyMusicSynthEditor(WebAssemblyMusicSynth &
     : juce::AudioProcessorEditor(p), processor(p)
 {
     setSize(400, 200);
-    instrumentSelector.addItem("Piano", 1);
-    instrumentSelector.addItem("Strings", 2);
-    instrumentSelector.addItem("Drums", 3);
-    instrumentSelector.addItem("Guitar", 4);
-    instrumentSelector.addItem("Bass", 5);
-    instrumentSelector.addItem("Tube", 6);
-    instrumentSelector.addItem("Flute", 7);
-    instrumentSelector.addItem("Padsynth", 8);
-    instrumentSelector.addItem("Brass", 9);
-    instrumentSelector.addItem("Choir", 10);
+    instrumentSelector.addItem("Channel 1", 1);
+    instrumentSelector.addItem("Channel 2", 2);
+    instrumentSelector.addItem("Channel 3", 3);
+    instrumentSelector.addItem("Channel 4", 4);
+    instrumentSelector.addItem("Channel 5", 5);
+    instrumentSelector.addItem("Channel 6", 6);
+    instrumentSelector.addItem("Channel 7", 7);
+    instrumentSelector.addItem("Channel 8", 8);
+    instrumentSelector.addItem("Channel 9", 9);
+    instrumentSelector.addItem("Channel 10", 10);
+    instrumentSelector.addItem("Channel 11", 11);
+    instrumentSelector.addItem("Channel 12", 12);
+    instrumentSelector.addItem("Channel 13", 13);
+    instrumentSelector.addItem("Channel 14", 14);
+    instrumentSelector.addItem("Channel 15", 15);
+    instrumentSelector.addItem("Channel 16", 16);
     instrumentSelector.setSelectedId(1);
     instrumentSelector.addListener(this);
     addAndMakeVisible(instrumentSelector);
+
+    addAndMakeVisible(browseButton);
+    browseButton.addListener(this);
+    addAndMakeVisible(wasmFileLabel);
+    wasmFileLabel.setText("No wasm file selected", juce::dontSendNotification);
 }
 
 void WebAssemblyMusicSynthEditor::resized()
 {
     instrumentSelector.setBounds(10, 10, getWidth() - 20, 30);
+    browseButton.setBounds(10, 50, getWidth() - 20, 30);
+    wasmFileLabel.setBounds(10, 90, getWidth() - 20, 24);
 }
 
 void WebAssemblyMusicSynthEditor::comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged)
 {
     if (comboBoxThatHasChanged == &instrumentSelector)
         processor.selectInstrument(instrumentSelector.getSelectedId());
+}
+
+void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
+{
+    if (button == &browseButton)
+    {
+        wasmChooser = std::make_unique<juce::FileChooser>(
+            "Select a Wasm file",
+            juce::File(),
+            "*.wasm"
+        );
+
+        auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+
+        wasmChooser->launchAsync(chooserFlags, [this](const juce::FileChooser& fc)
+        {
+            auto selectedFile = fc.getResult();
+            if (selectedFile.existsAsFile())
+            {
+                wasmFileLabel.setText(selectedFile.getFullPathName(), juce::dontSendNotification);
+                processor.loadWasmFile(selectedFile.getFullPathName());
+            }
+        });
+    }
 }
 
 juce::AudioProcessor *JUCE_CALLTYPE createPluginFilter()
