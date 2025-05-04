@@ -51,7 +51,7 @@ public:
 
         if (vm_cxt) {
             WasmEdge_VMDelete(vm_cxt);
-            renderbuf == NULL;
+            renderbuf = NULL;
         }
         vm_cxt = WasmEdge_VMCreate(NULL, NULL);
         WasmEdge_Result loadResult = WasmEdge_VMLoadWasmFromFile(vm_cxt, tempWasmSo.toRawUTF8());

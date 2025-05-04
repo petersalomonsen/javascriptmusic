@@ -6,6 +6,7 @@ add_subdirectory(JUCE)
 
 juce_add_plugin(WebAssemblyMusicSynth
     COMPANY_NAME "WebAssembly Music"
+    BUNDLE_ID com.petersalomonsen.WebAssemblyMusic
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE

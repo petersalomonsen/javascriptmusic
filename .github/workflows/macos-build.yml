@@ -43,8 +43,9 @@ jobs:
         run: |
           cd dawplugin
           cmake -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release
+          auval -v aumu Wasm WaMu
       
       - name: Verify Plugin
         run: |
-          auval -v aumu Wasm WaMu
+          # auval -v aumu Wasm WaMu
 
