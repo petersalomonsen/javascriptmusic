@@ -343,7 +343,6 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
         args->setProperty("function_name", "get_locked_content");
         args->setProperty("message", messageJsonString); // Use the original JSON string
         args->setProperty("signature", signature);
-        args->setProperty("account_id", "petersalomonsen.near");
         args->setProperty("token_id", tokenId);
 
         juce::String argsJsonString = juce::JSON::toString(juce::var(args));
@@ -480,70 +479,50 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
             }
             // actualContentString now holds the (hopefully) raw Base64 data.
 
-            // Step 4: Sanitize actualContentString to get pureBase64Data
-            juce::String pureBase64Data;
-            pureBase64Data.preallocateBytes(actualContentString.length()); // Preallocate
-            bool nonBase64Found = false;
-            for (int i = 0; i < actualContentString.length(); ++i) {
-                juce::juce_wchar c = actualContentString[i];
-                if ((c >= 'A' && c <= 'Z') ||
-                    (c >= 'a' && c <= 'z') ||
-                    (c >= '0' && c <= '9') ||
-                    c == '+' || c == '/' || c == '=') { // Include padding char '='
-                    pureBase64Data += c;
-                } else {
-                    nonBase64Found = true;
-                    juce::Logger::writeToLog("Sanitization: Truncated non-Base64 suffix. Original content length: " + juce::String(actualContentString.length()) +
-                                             ", Pure Base64 length: " + juce::String(pureBase64Data.length()) +
-                                             ". Suffix starts with char code " + juce::String((int)c) + " ('" + juce::String::charToString(c) + "') at index " + juce::String(i) +
-                                             ". Full suffix (first 20 chars): " + actualContentString.substring(i, juce::jmin(i + 20, actualContentString.length())));
-                    break; 
-                }
-            }
-            if (!nonBase64Found && actualContentString.isNotEmpty()) {
-                juce::Logger::writeToLog("Sanitization: Content string was pure Base64. Length: " + juce::String(pureBase64Data.length()));
-            }
-            
-            juce::Logger::writeToLog("Pure Base64 string to decode (sample): " + (pureBase64Data.length() > 200 ? pureBase64Data.substring(0,100) + "..." + pureBase64Data.substring(pureBase64Data.length()-100) : pureBase64Data));
-            juce::Logger::writeToLog("Full Pure Base64 string length (juce::String::length()): " + juce::String(pureBase64Data.length()));
-            juce::Logger::writeToLog("Full Pure Base64 string numBytesAsUTF8 (incl. null): " + juce::String(pureBase64Data.getNumBytesAsUTF8()));
+            // Step 4: Sanitize actualContentString to get pureBase64Data -- REMOVED
+            // The string used for decoding is now actualContentString directly.
 
-            // Log first and last few character codes of pureBase64Data
-            if (pureBase64Data.isNotEmpty()) {
-                juce::String firstCharsLog = "pureBase64Data first 10 char codes: ";
-                for (int i = 0; i < juce::jmin(10, pureBase64Data.length()); ++i) {
-                    firstCharsLog += juce::String((int)pureBase64Data[i]) + " ";
+            juce::Logger::writeToLog("Using actualContentString directly for Base64 decoding (sample): " + (actualContentString.length() > 200 ? actualContentString.substring(0,100) + "..." + actualContentString.substring(actualContentString.length()-100) : actualContentString));
+            juce::Logger::writeToLog("Full actualContentString length (juce::String::length()): " + juce::String(actualContentString.length()));
+            juce::Logger::writeToLog("Full actualContentString numBytesAsUTF8 (incl. null): " + juce::String(actualContentString.getNumBytesAsUTF8()));
+
+            // Log first and last few character codes of actualContentString
+            if (actualContentString.isNotEmpty()) {
+                juce::String firstCharsLog = "actualContentString first 10 char codes: ";
+                for (int i = 0; i < juce::jmin(10, actualContentString.length()); ++i) {
+                    firstCharsLog += juce::String((int)actualContentString[i]) + " ";
                 }
                 juce::Logger::writeToLog(firstCharsLog);
 
-                if (pureBase64Data.length() > 10) {
-                    juce::String lastCharsLog = "pureBase64Data last 10 char codes: ";
-                    for (int i = juce::jmax(0, pureBase64Data.length() - 10); i < pureBase64Data.length(); ++i) {
-                        lastCharsLog += juce::String((int)pureBase64Data[i]) + " ";
+                if (actualContentString.length() > 10) {
+                    juce::String lastCharsLog = "actualContentString last 10 char codes: ";
+                    for (int i = juce::jmax(0, actualContentString.length() - 10); i < actualContentString.length(); ++i) {
+                        lastCharsLog += juce::String((int)actualContentString[i]) + " ";
                     }
                     juce::Logger::writeToLog(lastCharsLog);
                 }
             }
 
-            // Step 5: Decode the pure Base64 string
+            // Step 5: Decode the Base64 string (now using actualContentString)
+            // wasmBytes is declared at the beginning of the if (statusCode == 200) block
             wasmBytes.reset(); // Clear for new data
             juce::MemoryOutputStream outputStream(wasmBytes, false);
 
-            if (!pureBase64Data.isEmpty()) {
-                if (!juce::Base64::convertFromBase64(outputStream, pureBase64Data))
+            if (!actualContentString.isEmpty()) { // Check actualContentString
+                if (!juce::Base64::convertFromBase64(outputStream, actualContentString)) // Use actualContentString
                 {
-                    juce::Logger::writeToLog("Base64 decoding failed for the pure string (using MemoryOutputStream).");
-                    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Failed to decode pure Base64 Wasm data (using MemoryOutputStream).");
+                    juce::Logger::writeToLog("Base64 decoding failed for actualContentString (using MemoryOutputStream).");
+                    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Failed to decode Base64 Wasm data (using actualContentString with MemoryOutputStream).");
                     return;
                 }
             }
             outputStream.flush(); // Ensure all data is written to wasmBytes
-            juce::Logger::writeToLog("Size of wasmBytes after pure Base64 decoding (using MemoryOutputStream): " + juce::String(wasmBytes.getSize()));
+            juce::Logger::writeToLog("Size of wasmBytes after Base64 decoding (using MemoryOutputStream): " + juce::String(wasmBytes.getSize()));
 
-            if (wasmBytes.isEmpty() && !pureBase64Data.isEmpty()) 
+            if (wasmBytes.isEmpty() && !actualContentString.isEmpty()) // Check actualContentString
             {
-                juce::Logger::writeToLog("Error: wasmBytes is empty after Base64 decoding, but input was not. Possible issues with the source data or decoding process.");
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Decoded Wasm data is empty despite non-empty input. Server might have sent an empty or invalid module, or decoding failed silently.");
+                juce::Logger::writeToLog("Error: wasmBytes is empty after Base64 decoding, but input (actualContentString) was not. Possible issues with the source data or decoding process.");
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Decoded Wasm data is empty despite non-empty input (actualContentString). Server might have sent an empty or invalid module, or decoding failed silently.");
                 return;
             }
 
