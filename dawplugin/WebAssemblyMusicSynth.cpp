@@ -589,6 +589,8 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
 
             // Step 7: Load the Wasm module using the existing method
             processor.compileAndLoadWasm(tempWasmFile.getFullPathName());
+            // After compiling and loading, prepare the Wasm environment and instantiate
+            processor.prepareWasm();
 
             // File is now a regular file, it will persist unless explicitly deleted.
             juce::Logger::writeToLog("Wasm module saved to: " + tempWasmFile.getFullPathName() + ". It will not be automatically deleted.");
