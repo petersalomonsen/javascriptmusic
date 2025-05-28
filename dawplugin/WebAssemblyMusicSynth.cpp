@@ -21,6 +21,10 @@ private:
     juce::TextButton browseButton { "Browse Wasm File" };
     juce::Label wasmFileLabel;
     std::unique_ptr<juce::FileChooser> wasmChooser;
+
+    // Added for Wasm download feature
+    juce::TextEditor accessMessageInput;
+    juce::TextButton downloadButton { "Download & Load Wasm" };
 };
 class WebAssemblyMusicSynth final : public AudioProcessor
 {
@@ -232,6 +236,16 @@ WebAssemblyMusicSynthEditor::WebAssemblyMusicSynthEditor(WebAssemblyMusicSynth &
     browseButton.addListener(this);
     addAndMakeVisible(wasmFileLabel);
     wasmFileLabel.setText("No wasm file selected", juce::dontSendNotification);
+
+    // Initialize and add new UI elements for Wasm download
+    addAndMakeVisible(accessMessageInput);
+    accessMessageInput.setMultiLine(false);
+    accessMessageInput.setReturnKeyStartsNewLine(false);
+    accessMessageInput.setScrollbarsShown(false);
+    accessMessageInput.setTextToShowWhenEmpty("Enter Access Message here", juce::Colours::grey);
+
+    addAndMakeVisible(downloadButton);
+    downloadButton.addListener(this);
 }
 
 void WebAssemblyMusicSynthEditor::resized()
@@ -239,6 +253,10 @@ void WebAssemblyMusicSynthEditor::resized()
     instrumentSelector.setBounds(10, 10, getWidth() - 20, 30);
     browseButton.setBounds(10, 50, getWidth() - 20, 30);
     wasmFileLabel.setBounds(10, 90, getWidth() - 20, 24);
+
+    // Position new UI elements
+    accessMessageInput.setBounds(10, 120, getWidth() - 20, 24);
+    downloadButton.setBounds(10, 150, getWidth() - 20, 30);
 }
 
 void WebAssemblyMusicSynthEditor::comboBoxChanged(juce::ComboBox *comboBoxThatHasChanged)
@@ -268,6 +286,194 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
                 processor.loadWasmFile(selectedFile.getFullPathName());
             }
         });
+    }
+    else if (button == &downloadButton)
+    {
+        juce::String accessMessage = accessMessageInput.getText();
+        if (accessMessage.isEmpty())
+        {
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                   "Input Error",
+                                                   "Please enter an access message.");
+            return;
+        }
+
+        juce::StringArray accessMessageParts;
+        accessMessageParts.addTokens(accessMessage, ".", "");
+        if (accessMessageParts.size() != 2)
+        {
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                   "Input Error",
+                                                   "Invalid access message format.");
+            return;
+        }
+
+        juce::String messageJsonBase64 = accessMessageParts[0];
+        juce::String signature = accessMessageParts[1];
+        
+        juce::MemoryBlock messageDecodedBytes;
+        juce::MemoryOutputStream messageOutputStream(messageDecodedBytes, false);
+        if (!juce::Base64::convertFromBase64(messageOutputStream, messageJsonBase64)) {
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Input Error", "Failed to decode access message (first part).");
+            return;
+        }
+        // Ensure the stream is flushed and the MemoryBlock is updated if necessary, though for MemoryOutputStream it's usually direct.
+        messageOutputStream.flush(); // Good practice
+        juce::String messageJsonString = messageDecodedBytes.toString();
+
+        juce::var messageVar = juce::JSON::parse(messageJsonString);
+        if (messageVar == juce::var()) // Check if parsing failed
+        {
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                   "Input Error",
+                                                   "Failed to parse access message JSON.");
+            return;
+        }
+
+        juce::String tokenId = messageVar["token_id"].toString();
+        if (tokenId.isEmpty())
+        {
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                   "Input Error",
+                                                   "Could not find 'token_id' in access message.");
+            return;
+        }
+
+        juce::DynamicObject::Ptr args = new juce::DynamicObject();
+        args->setProperty("function_name", "get_locked_content");
+        args->setProperty("message", messageJsonString); // Use the original JSON string
+        args->setProperty("signature", signature);
+        args->setProperty("account_id", "petersalomonsen.near");
+        args->setProperty("token_id", tokenId);
+
+        juce::String argsJsonString = juce::JSON::toString(juce::var(args));
+        juce::String argsBase64 = juce::Base64::toBase64(argsJsonString);
+
+        juce::DynamicObject::Ptr payload = new juce::DynamicObject();
+        payload->setProperty("method", "query");
+        
+        juce::DynamicObject::Ptr params = new juce::DynamicObject();
+        params->setProperty("request_type", "call_function");
+        params->setProperty("finality", "optimistic");
+        params->setProperty("account_id", "webassemblymusic.near");
+        params->setProperty("method_name", "call_js_func");
+        params->setProperty("args_base64", argsBase64);
+        
+        payload->setProperty("params", juce::var(params));
+        payload->setProperty("id", 132); // Static ID as in example
+        payload->setProperty("jsonrpc", "2.0");
+
+        juce::String payloadJsonString = juce::JSON::toString(juce::var(payload));
+
+        juce::URL baseUrl("https://rpc.mainnet.fastnear.com/");
+        // Associate POST data directly with the URL object.
+        // createInputStream will use POST if the URL has POST data.
+        juce::URL urlToUse = baseUrl.withPOSTData(payloadJsonString);
+        
+        int statusCode = 0;
+        juce::StringPairArray responseHeaders;
+
+        // Use InputStreamOptions for the modern API
+        juce::URL::InputStreamOptions options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
+                                                 .withExtraHeaders("Content-Type: application/json\\r\\nAccept: application/json")
+                                                 .withConnectionTimeoutMs(15000)
+                                                 .withResponseHeaders(&responseHeaders)
+                                                 .withStatusCode(&statusCode)
+                                                 .withNumRedirectsToFollow(0);
+
+        std::unique_ptr<juce::InputStream> stream = urlToUse.createInputStream(options);
+
+        if (stream == nullptr) { // Check if stream creation failed
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, 
+                                                   "Network Error", 
+                                                   "Failed to create input stream. Status code: " + juce::String(statusCode) + ". Check network connection and URL.");
+            return;
+        }
+
+        if (statusCode == 200)
+        {
+            juce::String responseJsonString = stream->readEntireStreamAsString();
+            juce::var responseVar = juce::JSON::parse(responseJsonString);
+
+            if (responseVar == juce::var())
+            {
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Failed to parse JSON response from server.");
+                return;
+            }
+
+            juce::var rpcResult = responseVar["result"];
+            if (!rpcResult.isObject()) {
+                 juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Invalid 'result' field in server response.");
+                return;
+            }
+
+            juce::var wasmBytesVar = rpcResult["result"];
+            if (!wasmBytesVar.isArray())
+            {
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Wasm data not found or not an array in server response.");
+                return;
+            }
+
+            juce::MemoryBlock wasmBytes;
+            juce::Array<juce::var>* byteArray = wasmBytesVar.getArray();
+            for (const auto& byteVal : *byteArray)
+            {
+                if (byteVal.isInt() || byteVal.isDouble()) // NEAR RPC returns numbers
+                {
+                    uint8_t byte = static_cast<uint8_t>(static_cast<int>(byteVal));
+                    wasmBytes.append(&byte, 1);
+                }
+                else
+                {
+                    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Invalid byte data in Wasm array.");
+                    return;
+                }
+            }
+
+            if (wasmBytes.isEmpty())
+            {
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Received empty Wasm data.");
+                return;
+            }
+
+            juce::File tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory);
+            juce::File tempWasmFile = tempDir.getChildFile("downloaded_instrument.wasm");
+            
+            if (tempWasmFile.exists()) tempWasmFile.deleteFile();
+
+
+            juce::FileOutputStream fos(tempWasmFile);
+            if (!fos.openedOk()) {
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Failed to open temporary Wasm file for writing: " + tempWasmFile.getFullPathName());
+                return;
+            }
+
+            if (!fos.write(wasmBytes.getData(), wasmBytes.getSize()))
+            {
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Failed to write downloaded Wasm data to temporary file.");
+                return;
+            }
+            fos.flush(); // Ensure data is written before closing (implicitly by FileOutputStream destructor)
+            
+            // Explicitly close the stream before loading, though destructor would do it.
+            // Not strictly necessary as FileOutputStream closes on destruction.
+            // fos. ~FileOutputStream(); // This is not how you do it. It will go out of scope.
+
+            wasmFileLabel.setText("Downloaded: " + tempWasmFile.getFileName(), juce::dontSendNotification);
+            processor.loadWasmFile(tempWasmFile.getFullPathName());
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, "Success", "Wasm downloaded and loading process initiated.");
+
+        }
+        else
+        {
+            juce::String errorBody;
+            if(stream) errorBody = stream->readEntireStreamAsString(); // Try to read error body if stream exists
+            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+                                                   "Download Error",
+                                                   "HTTP Error: " + juce::String(statusCode) + "\\nResponse: " + errorBody);
+        }
+        // No explicit 'else' for stream == nullptr needed here as it's handled above.
+        // The 'else' above corresponds to 'if (statusCode == 200)'
     }
 }
 
