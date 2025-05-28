@@ -393,7 +393,6 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
 
         if (statusCode == 200)
         {
-            juce::File tempWasmFile; // Will be initialized by TemporaryFile
             juce::MemoryBlock wasmBytes;
 
             juce::Logger::writeToLog("Successfully received response from NEAR RPC.");
@@ -541,59 +540,39 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
             outputStream.flush(); // Ensure all data is written to wasmBytes
             juce::Logger::writeToLog("Size of wasmBytes after pure Base64 decoding (using MemoryOutputStream): " + juce::String(wasmBytes.getSize()));
 
-            if (wasmBytes.isEmpty() && !pureBase64Data.isEmpty()) // Check pureBase64Data was not empty if wasmBytes is empty
+            if (wasmBytes.isEmpty() && !pureBase64Data.isEmpty()) 
             {
                 juce::Logger::writeToLog("Error: wasmBytes is empty after Base64 decoding, but input was not. Possible issues with the source data or decoding process.");
                 juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Decoded Wasm data is empty despite non-empty input. Server might have sent an empty or invalid module, or decoding failed silently.");
                 return;
             }
 
-            // Step 6: Save the decoded Wasm data to a temporary file
-            juce::File tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory);
-            if (!tempDir.exists() || !tempDir.isDirectory())
-            {
-                // Fallback if temp directory isn't found or isn't a directory
-                // This is unlikely but good to handle.
-                juce::Logger::writeToLog("Error: Could not find or access system temporary directory. Using current directory as fallback.");
-                tempDir = juce::File::getCurrentWorkingDirectory();
-            }
-
-            // Create a unique-ish filename or a fixed one for debugging
-            // For robust uniqueness, you might use juce::Uuid().toDashedString() + ".wasm"
-            tempWasmFile = tempDir.getChildFile("downloaded_wasm_module.wasm");
+            // Step 6: Save the decoded Wasm data to a temporary file using juce::TemporaryFile
+            juce::TemporaryFile tempFileHolder (juce::String("downloaded_synth.wasm")); 
             
-            juce::Logger::writeToLog("Attempting to save Wasm to regular file in temp dir: " + tempWasmFile.getFullPathName());
+            juce::File actualTempFile = tempFileHolder.getFile();
 
-            // Delete if it already exists to ensure a fresh write
-            if (tempWasmFile.existsAsFile())
+            if (actualTempFile == juce::File{}) // Check if the file object is invalid
             {
-                tempWasmFile.deleteFile();
-            }
-
-            juce::FileOutputStream fos(tempWasmFile);
-            if (fos.failedToOpen())
-            {
-                juce::Logger::writeToLog("Failed to open temporary file for writing: " + tempWasmFile.getFullPathName());
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Could not open temporary file to save Wasm data.");
+                juce::Logger::writeToLog("Error: Failed to create temporary file object using juce::TemporaryFile.");
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Failed to initialize temporary file structure.");
                 return;
             }
+            
+            juce::Logger::writeToLog("Attempting to save Wasm to temporary file: " + actualTempFile.getFullPathName());
 
-            if (!fos.write(wasmBytes.getData(), wasmBytes.getSize()))
+            if (actualTempFile.replaceWithData(wasmBytes.getData(), wasmBytes.getSize()))
             {
-                juce::Logger::writeToLog("Failed to write Wasm data to temporary file: " + tempWasmFile.getFullPathName());
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Could not write Wasm data to temporary file.");
-                return;
+                juce::Logger::writeToLog("Successfully saved Wasm to: " + actualTempFile.getFullPathName() + " Size: " + juce::String(actualTempFile.getSize()));
+
+                processor.compileAndLoadWasm(actualTempFile.getFullPathName());
+                processor.prepareWasm(); 
             }
-            fos.flush(); // Ensure data is written before closing (implicitly by FileOutputStream destructor)
-            juce::Logger::writeToLog("Successfully wrote " + juce::String(wasmBytes.getSize()) + " bytes to " + tempWasmFile.getFullPathName());
-
-            // Step 7: Load the Wasm module using the existing method
-            processor.compileAndLoadWasm(tempWasmFile.getFullPathName());
-            // After compiling and loading, prepare the Wasm environment and instantiate
-            processor.prepareWasm();
-
-            // File is now a regular file, it will persist unless explicitly deleted.
-            juce::Logger::writeToLog("Wasm module saved to: " + tempWasmFile.getFullPathName() + ". It will not be automatically deleted.");
+            else
+            {
+                juce::Logger::writeToLog("Error: Failed to write Wasm data to temporary file: " + actualTempFile.getFullPathName());
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Failed to save downloaded Wasm file using TemporaryFile.");
+            }
         }
         else
         {
