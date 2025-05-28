@@ -366,21 +366,22 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
         juce::String payloadJsonString = juce::JSON::toString(juce::var(payload));
 
         juce::URL baseUrl("https://rpc.mainnet.fastnear.com/");
-        // Associate POST data directly with the URL object.
-        // createInputStream will use POST if the URL has POST data.
-        juce::URL urlToUse = baseUrl.withPOSTData(payloadJsonString);
+        
+        // Set the raw JSON string as the body of the request
+        juce::URL urlToUse = baseUrl.withPOSTData(payloadJsonString); 
         
         int statusCode = 0;
         juce::StringPairArray responseHeaders;
 
-        // Use InputStreamOptions for the modern API
-        juce::URL::InputStreamOptions options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)
-                                                 .withExtraHeaders("Content-Type: application/json\\r\\nAccept: application/json")
+        // Construct InputStreamOptions and chain settings.
+        // Each 'withX' method returns a new InputStreamOptions object by value, so the whole chain must be used in initialization.
+        juce::URL::InputStreamOptions options = juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress)                                                   
+                                                 .withExtraHeaders("Content-Type: application/json\n")
+                                                 .withHttpRequestCmd("POST")
                                                  .withConnectionTimeoutMs(15000)
                                                  .withResponseHeaders(&responseHeaders)
-                                                 .withStatusCode(&statusCode)
-                                                 .withNumRedirectsToFollow(0);
-
+                                                 .withStatusCode(&statusCode);
+        
         std::unique_ptr<juce::InputStream> stream = urlToUse.createInputStream(options);
 
         if (stream == nullptr) { // Check if stream creation failed
