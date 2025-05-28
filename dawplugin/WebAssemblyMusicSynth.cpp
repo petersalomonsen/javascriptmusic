@@ -393,77 +393,205 @@ void WebAssemblyMusicSynthEditor::buttonClicked(juce::Button* button)
 
         if (statusCode == 200)
         {
-            juce::String responseJsonString = stream->readEntireStreamAsString();
-            juce::var responseVar = juce::JSON::parse(responseJsonString);
+            juce::File tempWasmFile; // Will be initialized by TemporaryFile
+            juce::MemoryBlock wasmBytes;
 
-            if (responseVar == juce::var())
+            juce::Logger::writeToLog("Successfully received response from NEAR RPC.");
+            juce::String responseBody = stream->readEntireStreamAsString();
+            juce::var responseVar;
+            juce::Result parseResult = juce::JSON::parse(responseBody, responseVar);
+
+            if (parseResult.failed())
             {
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Failed to parse JSON response from server.");
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Parse Error", "Failed to parse JSON response from server.");
                 return;
             }
 
             juce::var rpcResult = responseVar["result"];
             if (!rpcResult.isObject()) {
-                 juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Invalid 'result' field in server response.");
+                 juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Invalid 'result' object in server response.");
                 return;
             }
 
-            juce::var wasmBytesVar = rpcResult["result"];
-            if (!wasmBytesVar.isArray())
+            juce::var charCodeArrayVar = rpcResult["result"]; 
+            if (!charCodeArrayVar.isArray())
             {
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Wasm data not found or not an array in server response.");
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Wasm data (inside result.result) not found or not an array in server response.");
                 return;
             }
 
-            juce::MemoryBlock wasmBytes;
-            juce::Array<juce::var>* byteArray = wasmBytesVar.getArray();
-            for (const auto& byteVal : *byteArray)
+            // Step 1: Create a MemoryBlock of bytes from charCodeArrayVar
+            juce::MemoryBlock charCodeBytes;
+            if (juce::Array<juce::var>* charCodeArray = charCodeArrayVar.getArray())
             {
-                if (byteVal.isInt() || byteVal.isDouble()) // NEAR RPC returns numbers
+                for (const auto& charCodeVar : *charCodeArray)
                 {
-                    uint8_t byte = static_cast<uint8_t>(static_cast<int>(byteVal));
-                    wasmBytes.append(&byte, 1);
+                    if (charCodeVar.isInt() || charCodeVar.isDouble()) // isInt() should be sufficient for byte values
+                    {
+                        int val = static_cast<int>(charCodeVar);
+                        if (val >= 0 && val <= 255)
+                        {
+                            uint8_t byteVal = static_cast<uint8_t>(val);
+                            charCodeBytes.append(&byteVal, 1);
+                        }
+                        else
+                        {
+                            juce::Logger::writeToLog("Error: Character code value out of 0-255 range: " + juce::String(val));
+                            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Invalid character code (out of 0-255 range) in Wasm data array.");
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        juce::Logger::writeToLog("Error: Non-numeric value in character code array.");
+                        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Invalid (non-numeric) character code in Wasm data array.");
+                        return;
+                    }
                 }
-                else
+            }
+            else // Should not be reached if the isArray check above is comprehensive
+            {
+                 juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Failed to get character code array from Wasm data (internal error).");
+                return;
+            }
+
+            if (charCodeBytes.isEmpty() && charCodeArrayVar.getArray() != nullptr && charCodeArrayVar.getArray()->size() > 0) {
+                juce::Logger::writeToLog("Error: Constructed byte array for JSON string is empty but char code array was not.");
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Reconstructed Wasm string is empty but char code array was not. Possible non-printable chars or other issue.");
+                return;
+            }
+
+            // Step 2: Convert this block of bytes to a string (UTF-8 assumed by JUCE's toString)
+            juce::String jsonStringifiedBase64 = charCodeBytes.toString();
+            juce::Logger::writeToLog("String from char codes (expected JSON-stringified Base64, sample): " + (jsonStringifiedBase64.length() > 200 ? jsonStringifiedBase64.substring(0,100) + "..." + jsonStringifiedBase64.substring(jsonStringifiedBase64.length()-100) : jsonStringifiedBase64));
+            juce::Logger::writeToLog("Length of jsonStringifiedBase64: " + juce::String(jsonStringifiedBase64.length()));
+
+            // Step 3: Manually extract content from the JSON-like string
+            juce::String actualContentString;
+            if (jsonStringifiedBase64.length() >= 2 && jsonStringifiedBase64.startsWithChar('"') && jsonStringifiedBase64.endsWithChar('"'))
+            {
+                actualContentString = jsonStringifiedBase64.substring(1, jsonStringifiedBase64.length() - 1);
+                juce::Logger::writeToLog("Successfully stripped outer quotes. Extracted content length: " + juce::String(actualContentString.length()));
+            }
+            else
+            {
+                juce::Logger::writeToLog("Error: String from char codes is not properly quoted or is too short. Length: " + juce::String(jsonStringifiedBase64.length()) + ". Content (first 200 chars): " + jsonStringifiedBase64.substring(0, juce::jmin(200, jsonStringifiedBase64.length())));
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Wasm data string from server is not in the expected JSON-quoted format. Check logs.");
+                return;
+            }
+            // actualContentString now holds the (hopefully) raw Base64 data.
+
+            // Step 4: Sanitize actualContentString to get pureBase64Data
+            juce::String pureBase64Data;
+            pureBase64Data.preallocateBytes(actualContentString.length()); // Preallocate
+            bool nonBase64Found = false;
+            for (int i = 0; i < actualContentString.length(); ++i) {
+                juce::juce_wchar c = actualContentString[i];
+                if ((c >= 'A' && c <= 'Z') ||
+                    (c >= 'a' && c <= 'z') ||
+                    (c >= '0' && c <= '9') ||
+                    c == '+' || c == '/' || c == '=') { // Include padding char '='
+                    pureBase64Data += c;
+                } else {
+                    nonBase64Found = true;
+                    juce::Logger::writeToLog("Sanitization: Truncated non-Base64 suffix. Original content length: " + juce::String(actualContentString.length()) +
+                                             ", Pure Base64 length: " + juce::String(pureBase64Data.length()) +
+                                             ". Suffix starts with char code " + juce::String((int)c) + " ('" + juce::String::charToString(c) + "') at index " + juce::String(i) +
+                                             ". Full suffix (first 20 chars): " + actualContentString.substring(i, juce::jmin(i + 20, actualContentString.length())));
+                    break; 
+                }
+            }
+            if (!nonBase64Found && actualContentString.isNotEmpty()) {
+                juce::Logger::writeToLog("Sanitization: Content string was pure Base64. Length: " + juce::String(pureBase64Data.length()));
+            }
+            
+            juce::Logger::writeToLog("Pure Base64 string to decode (sample): " + (pureBase64Data.length() > 200 ? pureBase64Data.substring(0,100) + "..." + pureBase64Data.substring(pureBase64Data.length()-100) : pureBase64Data));
+            juce::Logger::writeToLog("Full Pure Base64 string length (juce::String::length()): " + juce::String(pureBase64Data.length()));
+            juce::Logger::writeToLog("Full Pure Base64 string numBytesAsUTF8 (incl. null): " + juce::String(pureBase64Data.getNumBytesAsUTF8()));
+
+            // Log first and last few character codes of pureBase64Data
+            if (pureBase64Data.isNotEmpty()) {
+                juce::String firstCharsLog = "pureBase64Data first 10 char codes: ";
+                for (int i = 0; i < juce::jmin(10, pureBase64Data.length()); ++i) {
+                    firstCharsLog += juce::String((int)pureBase64Data[i]) + " ";
+                }
+                juce::Logger::writeToLog(firstCharsLog);
+
+                if (pureBase64Data.length() > 10) {
+                    juce::String lastCharsLog = "pureBase64Data last 10 char codes: ";
+                    for (int i = juce::jmax(0, pureBase64Data.length() - 10); i < pureBase64Data.length(); ++i) {
+                        lastCharsLog += juce::String((int)pureBase64Data[i]) + " ";
+                    }
+                    juce::Logger::writeToLog(lastCharsLog);
+                }
+            }
+
+            // Step 5: Decode the pure Base64 string
+            wasmBytes.reset(); // Clear for new data
+            juce::MemoryOutputStream outputStream(wasmBytes, false);
+
+            if (!pureBase64Data.isEmpty()) {
+                if (!juce::Base64::convertFromBase64(outputStream, pureBase64Data))
                 {
-                    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Invalid byte data in Wasm array.");
+                    juce::Logger::writeToLog("Base64 decoding failed for the pure string (using MemoryOutputStream).");
+                    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Failed to decode pure Base64 Wasm data (using MemoryOutputStream).");
                     return;
                 }
             }
+            outputStream.flush(); // Ensure all data is written to wasmBytes
+            juce::Logger::writeToLog("Size of wasmBytes after pure Base64 decoding (using MemoryOutputStream): " + juce::String(wasmBytes.getSize()));
 
-            if (wasmBytes.isEmpty())
+            if (wasmBytes.isEmpty() && !pureBase64Data.isEmpty()) // Check pureBase64Data was not empty if wasmBytes is empty
             {
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Received empty Wasm data.");
+                juce::Logger::writeToLog("Error: wasmBytes is empty after Base64 decoding, but input was not. Possible issues with the source data or decoding process.");
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "Download Error", "Decoded Wasm data is empty despite non-empty input. Server might have sent an empty or invalid module, or decoding failed silently.");
                 return;
             }
 
+            // Step 6: Save the decoded Wasm data to a temporary file
             juce::File tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory);
-            juce::File tempWasmFile = tempDir.getChildFile("downloaded_instrument.wasm");
-            
-            if (tempWasmFile.exists()) tempWasmFile.deleteFile();
+            if (!tempDir.exists() || !tempDir.isDirectory())
+            {
+                // Fallback if temp directory isn't found or isn't a directory
+                // This is unlikely but good to handle.
+                juce::Logger::writeToLog("Error: Could not find or access system temporary directory. Using current directory as fallback.");
+                tempDir = juce::File::getCurrentWorkingDirectory();
+            }
 
+            // Create a unique-ish filename or a fixed one for debugging
+            // For robust uniqueness, you might use juce::Uuid().toDashedString() + ".wasm"
+            tempWasmFile = tempDir.getChildFile("downloaded_wasm_module.wasm");
+            
+            juce::Logger::writeToLog("Attempting to save Wasm to regular file in temp dir: " + tempWasmFile.getFullPathName());
+
+            // Delete if it already exists to ensure a fresh write
+            if (tempWasmFile.existsAsFile())
+            {
+                tempWasmFile.deleteFile();
+            }
 
             juce::FileOutputStream fos(tempWasmFile);
-            if (!fos.openedOk()) {
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Failed to open temporary Wasm file for writing: " + tempWasmFile.getFullPathName());
+            if (fos.failedToOpen())
+            {
+                juce::Logger::writeToLog("Failed to open temporary file for writing: " + tempWasmFile.getFullPathName());
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Could not open temporary file to save Wasm data.");
                 return;
             }
 
             if (!fos.write(wasmBytes.getData(), wasmBytes.getSize()))
             {
-                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Failed to write downloaded Wasm data to temporary file.");
+                juce::Logger::writeToLog("Failed to write Wasm data to temporary file: " + tempWasmFile.getFullPathName());
+                juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon, "File Error", "Could not write Wasm data to temporary file.");
                 return;
             }
             fos.flush(); // Ensure data is written before closing (implicitly by FileOutputStream destructor)
-            
-            // Explicitly close the stream before loading, though destructor would do it.
-            // Not strictly necessary as FileOutputStream closes on destruction.
-            // fos. ~FileOutputStream(); // This is not how you do it. It will go out of scope.
+            juce::Logger::writeToLog("Successfully wrote " + juce::String(wasmBytes.getSize()) + " bytes to " + tempWasmFile.getFullPathName());
 
-            wasmFileLabel.setText("Downloaded: " + tempWasmFile.getFileName(), juce::dontSendNotification);
-            processor.loadWasmFile(tempWasmFile.getFullPathName());
-            juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon, "Success", "Wasm downloaded and loading process initiated.");
+            // Step 7: Load the Wasm module using the existing method
+            processor.compileAndLoadWasm(tempWasmFile.getFullPathName());
 
+            // File is now a regular file, it will persist unless explicitly deleted.
+            juce::Logger::writeToLog("Wasm module saved to: " + tempWasmFile.getFullPathName() + ". It will not be automatically deleted.");
         }
         else
         {
