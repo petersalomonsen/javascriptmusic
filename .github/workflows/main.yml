@@ -25,6 +25,7 @@ jobs:
           node-version: '20'
       - name: Web Test Runner
         run: |
+          sudo apt update
           sudo apt-get install -y pulseaudio
           pulseaudio -D --exit-idle-time=-1
           cd wasmaudioworklet
