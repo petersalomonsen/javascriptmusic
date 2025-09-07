@@ -7,6 +7,7 @@ export default {
   ],
   concurrency: 1,
   watch: false,
+  testsFinishTimeout: 60000,
   testRunnerHtml: testRunnerImport =>
     `<html>
       <body>
@@ -22,7 +23,7 @@ export default {
     playwrightLauncher({ product: 'chromium', launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } }),
     playwrightLauncher({
       product: 'firefox', launchOptions: {
-        headless: false,
+        headless: true,
         firefoxUserPrefs: {
           'media.autoplay.block-webaudio': false,  // Allow Web Audio autoplay
           'media.autoplay.default': 0,            // Allow autoplay for all media

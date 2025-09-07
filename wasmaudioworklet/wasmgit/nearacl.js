@@ -13,8 +13,8 @@ const nearconfig_testnet = {
 };
 
 export const nearconfig = {
-    nodeUrl: 'https://rpc.mainnet.near.org',
-    walletUrl: 'https://wallet.near.org',
+    nodeUrl: 'https://rpc.mainnet.fastnear.com',
+    walletUrl: 'https://app.mynearwallet.com',
     helperUrl: 'https://helper.mainnet.near.org',
     contractName: 'wasmgit.near',
     deps: {
@@ -57,7 +57,7 @@ async function loadAccountData() {
 }
 
 export async function initNear() {
-    await loadScript('https://cdn.jsdelivr.net/gh/nearprotocol/near-api-js/dist/near-api-js.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/near-api-js@0.44.2/dist/near-api-js.min.js');
 
     nearconfig.deps.keyStore = new nearApi.keyStores.BrowserLocalStorageKeyStore();
     window.near = await nearApi.connect(nearconfig);
