@@ -13,8 +13,8 @@ const nearconfig_testnet = {
 };
 
 export const nearconfig = {
-    nodeUrl: 'https://rpc.mainnet.near.org',
-    walletUrl: 'https://wallet.near.org',
+    nodeUrl: 'https://rpc.mainnet.fastnear.com',
+    walletUrl: 'https://app.mynearwallet.com',
     helperUrl: 'https://helper.mainnet.near.org',
     contractName: 'wasmgit.near',
     deps: {
