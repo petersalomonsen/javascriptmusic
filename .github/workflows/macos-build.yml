@@ -24,6 +24,8 @@ jobs:
 
       - name: Build WasmEdge static library
         run: |
+          # Handle existing cmake installation
+          brew list cmake &>/dev/null && brew uninstall --ignore-dependencies cmake || true
           brew install llvm@16 ninja cmake
           export LLVM_DIR="$(brew --prefix)/opt/llvm@16/lib/cmake"
           export CC="$(brew --prefix)/opt/llvm@16/bin/clang"
