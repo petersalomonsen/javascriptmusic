@@ -57,7 +57,7 @@ async function loadAccountData() {
 }
 
 export async function initNear() {
-    await loadScript('https://cdn.jsdelivr.net/npm/near-api-js@1.1.0/dist/near-api-js.min.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/near-api-js@0.44.2/dist/near-api-js.min.js');
 
     nearconfig.deps.keyStore = new nearApi.keyStores.BrowserLocalStorageKeyStore();
     window.near = await nearApi.connect(nearconfig);
