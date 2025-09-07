@@ -29,10 +29,37 @@
      - Restart your DAW
      - On newer macOS versions, you may need to authorize the plugin in System Settings > Privacy & Security
 
-### Troubleshooting
+### Handling macOS Security Warning
+
+When you first try to use the plugin, macOS will show a security warning because the plugin is not signed with an Apple Developer certificate. Here's how to authorize it:
+
+1. **When you see the warning dialog**:
+   - Click "Done" (not "Move to Bin")
+   
+2. **Open System Settings**:
+   - Go to Apple Menu > System Settings (or System Preferences on older macOS)
+   - Navigate to Privacy & Security
+   
+3. **Authorize the plugin**:
+   - Scroll down to the Security section
+   - You should see a message about "WebAssemblyMusicSynth.component" being blocked
+   - Click "Open Anyway" or "Allow Anyway"
+   
+4. **Try again in your DAW**:
+   - Close and reopen your DAW
+   - Load the plugin again
+   - You may see one more dialog - click "Open" to confirm
+
+**Alternative method using Terminal**:
+If the above doesn't work, you can remove the quarantine flag manually:
+```bash
+/usr/bin/xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/WebAssemblyMusicSynth.component
+```
+Note: Use `/usr/bin/xattr` to ensure you're using the system version, not a Homebrew version.
+
+### Other Troubleshooting
 
 - **Plugin not showing up**: Make sure the component file is in the correct directory and restart your DAW
-- **Security warning**: On first launch, macOS may block the plugin. Go to System Settings > Privacy & Security and click "Open Anyway"
 - **Compatibility issues**: Ensure your DAW supports Audio Unit (AU) plugins and is running the latest version
 
 ### Supported DAWs
