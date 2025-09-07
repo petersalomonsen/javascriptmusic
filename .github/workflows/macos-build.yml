@@ -6,10 +6,13 @@ on:
       - 'dawplugin/**'
       - '.github/workflows/macos-build.yml'
     branches: [ master ]
+    tags:
+      - 'v*'
   pull_request:
     paths:
       - 'dawplugin/**'
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -43,4 +46,58 @@ jobs:
         run: |
           cd dawplugin
           cmake -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release
+      
+      - name: Package Plugin
+        run: |
+          cd dawplugin/build
+          # Find the built AU plugin
+          AU_PATH=$(find . -name "*.component" -type d | head -1)
+          if [ -n "$AU_PATH" ]; then
+            PLUGIN_NAME=$(basename "$AU_PATH" .component)
+            # Create a temporary directory for the release package
+            mkdir -p WebAssemblyMusicSynth-macOS
+            # Copy the plugin to the package directory
+            cp -R "$AU_PATH" WebAssemblyMusicSynth-macOS/
+            # Copy the installation instructions
+            cp ../INSTALLATION.md WebAssemblyMusicSynth-macOS/
+            # Create a zip archive of the plugin and instructions
+            zip -r "WebAssemblyMusicSynth-macOS.zip" WebAssemblyMusicSynth-macOS/
+            echo "PLUGIN_PATH=$PWD/WebAssemblyMusicSynth-macOS.zip" >> $GITHUB_ENV
+            echo "Plugin packaged successfully with installation instructions"
+          else
+            echo "No .component plugin found"
+            exit 1
+          fi
+      
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebAssemblyMusicSynth-macOS
+          path: dawplugin/build/WebAssemblyMusicSynth-macOS.zip
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dawplugin/build/WebAssemblyMusicSynth-macOS.zip
+          body: |
+            # WebAssembly Music Synth Plugin Release
+            
+            This release includes the Audio Unit (AU) plugin for macOS.
+            
+            ## Download
+            - `WebAssemblyMusicSynth-macOS.zip` - Audio Unit plugin for macOS
+            
+            ## Installation
+            Please see the [Installation Guide](https://github.com/petersalomonsen/javascriptmusic/blob/master/dawplugin/INSTALLATION.md) for detailed installation instructions.
+            
+            ## What's New
+            See the commit history for changes included in this release.
+            
+            ## Support
+            For issues or questions, please open an issue on the GitHub repository.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
