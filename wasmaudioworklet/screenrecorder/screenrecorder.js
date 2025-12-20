@@ -14,17 +14,39 @@ export async function startVideoRecording(audioContext, audioNodeToRecord = null
         audioStreamDestination = audioContext.createMediaStreamDestination();
         
         if (audioNodeToRecord) {
-            audioNodeToRecord.connect(audioStreamDestination);
+            // Add a compressor/limiter to prevent the synth from clipping and drowning out the mic
+            const synthCompressor = audioContext.createDynamicsCompressor();
+            synthCompressor.threshold.value = -6;  // Start compressing at -6dB
+            synthCompressor.knee.value = 3;
+            synthCompressor.ratio.value = 12;      // Heavy compression to tame peaks
+            synthCompressor.attack.value = 0.003;  // Fast attack to catch transients
+            synthCompressor.release.value = 0.1;
+            
+            const synthGain = audioContext.createGain();
+            synthGain.gain.value = 0.7;  // Reduce synth level to leave headroom for voice
+            
+            audioNodeToRecord.connect(synthCompressor);
+            synthCompressor.connect(synthGain);
+            synthGain.connect(audioStreamDestination);
         } else {
             // need at least one node connected in order to keep in sync with the video
             audioContext.createGain().connect(audioStreamDestination);
         }
 
         if (isCameraActive()) {
-            const micstream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            // Request stereo mic input
+            const micstream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    channelCount: 2,
+                    echoCancellation: false,  // Disable for better quality when singing
+                    noiseSuppression: false,  // Disable to preserve vocal dynamics
+                    autoGainControl: false    // Disable to have manual control
+                }, 
+                video: false 
+            });
             const micsource = audioContext.createMediaStreamSource(new MediaStream(micstream.getAudioTracks()));
             const micgain = audioContext.createGain();
-            micgain.gain.value = 0.6;
+            micgain.gain.value = 1.5;  // Boost mic to compete with synth
             micsource.connect(micgain);
             micgain.connect(audioStreamDestination);
         }
