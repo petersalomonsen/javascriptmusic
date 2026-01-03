@@ -21,6 +21,10 @@ Go to https://petersalomonsen.com for resources like articles, videos and exampl
 
 https://petersalomonsen.com/webassemblymusic/livecodev2/?gist=a74d2d036b3ecaa01af4e0f6d03ae7c4
 
+# Documentation
+
+- [JavaScript Sequence API Documentation](midisequencer/SEQUENCE_API.md) - Complete reference for writing JavaScript music sequences
+
 # Build / Run / Export to WAW
 
 **Build**:
