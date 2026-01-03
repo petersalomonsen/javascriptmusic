@@ -12,7 +12,8 @@ This document describes the functions available when writing JavaScript music se
 - [Song Structure Functions](#song-structure-functions)
 - [Channel Control Functions](#channel-control-functions)
 - [TrackerPattern Class](#trackerpattern-class)
-- [Pattern Class Methods](#pattern-class-methods)
+- [TrackerPattern Instance Methods](#trackerpattern-instance-methods)
+- [Array Extensions](#array-extensions)
 
 ---
 
@@ -290,44 +291,72 @@ await track.play([
 
 ---
 
-## Pattern Class Methods
+## TrackerPattern Instance Methods
 
-These methods are available on TrackerPattern instances:
+These methods are available on TrackerPattern instances created with `createTrack()`:
+
+### `setChannel(channel)`
+Sets the MIDI channel for subsequent notes.
+
+**Parameters:**
+- `channel` (number): MIDI channel (0-15)
+
+**Example:**
+```javascript
+const track = createTrack(0, 4, 100);
+track.setChannel(1);
+```
+
+### `waitForBeat(beatNo)`
+Waits until a specific beat relative to the pattern's offset.
+
+**Parameters:**
+- `beatNo` (number): Beat number relative to pattern start
+
+### `waitForStep(stepno)`
+Waits until a specific step number.
+
+**Parameters:**
+- `stepno` (number): Step number to wait for
+
+### `waitDuration(duration)`
+Waits for a specified duration in beats.
+
+**Parameters:**
+- `duration` (number): Duration in beats
 
 ### `note(noteNumber, duration)`
-Plays a single note.
+Plays a single note on the pattern's current channel.
 
 **Parameters:**
 - `noteNumber` (number): MIDI note number (0-127)
 - `duration` (number): Duration in beats
 
 ### `playNote(note, duration)`
-Plays a note using string notation.
+Plays a note using string notation on the pattern's current channel.
 
 **Parameters:**
 - `note` (string): Note name (e.g., 'c4', 'f#3')
 - `duration` (number): Duration in beats
 
-### `setChannel(channel)`
-Sets the MIDI channel.
+### `pitchbend(start, target, duration, steps)`
+Performs a pitch bend automation on the pattern's channel.
 
 **Parameters:**
-- `channel` (number): MIDI channel (0-15)
-
-### `waitForBeat(beatNo)`
-Waits until a specific beat relative to the pattern's offset.
-
-### `waitForStep(stepno)`
-Waits until a specific step number.
-
-### `waitDuration(duration)`
-Waits for a specified duration in beats.
-
-### `pitchbend(start, target, duration, steps)`
-Performs a pitch bend automation (see MIDI Control Functions).
+- `start` (number): Starting pitch bend value
+- `target` (number): Target pitch bend value
+- `duration` (number): Duration in beats
+- `steps` (number): Number of interpolation steps
 
 ### `controlchange(controller, start, target, duration, steps)`
-Performs a control change automation (see MIDI Control Functions).
+Performs a control change automation on the pattern's channel.
+
+**Parameters:**
+- `controller` (number): MIDI CC number (0-127)
+- `start` (number): Starting value
+- `target` (number): Target value
+- `duration` (number): Duration in beats
+- `steps` (number): Number of interpolation steps
 
 ---
 
