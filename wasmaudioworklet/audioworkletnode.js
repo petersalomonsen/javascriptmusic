@@ -8,6 +8,8 @@ import { getAudioWorkletModuleUrl } from './common/audioworkletmodules.js';
 import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkletprocessorsequencer.js';
 import { isSointuSong } from './sointu/playsointu.js';
 import { modalOkCancel } from './common/ui/modal.js';
+import { createFaustNode } from './faust/faustcompiler.js';
+import { startFaustSequencer, stopFaustSequencer, faustOnMidi } from './faust/faustsequencer.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
@@ -47,6 +49,16 @@ export function initAudioWorkletNode(componentRoot) {
                 );
                 window.audioworkletnode = audioworkletnode;
                 onmidi = midiSynthOnMidi;
+            } else if (song.faustGenerator) {
+                const faustNode = await createFaustNode(context, song.faustGenerator);
+                faustNode.connect(context.destination);
+                audioworkletnode = faustNode;
+                window.audioworkletnode = audioworkletnode;
+                onmidi = faustOnMidi;
+                const togglePlay = componentRoot.getElementById('toggleSongPlayCheckbox').checked;
+                if (togglePlay && song.eventlist) {
+                    startFaustSequencer(faustNode, song.eventlist, context);
+                }
             } else if (song.synthsource) {
                 await startWAM(context);
                 wamPostSong(song.eventlist, song.synthsource);
@@ -147,7 +159,8 @@ export function initAudioWorkletNode(componentRoot) {
     window.stopaudio = async () => {
         if (audioworkletnode) {
             clearVisualization();
-            audioworkletnode.port.postMessage({ terminate: true });
+            stopFaustSequencer();
+            try { audioworkletnode.port.postMessage({ terminate: true }); } catch (e) { }
             audioworkletnode.disconnect();
             detachSeek();
             audioworkletnode = null;

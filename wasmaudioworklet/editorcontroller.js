@@ -17,6 +17,7 @@ import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
 import { isSointuSong, getSointuWasm, getSointuYaml } from './sointu/playsointu.js';
+import { compileFaustDSP } from './faust/faustcompiler.js';
 
 export let songsourceeditor;
 export let synthsourceeditor;
@@ -133,6 +134,8 @@ export async function initEditor(componentRoot) {
                 if (!gitrepoconfig.synthfilename) {
                     if (synthsource.startsWith('<?xml')) {
                         gitrepoconfig.synthfilename = 'synth.xml';
+                    } else if (synthsource.includes('import("stdfaust')) {
+                        gitrepoconfig.synthfilename = 'synth.dsp';
                     } else {
                         gitrepoconfig.synthfilename = 'synth.ts';
                     }
@@ -196,7 +199,12 @@ export async function initEditor(componentRoot) {
                     await exportWAMAudio(eventlist, synthsource);
                 }
 
-                if (!synthSourceIsXML) {
+                if (synthsource.includes('import("stdfaust')) {
+                    toggleSpinner(true);
+                    const faustGenerator = await compileFaustDSP(synthsource);
+                    toggleSpinner(false);
+                    return { eventlist: eventlist, faustGenerator: faustGenerator };
+                } else if (!synthSourceIsXML) {
                     toggleSpinner(true);
                     const systemSampleRate = new AudioContext().sampleRate;
                     const synthwasm = await compileWebAssemblySynth(synthsource,
@@ -220,7 +228,7 @@ export async function initEditor(componentRoot) {
                             <p>
                                 <form>
                                     <label><input type="radio" name="exporttype" value="wav48k" checked="checked">WAV (48kHz samplerate)</label><br />
-                                    <label><input type="radio" name="exporttype" value="wav">WAV (44.1kHz samplerate)</label><br />                                
+                                    <label><input type="radio" name="exporttype" value="wav">WAV (44.1kHz samplerate)</label><br />
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_WASM_LIB}">WASM Library module</label><br />
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB}">WASM midi-multipart module</label><br />
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG}">PNG compressed WASM midi-multipart module</label><br />
@@ -392,7 +400,7 @@ export async function initEditor(componentRoot) {
 
                 if (songmode == SONG_MODE_SOINTU) {
                     synthwasm = await getSointuWasm(song);
-                } else {
+                } else if (!synthsource.includes('import("stdfaust')) {
                     synthwasm = await compileWebAssemblySynth(synthsource,
                         exportProject && songmode === SONG_MODE_WASM ? song : undefined,
                         songmode === SONG_MODE_PROTRACKER ? 55856 :
@@ -485,7 +493,9 @@ export async function initEditor(componentRoot) {
             }
 
             if (song.eventlist) {
-                if (song.synthsource) {
+                if (song.faustGenerator) {
+                    // Faust path: node creation handled by audioworkletnode.js startaudio
+                } else if (song.synthsource) {
                     await wamPostSong(song.eventlist, song.synthsource);
                 } else {
                     updateSong(song.eventlist, componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false);
@@ -523,7 +533,8 @@ export async function initEditor(componentRoot) {
 
         const synthfilename = Object.keys(gist.files).find(filename =>
             filename.endsWith('.ts') ||
-            filename.endsWith('.xml'));
+            filename.endsWith('.xml') ||
+            filename.endsWith('.dsp'));
         if (synthfilename) {
             console.log(`found synth code in ${synthfilename}`);
             storedsynthcode = gist.files[synthfilename].content;

@@ -82,7 +82,8 @@ export async function initWASMGitClient(gitrepo) {
     return {
         songfilename: dircontents.find(filename => filename.endsWith('.js')),
         synthfilename: dircontents.find(filename => filename.endsWith('.ts')) ||
-            dircontents.find(filename => filename.endsWith('.xml')),
+            dircontents.find(filename => filename.endsWith('.xml')) ||
+            dircontents.find(filename => filename.endsWith('.dsp')),
         fragmentshader: dircontents.find(filename => filename.endsWith('.glsl'))
     };
 }
