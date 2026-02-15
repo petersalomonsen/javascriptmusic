@@ -1,4 +1,4 @@
-import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
+import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout, createCredentials as nearCreateCredentials } from './nearacl.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
 import { modal } from '../common/ui/modal.js';
 
@@ -319,12 +319,19 @@ customElements.define('wasmgit-ui',
                     await nearLogout();
                     location.reload();
                 };
+                this.shadowRoot.getElementById('loginButton').style.display = 'none';
+                this.shadowRoot.getElementById('createCredentialsButton').style.display = 'none';
             } else {
                 this.shadowRoot.getElementById('loginButton').style.display = 'block';
+                this.shadowRoot.getElementById('createCredentialsButton').style.display = 'block';
                 this.shadowRoot.getElementById('logoutButton').style.display = 'none';
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'none';
-                this.shadowRoot.getElementById('loginButton').onclick = () => {
-                    nearLogin();
+                this.shadowRoot.getElementById('loginButton').onclick = async () => {
+                    await nearLogin();
+                    location.reload();
+                };
+                this.shadowRoot.getElementById('createCredentialsButton').onclick = async () => {
+                    await nearCreateCredentials();
                 };
             }
             updateCommitAndSyncButtonState(await repoHasChanges());
