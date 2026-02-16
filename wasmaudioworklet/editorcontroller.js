@@ -494,7 +494,7 @@ export async function initEditor(componentRoot) {
 
             if (song.eventlist) {
                 if (song.faustGenerator) {
-                    // Faust path: node creation handled by audioworkletnode.js startaudio
+                    await window.replaceFaustNode(song.faustGenerator, song.eventlist);
                 } else if (song.synthsource) {
                     await wamPostSong(song.eventlist, song.synthsource);
                 } else {

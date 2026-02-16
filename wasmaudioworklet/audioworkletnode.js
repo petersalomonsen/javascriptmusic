@@ -175,6 +175,21 @@ export function initAudioWorkletNode(componentRoot) {
         componentRoot.getElementById('stopaudiobutton').style.display = 'none';
     }
 
+    window.replaceFaustNode = async (faustGenerator, eventlist) => {
+        stopFaustSequencer();
+        if (audioworkletnode) {
+            audioworkletnode.disconnect();
+        }
+        const faustNode = await createFaustNode(context, faustGenerator);
+        faustNode.connect(context.destination);
+        audioworkletnode = faustNode;
+        window.audioworkletnode = audioworkletnode;
+        onmidi = faustOnMidi;
+        if (eventlist) {
+            startFaustSequencer(faustNode, eventlist, context);
+        }
+    };
+
     window.toggleSongPlay = (status) => {
         if (audioworkletnode) {
             audioworkletnode.port.postMessage({ toggleSongPlay: status });
