@@ -9,13 +9,14 @@ import { AudioWorkletProcessorSequencerModule } from './midisequencer/audioworkl
 import { isSointuSong } from './sointu/playsointu.js';
 import { modalOkCancel } from './common/ui/modal.js';
 import { createFaustNode } from './faust/faustcompiler.js';
-import { startFaustSequencer, stopFaustSequencer, faustOnMidi } from './faust/faustsequencer.js';
+import { startFaustSequencer, stopFaustSequencer, pauseFaustSequencer, resumeFaustSequencer, updateFaustNode, updateFaustSequence, faustOnMidi } from './faust/faustsequencer.js';
 // The code in the main global scope.
 
 export function initAudioWorkletNode(componentRoot) {
     let audioworkletnode;
     let onmidi = () => { };
     let playing = false;
+    let faustMode = false;
 
     const sessionSampleRate = sessionStorage.getItem('samplerate');
     const context = sessionSampleRate ?
@@ -50,6 +51,7 @@ export function initAudioWorkletNode(componentRoot) {
                 window.audioworkletnode = audioworkletnode;
                 onmidi = midiSynthOnMidi;
             } else if (song.faustGenerator) {
+                faustMode = true;
                 const faustNode = await createFaustNode(context, song.faustGenerator);
                 faustNode.connect(context.destination);
                 audioworkletnode = faustNode;
@@ -160,6 +162,7 @@ export function initAudioWorkletNode(componentRoot) {
         if (audioworkletnode) {
             clearVisualization();
             stopFaustSequencer();
+            faustMode = false;
             try { audioworkletnode.port.postMessage({ terminate: true }); } catch (e) { }
             audioworkletnode.disconnect();
             detachSeek();
@@ -176,7 +179,6 @@ export function initAudioWorkletNode(componentRoot) {
     }
 
     window.replaceFaustNode = async (faustGenerator, eventlist) => {
-        stopFaustSequencer();
         if (audioworkletnode) {
             audioworkletnode.disconnect();
         }
@@ -185,13 +187,20 @@ export function initAudioWorkletNode(componentRoot) {
         audioworkletnode = faustNode;
         window.audioworkletnode = audioworkletnode;
         onmidi = faustOnMidi;
+        updateFaustNode(faustNode);
         if (eventlist) {
-            startFaustSequencer(faustNode, eventlist, context);
+            updateFaustSequence(eventlist);
         }
     };
 
     window.toggleSongPlay = (status) => {
-        if (audioworkletnode) {
+        if (faustMode) {
+            if (status) {
+                resumeFaustSequencer();
+            } else {
+                pauseFaustSequencer();
+            }
+        } else if (audioworkletnode) {
             audioworkletnode.port.postMessage({ toggleSongPlay: status });
             setPaused(!status);
         } else if (wamsynth) {
