@@ -57,6 +57,7 @@ export function initAudioWorkletNode(componentRoot) {
                 audioworkletnode = faustNode;
                 window.audioworkletnode = audioworkletnode;
                 onmidi = faustOnMidi;
+                updateFaustNode(faustNode);
                 const togglePlay = componentRoot.getElementById('toggleSongPlayCheckbox').checked;
                 if (togglePlay && song.eventlist) {
                     startFaustSequencer(faustNode, song.eventlist, context);
