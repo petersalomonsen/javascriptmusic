@@ -1255,10 +1255,10 @@ function parseEffectC(cSrc, clsName) {
 function preprocessEffectInputs(line, numInputs) {
     let out = line;
     if (numInputs >= 2) {
-        out = out.replace(/\(float\)input0\[\w+\]/g, 'this.signal.left');
-        out = out.replace(/\(float\)input1\[\w+\]/g, 'this.signal.right');
+        out = out.replace(/\(float\)\(?input0\[\w+\]\)?/g, 'this.signal.left');
+        out = out.replace(/\(float\)\(?input1\[\w+\]\)?/g, 'this.signal.right');
     } else if (numInputs === 1) {
-        out = out.replace(/\(float\)input0\[\w+\]/g, '((this.signal.left + this.signal.right) * 0.5)');
+        out = out.replace(/\(float\)\(?input0\[\w+\]\)?/g, '((this.signal.left + this.signal.right) * 0.5)');
     }
     return out;
 }
