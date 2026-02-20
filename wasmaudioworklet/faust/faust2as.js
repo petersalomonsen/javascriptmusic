@@ -76,12 +76,23 @@ while ((m = helperFnRegex.exec(cSource)) !== null) {
     helperFns.push({ fnName, params, body });
 }
 
-// --- 2b: Extract SIG0 structs and fill functions ---
+// --- 2b: Extract SIG structs, fill functions, and wave data arrays ---
 const sig0Structs = [];
 const sig0Tables = [];
 const sig0Fills = [];
+const sigWaveArrays = [];
 
-// Find SIG0 struct definitions
+// Find static wave data arrays: static float fPianoSIG0Wave0[26] = {21.0f, 5.0f, ...};
+const sigWaveRegex = new RegExp(
+    `static\\s+float\\s+(f${className}SIG\\d+Wave\\d+)\\s*\\[(\\d+)\\]\\s*=\\s*\\{([^}]+)\\}`,
+    'g'
+);
+while ((m = sigWaveRegex.exec(cSource)) !== null) {
+    const values = m[3].split(',').map(v => v.trim().replace(/f$/i, ''));
+    sigWaveArrays.push({ name: m[1], size: parseInt(m[2]), values });
+}
+
+// Find SIG struct definitions
 const sig0StructRegex = new RegExp(`typedef\\s+struct\\s*\\{([^}]+)\\}\\s*${className}SIG(\\d+)\\s*;`, 'g');
 while ((m = sig0StructRegex.exec(cSource)) !== null) {
     const fields = m[1];
@@ -90,7 +101,7 @@ while ((m = sig0StructRegex.exec(cSource)) !== null) {
 }
 
 // Find static table declarations: static float ftbl0ClassNameSIG0[65536];
-const sig0TableRegex = new RegExp(`static\\s+float\\s+(ftbl\\d+${className}SIG\\d+)\\s*\\[(\\d+)\\]`, 'g');
+const sig0TableRegex = new RegExp(`static\\s+float\\s+(ftbl\\d+${className}SIG\\d+)\\s*\\[(\\d+)\\]\\s*;`, 'g');
 while ((m = sig0TableRegex.exec(cSource)) !== null) {
     sig0Tables.push({ name: m[1], size: parseInt(m[2]) });
 }
@@ -189,8 +200,8 @@ while ((m = declareRegex.exec(buildUIBody)) !== null) {
     midiMeta[field][key] = value;
 }
 
-// Parse addHorizontalSlider/addVerticalSlider/addButton
-const sliderRegex = /ui_interface->add(?:Horizontal|Vertical)Slider\([^,]+,\s*"(\w+)",\s*&dsp->(\w+),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)\)/g;
+// Parse addHorizontalSlider/addVerticalSlider/addNumEntry/addButton
+const sliderRegex = /ui_interface->(?:add(?:Horizontal|Vertical)Slider|addNumEntry)\([^,]+,\s*"(\w+)",\s*&dsp->(\w+),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)\)/g;
 while ((m = sliderRegex.exec(buildUIBody)) !== null) {
     uiParams.push({
         name: m[1],
@@ -319,6 +330,15 @@ function transpileExpr(expr) {
         const shortName = table.name.replace(className, '');
         if (shortName !== table.name) {
             out = out.replace(new RegExp(table.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), shortName);
+        }
+    }
+
+    // Wave data array names: fClassNameSIG0Wave0 → _wave_SIG0Wave0
+    // Use \b word boundary to avoid matching fPianoSIG0Wave0 inside fPianoSIG0Wave0_idx
+    for (const wave of sigWaveArrays) {
+        const shortName = wave.name.replace(`f${className}`, '_wave_');
+        if (shortName !== wave.name) {
+            out = out.replace(new RegExp(`\\b${wave.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), shortName);
         }
     }
 
@@ -570,7 +590,14 @@ out.push('import { notefreq } from "../../synth/note";');
 out.push('import { SAMPLERATE } from "../../environment";');
 out.push('');
 
-// Module-level SIG0 tables with lazy initialization
+// Module-level wave data arrays (static lookup data from Faust waveform declarations)
+for (const wave of sigWaveArrays) {
+    const shortName = wave.name.replace(`f${className}`, '_wave_');
+    out.push(`const ${shortName}: StaticArray<f32> = StaticArray.fromArray<f32>([${wave.values.join(', ')}]);`);
+}
+if (sigWaveArrays.length > 0) out.push('');
+
+// Module-level SIG tables with lazy initialization
 for (const table of sig0Tables) {
     const shortName = table.name.replace(className, '');
     out.push(`const ${shortName}: StaticArray<f32> = new StaticArray<f32>(${table.size});`);
@@ -588,26 +615,32 @@ if (sig0Fills.length > 0) {
         const table = sig0Tables[idx];
         const shortTableName = table ? table.name.replace(className, '') : `ftbl${idx}SIG${fill.sigIndex}`;
 
-        // Declare temp variables for SIG0 struct fields
+        // Parse SIG struct fields (both array and scalar)
         const sig0Struct = sig0Structs[idx];
+        const sigFields = []; // { type, name, arraySize (null for scalar) }
         if (sig0Struct) {
-            const sigFieldRegex = /\s*(int|float)\s+(\w+)\s*\[(\d+)\]\s*;/g;
+            const sigFieldRegex = /\s*(int|float)\s+(\w+)(?:\[(\d+)\])?\s*;/g;
             let fm;
             while ((fm = sigFieldRegex.exec(sig0Struct.fields)) !== null) {
-                const asType = fm[1] === 'float' ? 'f32' : 'i32';
-                out.push(`    const sig${fill.sigIndex}_${fm[2]}: StaticArray<${asType}> = new StaticArray<${asType}>(${fm[3]});`);
+                sigFields.push({ type: fm[1], name: fm[2], arraySize: fm[3] ? parseInt(fm[3]) : null });
+            }
+
+            // Declare temp variables for SIG struct fields
+            for (const sf of sigFields) {
+                const asType = sf.type === 'float' ? 'f32' : 'i32';
+                if (sf.arraySize) {
+                    out.push(`    const sig${fill.sigIndex}_${sf.name}: StaticArray<${asType}> = new StaticArray<${asType}>(${sf.arraySize});`);
+                } else {
+                    out.push(`    let sig${fill.sigIndex}_${sf.name}: ${asType} = 0;`);
+                }
             }
         }
 
         const fillLines = transpileSig0Fill(fill.body, shortTableName);
-        // Replace dsp struct field accesses with our temp arrays
+        // Replace dsp struct field accesses with our temp variables
         for (let line of fillLines) {
-            if (sig0Struct) {
-                const sigFieldRegex2 = /\s*(int|float)\s+(\w+)\s*\[(\d+)\]\s*;/g;
-                let fm2;
-                while ((fm2 = sigFieldRegex2.exec(sig0Struct.fields)) !== null) {
-                    line = line.replace(new RegExp(`\\b${fm2[2]}\\b`, 'g'), `sig${fill.sigIndex}_${fm2[2]}`);
-                }
+            for (const sf of sigFields) {
+                line = line.replace(new RegExp(`\\b${sf.name}\\b`, 'g'), `sig${fill.sigIndex}_${sf.name}`);
             }
             out.push('    ' + line);
         }

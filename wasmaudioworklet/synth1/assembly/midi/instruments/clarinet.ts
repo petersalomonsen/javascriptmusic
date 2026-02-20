@@ -12,14 +12,14 @@ let _sig0_initialized: bool = false;
 function _initSIG0Tables(): void {
     if (_sig0_initialized) return;
     _sig0_initialized = true;
-    const sig0_iVec1: StaticArray<i32> = new StaticArray<i32>(2);
-    const sig0_iRec18: StaticArray<i32> = new StaticArray<i32>(2);
+    const sig0_iVec0: StaticArray<i32> = new StaticArray<i32>(2);
+    const sig0_iRec15: StaticArray<i32> = new StaticArray<i32>(2);
     for (let i = 0; i < ftbl0SIG0.length; i++) {
-        sig0_iVec1[0] = 1;
-        sig0_iRec18[0] = ((sig0_iVec1[1] + sig0_iRec18[1]) % 65536);
-        ftbl0SIG0[i] = Mathf.sin((9.58738019e-05 * <f32>sig0_iRec18[0]));
-        sig0_iVec1[1] = sig0_iVec1[0];
-        sig0_iRec18[1] = sig0_iRec18[0];
+        sig0_iVec0[0] = 1;
+        sig0_iRec15[0] = ((sig0_iVec0[1] + sig0_iRec15[1]) % 65536);
+        ftbl0SIG0[i] = Mathf.sin((9.58738019e-05 * <f32>sig0_iRec15[0]));
+        sig0_iVec0[1] = sig0_iVec0[0];
+        sig0_iRec15[1] = sig0_iRec15[0];
     }
 }
 
@@ -30,22 +30,22 @@ export class Clarinet extends MidiVoice {
     private iRec6: StaticArray<i32> = new StaticArray<i32>(2);
     private fHslider1: f32 = 0.5;
     private fRec12: StaticArray<f32> = new StaticArray<f32>(2);
-    private fHslider2: f32 = 1;
+    private fHslider2: f32 = 0.25;
     private fConst1: f32;
+    private fHslider3: f32 = 5;
+    private fRec16: StaticArray<f32> = new StaticArray<f32>(2);
+    private fHslider4: f32 = 1;
     private fButton0: f32 = 0;
-    private fHslider3: f32 = 0;
-    private fVec0: StaticArray<f32> = new StaticArray<f32>(2);
-    private fHslider4: f32 = 0.6;
-    private fRec15: StaticArray<f32> = new StaticArray<f32>(2);
+    private fHslider5: f32 = 0;
+    private fVec1: StaticArray<f32> = new StaticArray<f32>(2);
+    private fHslider6: f32 = 0.6;
+    private fRec17: StaticArray<f32> = new StaticArray<f32>(2);
     private fConst5: f32;
-    private iRec17: StaticArray<i32> = new StaticArray<i32>(2);
+    private iRec19: StaticArray<i32> = new StaticArray<i32>(2);
     private fConst6: f32;
     private fConst7: f32;
     private fConst8: f32;
-    private fRec16: StaticArray<f32> = new StaticArray<f32>(3);
-    private fHslider5: f32 = 0.25;
-    private fHslider6: f32 = 5;
-    private fRec19: StaticArray<f32> = new StaticArray<f32>(2);
+    private fRec18: StaticArray<f32> = new StaticArray<f32>(3);
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private fHslider7: f32 = 0.5;
     private IOTA: i32 = 0;
@@ -85,11 +85,11 @@ export class Clarinet extends MidiVoice {
     private instanceClear(): void {
         for (let i = 0; i < 2; i++) { this.iRec6[i] = 0; }
         for (let i = 0; i < 2; i++) { this.fRec12[i] = 0.0; }
-        for (let i = 0; i < 2; i++) { this.fVec0[i] = 0.0; }
-        for (let i = 0; i < 2; i++) { this.fRec15[i] = 0.0; }
-        for (let i = 0; i < 2; i++) { this.iRec17[i] = 0; }
-        for (let i = 0; i < 3; i++) { this.fRec16[i] = 0.0; }
-        for (let i = 0; i < 2; i++) { this.fRec19[i] = 0.0; }
+        for (let i = 0; i < 2; i++) { this.fRec16[i] = 0.0; }
+        for (let i = 0; i < 2; i++) { this.fVec1[i] = 0.0; }
+        for (let i = 0; i < 2; i++) { this.fRec17[i] = 0.0; }
+        for (let i = 0; i < 2; i++) { this.iRec19[i] = 0; }
+        for (let i = 0; i < 3; i++) { this.fRec18[i] = 0.0; }
         for (let i = 0; i < 2; i++) { this.fRec13[i] = 0.0; }
         this.IOTA = 0;
         for (let i = 0; i < 2048; i++) { this.fRec14[i] = 0.0; }
@@ -104,7 +104,7 @@ export class Clarinet extends MidiVoice {
         super.noteon(note, velocity);
         this.fHslider8 = notefreq(note);
         this.fButton0 = 1.0;
-        this.fHslider4 = <f32>velocity / 127.0;
+        this.fHslider6 = <f32>velocity / 127.0;
         this.silentSamples = 0;
     }
 
@@ -120,35 +120,35 @@ export class Clarinet extends MidiVoice {
         const fSlow0: f32 = <f32>this.fHslider0;
         const fSlow1: f32 = <f32>this.fHslider1;
         const fSlow2: f32 = (1.0 - fSlow1);
-        const fSlow3: f32 = (0.00100000005 * <f32>this.fHslider2);
-        const iSlow4: i32 = (Mathf.abs(fSlow3) < 1.1920929e-07 ? 1 : 0);
-        const fSlow5: f32 = (iSlow4 ? 0.0 : Mathf.exp((0.0 - (this.fConst1 / (iSlow4 ? 1.0 : fSlow3)))));
-        const fSlow6: f32 = Mathf.min(1.0, (<f32>this.fButton0 + <f32>this.fHslider3));
-        const fSlow7: f32 = ((fSlow6 * <f32>this.fHslider4) * (1.0 - fSlow5));
-        const fSlow8: f32 = (0.00999999978 * <f32>this.fHslider5);
-        const fSlow9: f32 = (this.fConst1 * <f32>this.fHslider6);
+        const fSlow3: f32 = (0.00999999978 * <f32>this.fHslider2);
+        const fSlow4: f32 = (this.fConst1 * <f32>this.fHslider3);
+        const fSlow5: f32 = (0.00100000005 * <f32>this.fHslider4);
+        const iSlow6: i32 = (Mathf.abs(fSlow5) < 1.1920929e-07 ? 1 : 0);
+        const fSlow7: f32 = (iSlow6 ? 0.0 : Mathf.exp((0.0 - (this.fConst1 / (iSlow6 ? 1.0 : fSlow5)))));
+        const fSlow8: f32 = Mathf.min(1.0, (<f32>this.fButton0 + <f32>this.fHslider5));
+        const fSlow9: f32 = ((fSlow8 * <f32>this.fHslider6) * (1.0 - fSlow7));
         const fSlow10: f32 = ((0.25999999 * <f32>this.fHslider7) + -0.439999998);
         const fSlow11: f32 = (170.0 / <f32>this.fHslider8);
-        const iSlow12: i32 = (fSlow6 == 0.0 ? 1 : 0);
+        const iSlow12: i32 = (fSlow8 == 0.0 ? 1 : 0);
         const fSlow13: f32 = Mathf.pow(2.0, (0.0833333358 * <f32>this.fHslider9));
 
         this.iRec6[0] = 0;
         this.fRec12[0] = ((fSlow1 * this.fRec12[1]) + (fSlow2 * this.fRec11[1]));
         const fRec10: f32 = (this.fRec12[0] + <f32>this.iRec6[1]);
-        this.fVec0[0] = fSlow6;
-        this.fRec15[0] = ((this.fRec15[1] * fSlow5) + fSlow7);
-        this.iRec17[0] = ((1103515245 * this.iRec17[1]) + 12345);
-        this.fRec16[0] = ((4.65661287e-10 * <f32>this.iRec17[0]) - (this.fConst6 * ((this.fConst7 * this.fRec16[2]) + (this.fConst8 * this.fRec16[1]))));
-        const fTemp0: f32 = (this.fRec15[0] * ((this.fConst5 * (this.fRec16[2] + (this.fRec16[0] + (2.0 * this.fRec16[1])))) + 1.0));
-        this.fRec19[0] = (fSlow9 + (this.fRec19[1] - Mathf.floor((fSlow9 + this.fRec19[1]))));
-        const fTemp1: f32 = ftbl0SIG0[<i32>(65536.0 * this.fRec19[0])];
-        const fTemp2: f32 = (fSlow8 * fTemp1);
-        this.fRec13[0] = (fTemp0 + (this.fRec0[1] + fTemp2));
+        this.fRec16[0] = (fSlow4 + (this.fRec16[1] - Mathf.floor((fSlow4 + this.fRec16[1]))));
+        const fTemp0: f32 = ftbl0SIG0[<i32>(65536.0 * this.fRec16[0])];
+        const fTemp1: f32 = (fSlow3 * fTemp0);
+        this.fVec1[0] = fSlow8;
+        this.fRec17[0] = ((this.fRec17[1] * fSlow7) + fSlow9);
+        this.iRec19[0] = ((1103515245 * this.iRec19[1]) + 12345);
+        this.fRec18[0] = ((4.65661287e-10 * <f32>this.iRec19[0]) - (this.fConst6 * ((this.fConst7 * this.fRec18[2]) + (this.fConst8 * this.fRec18[1]))));
+        const fTemp2: f32 = (this.fRec17[0] * ((this.fConst5 * (this.fRec18[2] + (this.fRec18[0] + (2.0 * this.fRec18[1])))) + 1.0));
+        this.fRec13[0] = (fTemp1 + (this.fRec0[1] + fTemp2));
         const fTemp3: f32 = (0.0 - this.fRec13[1]);
-        this.fRec14[(this.IOTA & 2047)] = ((fTemp2 + fTemp0) + (fTemp3 * Mathf.max(-1.0, Mathf.min(1.0, ((fSlow10 * fTemp3) + 0.699999988)))));
-        const fTemp4: f32 = <f32>((fSlow6 == this.fVec0[1] ? 1 : 0) | iSlow12);
+        this.fRec14[(this.IOTA & 2047)] = (fTemp1 + (fTemp2 + (fTemp3 * Mathf.max(-1.0, Mathf.min(1.0, ((fSlow10 * fTemp3) + 0.699999988))))));
+        const fTemp4: f32 = <f32>((fSlow8 == this.fVec1[1] ? 1 : 0) | iSlow12);
         this.fRec20[0] = ((0.999000013 * (fTemp4 * this.fRec20[1])) + (fSlow13 * (1.0 - (0.999000013 * fTemp4))));
-        const fTemp5: f32 = (this.fConst10 * ((fSlow11 / (this.fRec20[0] * ((fSlow8 * (this.fRec15[0] * fTemp1)) + 1.0))) + -0.0500000007));
+        const fTemp5: f32 = (this.fConst10 * ((fSlow11 / (this.fRec20[0] * ((fSlow3 * (this.fRec17[0] * fTemp0)) + 1.0))) + -0.0500000007));
         const fTemp6: f32 = (fTemp5 + -1.49999499);
         const iTemp7: i32 = <i32>fTemp6;
         const iTemp8: i32 = (<i32>Mathf.min(this.fConst9, <f32>max(0, <i32>iTemp7)) + 1);
@@ -190,12 +190,12 @@ export class Clarinet extends MidiVoice {
 
         this.iRec6[1] = this.iRec6[0];
         this.fRec12[1] = this.fRec12[0];
-        this.fVec0[1] = this.fVec0[0];
-        this.fRec15[1] = this.fRec15[0];
-        this.iRec17[1] = this.iRec17[0];
-        this.fRec16[2] = this.fRec16[1];
         this.fRec16[1] = this.fRec16[0];
-        this.fRec19[1] = this.fRec19[0];
+        this.fVec1[1] = this.fVec1[0];
+        this.fRec17[1] = this.fRec17[0];
+        this.iRec19[1] = this.iRec19[0];
+        this.fRec18[2] = this.fRec18[1];
+        this.fRec18[1] = this.fRec18[0];
         this.fRec13[1] = this.fRec13[0];
         this.IOTA = (this.IOTA + 1);
         this.fRec20[1] = this.fRec20[0];
