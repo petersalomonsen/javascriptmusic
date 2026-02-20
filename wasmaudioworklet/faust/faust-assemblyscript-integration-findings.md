@@ -477,26 +477,235 @@ This actually makes the transpilation **easier** — the generated code is close
    - All arrays as `StaticArray<T>` (no GC)
    - No allocations inside `nextframe()`
 
-### 4.7 Alternative: Lightweight Transpiler (Without Modifying Faust)
+### 4.7 Automated C-to-AssemblyScript Transpiler Design
 
-Instead of modifying the Faust compiler itself, we could:
+Instead of modifying the Faust compiler, we use its existing C backend and write a transpiler.
 
-1. **Use Faust's existing Rust output** (`faust -lang rust`)
-2. **Write a Rust-to-AssemblyScript transpiler** - the languages are similar enough that a relatively simple AST-level transformation would work
-3. **Or use Faust's C output** (`faust -lang c`) and write a C-to-AS transpiler
+#### 4.7.1 Pipeline
 
-The C output is the simplest (no ownership/lifetime complexity):
-
-```bash
-faust -lang c -cn MySynth mysynth.dsp -o mysynth.c
+```
+mysynth.dsp
+    │  faust -lang c -cn MySynth mysynth.dsp -o mysynth.c
+    v
+mysynth.c              (Faust-generated C, very structured)
+    │  transpiler (TypeScript/Node script)
+    v
+mysynth.ts             (AssemblyScript MidiVoice subclass)
+    │  compiled alongside existing synth code
+    v
+single release.wasm    (all instruments in one binary)
 ```
 
-This produces a C file with:
-- `typedef struct { ... } MySynth;` - state struct
-- `void compute(MySynth* dsp, int count, float** inputs, float** outputs)` - audio loop
-- `void init(MySynth* dsp, int sample_rate)` - initialization
+#### 4.7.2 Structure of Faust C Output
 
-This C code maps almost directly to AssemblyScript with simple search-and-replace rules.
+Every Faust-generated C file follows an identical structure (verified across electric guitar, clarinet, violin, etc.):
+
+```c
+// 1. Helper functions (optional)
+static float ClassName_faustpower2_f(float value) { return value * value; }
+
+// 2. Lookup table generators (optional, e.g. sine wavetable for clarinet)
+typedef struct { int iVec1[2]; int iRec18[2]; } ClassNameSIG0;
+static void fillClassNameSIG0(ClassNameSIG0* dsp, int count, float* table);
+static float ftbl0ClassNameSIG0[65536];
+
+// 3. Main DSP struct — ALL state lives here
+typedef struct {
+    FAUSTFLOAT fHslider0;         // UI parameter (float)
+    FAUSTFLOAT fButton0;          // UI parameter (button)
+    int fSampleRate;
+    float fConst1;                // sample-rate constant
+    float fRec29[2];              // delay line / recursion buffer
+    int IOTA;                     // circular buffer index
+    float fRec34[2048];           // large circular delay buffer
+    int iRec36[2];                // integer recursion (e.g. noise PRNG)
+} ClassName;
+
+// 4. instanceResetUserInterfaceClassName(dsp) — default param values
+// 5. instanceClearClassName(dsp)             — zero all state arrays
+// 6. instanceConstantsClassName(dsp, sr)     — sample-rate constants
+// 7. classInitClassName(sr)                  — static init (fills lookup tables)
+// 8. buildUserInterfaceClassName(dsp, ui)    — declares freq/gate/gain/etc
+// 9. computeClassName(dsp, count, inputs, outputs) — THE audio loop
+```
+
+#### 4.7.3 Transpilation Rules
+
+The transpiler parses the C file section-by-section (no full C parser needed — the structure is rigid and predictable). Key rules:
+
+**Struct → Class fields:**
+```
+C:   FAUSTFLOAT fHslider0;       →  AS:  private fHslider0: f32 = 0.5;
+C:   float fConst1;              →  AS:  private fConst1: f32;
+C:   float fRec29[2];            →  AS:  private fRec29: StaticArray<f32> = new StaticArray<f32>(2);
+C:   int iRec36[2];              →  AS:  private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
+C:   int IOTA;                   →  AS:  private IOTA: i32 = 0;
+C:   float fRec34[2048];         →  AS:  private fRec34: StaticArray<f32> = new StaticArray<f32>(2048);
+```
+Default values come from `instanceResetUserInterface`.
+
+**Static lookup tables:**
+```
+C:   static float ftbl0[65536];
+     filled by classInit via fillSIG0()
+
+AS:  Module-level StaticArray, filled in constructor:
+     const ftbl0: StaticArray<f32> = new StaticArray<f32>(65536);
+     // fill loop transpiled from fillClassNameSIG0
+```
+
+**Math functions:**
+```
+C:   fminf(a, b)     →  AS:  Mathf.min(a, b)
+C:   fmaxf(a, b)     →  AS:  Mathf.max(a, b)
+C:   floorf(x)       →  AS:  Mathf.floor(x)
+C:   sinf(x)         →  AS:  Mathf.sin(x)
+C:   cosf(x)         →  AS:  Mathf.cos(x)
+C:   tanf(x)         →  AS:  Mathf.tan(x)
+C:   expf(x)         →  AS:  Mathf.exp(x)
+C:   logf(x)         →  AS:  Mathf.log(x)
+C:   log10f(x)       →  AS:  Mathf.log10(x)
+C:   powf(a, b)      →  AS:  Mathf.pow(a, b)
+C:   sqrtf(x)        →  AS:  Mathf.sqrt(x)
+C:   fabsf(x)        →  AS:  Mathf.abs(x)
+C:   remainderf(a,b) →  AS:  (a % b)  // or custom function
+C:   rintf(x)        →  AS:  Mathf.round(x)
+```
+
+**Type casts:**
+```
+C:   (float)intval      →  AS:  <f32>intval
+C:   (int)floatval      →  AS:  <i32>floatval
+C:   (float)(expr)      →  AS:  <f32>(expr)
+```
+
+**Pointer/array access:**
+```
+C:   dsp->fRec29[0]     →  AS:  this.fRec29[0]
+C:   dsp->IOTA          →  AS:  this.IOTA
+C:   dsp->fRec2[((dsp->IOTA - (iTemp5 + 1)) & 2047)]
+     →  AS:  this.fRec2[((this.IOTA - (iTemp5 + 1)) & 2047)]
+```
+
+**Boolean/integer logic (C uses int for bool):**
+```
+C:   (fSlow4 == 0.0f)                        →  AS:  (fSlow4 == 0.0 ? 1 : 0)
+C:   (dsp->iRec37[1] > 0)                    →  AS:  (this.iRec37[1] > 0 ? 1 : 0)
+C:   (fSlow4 <= dsp->fVec0[1])               →  AS:  (fSlow4 <= this.fVec0[1] ? 1 : 0)
+C:   int iSlow5 = (fSlow4 == 0.0f);          →  AS:  const iSlow5: i32 = fSlow4 == 0.0 ? 1 : 0;
+```
+
+**Variable declarations:**
+```
+C:   float fSlow0 = (float)dsp->fHslider0;   →  AS:  const fSlow0: f32 = this.fHslider0;
+C:   int iTemp4 = (int)fTemp3;               →  AS:  const iTemp4: i32 = <i32>fTemp3;
+C:   float fRec10 = ...;                     →  AS:  const fRec10: f32 = ...;
+```
+
+**Helper functions:**
+```
+C:   static float ClassName_faustpower2_f(float value) { return value * value; }
+AS:  function faustpower2_f(value: f32): f32 { return value * value; }
+```
+
+#### 4.7.4 compute() → nextframe() Transformation
+
+The `computeClassName()` function has this structure:
+```c
+void computeClassName(ClassName* dsp, int count, FAUSTFLOAT** inputs, FAUSTFLOAT** outputs) {
+    FAUSTFLOAT* output0 = outputs[0];     // ← DISCARD (we use channel.signal)
+    FAUSTFLOAT* output1 = outputs[1];     // ← DISCARD
+    float fSlow0 = ...;                   // ← KEEP: per-buffer parameter reads
+    float fSlow1 = ...;                   // ← KEEP
+    // ...
+    for (i0 = 0; (i0 < count); i0 = (i0 + 1)) {   // ← REMOVE loop wrapper
+        // --- loop body ---              // ← BECOMES nextframe() body
+        // ...
+        output0[i0] = (FAUSTFLOAT)fTemp60;  // ← REPLACE with channel.signal.addMonoSignal()
+        output1[i0] = (FAUSTFLOAT)fTemp60;  // ← REMOVE (stereo handled by pan)
+        // --- delay line shifts ---      // ← KEEP as-is
+        dsp->fRec29[1] = dsp->fRec29[0];
+        // ...
+    }
+}
+```
+
+The transpiler:
+1. Extracts `fSlow*` declarations (before the loop) → top of `nextframe()`
+2. Extracts the loop body → body of `nextframe()`
+3. Replaces `output0[i0] = expr` → `this.channel.signal.addMonoSignal(expr, 0.5, 0.5)`
+4. Keeps delay line shifts as-is (just `dsp->` → `this.`)
+
+#### 4.7.5 buildUserInterface() → MIDI Mapping
+
+The `buildUserInterface` function declares parameter names and metadata:
+```c
+ui->addHorizontalSlider(ui, "freq",    &dsp->fHslider2, 440.0, 50.0, 1000.0, 0.01);
+ui->addHorizontalSlider(ui, "bend",    &dsp->fHslider4, 0.0, -2.0, 2.0, 0.01);
+ui->addHorizontalSlider(ui, "gain",    &dsp->fHslider5, 0.8, 0.0, 1.0, 0.01);
+ui->addHorizontalSlider(ui, "sustain", &dsp->fHslider3, 0.0, 0.0, 1.0, 1.0);
+ui->addButton(ui, "gate",              &dsp->fButton0);
+```
+
+The transpiler parses this to generate `noteon()`/`noteoff()`:
+- `"freq"` → `this.fHsliderN = notefreq(note as f32)`
+- `"gate"` → `this.fButtonN = 1.0` (noteon) / `this.fButtonN = 0.0` (noteoff)
+- `"gain"` or `"vel"` → `this.fHsliderN = <f32>velocity / 127.0`
+- `"sustain"` with `"midi", "ctrl 64"` → handled by MidiChannel CC routing
+- `"bend"` with `"midi", "pitchwheel"` → could be set via CC or pitchbend
+
+#### 4.7.6 isDone() Generation
+
+The transpiler generates `isDone()` based on whether the instrument has a gate:
+- If gate exists: `return this.fButtonN == 0.0 && this.silentSamples > threshold`
+- The silence threshold (~4410 samples = 100ms) accounts for reverb/release tails
+- A `silentSamples` counter is added, incremented when `|output| < epsilon`
+
+#### 4.7.7 Implementation: TypeScript/Node Script
+
+The transpiler would be a ~300-500 line TypeScript script:
+
+```
+faust2as.ts:
+  1. Run: faust -lang c -cn ClassName input.dsp -o /tmp/output.c
+  2. Parse C output (regex-based, not a full parser):
+     a. Extract helper functions (faustpower*)
+     b. Extract SIG0 structs + fill functions (if any)
+     c. Extract main struct fields → class fields
+     d. Extract instanceResetUserInterface → default values
+     e. Extract instanceClear → instanceClear() method
+     f. Extract instanceConstants → instanceConstants() method
+     g. Extract classInit → static table initialization
+     h. Extract buildUserInterface → parameter name→field mapping
+     i. Extract compute() → fSlow* + loop body + delay shifts
+  3. Generate AssemblyScript:
+     a. Imports (MidiVoice, MidiChannel, notefreq, SAMPLERATE)
+     b. Module-level lookup tables (if SIG0 present)
+     c. Helper functions
+     d. Class extending MidiVoice
+     e. Fields (with types and defaults from steps 2c/2d)
+     f. constructor → instanceConstants + instanceClear + table fill
+     g. noteon/noteoff/isDone → from parameter mapping (step 2h)
+     h. nextframe → from compute body (step 2i)
+  4. Write .ts file
+```
+
+The C output is so structured that regex-based parsing is reliable — every Faust C
+output follows the exact same template. The only variations are:
+- Number and types of struct fields
+- Presence/absence of SIG0 lookup tables
+- Number of `fSlow*` parameter reads
+- Size of the compute loop body
+
+#### 4.7.8 Usage
+
+```bash
+# Transpile a Faust DSP to AssemblyScript MidiVoice
+npx ts-node faust2as.ts elecGuitarMIDI.dsp --name ElecGuitar --out assembly/midi/instruments/elecguitar.ts
+
+# Then use in midi.mix.ts:
+# midichannels[0] = new MidiChannel(6, (ch) => new ElecGuitar(ch));
+```
 
 ### 4.8 Pros and Cons
 
