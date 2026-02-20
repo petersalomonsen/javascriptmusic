@@ -175,7 +175,7 @@ const resetUIRegex = new RegExp(
 const resetUIMatch = resetUIRegex.exec(cSource);
 const defaults = {};
 if (resetUIMatch) {
-    const defaultRegex = /dsp->(\w+)\s*=\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)/g;
+    const defaultRegex = /dsp->(\w+)\s*=\s*\(FAUSTFLOAT\)\(?([\d.eE+-]+f?)\)?/g;
     while ((m = defaultRegex.exec(resetUIMatch[1])) !== null) {
         let val = m[2].replace(/f$/, '');
         // Normalize "0.80000000000000004" to "0.8"
@@ -340,8 +340,8 @@ function transpileExpr(expr, ctx) {
     // dsp-> → this.
     out = out.replace(/dsp->/g, 'this.');
 
-    // (float)this.fSampleRate → SAMPLERATE
-    out = out.replace(/\(float\)\s*this\.fSampleRate/g, 'SAMPLERATE');
+    // (float)this.fSampleRate or (float)(this.fSampleRate) → SAMPLERATE
+    out = out.replace(/\(float\)\s*\(?this\.fSampleRate\)?/g, 'SAMPLERATE');
 
     // ClassName_faustpower2_f → faustpower2_f (etc.)
     for (const h of ctx.helperFns) {
@@ -379,6 +379,10 @@ function transpileExpr(expr, ctx) {
         out = out.replace(new RegExp(`\\b${cFn}\\(`, 'g'), `${asFn}(`);
     }
 
+    // Integer math helpers: min_i/max_i → min<i32>/max<i32> (AS built-ins)
+    out = out.replace(/\bmin_i\(/g, 'min<i32>(');
+    out = out.replace(/\bmax_i\(/g, 'max<i32>(');
+
     // Boolean-to-int wrapping: MUST happen BEFORE type cast replacement
     // so that (int) and (float) casts are not confused with < > comparisons.
     // In C, comparisons return int (0 or 1). In AS, they return bool.
@@ -408,8 +412,8 @@ function transpileExpr(expr, ctx) {
     // FAUSTFLOAT cast
     out = out.replace(/\(FAUSTFLOAT\)/g, '');
 
-    // float suffix: 0.5f → 0.5
-    out = out.replace(/(\d+\.\d+(?:e[+-]?\d+)?)f\b/gi, '$1');
+    // float suffix: 0.5f → 0.5, 1e+01f → 1e+01, 1.0e+01f → 1.0e+01
+    out = out.replace(/(\d+\.?\d*(?:e[+-]?\d+)?)f\b/gi, '$1');
 
     if (hasSemicolon) out += ';';
     return out;
@@ -461,15 +465,17 @@ function transpileDelayShifts(lines, ctx) {
         const trimmed = lines[i].trim();
 
         // Inner C99 loop for arrays > 3: for (j0 = 3; (j0 > 0); j0 = (j0 - 1)) {
-        const loopMatch = trimmed.match(/^for\s*\(\s*(\w+)\s*=\s*(\d+);\s*\(\s*\1\s*>\s*0\s*\);\s*\1\s*=\s*\(\s*\1\s*-\s*1\s*\)\s*\)\s*\{$/);
+        // Also handles non-parenthesized: for (j0 = 3; j0 > 0; j0 = j0 - 1) {
+        const loopMatch = trimmed.match(/^for\s*\(\s*(\w+)\s*=\s*(\d+);\s*\(?\s*\1\s*>\s*0\s*\)?;\s*\1\s*=\s*\(?\s*\1\s*-\s*1\s*\)?\s*\)\s*\{$/);
         if (loopMatch) {
             const varName = loopMatch[1];
             const start = parseInt(loopMatch[2]);
             // Next line is the assignment: dsp->fRec33[j0] = dsp->fRec33[(j0 - 1)];
+            // Also handles non-parenthesized: dsp->fRec33[j0 - 1]
             i++;
             const assignLine = lines[i] ? lines[i].trim() : '';
-            // Extract array name from: dsp->fRecN[j0] = dsp->fRecN[(j0 - 1)];
-            const arrMatch = assignLine.match(/dsp->(\w+)\[(\w+)\]\s*=\s*dsp->(\w+)\[\(\s*\2\s*-\s*1\s*\)\]/);
+            // Extract array name from: dsp->fRecN[j0] = dsp->fRecN[(j0 - 1)] or dsp->fRecN[j0 - 1];
+            const arrMatch = assignLine.match(/dsp->(\w+)\[(\w+)\]\s*=\s*dsp->(\w+)\[\(?\s*\2\s*-\s*1\s*\)?]/);
             if (arrMatch) {
                 // Unroll: this.fRec33[3] = this.fRec33[2]; this.fRec33[2] = this.fRec33[1]; this.fRec33[1] = this.fRec33[0];
                 for (let j = start; j > 0; j--) {
@@ -507,7 +513,8 @@ function transpileInstanceClear(body) {
         }
 
         // C99 loop for zeroing arrays
-        const forMatch = trimmed.match(/for\s*\(\s*\w+\s*=\s*0;\s*\(\s*\w+\s*<\s*(\d+)\s*\);\s*\w+\s*=\s*\(\s*\w+\s*\+\s*1\s*\)\s*\)/);
+        // Handles both: for (l0 = 0; (l0 < 2); l0 = (l0 + 1)) and for (l0 = 0; l0 < 2; l0 = l0 + 1)
+        const forMatch = trimmed.match(/for\s*\(\s*\w+\s*=\s*0;\s*\(?\s*\w+\s*<\s*(\d+)\s*\)?;\s*\w+\s*=\s*\(?\s*\w+\s*\+\s*1\s*\)?\s*\)/);
         if (forMatch) {
             const count = parseInt(forMatch[1]);
             // Look ahead for the assignment line
@@ -569,7 +576,7 @@ function transpileSig0Fill(fillBody, tableName, ctx) {
 
         // for loop start
         if (trimmed.match(/^for\s*\(/)) {
-            const forMatch = trimmed.match(/for\s*\(\s*\w+\s*=\s*0;\s*\(\s*\w+\s*<\s*count\s*\);\s*\w+\s*=\s*\(\s*\w+\s*\+\s*1\s*\)\s*\)/);
+            const forMatch = trimmed.match(/for\s*\(\s*\w+\s*=\s*0;\s*\(?\s*\w+\s*<\s*count\s*\)?;\s*\w+\s*=\s*\(?\s*\w+\s*\+\s*1\s*\)?\s*\)/);
             if (forMatch) {
                 result.push(`for (let i = 0; i < ${tableName}.length; i++) {`);
                 inLoop = true;
@@ -1118,7 +1125,7 @@ function parseEffectC(cSrc, clsName) {
     const resetUIMatch = resetUIRegex.exec(cSrc);
     const defaults = {};
     if (resetUIMatch) {
-        const defaultRegex = /dsp->(\w+)\s*=\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)/g;
+        const defaultRegex = /dsp->(\w+)\s*=\s*\(FAUSTFLOAT\)\(?([\d.eE+-]+f?)\)?/g;
         while ((m = defaultRegex.exec(resetUIMatch[1])) !== null) {
             let val = m[2].replace(/f$/, '');
             val = parseFloat(val).toString();
