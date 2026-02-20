@@ -29,7 +29,6 @@ class SimpleSine extends MidiVoice {
 
 export function initializeMidiSynth(): void {
     midichannels[0] = new MidiChannel(6, (channel: MidiChannel) => new ElecGuitar(channel));
-    midichannels[1] = new MidiChannel(6, (channel: MidiChannel) => new SimpleSine(channel));
 }
 
 export function postprocess(): void {
