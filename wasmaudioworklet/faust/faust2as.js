@@ -550,6 +550,111 @@ function preprocessEffectInputs(line, numInputs) {
 }
 
 // ---------------------------------------------------------------------------
+// External header (ffunction) support — LookupTable parsing
+// ---------------------------------------------------------------------------
+
+const SYSTEM_HEADERS = new Set(['math.h', 'stdint.h', 'stdlib.h', 'string.h', 'stdio.h']);
+
+function parseExternalHeader(headerPath) {
+    const src = fs.readFileSync(headerPath, 'utf-8');
+    const functions = new Map();
+
+    // 1. Extract point arrays: double tableName_points[N*2] = { ... };
+    const pointArrays = new Map();
+    const pointRegex = /double\s+(\w+_points)\s*\[\s*\d+\s*\*\s*2\s*\]\s*=\s*\{([^}]+)\}/g;
+    let m;
+    while ((m = pointRegex.exec(src)) !== null) {
+        const values = m[2].split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+        pointArrays.set(m[1], values);
+    }
+
+    // 2. Extract LookupTable declarations: LookupTable tableName(&pointsName[0], N);
+    const tableMap = new Map(); // tableName → { pointsArrayName, nPoints }
+    const tableRegex = /LookupTable\s+(\w+)\s*\(\s*&\s*(\w+_points)\s*\[\s*0\s*\]\s*,\s*(\d+)\s*\)/g;
+    while ((m = tableRegex.exec(src)) !== null) {
+        tableMap.set(m[1], { pointsArrayName: m[2], nPoints: parseInt(m[3]) });
+    }
+
+    // 3. Extract getter functions: float getValueXxx(float index) { return tableName.getValue(index); }
+    const getterRegex = /float\s+(getValue\w+|getvalue\w+|getValuer\w+)\s*\(\s*float\s+\w+\s*\)\s*\{\s*return\s+(\w+)\.getValue\s*\(\s*\w+\s*\)\s*;\s*\}/g;
+    while ((m = getterRegex.exec(src)) !== null) {
+        const fnName = m[1];
+        const tableName = m[2];
+        const tableInfo = tableMap.get(tableName);
+        if (tableInfo) {
+            const points = pointArrays.get(tableInfo.pointsArrayName);
+            if (points) {
+                functions.set(fnName, {
+                    tableName,
+                    points,
+                    nPoints: tableInfo.nPoints,
+                });
+            }
+        }
+    }
+
+    // 4. Extract simple array readers: float readXxx(int index) { ... return arrayName[index]; }
+    // (for modalBar-style tables — not LookupTable-based)
+    const arrayReaderRegex = /float\s+(read\w+)\s*\(\s*int\s+\w+\s*\)\s*\{[^}]*static\s+float\s+(\w+)\s*\[\s*[^\]]+\]\s*=\s*\{([^}]+)\}[^}]*return\s+\w+\[\s*\w+\s*\]\s*;/gs;
+    while ((m = arrayReaderRegex.exec(src)) !== null) {
+        const fnName = m[1];
+        const values = m[3].split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+        functions.set(fnName, {
+            tableName: m[2],
+            points: values,
+            nPoints: -1, // flag: simple array, not LookupTable
+        });
+    }
+
+    return { functions };
+}
+
+function generateLookupTableAS(fnName, tableInfo, prefix) {
+    const lines = [];
+    const arrayName = `${prefix}${tableInfo.tableName}_points`;
+
+    if (tableInfo.nPoints === -1) {
+        // Simple array reader (e.g. readMarmstk1)
+        lines.push(`const ${arrayName}: StaticArray<f32> = StaticArray.fromArray<f32>([${tableInfo.points.join(', ')}]);`);
+        lines.push(`function ${fnName}(index: i32): f32 { return ${arrayName}[index]; }`);
+    } else {
+        // LookupTable with linear interpolation
+        const ptsStr = tableInfo.points.map(v => v.toString()).join(', ');
+        lines.push(`const ${arrayName}: StaticArray<f64> = StaticArray.fromArray<f64>([${ptsStr}]);`);
+        lines.push(`function ${fnName}(x: f32): f32 {`);
+        lines.push(`    const pts = ${arrayName};`);
+        lines.push(`    const n: i32 = ${tableInfo.nPoints};`);
+        lines.push(`    let i: i32 = 0;`);
+        lines.push(`    while (<f64>x > pts[i * 2]) {`);
+        lines.push(`        i++;`);
+        lines.push(`        if (i >= n) return <f32>pts[(n - 1) * 2 + 1];`);
+        lines.push(`    }`);
+        lines.push(`    if (i == 0) return <f32>pts[1];`);
+        lines.push(`    const ratio: f64 = (<f64>x - pts[(i - 1) * 2]) / (pts[i * 2] - pts[(i - 1) * 2]);`);
+        lines.push(`    return <f32>(pts[(i - 1) * 2 + 1] * (1.0 - ratio) + pts[i * 2 + 1] * ratio);`);
+        lines.push(`}`);
+    }
+    return lines;
+}
+
+function detectExternalHeaders(cSource, inputDsp) {
+    const headers = [];
+    const headerRegex = /#include\s+<(\w+\.h)>/g;
+    let m;
+    while ((m = headerRegex.exec(cSource)) !== null) {
+        if (!SYSTEM_HEADERS.has(m[1])) {
+            const headerPath = path.resolve(path.dirname(inputDsp), m[1]);
+            if (fs.existsSync(headerPath)) {
+                headers.push({ name: m[1], path: headerPath });
+            } else {
+                console.warn(`Warning: External header ${m[1]} referenced but not found at ${headerPath}`);
+            }
+        }
+    }
+    return headers;
+}
+
+// ---------------------------------------------------------------------------
 // Core transpilation pipeline
 // ---------------------------------------------------------------------------
 
@@ -598,6 +703,28 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         }
         effectCSource = fs.readFileSync(tmpEffectCFile, 'utf-8');
         console.log(`Detected effect declaration — will generate ${clsName}Channel MidiChannel subclass`);
+    }
+
+    // === Step 1b: Detect and parse external header files (ffunction support) ===
+    const externalFunctions = new Map(); // fnName → tableInfo
+    const allExternalHeaders = [
+        ...detectExternalHeaders(cSource, inputDsp),
+        ...(effectCSource ? detectExternalHeaders(effectCSource, inputDsp) : []),
+    ];
+    const parsedHeaders = new Set();
+    for (const header of allExternalHeaders) {
+        if (parsedHeaders.has(header.path)) continue;
+        parsedHeaders.add(header.path);
+        console.log(`Parsing external header: ${header.name}`);
+        const parsed = parseExternalHeader(header.path);
+        for (const [fnName, info] of parsed.functions) {
+            if (!externalFunctions.has(fnName)) {
+                externalFunctions.set(fnName, info);
+            }
+        }
+    }
+    if (externalFunctions.size > 0) {
+        console.log(`Found ${externalFunctions.size} external lookup table functions: ${[...externalFunctions.keys()].join(', ')}`);
     }
 
     // === Step 2: Parse C output ===
@@ -1219,6 +1346,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         className: clsName,
         sourceFile: path.basename(inputDsp),
         hasEffect,
+        externalFunctions, // Map<fnName, { tableName, points, nPoints }>
         voice: {
             waveData: voiceWaveData,
             sigTables: voiceSigTables,
@@ -1254,6 +1382,21 @@ function assembleSingleFile(result) {
     out.push('import { notefreq } from "../../synth/note";');
     out.push('import { SAMPLERATE } from "../../environment";');
     out.push('');
+
+    // External lookup table functions (from ffunction headers like piano.h)
+    if (result.externalFunctions.size > 0) {
+        const emittedTables = new Set();
+        for (const [fnName, info] of result.externalFunctions) {
+            const lines = generateLookupTableAS(fnName, info, '');
+            for (const line of lines) {
+                // Deduplicate: avoid emitting same table data array twice if shared
+                if (line.startsWith('const ') && emittedTables.has(line)) continue;
+                if (line.startsWith('const ')) emittedTables.add(line);
+                out.push(line);
+            }
+        }
+        out.push('');
+    }
 
     // Voice wave data
     out.push(...result.voice.waveData);
@@ -1322,6 +1465,26 @@ function assembleBundle(results) {
     }
     for (const code of allHelpers.values()) out.push(code);
     if (allHelpers.size > 0) out.push('');
+
+    // Deduplicated external lookup table functions (ffunction headers)
+    const emittedExternalFns = new Set();
+    const emittedExternalTables = new Set();
+    for (const r of results) {
+        if (r.externalFunctions.size > 0) {
+            for (const [fnName, info] of r.externalFunctions) {
+                if (emittedExternalFns.has(fnName)) continue;
+                emittedExternalFns.add(fnName);
+                const prefix = r.className + '_';
+                const lines = generateLookupTableAS(fnName, info, prefix);
+                for (const line of lines) {
+                    if (line.startsWith('const ') && emittedExternalTables.has(line)) continue;
+                    if (line.startsWith('const ')) emittedExternalTables.add(line);
+                    out.push(line);
+                }
+            }
+        }
+    }
+    if (emittedExternalFns.size > 0) out.push('');
 
     // Per-DSP: wave data, SIG tables, SIG init, classes
     for (const r of results) {
