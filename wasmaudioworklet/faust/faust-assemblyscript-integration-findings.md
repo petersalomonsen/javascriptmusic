@@ -5,7 +5,8 @@
 2. [Current Faust Integration (Standalone, Not Integrated)](#2-current-faust-integration-standalone-not-integrated)
 3. [Path A: Enhance Standalone Faust to Match MidiSynth Capabilities](#3-path-a-enhance-standalone-faust-to-match-midisynth-capabilities)
 4. [Path B: Transpile Faust DSP to AssemblyScript MidiVoice](#4-path-b-transpile-faust-dsp-to-assemblyscript-midivoice)
-5. [Key File References](#5-key-file-references)
+5. [Path C: Transpile Directly from Faust DSP to AssemblyScript](#5-path-c-transpile-directly-from-faust-dsp-to-assemblyscript)
+6. [Key File References](#6-key-file-references)
 
 ---
 
@@ -737,7 +738,205 @@ npx ts-node faust2as.ts elecGuitarMIDI.dsp --name ElecGuitar --out assembly/midi
 
 ---
 
-## 5. Key File References
+## 5. Path C: Transpile Directly from Faust DSP to AssemblyScript
+
+### 5.1 Concept
+
+Instead of going through C as an intermediate (`Faust → C → AS`), transpile directly from the Faust `.dsp` source code to AssemblyScript. The appeal is that the transpiler would work at a higher level of abstraction and could potentially produce more readable output that resembles the original Faust source.
+
+### 5.2 How the Faust Language Works
+
+Faust is a **functional dataflow language** — fundamentally different from imperative languages like C or AssemblyScript. It describes *what signals do*, not *how to compute them step by step*.
+
+**Core composition operators:**
+
+| Operator | Name | Example | Meaning |
+|----------|------|---------|---------|
+| `:` | Serial | `osc : filter` | Output of osc feeds into filter |
+| `,` | Parallel | `sig1, sig2` | Two signals side by side |
+| `<:` | Split | `sig <: p1, p2` | Duplicate signal to multiple processors |
+| `:>` | Merge | `s1, s2 :> out` | Sum multiple signals together |
+| `~` | Feedback | `proc ~ fb` | Feed output back to input (1-sample delay) |
+| `@` | Delay | `x@n` | Read n samples back |
+| `'` | Previous | `x'` | Previous sample (= `x@1`) |
+
+**Example — a complete synth in Faust:**
+```faust
+midigate = button("gate");
+midifreq = nentry("freq[unit:Hz]", 440, 20, 20000, 1);
+midigain = nentry("gain", 0.5, 0, 0.5, 0.01);
+
+env = en.adsre(att, dec, sust, rel, midigate);
+oscillo(f) = (os.sawtooth(f) * (1-wfFade)) + (os.square(f) * wfFade);
+synth = (oscillo(midifreq) : ve.moog_vcf(res, cutoff)) * midigain * env;
+process = synth;
+```
+
+**What the Faust compiler does with this:**
+1. Expands all library calls (`os.sawtooth`, `en.adsre`, `ve.moog_vcf`) recursively into primitive operations
+2. Builds a signal graph connecting all inputs, outputs, and feedback paths
+3. Resolves the feedback operator `~` into explicit state variables with 1-sample delays
+4. Performs topological sort to determine computation order
+5. Allocates state: determines array sizes for delay lines, recursion buffers, etc.
+6. Generates imperative code (C, Rust, etc.) with flat loops over the resolved signal graph
+
+### 5.3 The Paradigm Gap
+
+The Faust source and the generated C occupy fundamentally different abstraction levels:
+
+**Faust source (simpleSynth_FX.dsp):**
+```faust
+env = en.adsre(att, dec, sust, rel, midigate);
+synth = (oscillo(allfreq) : ve.moog_vcf(res, cutoff)) * volume;
+process = synth;
+```
+
+**Generated C (after compiler resolves everything):**
+```c
+typedef struct {
+    float fRec0[2];    // ← envelope state (what was `en.adsre`)
+    float fRec7[2];    // ← smoothed parameter (one of many `si.smoo`)
+    float fRec8[2];    // ← oscillator phase accumulator
+    float fVec3[4096]; // ← delay line for waveguide
+    float fRec6[2];    // ← Moog VCF state (4 poles collapsed)
+    float fRec5[2];    //    ↓
+    float fRec4[2];    //    ↓
+    float fRec3[2];    //    ↓
+    float fRec2[2];    //    (resonance feedback)
+    // ... 16 more state variables
+} SimpleSynth_FX;
+```
+
+The ADSR envelope `en.adsre(att, dec, sust, rel, gate)` alone expands to a signal graph that uses the feedback operator `~` with two state signals:
+```faust
+adsre(a,d,s,r,t) = env ~ (_,_) : (!,_)
+with {
+    env(p2,y) =
+        (t>0) & (p2|(y>=1)),                      // phase tracking
+        (y + p1*u - (p2&(y>s))*v*y - p3*w*y)      // envelope value
+        * ((p3==0)|(y>=eps))
+    with {
+        p1 = (p2==0) & (t>0) & (y<1);             // attack phase?
+        p3 = (t<=0) & (y>0);                       // release phase?
+        u = 1/(SR*a); v = 1-pow(s,1/(SR*d));       // rates
+        // ...
+    };
+};
+```
+
+The compiler turns this functional feedback definition into a flat block of 10+ assignments with explicit `fRec0[0]`/`fRec0[1]` state management. **There is no simple syntactic mapping from the Faust source to imperative code** — the compiler performs deep semantic analysis to produce it.
+
+### 5.4 What a Direct Transpiler Would Need to Do
+
+To transpile Faust DSP → AssemblyScript directly, the transpiler would need to replicate the Faust compiler's frontend:
+
+1. **Parser** — Parse the Faust grammar (expressions, `with` blocks, pattern matching, `seq`/`par`/`sum` iteration, `letrec`, etc.)
+2. **Library expander** — Recursively inline all library calls. A single `pm.elecGuitar_ui_MIDI` expands to thousands of primitive operations across `physmodels.lib`, `instrument.lib`, `oscillator.lib`, `filter.lib`, etc.
+3. **Signal graph builder** — Convert the expanded AST into a signal flow graph, resolving all composition operators (`:`, `<:`, `:>`, `~`, etc.)
+4. **Feedback resolver** — Break `~` feedback cycles by inserting 1-sample delays and determining the correct computation order (topological sort with cycle-breaking)
+5. **State allocator** — Determine how many state variables are needed, what sizes the delay line arrays should be, and assign each feedback path to a specific array slot
+6. **Code emitter** — Generate the imperative AssemblyScript compute loop from the scheduled signal graph
+
+Steps 1–5 are the core of the Faust compiler itself (~100,000 lines of C++). Reimplementing this in JavaScript would be a very large project.
+
+### 5.5 Could AS Helper Functions Bridge the Gap?
+
+One idea: create an AssemblyScript DSP library that mirrors Faust primitives, so the transpiled code reads more like Faust:
+
+```typescript
+// Hypothetical AS helper library
+class DelayLine {
+    write(x: f32): void;
+    read(d: i32): f32;
+    readInterp(d: f32): f32; // fractional delay
+}
+
+class OnePole {
+    process(x: f32, b0: f32, a1: f32): f32;
+}
+
+class ADSR {
+    process(gate: f32, a: f32, d: f32, s: f32, r: f32): f32;
+}
+
+class BLSaw { // bandlimited sawtooth
+    next(freq: f32): f32;
+}
+```
+
+Then the transpiled output could look like:
+```typescript
+nextframe(): void {
+    const env = this.adsr.process(this.gate, att, dec, sust, rel);
+    const osc = this.saw.next(this.freq) * (1 - wfFade) + this.square.next(this.freq) * wfFade;
+    const filtered = this.moogVCF.process(osc, res, cutoff);
+    const output = filtered * this.gain * env;
+    this.channel.signal.addMonoSignal(output, 0.5, 0.5);
+}
+```
+
+**This looks appealing but has fundamental problems:**
+
+1. **Still requires signal graph resolution.** The helper classes hide internal state, but someone still needs to figure out which helpers are needed, how they connect, and how many state variables each requires. The Moog VCF alone expands to 4 cascaded poles with nonlinear feedback — you can't just call `this.moogVCF.process()` without the compiler telling you what the feedback topology looks like.
+
+2. **Faust library functions are not black boxes.** `pm.elecGuitar_ui_MIDI` is not a single "guitar" object — it's a composition of dozens of primitive waveguide delays, allpass filters, nonlinear functions, and body resonators, all interconnected with feedback loops. There's no natural decomposition into helper objects without the compiler's analysis.
+
+3. **Performance overhead.** The Faust compiler's flat inlined code is optimal — no virtual dispatch, no function call overhead per sample. Helper class method calls would add overhead in the audio hot loop. This matters at 44100 samples/sec × 10 voices.
+
+4. **Physical models resist componentization.** In `bowed.dsp`:
+   ```faust
+   process = (stringFilter : instrumentBody) ~ (bridgeDelay : NLFM)
+           : bodyFilter(*(0.2)) : _*gain*8 : stereo : instrReverb;
+   ```
+   The `instrumentBody` contains a nested `~ (neckDelay)` feedback loop. The outer `~` couples the bridge delay with the inner loop. These interdependent feedback paths share state and cannot be cleanly separated into independent helper objects.
+
+### 5.6 Comparison of Approaches
+
+| Aspect | Path B2: Faust → C → AS | Path C: Faust → AS direct |
+|--------|------------------------|--------------------------|
+| **Signal graph resolution** | Faust compiler handles it | Must reimplement (~100K lines C++) |
+| **Library expansion** | Faust compiler handles it | Must process all `.lib` files |
+| **Feedback scheduling** | Faust compiler handles it | Must implement topological sort with cycle-breaking |
+| **State allocation** | Faust compiler handles it | Must infer array sizes from signal graph |
+| **Fragility** | Depends on C output formatting | Depends on Faust grammar stability |
+| **Output readability** | Low (flat array indices) | Could be higher with helpers |
+| **Implementation effort** | Done (~1300 lines JS) | Months of work (compiler reimplementation) |
+| **Correctness guarantee** | High (Faust compiler is mature) | Risk of subtle bugs in graph analysis |
+| **Instruments supported** | Any that `faust -lang c` accepts | Only what the reimplemented frontend covers |
+
+### 5.7 What Would Be Practical
+
+**Option 1: AS helper library for hand-written instruments (small effort)**
+
+Create a library of DSP primitives in AssemblyScript (`DelayLine`, `OnePole`, `BiQuad`, `ADSR`, `BLSaw`, etc.) that developers use to hand-write MidiVoice classes. This doesn't involve Faust at all — it's just a good DSP toolkit. The building blocks happen to be the same ones Faust uses internally, but the developer composes them manually in imperative code.
+
+**Option 2: Post-process the C-transpiled output (moderate effort)**
+
+Keep the current `Faust → C → AS` pipeline but add a post-processing step that recognizes common patterns in the flat transpiled code and annotates them with comments:
+```typescript
+// --- ADSR envelope (att=0.1, dec=60, sust=0.1, rel=100) ---
+const fTemp2: f32 = ...;
+this.fRec0[0] = (1.0 - fTemp4) * ... ;
+// --- Moog VCF (4-pole, res=0.5, fc=cutoff) ---
+this.fRec6[0] = ... ;
+this.fRec5[0] = ... ;
+```
+
+This improves readability without changing the code's structure or semantics.
+
+**Option 3: Faust compiler backend (as documented in section 4.6)**
+
+The proper way to get "Faust → AS directly" is to add an AssemblyScript backend to the Faust compiler itself, which already has the signal graph resolver, feedback scheduler, and state allocator. The backend only needs to emit AS syntax instead of C syntax. This is what sections 4.2–4.6 document.
+
+### 5.8 Conclusion
+
+Direct Faust-to-AS transpilation without the Faust compiler is impractical because Faust is a **functional signal graph language**, not an imperative language. The compilation from dataflow descriptions to imperative sample-by-sample code requires deep semantic analysis (feedback resolution, state allocation, scheduling) that is the Faust compiler's core job. Creating AS helper functions can improve readability of hand-written DSP code, but cannot bridge the fundamental paradigm gap between Faust's declarative signal graphs and AssemblyScript's imperative computation model.
+
+The current approach — letting the Faust compiler resolve the signal graph to C, then transpiling the structured C output to AS — leverages the mature Faust compiler for the hard work and only requires a relatively simple syntactic transformation (~1300 lines of JS) for the last step.
+
+---
+
+## 6. Key File References
 
 ### AssemblyScript MidiSynth
 | File | Description |
