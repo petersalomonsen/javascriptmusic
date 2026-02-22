@@ -842,7 +842,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         midiMeta[m[1]][m[2]] = m[3];
     }
 
-    const sliderRegex = /ui_interface->(?:add(?:Horizontal|Vertical)Slider|addNumEntry)\([^,]+,\s*"(\w+)",\s*&dsp->(\w+),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)\)/g;
+    const sliderRegex = /ui_interface->(?:add(?:Horizontal|Vertical)Slider|addNumEntry)\([^,]+,\s*"([^"]+)",\s*&dsp->(\w+),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)\)/g;
     while ((m = sliderRegex.exec(buildUIBody)) !== null) {
         uiParams.push({
             name: m[1], field: m[2],
@@ -850,7 +850,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             midi: midiMeta[m[2]] || {}
         });
     }
-    const buttonRegex = /ui_interface->addButton\([^,]+,\s*"(\w+)",\s*&dsp->(\w+)\)/g;
+    const buttonRegex = /ui_interface->addButton\([^,]+,\s*"([^"]+)",\s*&dsp->(\w+)\)/g;
     while ((m = buttonRegex.exec(buildUIBody)) !== null) {
         uiParams.push({
             name: m[1], field: m[2],
@@ -1062,6 +1062,12 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     const gateParam = uiParams.find(p => p.isButton && p.name === 'gate');
     const gainParam = uiParams.find(p => p.name === 'gain');
 
+    // Build CC-mappable params (exclude freq, gain, gate — those are handled by noteon)
+    const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
+    const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
+    const CC_BASE = 102; // CC 102-119 are undefined in MIDI spec
+    ccParams.forEach((p, i) => { p.cc = CC_BASE + i; });
+
     voiceClass.push('    noteon(note: u8, velocity: u8): void {');
     voiceClass.push('        super.noteon(note, velocity);');
     if (freqParam) {
@@ -1095,6 +1101,19 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     // nextframe
     voiceClass.push('    nextframe(): void {');
+
+    // CC-to-parameter mapping
+    if (ccParams.length > 0) {
+        for (const p of ccParams) {
+            const label = p.name.replace(/_/g, ' ');
+            const range = (p.max - p.min);
+            const minStr = p.min === 0 ? '' : `${p.min} + `;
+            const rangeStr = range === 1 ? '' : ` * ${range}`;
+            voiceClass.push(`        // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
+            voiceClass.push(`        this.${p.field} = ${minStr}<f32>this.channel.controllerValues[${p.cc}] / 127.0${rangeStr};`);
+        }
+        voiceClass.push('');
+    }
 
     for (const decl of fSlowDecls) {
         const transpiled = transpileStatement(decl, voiceCtx);
@@ -1347,6 +1366,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         sourceFile: path.basename(inputDsp),
         hasEffect,
         externalFunctions, // Map<fnName, { tableName, points, nPoints }>
+        uiParams, // Array of { name, field, init, min, max, step, isButton?, midi }
         voice: {
             waveData: voiceWaveData,
             sigTables: voiceSigTables,
@@ -1521,6 +1541,23 @@ function assembleBundle(results) {
         out.push(`    midichannels[${i}].controlchange(7, 100);`);
         out.push(`    midichannels[${i}].controlchange(10, 64);`);
         out.push(`    midichannels[${i}].controlchange(91, 10);`);
+
+        // Emit CC defaults for tweakable DSP parameters
+        const excludedFields = new Set(['freq', 'gain', 'gate']);
+        const ccBase = 102;
+        const tweakable = (r.uiParams || []).filter(p => !p.isButton && !excludedFields.has(p.name));
+        if (tweakable.length > 0) {
+            out.push('');
+            for (let j = 0; j < tweakable.length; j++) {
+                const p = tweakable[j];
+                const cc = ccBase + j;
+                const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
+                const label = p.name.replace(/_/g, ' ');
+                out.push(`    // ${label} (CC ${cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
+                out.push(`    midichannels[${i}].controlchange(${cc}, ${ccDefault});`);
+            }
+        }
+
         if (i < results.length - 1) out.push('');
     });
     out.push('}');
