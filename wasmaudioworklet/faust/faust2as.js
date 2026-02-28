@@ -1133,11 +1133,16 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     if (freqParam) {
         voiceClass.push(`        this.${freqParam.field} = notefreq(note);`);
     }
-    if (gateParam) {
-        voiceClass.push(`        this.${gateParam.field} = 1.0;`);
-    }
     if (gainParam) {
         voiceClass.push(`        this.${gainParam.field} = <f32>velocity / 127.0;`);
+    }
+    if (gateParam) {
+        // Force gate 0→1 transition so Faust envelope edge detection retriggers.
+        // Without this, a sustained voice (noteoff never called due to sustain pedal)
+        // would not retrigger because gate stays at 1.0 and the DSP sees no rising edge.
+        voiceClass.push(`        this.${gateParam.field} = 0.0;`);
+        voiceClass.push('        this.nextframe();');
+        voiceClass.push(`        this.${gateParam.field} = 1.0;`);
     }
     voiceClass.push('        this.silentSamples = 0;');
     voiceClass.push('    }');
