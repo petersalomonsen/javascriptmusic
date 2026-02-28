@@ -27,7 +27,8 @@
         "bundle-musicandshadervideoplayer": "(cd player/musicandshadervideoplayer && rollup -c rollup.config.js)",
         "patch-version": "npm --no-git-tag-version version patch",
         "serve": "http-server -p 8080 .",
-        "test-e2e": "npx playwright test"
+        "test-e2e": "npx playwright test",
+        "test-faust": "node faust/generate-test-sources.js && wtr faust/faust2as.spec.js"
     },
     "devDependencies": {
         "@as-pect/cli": "^8.1.0",

@@ -4,23 +4,47 @@ Transpiles Faust `.dsp` physical model instruments into AssemblyScript `MidiVoic
 
 ## Quick Start
 
+### Single-file mode
+
+Generates one `.ts` file per DSP with the voice class, channel class, `initializeMidiSynth()` and `postprocess()`. The output can be pasted directly into the web app's AssemblyScript code editor.
+
 ```bash
 cd wasmaudioworklet
 node faust/faust2as.js <input.dsp> [--name ClassName] [--out output.ts]
+```
+
+### Bundle mode
+
+Combines multiple DSPs into a single file with all voice/channel classes, a shared `initializeMidiSynth()` that wires each DSP to a MIDI channel, and an empty `postprocess()`. Also suitable for pasting into the web app.
+
+```bash
+cd wasmaudioworklet
+node faust/faust2as.js --bundle <dsp1.dsp> [dsp2.dsp ...] [--out output.ts]
 ```
 
 ### Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--name` | Class name for the generated voice | Derived from filename |
+| `--name` | Class name for the generated voice (single-file only) | Derived from filename |
 | `--out` | Output `.ts` file path | `synth1/assembly/midi/instruments/<name>.ts` |
+| `--bundle` | Bundle multiple DSPs into one file | Off |
 
-### Example
+### Examples
 
 ```bash
-node faust/faust2as.js ../resources/faust/examples/physicalModeling/faust-stk/bowed.dsp \
-  --name Bowed --out /tmp/bowed.ts
+# Single instrument
+node faust/faust2as.js ../resources/faust/examples/generator/dx7.dsp
+
+# Single instrument with custom output
+node faust/faust2as.js ../resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
+  --out synth1/assembly/midi/instruments/clarinet.ts
+
+# Bundle: DX7 + Clarinet on MIDI channels 0 and 1
+node faust/faust2as.js --bundle \
+  ../resources/faust/examples/generator/dx7.dsp \
+  ../resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
+  --out /tmp/faust_bundle.ts
 ```
 
 ## Prerequisites
@@ -33,8 +57,26 @@ node faust/faust2as.js ../resources/faust/examples/physicalModeling/faust-stk/bo
 1. Runs `faust -lang c` on the input `.dsp` file
 2. Parses the generated C code (struct fields, `instanceConstants`, `instanceClear`, `compute` body)
 3. Emits an AssemblyScript `MidiVoice` subclass with `noteon()`, `noteoff()`, `isDone()`, and `nextframe()`
+4. Generates `initializeMidiSynth()` and `postprocess()` exports (required by `midisynth.ts`)
 
 The generated voice maps Faust's `freq`/`gain`/`gate` convention to MIDI note-on/note-off events, and writes stereo output into the channel's signal bus.
+
+## Import Paths
+
+Both single-file and bundle modes generate imports relative to the `mixes/` directory:
+
+```typescript
+import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';
+import { SAMPLERATE } from '../environment';
+```
+
+This is because the web app's AssemblyScript code editor compiles code from the `mixes/` directory context. The generated files can be pasted directly into the editor.
+
+## MIDI CC Parameter Mapping
+
+Tweakable UI parameters (everything except `freq`/`gain`/`gate`) are emitted as module-level global variables prefixed with the DSP name (e.g. `dx7_fHslider0`). These are mapped to MIDI CC numbers sequentially from CC 0, skipping reserved CCs (7=volume, 10=pan, 64=sustain, 91=reverb, 120-127=channel mode).
+
+A `{Name}Channel extends MidiChannel` class is generated with a `controlchange()` override that routes CC values to the global variables. The `initializeMidiSynth()` function emits CC defaults for all mapped parameters.
 
 ## Effect Support
 
@@ -44,25 +86,7 @@ If the `.dsp` source contains a top-level `effect = ...` declaration, the transp
 2. Generates a `{ClassName}Channel extends MidiChannel` subclass alongside the voice
 3. The channel's `preprocess()` method applies the effect to the mixed voice output
 
-This is the standard Faust convention for post-processing effects like reverb that should run once per channel, not per voice. The transpiler does not modify the DSP source — it only generates the effect class when the declaration already exists. For an example of a DSP with this pattern, see `examples/bela/simpleSynth_FX.dsp` which separates `process = synth` from `effect = ... flanger : panno : reverb`.
-
-## Using the Generated Code
-
-```typescript
-import { Bowed } from '../midi/instruments/bowed';
-
-midichannels[0] = new MidiChannel(6, (channel: MidiChannel) => new Bowed(channel));
-```
-
-The first argument (`6`) is the polyphony — the number of simultaneous voices.
-
-If the DSP has an `effect = ...` declaration, the transpiler also generates a `{ClassName}Channel extends MidiChannel` subclass. Use it in place of `MidiChannel` to apply the effect:
-
-```typescript
-import { Bowed, BowedChannel } from '../midi/instruments/bowed';
-
-midichannels[0] = new BowedChannel(6, (channel: MidiChannel) => new Bowed(channel));
-```
+This is the standard Faust convention for post-processing effects like reverb that should run once per channel, not per voice. The transpiler does not modify the DSP source — it only generates the effect class when the declaration already exists.
 
 ## Supported Faust Features
 
@@ -75,20 +99,20 @@ midichannels[0] = new BowedChannel(6, (channel: MidiChannel) => new Bowed(channe
 | Multiple SIG fill functions | Yes |
 | `nentry` / `hslider` / `button` UI elements | Yes |
 | `effect = ...` declarations | Yes (generates MidiChannel subclass) |
+| `ffunction` external headers (e.g. piano.h) | Yes (generates lookup tables) |
 | `soundfile` primitives | No |
 
 ## Tested Instruments
 
-The following Faust-STK instruments from `resources/faust/examples/physicalModeling/faust-stk/` have been transpiled and verified:
-
 | Instrument | DSP file | Notes |
 |------------|----------|-------|
-| Electric Guitar | `elecGuitarMIDI.dsp` | Plucked string |
-| Guitar | `guitarMIDI.dsp` | Plucked string |
-| Clarinet | `clarinet.dsp` | Reverb baked into `process` |
-| Piano | `piano1.dsp` | Reverb baked into `process` (large output ~3000 lines) |
-| Bowed String | `bowed.dsp` | Reverb baked into `process` |
-| SimpleSynth FX | `simpleSynth_FX.dsp` | Uses `effect = ...` (flanger + panner + reverb) |
+| DX7 | `generator/dx7.dsp` | FM synth, 138 params (124 CC-mapped) |
+| Electric Guitar | `faust-stk/elecGuitarMIDI.dsp` | Plucked string |
+| Guitar | `faust-stk/guitarMIDI.dsp` | Plucked string |
+| Clarinet | `physicalModeling/clarinetMIDI.dsp` | 8 CC-mapped params |
+| Piano | `physicalModeling/faust-stk/piano1.dsp` | External header lookup tables (~3000 lines) |
+| Bowed String | `faust-stk/bowed.dsp` | Reverb baked into `process` |
+| SimpleSynth FX | `bela/simpleSynth_FX.dsp` | Uses `effect = ...` (flanger + panner + reverb) |
 
 ## Troubleshooting
 

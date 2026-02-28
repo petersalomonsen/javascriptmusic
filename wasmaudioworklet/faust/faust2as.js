@@ -74,6 +74,13 @@ function transpileExpr(expr, ctx) {
     // dsp-> → this.
     out = out.replace(/dsp->/g, 'this.');
 
+    // Replace this.field → globalName for global UI params (shared across voices)
+    if (ctx.globalFields) {
+        for (const [field, globalName] of ctx.globalFields) {
+            out = out.replace(new RegExp(`this\\.${field}\\b`, 'g'), globalName);
+        }
+    }
+
     // (float)this.fSampleRate or (float)(this.fSampleRate) → SAMPLERATE
     out = out.replace(/\(float\)\s*\(?this\.fSampleRate\)?/g, 'SAMPLERATE');
 
@@ -90,10 +97,11 @@ function transpileExpr(expr, ctx) {
         }
     }
 
-    // Wave data array names: fClassNameSIG0Wave0 → _wave_SIG0Wave0
+    // Wave data array names: fClassNameSIG0Wave0 → _wave_SIG0Wave0 (also iClassName for int waves)
     // Use \b word boundary to avoid matching fPianoSIG0Wave0 inside fPianoSIG0Wave0_idx
     for (const wave of ctx.sigWaveArrays) {
-        const shortName = wave.name.replace(`f${ctx.className}`, ctx.wavePrefix + '_wave_');
+        const prefix = wave.isInt ? 'i' : 'f';
+        const shortName = wave.name.replace(`${prefix}${ctx.className}`, ctx.wavePrefix + '_wave_');
         if (shortName !== wave.name) {
             out = out.replace(new RegExp(`\\b${wave.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), shortName);
         }
@@ -105,7 +113,7 @@ function transpileExpr(expr, ctx) {
         'sinf': 'Mathf.sin', 'cosf': 'Mathf.cos', 'tanf': 'Mathf.tan',
         'expf': 'Mathf.exp', 'logf': 'Mathf.log', 'log10f': 'Mathf.log10',
         'powf': 'Mathf.pow', 'sqrtf': 'Mathf.sqrt', 'fabsf': 'Mathf.abs',
-        'rintf': 'Mathf.round', 'ceilf': 'Mathf.ceil',
+        'rintf': 'Mathf.round', 'roundf': 'Mathf.round', 'ceilf': 'Mathf.ceil',
         'atanf': 'Mathf.atan', 'atan2f': 'Mathf.atan2',
         'asinf': 'Mathf.asin', 'acosf': 'Mathf.acos',
     };
@@ -122,6 +130,9 @@ function transpileExpr(expr, ctx) {
     // In C, comparisons return int (0 or 1). In AS, they return bool.
     // When comparisons are used in arithmetic (bitwise OR, multiplication, addition),
     // they need explicit ? 1 : 0 wrapping.
+    // Protect bitwise shift operators from being split by comparison matching
+    out = out.replace(/>>/g, '__RSHIFT__');
+    out = out.replace(/<</g, '__LSHIFT__');
     // Pass 1: Simple comparisons where both sides have no nested parens
     out = out.replace(/\(([^()]+?)\s*(==|!=|<=|>=|<|>)\s*([^()]+?)\)/g,
         (match, lhs, op, rhs) => {
@@ -134,11 +145,16 @@ function transpileExpr(expr, ctx) {
     // Pass 3: Comparisons where RHS is a function call like (value op func(args))
     out = out.replace(/\(([^()]+?)\s*(==|!=|<=|>=|<|>)\s*([\w.]+\([^)]*\))\)/g,
         (match, lhs, op, rhs) => `(${lhs.trim()} ${op} ${rhs} ? 1 : 0)`);
+    // Restore shift operators
+    out = out.replace(/__RSHIFT__/g, '>>');
+    out = out.replace(/__LSHIFT__/g, '<<');
 
-    // Type casts: (float)expr → <f32>(expr), (int)expr → <i32>(expr)
-    // Handle (float)(expr) and (int)(expr)
-    out = out.replace(/\(float\)\(/g, '<f32>(');
-    out = out.replace(/\(int\)\(/g, '<i32>(');
+    // Type casts: (float)(expr) → _fcast(expr), (int)(expr) → _icast(expr)
+    // Uses generic inline helpers to avoid AS contextual typing issues:
+    // <f32>(100 * iSlow) would contextually type 100 as f32, causing f32*i32 error.
+    // _fcast(100 * iSlow) evaluates the arg at its natural type (i32), then converts.
+    out = out.replace(/\(float\)\(/g, '_fcast(');
+    out = out.replace(/\(int\)\(/g, '_icast(');
     // Handle (float)simple_var and (int)simple_var
     out = out.replace(/\(float\)(\w[\w.[\]]*)/g, '<f32>$1');
     out = out.replace(/\(int\)(\w[\w.[\]]*)/g, '<i32>$1');
@@ -348,14 +364,15 @@ function parseEffectC(cSrc, clsName) {
         helperFns.push({ fnName: m[1], params: m[2], body: m[3].trim() });
     }
 
-    // Wave data arrays
+    // Wave data arrays (float and int)
     const sigWaveRegex = new RegExp(
-        `static\\s+float\\s+(f${clsName}SIG\\d+Wave\\d+)\\s*\\[(\\d+)\\]\\s*=\\s*\\{([^}]+)\\}`, 'g'
+        `static\\s+(float|int)\\s+([fi]${clsName}SIG\\d+Wave\\d+)\\s*\\[(\\d+)\\]\\s*=\\s*\\{([^}]+)\\}`, 'g'
     );
     const sigWaveArrays = [];
     while ((m = sigWaveRegex.exec(cSrc)) !== null) {
-        const values = m[3].split(',').map(v => v.trim().replace(/f$/i, ''));
-        sigWaveArrays.push({ name: m[1], size: parseInt(m[2]), values });
+        const isInt = m[1] === 'int';
+        const values = m[4].split(',').map(v => v.trim().replace(/f$/i, ''));
+        sigWaveArrays.push({ name: m[2], size: parseInt(m[3]), values, isInt });
     }
 
     // SIG struct definitions
@@ -365,16 +382,16 @@ function parseEffectC(cSrc, clsName) {
         sig0Structs.push({ sigIndex: m[2], fields: m[1] });
     }
 
-    // SIG table declarations
-    const sig0TableRegex = new RegExp(`static\\s+float\\s+(ftbl\\d+${clsName}SIG\\d+)\\s*\\[(\\d+)\\]\\s*;`, 'g');
+    // SIG table declarations (float and int)
+    const sig0TableRegex = new RegExp(`static\\s+(float|int)\\s+([fi]tbl\\d+${clsName}SIG\\d+)\\s*\\[(\\d+)\\]\\s*;`, 'g');
     const sig0Tables = [];
     while ((m = sig0TableRegex.exec(cSrc)) !== null) {
-        sig0Tables.push({ name: m[1], size: parseInt(m[2]) });
+        sig0Tables.push({ name: m[2], size: parseInt(m[3]), isInt: m[1] === 'int' });
     }
 
-    // SIG fill functions
+    // SIG fill functions (float* table or int* table)
     const sig0FillRegex = new RegExp(
-        `static\\s+void\\s+fill${clsName}SIG(\\d+)\\s*\\(${clsName}SIG\\d+\\*\\s*dsp,\\s*int\\s+count,\\s*float\\*\\s+table\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
+        `static\\s+void\\s+fill${clsName}SIG(\\d+)\\s*\\(${clsName}SIG\\d+\\*\\s*dsp,\\s*int\\s+count,\\s*(?:float|int)\\*\\s+table\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
     );
     const sig0Fills = [];
     while ((m = sig0FillRegex.exec(cSrc)) !== null) {
@@ -743,12 +760,12 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     const sigWaveArrays = [];
 
     const sigWaveRegex = new RegExp(
-        `static\\s+float\\s+(f${clsName}SIG\\d+Wave\\d+)\\s*\\[(\\d+)\\]\\s*=\\s*\\{([^}]+)\\}`,
+        `static\\s+(float|int)\\s+([fi]${clsName}SIG\\d+Wave\\d+)\\s*\\[(\\d+)\\]\\s*=\\s*\\{([^}]+)\\}`,
         'g'
     );
     while ((m = sigWaveRegex.exec(cSource)) !== null) {
-        const values = m[3].split(',').map(v => v.trim().replace(/f$/i, ''));
-        sigWaveArrays.push({ name: m[1], size: parseInt(m[2]), values });
+        const values = m[4].split(',').map(v => v.trim().replace(/f$/i, ''));
+        sigWaveArrays.push({ name: m[2], size: parseInt(m[3]), values, isInt: m[1] === 'int' });
     }
 
     const sig0StructRegex = new RegExp(`typedef\\s+struct\\s*\\{([^}]+)\\}\\s*${clsName}SIG(\\d+)\\s*;`, 'g');
@@ -756,13 +773,13 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         sig0Structs.push({ sigIndex: m[2], fields: m[1] });
     }
 
-    const sig0TableRegex = new RegExp(`static\\s+float\\s+(ftbl\\d+${clsName}SIG\\d+)\\s*\\[(\\d+)\\]\\s*;`, 'g');
+    const sig0TableRegex = new RegExp(`static\\s+(float|int)\\s+([fi]tbl\\d+${clsName}SIG\\d+)\\s*\\[(\\d+)\\]\\s*;`, 'g');
     while ((m = sig0TableRegex.exec(cSource)) !== null) {
-        sig0Tables.push({ name: m[1], size: parseInt(m[2]) });
+        sig0Tables.push({ name: m[2], size: parseInt(m[3]), isInt: m[1] === 'int' });
     }
 
     const sig0FillRegex = new RegExp(
-        `static\\s+void\\s+fill${clsName}SIG(\\d+)\\s*\\(${clsName}SIG\\d+\\*\\s*dsp,\\s*int\\s+count,\\s*float\\*\\s+table\\)\\s*\\{([\\s\\S]*?)^\\}`,
+        `static\\s+void\\s+fill${clsName}SIG(\\d+)\\s*\\(${clsName}SIG\\d+\\*\\s*dsp,\\s*int\\s+count,\\s*(?:float|int)\\*\\s+table\\)\\s*\\{([\\s\\S]*?)^\\}`,
         'gm'
     );
     while ((m = sig0FillRegex.exec(cSource)) !== null) {
@@ -924,6 +941,36 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         }
     }
 
+    // === Determine global UI parameters ===
+
+    // freq/gate/gain are standard Faust MIDI polyphony params — they stay per-voice
+    const freqParam = uiParams.find(p => p.name === 'freq');
+    const gateParam = uiParams.find(p => p.isButton && p.name === 'gate');
+    const gainParam = uiParams.find(p => p.name === 'gain');
+
+    // All other non-button UI params become global variables shared across voices
+    const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
+    const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
+
+    // Assign CCs sequentially, skipping reserved MIDI CCs, capping at 127
+    const RESERVED_CCS = new Set([7, 10, 64, 91]); // volume, pan, sustain, reverb
+    let ccIndex = 0;
+    for (const p of ccParams) {
+        while (ccIndex <= 127 && RESERVED_CCS.has(ccIndex)) ccIndex++;
+        if (ccIndex > 127) break;
+        p.cc = ccIndex;
+        ccIndex++;
+    }
+
+    // Global variable prefix: lowercase DSP filename
+    const globalPrefix = path.basename(inputDsp, '.dsp') + '_';
+
+    // Map UI param fields → global variable names (except per-voice freq/gain/gate)
+    const globalFields = new Map();
+    for (const p of ccParams) {
+        globalFields.set(p.field, globalPrefix + p.field);
+    }
+
     // === Generate voice code sections ===
 
     const voiceCtx = {
@@ -933,20 +980,24 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         sigWaveArrays,
         tablePrefix: voiceTablePrefix,
         wavePrefix: voiceWavePrefix,
+        globalFields,
     };
 
     // Voice wave data
     const voiceWaveData = [];
     for (const wave of sigWaveArrays) {
-        const shortName = wave.name.replace(`f${clsName}`, voiceWavePrefix + '_wave_');
-        voiceWaveData.push(`const ${shortName}: StaticArray<f32> = StaticArray.fromArray<f32>([${wave.values.join(', ')}]);`);
+        const prefix = wave.isInt ? 'i' : 'f';
+        const shortName = wave.name.replace(`${prefix}${clsName}`, voiceWavePrefix + '_wave_');
+        const asType = wave.isInt ? 'i32' : 'f32';
+        voiceWaveData.push(`const ${shortName}: StaticArray<${asType}> = StaticArray.fromArray<${asType}>([${wave.values.join(', ')}]);`);
     }
 
     // Voice SIG tables
     const voiceSigTables = [];
     for (const table of sig0Tables) {
         const shortName = voiceTablePrefix + table.name.replace(clsName, '');
-        voiceSigTables.push(`const ${shortName}: StaticArray<f32> = new StaticArray<f32>(${table.size});`);
+        const asType = table.isInt ? 'i32' : 'f32';
+        voiceSigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${table.size});`);
     }
 
     // Voice SIG init function
@@ -1011,6 +1062,8 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     for (const field of fields) {
         const isUI = field.type === 'FAUSTFLOAT';
+        // Skip global UI params — they're emitted as module-level variables
+        if (isUI && globalFields.has(field.name)) continue;
         if (field.arraySize) {
             const asType = (field.type === 'int') ? 'i32' : 'f32';
             voiceClass.push(`    private ${field.name}: StaticArray<${asType}> = new StaticArray<${asType}>(${field.arraySize});`);
@@ -1058,16 +1111,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     voiceClass.push('');
 
     // noteon / noteoff / isDone
-    const freqParam = uiParams.find(p => p.name === 'freq');
-    const gateParam = uiParams.find(p => p.isButton && p.name === 'gate');
-    const gainParam = uiParams.find(p => p.name === 'gain');
-
-    // Build CC-mappable params (exclude freq, gain, gate — those are handled by noteon)
-    const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
-    const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
-    const CC_BASE = 102; // CC 102-119 are undefined in MIDI spec
-    ccParams.forEach((p, i) => { p.cc = CC_BASE + i; });
-
     voiceClass.push('    noteon(note: u8, velocity: u8): void {');
     voiceClass.push('        super.noteon(note, velocity);');
     if (freqParam) {
@@ -1101,19 +1144,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     // nextframe
     voiceClass.push('    nextframe(): void {');
-
-    // CC-to-parameter mapping
-    if (ccParams.length > 0) {
-        for (const p of ccParams) {
-            const label = p.name.replace(/_/g, ' ');
-            const range = (p.max - p.min);
-            const minStr = p.min === 0 ? '' : `${p.min} + `;
-            const rangeStr = range === 1 ? '' : ` * ${range}`;
-            voiceClass.push(`        // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
-            voiceClass.push(`        this.${p.field} = ${minStr}<f32>this.channel.controllerValues[${p.cc}] / 127.0${rangeStr};`);
-        }
-        voiceClass.push('');
-    }
 
     for (const decl of fSlowDecls) {
         const transpiled = transpileStatement(decl, voiceCtx);
@@ -1153,6 +1183,23 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     voiceClass.push('    }');
     voiceClass.push('}');
 
+    // === Generate global variable declarations for shared UI params ===
+    const voiceGlobals = [];
+    for (const p of ccParams) {
+        const globalName = globalFields.get(p.field);
+        const def = defaults[p.field] || '0.0';
+        const label = p.name.replace(/_/g, ' ');
+        const ccComment = p.cc !== undefined ? ` (CC ${p.cc})` : '';
+        voiceGlobals.push(`// ${label}${ccComment}`);
+        voiceGlobals.push(`let ${globalName}: f32 = ${def};`);
+    }
+
+    // Log CC allocation stats
+    const mappedCount = ccParams.filter(p => p.cc !== undefined).length;
+    if (ccParams.length > 0) {
+        console.log(`  ${mappedCount}/${ccParams.length} params mapped to MIDI CC (max CC 127)`);
+    }
+
     // === Generate effect code sections ===
 
     const effectWaveData = [];
@@ -1175,14 +1222,17 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
         // Effect wave data
         for (const wave of eff.sigWaveArrays) {
-            const shortName = wave.name.replace(`f${effectClassName}`, effectWavePrefix + '_wave_');
-            effectWaveData.push(`const ${shortName}: StaticArray<f32> = StaticArray.fromArray<f32>([${wave.values.join(', ')}]);`);
+            const prefix = wave.isInt ? 'i' : 'f';
+            const shortName = wave.name.replace(`${prefix}${effectClassName}`, effectWavePrefix + '_wave_');
+            const asType = wave.isInt ? 'i32' : 'f32';
+            effectWaveData.push(`const ${shortName}: StaticArray<${asType}> = StaticArray.fromArray<${asType}>([${wave.values.join(', ')}]);`);
         }
 
         // Effect SIG tables
         for (const table of eff.sig0Tables) {
             const shortName = effectTablePrefix + table.name.replace(effectClassName, '');
-            effectSigTables.push(`const ${shortName}: StaticArray<f32> = new StaticArray<f32>(${table.size});`);
+            const asType = table.isInt ? 'i32' : 'f32';
+            effectSigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${table.size});`);
         }
 
         // Effect SIG init function
@@ -1323,7 +1373,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
         effectClass.push('    }');
 
-        // controlchange()
+        // controlchange() — merge effect CC mappings + voice global CC mappings
         const ccMappings = [];
         for (const param of eff.uiParams) {
             if (param.midi && param.midi.midi) {
@@ -1338,7 +1388,8 @@ function transpileDsp(inputDsp, clsName, options = {}) {
                 }
             }
         }
-        if (ccMappings.length > 0) {
+        const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
+        if (ccMappings.length > 0 || voiceCCParams.length > 0) {
             effectClass.push('');
             effectClass.push('    controlchange(controller: u8, value: u8): void {');
             effectClass.push('        super.controlchange(controller, value);');
@@ -1348,11 +1399,43 @@ function transpileDsp(inputDsp, clsName, options = {}) {
                 effectClass.push(`                this.${cc.field} = ${cc.min} + (<f32>value / 127.0) * ${cc.max - cc.min};`);
                 effectClass.push('                break;');
             }
+            for (const p of voiceCCParams) {
+                const globalName = globalFields.get(p.field);
+                const range = p.max - p.min;
+                const minStr = p.min === 0 ? '' : `${p.min} + `;
+                const rangeStr = range === 1 ? '' : ` * ${range}`;
+                effectClass.push(`            case ${p.cc}:`);
+                effectClass.push(`                ${globalName} = ${minStr}<f32>value / 127.0${rangeStr};`);
+                effectClass.push('                break;');
+            }
             effectClass.push('        }');
             effectClass.push('    }');
         }
 
         effectClass.push('}');
+    }
+
+    // === Generate channel class for voice CC params (no-effect case) ===
+    const voiceChannelClass = [];
+    const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
+    if (!hasEffect && voiceCCParams.length > 0) {
+        const channelClassName = clsName + 'Channel';
+        voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
+        voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
+        voiceChannelClass.push('        super.controlchange(controller, value);');
+        voiceChannelClass.push('        switch (controller) {');
+        for (const p of voiceCCParams) {
+            const globalName = globalFields.get(p.field);
+            const range = p.max - p.min;
+            const minStr = p.min === 0 ? '' : `${p.min} + `;
+            const rangeStr = range === 1 ? '' : ` * ${range}`;
+            voiceChannelClass.push(`            case ${p.cc}:`);
+            voiceChannelClass.push(`                ${globalName} = ${minStr}<f32>value / 127.0${rangeStr};`);
+            voiceChannelClass.push('                break;');
+        }
+        voiceChannelClass.push('        }');
+        voiceChannelClass.push('    }');
+        voiceChannelClass.push('}');
     }
 
     // Clean up temp files
@@ -1361,18 +1444,25 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         try { fs.unlinkSync(tmpEffectCFile); } catch (e) {}
     }
 
+    const hasChannelClass = hasEffect || voiceCCParams.length > 0;
+
     return {
         className: clsName,
         sourceFile: path.basename(inputDsp),
         hasEffect,
+        hasChannelClass,
+        ccParams,
+        globalPrefix,
         externalFunctions, // Map<fnName, { tableName, points, nPoints }>
         uiParams, // Array of { name, field, init, min, max, step, isButton?, midi }
         voice: {
+            globals: voiceGlobals,
             waveData: voiceWaveData,
             sigTables: voiceSigTables,
             sigInit: voiceSigInit,
             helpers: voiceHelpers,
             classCode: voiceClass,
+            channelClass: voiceChannelClass,
         },
         effect: {
             waveData: effectWaveData,
@@ -1398,9 +1488,13 @@ function assembleSingleFile(result) {
     out.push('');
 
     // Imports
-    out.push('import { MidiVoice, MidiChannel } from "../midisynth";');
-    out.push('import { notefreq } from "../../synth/note";');
-    out.push('import { SAMPLERATE } from "../../environment";');
+    out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
+    out.push("import { SAMPLERATE } from '../environment';");
+    out.push('');
+
+    // Generic cast helpers — avoid AS contextual typing issues with <f32>/<i32>
+    out.push('@inline function _fcast<T>(x: T): f32 { return <f32>x; }');
+    out.push('@inline function _icast<T>(x: T): i32 { return <i32>x; }');
     out.push('');
 
     // External lookup table functions (from ffunction headers like piano.h)
@@ -1430,9 +1524,21 @@ function assembleSingleFile(result) {
     for (const h of result.voice.helpers) out.push(h.code);
     if (result.voice.helpers.length > 0) out.push('');
 
+    // Global variables for shared DSP parameters
+    if (result.voice.globals.length > 0) {
+        out.push(...result.voice.globals);
+        out.push('');
+    }
+
     // Voice class
     out.push(...result.voice.classCode);
     out.push('');
+
+    // Voice channel class (no-effect case with CC params)
+    if (result.voice.channelClass.length > 0) {
+        out.push(...result.voice.channelClass);
+        out.push('');
+    }
 
     // Effect sections
     if (result.hasEffect) {
@@ -1450,10 +1556,36 @@ function assembleSingleFile(result) {
         for (const h of uniqueEffectHelpers) out.push(h.code);
         if (uniqueEffectHelpers.length > 0) out.push('');
 
-        // Effect channel class
+        // Effect channel class (includes voice CC handling)
         out.push(...result.effect.classCode);
         out.push('');
     }
+
+    // initializeMidiSynth()
+    const channelClass = result.hasChannelClass ? `${result.className}Channel` : 'MidiChannel';
+    out.push('export function initializeMidiSynth(): void {');
+    out.push(`    midichannels[0] = new ${channelClass}(10, (channel: MidiChannel) => new ${result.className}(channel));`);
+    out.push(`    midichannels[0].controlchange(7, 100);`);
+    out.push(`    midichannels[0].controlchange(10, 64);`);
+    out.push(`    midichannels[0].controlchange(91, 10);`);
+
+    // Emit CC defaults for tweakable DSP parameters
+    const ccMapped = (result.ccParams || []).filter(p => p.cc !== undefined);
+    if (ccMapped.length > 0) {
+        out.push('');
+        for (const p of ccMapped) {
+            const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
+            const label = p.name.replace(/_/g, ' ');
+            out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
+            out.push(`    midichannels[0].controlchange(${p.cc}, ${ccDefault});`);
+        }
+    }
+
+    out.push('}');
+    out.push('');
+    out.push('export function postprocess(): void {');
+    out.push('}');
+    out.push('');
 
     return out;
 }
@@ -1474,6 +1606,11 @@ function assembleBundle(results) {
     // Bundle imports
     out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
     out.push("import { SAMPLERATE } from '../environment';");
+    out.push('');
+
+    // Generic cast helpers — avoid AS contextual typing issues with <f32>/<i32>
+    out.push('@inline function _fcast<T>(x: T): f32 { return <f32>x; }');
+    out.push('@inline function _icast<T>(x: T): i32 { return <i32>x; }');
     out.push('');
 
     // Deduplicated helper functions
@@ -1506,8 +1643,14 @@ function assembleBundle(results) {
     }
     if (emittedExternalFns.size > 0) out.push('');
 
-    // Per-DSP: wave data, SIG tables, SIG init, classes
+    // Per-DSP: globals, wave data, SIG tables, SIG init, classes
     for (const r of results) {
+        // Global variables for shared DSP parameters
+        if (r.voice.globals.length > 0) {
+            out.push(...r.voice.globals);
+            out.push('');
+        }
+
         // Voice wave data
         out.push(...r.voice.waveData);
         if (r.voice.waveData.length > 0) out.push('');
@@ -1519,6 +1662,12 @@ function assembleBundle(results) {
         // Voice class
         out.push(...r.voice.classCode);
         out.push('');
+
+        // Voice channel class (no-effect case with CC params)
+        if (r.voice.channelClass.length > 0) {
+            out.push(...r.voice.channelClass);
+            out.push('');
+        }
 
         // Effect sections
         if (r.hasEffect) {
@@ -1536,25 +1685,21 @@ function assembleBundle(results) {
     // initializeMidiSynth()
     out.push('export function initializeMidiSynth(): void {');
     results.forEach((r, i) => {
-        const channelClass = r.hasEffect ? `${r.className}Channel` : 'MidiChannel';
+        const channelClass = r.hasChannelClass ? `${r.className}Channel` : 'MidiChannel';
         out.push(`    midichannels[${i}] = new ${channelClass}(10, (channel: MidiChannel) => new ${r.className}(channel));`);
         out.push(`    midichannels[${i}].controlchange(7, 100);`);
         out.push(`    midichannels[${i}].controlchange(10, 64);`);
         out.push(`    midichannels[${i}].controlchange(91, 10);`);
 
-        // Emit CC defaults for tweakable DSP parameters
-        const excludedFields = new Set(['freq', 'gain', 'gate']);
-        const ccBase = 102;
-        const tweakable = (r.uiParams || []).filter(p => !p.isButton && !excludedFields.has(p.name));
-        if (tweakable.length > 0) {
+        // Emit CC defaults for tweakable DSP parameters (uses pre-assigned CC numbers)
+        const ccMapped = (r.ccParams || []).filter(p => p.cc !== undefined);
+        if (ccMapped.length > 0) {
             out.push('');
-            for (let j = 0; j < tweakable.length; j++) {
-                const p = tweakable[j];
-                const cc = ccBase + j;
+            for (const p of ccMapped) {
                 const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
                 const label = p.name.replace(/_/g, ' ');
-                out.push(`    // ${label} (CC ${cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
-                out.push(`    midichannels[${i}].controlchange(${cc}, ${ccDefault});`);
+                out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
+                out.push(`    midichannels[${i}].controlchange(${p.cc}, ${ccDefault});`);
             }
         }
 

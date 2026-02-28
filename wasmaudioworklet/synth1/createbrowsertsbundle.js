@@ -30,6 +30,11 @@ fileList.forEach(filename => {
   const filecontent = fs.readFileSync(filename).toString();
   const adjustedFileName = filename.substr(rootdir.length);
 
+  // Skip Faust-generated instrument files from globalimports re-exports.
+  // They use import paths relative to the mixes/ directory (for pasting into the
+  // web app editor) and would cause compile errors if pulled in transitively.
+  const isFaustGenerated = filecontent.startsWith('// Faust-generated');
+
   switch(adjustedFileName.split('/')[0]) {
     case 'instruments':
     case 'math':
@@ -40,11 +45,13 @@ fileList.forEach(filename => {
         break;
       }
     case 'synth':
-      filecontent.split(/\n/)
-        .filter(line => line.startsWith('export '))
-        .map(line => line.replace(' abstract ', ' ').split(' ')[2])
-        .map(name => name.split(/[^A-Za-z_0-9]/)[0])
-        .forEach(name => globalimports.push(`export { ${name} } from '../${adjustedFileName.replace(/\.ts$/,'')}';`));
+      if (!isFaustGenerated) {
+        filecontent.split(/\n/)
+          .filter(line => line.startsWith('export '))
+          .map(line => line.replace(' abstract ', ' ').split(' ')[2])
+          .map(name => name.split(/[^A-Za-z_0-9]/)[0])
+          .forEach(name => globalimports.push(`export { ${name} } from '../${adjustedFileName.replace(/\.ts$/,'')}';`));
+      }
     default:
   }
   fileMap[adjustedFileName] = filecontent;  
