@@ -8,281 +8,281 @@ import { SAMPLERATE } from '../environment';
 @inline function _fcast<T>(x: T): f32 { return <f32>x; }
 @inline function _icast<T>(x: T): i32 { return <i32>x; }
 
-// Feedback (CC 0)
+// Feedback (NRPN 0)
 let dx7_fHslider126: f32 = 0;
-// Transpose (CC 1)
+// Transpose (NRPN 1)
 let dx7_fHslider2: f32 = 0;
-// Osc Key Sync (CC 2)
+// Osc Key Sync (NRPN 2)
 let dx7_fHslider22: f32 = 1;
-// L1 (CC 3)
+// L1 (NRPN 3)
 let dx7_fHslider27: f32 = 50;
-// L2 (CC 4)
+// L2 (NRPN 4)
 let dx7_fHslider30: f32 = 50;
-// L3 (CC 5)
+// L3 (NRPN 5)
 let dx7_fHslider31: f32 = 50;
-// L4 (CC 6)
+// L4 (NRPN 6)
 let dx7_fHslider26: f32 = 50;
-// R1 (CC 8)
+// R1 (NRPN 7)
 let dx7_fHslider29: f32 = 99;
-// R2 (CC 9)
+// R2 (NRPN 8)
 let dx7_fHslider32: f32 = 99;
-// R3 (CC 11)
+// R3 (NRPN 9)
 let dx7_fHslider33: f32 = 99;
-// R4 (CC 12)
+// R4 (NRPN 10)
 let dx7_fHslider28: f32 = 99;
-// Wave (CC 13)
+// Wave (NRPN 11)
 let dx7_fEntry2: f32 = 0;
-// Speed (CC 14)
+// Speed (NRPN 12)
 let dx7_fHslider20: f32 = 35;
-// Delay (CC 15)
+// Delay (NRPN 13)
 let dx7_fHslider21: f32 = 0;
-// PMD (CC 16)
+// PMD (NRPN 14)
 let dx7_fHslider34: f32 = 0;
-// AMD (CC 17)
+// AMD (NRPN 15)
 let dx7_fHslider18: f32 = 0;
-// Sync (CC 18)
+// Sync (NRPN 16)
 let dx7_fHslider19: f32 = 1;
-// P Mod Sens (CC 19)
+// P Mod Sens (NRPN 17)
 let dx7_fHslider35: f32 = 3;
-// Tune (CC 20)
+// Tune (NRPN 18)
 let dx7_fHslider23: f32 = 0;
-// Coarse (CC 21)
+// Coarse (NRPN 19)
 let dx7_fHslider24: f32 = 1;
-// Fine (CC 22)
+// Fine (NRPN 20)
 let dx7_fHslider25: f32 = 0;
-// L1 (CC 23)
+// L1 (NRPN 21)
 let dx7_fHslider0: f32 = 99;
-// L2 (CC 24)
+// L2 (NRPN 22)
 let dx7_fHslider13: f32 = 99;
-// L3 (CC 25)
+// L3 (NRPN 23)
 let dx7_fHslider14: f32 = 99;
-// L4 (CC 26)
+// L4 (NRPN 24)
 let dx7_fHslider11: f32 = 0;
-// R1 (CC 27)
+// R1 (NRPN 25)
 let dx7_fHslider9: f32 = 99;
-// R2 (CC 28)
+// R2 (NRPN 26)
 let dx7_fHslider15: f32 = 99;
-// R3 (CC 29)
+// R3 (NRPN 27)
 let dx7_fHslider16: f32 = 99;
-// R4 (CC 30)
+// R4 (NRPN 28)
 let dx7_fHslider12: f32 = 99;
-// Level (CC 31)
+// Level (NRPN 29)
 let dx7_fHslider1: f32 = 99;
-// Key Vel (CC 32)
+// Key Vel (NRPN 30)
 let dx7_fHslider7: f32 = 0;
-// A Mod Sens (CC 33)
+// A Mod Sens (NRPN 31)
 let dx7_fHslider17: f32 = 0;
-// Rate Scaling (CC 34)
+// Rate Scaling (NRPN 32)
 let dx7_fHslider10: f32 = 0;
-// Breakpoint (CC 35)
+// Breakpoint (NRPN 33)
 let dx7_fHslider4: f32 = 0;
-// L Depth (CC 36)
+// L Depth (NRPN 34)
 let dx7_fHslider5: f32 = 0;
-// R Depth (CC 37)
+// R Depth (NRPN 35)
 let dx7_fHslider6: f32 = 0;
-// L Curve (CC 38)
+// L Curve (NRPN 36)
 let dx7_fEntry0: f32 = 0;
-// R Curve (CC 39)
+// R Curve (NRPN 37)
 let dx7_fEntry1: f32 = 0;
-// Tune (CC 40)
+// Tune (NRPN 38)
 let dx7_fHslider51: f32 = 0;
-// Coarse (CC 41)
+// Coarse (NRPN 39)
 let dx7_fHslider52: f32 = 1;
-// Fine (CC 42)
+// Fine (NRPN 40)
 let dx7_fHslider53: f32 = 0;
-// L1 (CC 43)
+// L1 (NRPN 41)
 let dx7_fHslider36: f32 = 99;
-// L2 (CC 44)
+// L2 (NRPN 42)
 let dx7_fHslider46: f32 = 99;
-// L3 (CC 45)
+// L3 (NRPN 43)
 let dx7_fHslider47: f32 = 99;
-// L4 (CC 46)
+// L4 (NRPN 44)
 let dx7_fHslider44: f32 = 0;
-// R1 (CC 47)
+// R1 (NRPN 45)
 let dx7_fHslider42: f32 = 99;
-// R2 (CC 48)
+// R2 (NRPN 46)
 let dx7_fHslider48: f32 = 99;
-// R3 (CC 49)
+// R3 (NRPN 47)
 let dx7_fHslider49: f32 = 99;
-// R4 (CC 50)
+// R4 (NRPN 48)
 let dx7_fHslider45: f32 = 99;
-// Level (CC 51)
+// Level (NRPN 49)
 let dx7_fHslider37: f32 = 0;
-// Key Vel (CC 52)
+// Key Vel (NRPN 50)
 let dx7_fHslider41: f32 = 0;
-// A Mod Sens (CC 53)
+// A Mod Sens (NRPN 51)
 let dx7_fHslider50: f32 = 0;
-// Rate Scaling (CC 54)
+// Rate Scaling (NRPN 52)
 let dx7_fHslider43: f32 = 0;
-// Breakpoint (CC 55)
+// Breakpoint (NRPN 53)
 let dx7_fHslider38: f32 = 0;
-// L Depth (CC 56)
+// L Depth (NRPN 54)
 let dx7_fHslider39: f32 = 0;
-// R Depth (CC 57)
+// R Depth (NRPN 55)
 let dx7_fHslider40: f32 = 0;
-// L Curve (CC 58)
+// L Curve (NRPN 56)
 let dx7_fEntry3: f32 = 0;
-// R Curve (CC 59)
+// R Curve (NRPN 57)
 let dx7_fEntry4: f32 = 0;
-// Tune (CC 60)
+// Tune (NRPN 58)
 let dx7_fHslider69: f32 = 0;
-// Coarse (CC 61)
+// Coarse (NRPN 59)
 let dx7_fHslider70: f32 = 1;
-// Fine (CC 62)
+// Fine (NRPN 60)
 let dx7_fHslider71: f32 = 0;
-// L1 (CC 63)
+// L1 (NRPN 61)
 let dx7_fHslider54: f32 = 99;
-// L2 (CC 65)
+// L2 (NRPN 62)
 let dx7_fHslider64: f32 = 99;
-// L3 (CC 66)
+// L3 (NRPN 63)
 let dx7_fHslider65: f32 = 99;
-// L4 (CC 67)
+// L4 (NRPN 64)
 let dx7_fHslider62: f32 = 0;
-// R1 (CC 68)
+// R1 (NRPN 65)
 let dx7_fHslider60: f32 = 99;
-// R2 (CC 69)
+// R2 (NRPN 66)
 let dx7_fHslider66: f32 = 99;
-// R3 (CC 70)
+// R3 (NRPN 67)
 let dx7_fHslider67: f32 = 99;
-// R4 (CC 71)
+// R4 (NRPN 68)
 let dx7_fHslider63: f32 = 99;
-// Level (CC 72)
+// Level (NRPN 69)
 let dx7_fHslider55: f32 = 0;
-// Key Vel (CC 73)
+// Key Vel (NRPN 70)
 let dx7_fHslider59: f32 = 0;
-// A Mod Sens (CC 74)
+// A Mod Sens (NRPN 71)
 let dx7_fHslider68: f32 = 0;
-// Rate Scaling (CC 75)
+// Rate Scaling (NRPN 72)
 let dx7_fHslider61: f32 = 0;
-// Breakpoint (CC 76)
+// Breakpoint (NRPN 73)
 let dx7_fHslider56: f32 = 0;
-// L Depth (CC 77)
+// L Depth (NRPN 74)
 let dx7_fHslider57: f32 = 0;
-// R Depth (CC 78)
+// R Depth (NRPN 75)
 let dx7_fHslider58: f32 = 0;
-// L Curve (CC 79)
+// L Curve (NRPN 76)
 let dx7_fEntry5: f32 = 0;
-// R Curve (CC 80)
+// R Curve (NRPN 77)
 let dx7_fEntry6: f32 = 0;
-// Tune (CC 81)
+// Tune (NRPN 78)
 let dx7_fHslider87: f32 = 0;
-// Coarse (CC 82)
+// Coarse (NRPN 79)
 let dx7_fHslider88: f32 = 1;
-// Fine (CC 83)
+// Fine (NRPN 80)
 let dx7_fHslider89: f32 = 0;
-// L1 (CC 84)
+// L1 (NRPN 81)
 let dx7_fHslider72: f32 = 99;
-// L2 (CC 85)
+// L2 (NRPN 82)
 let dx7_fHslider82: f32 = 99;
-// L3 (CC 86)
+// L3 (NRPN 83)
 let dx7_fHslider83: f32 = 99;
-// L4 (CC 87)
+// L4 (NRPN 84)
 let dx7_fHslider80: f32 = 0;
-// R1 (CC 88)
+// R1 (NRPN 85)
 let dx7_fHslider78: f32 = 99;
-// R2 (CC 89)
+// R2 (NRPN 86)
 let dx7_fHslider84: f32 = 99;
-// R3 (CC 90)
+// R3 (NRPN 87)
 let dx7_fHslider85: f32 = 99;
-// R4 (CC 92)
+// R4 (NRPN 88)
 let dx7_fHslider81: f32 = 99;
-// Level (CC 93)
+// Level (NRPN 89)
 let dx7_fHslider73: f32 = 0;
-// Key Vel (CC 94)
+// Key Vel (NRPN 90)
 let dx7_fHslider77: f32 = 0;
-// A Mod Sens (CC 95)
+// A Mod Sens (NRPN 91)
 let dx7_fHslider86: f32 = 0;
-// Rate Scaling (CC 96)
+// Rate Scaling (NRPN 92)
 let dx7_fHslider79: f32 = 0;
-// Breakpoint (CC 97)
+// Breakpoint (NRPN 93)
 let dx7_fHslider74: f32 = 0;
-// L Depth (CC 98)
+// L Depth (NRPN 94)
 let dx7_fHslider75: f32 = 0;
-// R Depth (CC 99)
+// R Depth (NRPN 95)
 let dx7_fHslider76: f32 = 0;
-// L Curve (CC 100)
+// L Curve (NRPN 96)
 let dx7_fEntry7: f32 = 0;
-// R Curve (CC 101)
+// R Curve (NRPN 97)
 let dx7_fEntry8: f32 = 0;
-// Tune (CC 102)
+// Tune (NRPN 98)
 let dx7_fHslider105: f32 = 0;
-// Coarse (CC 103)
+// Coarse (NRPN 99)
 let dx7_fHslider106: f32 = 1;
-// Fine (CC 104)
+// Fine (NRPN 100)
 let dx7_fHslider107: f32 = 0;
-// L1 (CC 105)
+// L1 (NRPN 101)
 let dx7_fHslider90: f32 = 99;
-// L2 (CC 106)
+// L2 (NRPN 102)
 let dx7_fHslider100: f32 = 99;
-// L3 (CC 107)
+// L3 (NRPN 103)
 let dx7_fHslider101: f32 = 99;
-// L4 (CC 108)
+// L4 (NRPN 104)
 let dx7_fHslider98: f32 = 0;
-// R1 (CC 109)
+// R1 (NRPN 105)
 let dx7_fHslider96: f32 = 99;
-// R2 (CC 110)
+// R2 (NRPN 106)
 let dx7_fHslider102: f32 = 99;
-// R3 (CC 111)
+// R3 (NRPN 107)
 let dx7_fHslider103: f32 = 99;
-// R4 (CC 112)
+// R4 (NRPN 108)
 let dx7_fHslider99: f32 = 99;
-// Level (CC 113)
+// Level (NRPN 109)
 let dx7_fHslider91: f32 = 0;
-// Key Vel (CC 114)
+// Key Vel (NRPN 110)
 let dx7_fHslider95: f32 = 0;
-// A Mod Sens (CC 115)
+// A Mod Sens (NRPN 111)
 let dx7_fHslider104: f32 = 0;
-// Rate Scaling (CC 116)
+// Rate Scaling (NRPN 112)
 let dx7_fHslider97: f32 = 0;
-// Breakpoint (CC 117)
+// Breakpoint (NRPN 113)
 let dx7_fHslider92: f32 = 0;
-// L Depth (CC 118)
+// L Depth (NRPN 114)
 let dx7_fHslider93: f32 = 0;
-// R Depth (CC 119)
+// R Depth (NRPN 115)
 let dx7_fHslider94: f32 = 0;
-// L Curve (CC 120)
+// L Curve (NRPN 116)
 let dx7_fEntry9: f32 = 0;
-// R Curve (CC 121)
+// R Curve (NRPN 117)
 let dx7_fEntry10: f32 = 0;
-// Tune (CC 122)
+// Tune (NRPN 118)
 let dx7_fHslider123: f32 = 0;
-// Coarse (CC 123)
+// Coarse (NRPN 119)
 let dx7_fHslider124: f32 = 1;
-// Fine (CC 124)
+// Fine (NRPN 120)
 let dx7_fHslider125: f32 = 0;
-// L1 (CC 125)
+// L1 (NRPN 121)
 let dx7_fHslider108: f32 = 99;
-// L2 (CC 126)
+// L2 (NRPN 122)
 let dx7_fHslider118: f32 = 99;
-// L3 (CC 127)
+// L3 (NRPN 123)
 let dx7_fHslider119: f32 = 99;
-// L4
+// L4 (NRPN 124)
 let dx7_fHslider116: f32 = 0;
-// R1
+// R1 (NRPN 125)
 let dx7_fHslider114: f32 = 99;
-// R2
+// R2 (NRPN 126)
 let dx7_fHslider120: f32 = 99;
-// R3
+// R3 (NRPN 127)
 let dx7_fHslider121: f32 = 99;
-// R4
+// R4 (NRPN 128)
 let dx7_fHslider117: f32 = 99;
-// Level
+// Level (NRPN 129)
 let dx7_fHslider109: f32 = 0;
-// Key Vel
+// Key Vel (NRPN 130)
 let dx7_fHslider113: f32 = 0;
-// A Mod Sens
+// A Mod Sens (NRPN 131)
 let dx7_fHslider122: f32 = 0;
-// Rate Scaling
+// Rate Scaling (NRPN 132)
 let dx7_fHslider115: f32 = 0;
-// Breakpoint
+// Breakpoint (NRPN 133)
 let dx7_fHslider110: f32 = 0;
-// L Depth
+// L Depth (NRPN 134)
 let dx7_fHslider111: f32 = 0;
-// R Depth
+// R Depth (NRPN 135)
 let dx7_fHslider112: f32 = 0;
-// L Curve
+// L Curve (NRPN 136)
 let dx7_fEntry11: f32 = 0;
-// R Curve
+// R Curve (NRPN 137)
 let dx7_fEntry12: f32 = 0;
 
 const Dx7_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
@@ -1355,381 +1355,160 @@ export class Dx7 extends MidiVoice {
 }
 
 export class Dx7Channel extends MidiChannel {
+    private _nrpnMsb: u8 = 127;
+    private _nrpnLsb: u8 = 127;
+
     controlchange(controller: u8, value: u8): void {
         super.controlchange(controller, value);
         switch (controller) {
-            case 0:
-                dx7_fHslider126 = <f32>value / 127.0 * 7;
-                break;
-            case 1:
-                dx7_fHslider2 = -24 + <f32>value / 127.0 * 48;
-                break;
-            case 2:
-                dx7_fHslider22 = <f32>value / 127.0;
-                break;
-            case 3:
-                dx7_fHslider27 = <f32>value / 127.0 * 99;
-                break;
-            case 4:
-                dx7_fHslider30 = <f32>value / 127.0 * 99;
-                break;
-            case 5:
-                dx7_fHslider31 = <f32>value / 127.0 * 99;
-                break;
+            case 99: this._nrpnMsb = value; break;
+            case 98: this._nrpnLsb = value; break;
             case 6:
-                dx7_fHslider26 = <f32>value / 127.0 * 99;
-                break;
-            case 8:
-                dx7_fHslider29 = <f32>value / 127.0 * 99;
-                break;
-            case 9:
-                dx7_fHslider32 = <f32>value / 127.0 * 99;
-                break;
-            case 11:
-                dx7_fHslider33 = <f32>value / 127.0 * 99;
-                break;
-            case 12:
-                dx7_fHslider28 = <f32>value / 127.0 * 99;
-                break;
-            case 13:
-                dx7_fEntry2 = <f32>value / 127.0 * 5;
-                break;
-            case 14:
-                dx7_fHslider20 = <f32>value / 127.0 * 99;
-                break;
-            case 15:
-                dx7_fHslider21 = <f32>value / 127.0 * 99;
-                break;
-            case 16:
-                dx7_fHslider34 = <f32>value / 127.0 * 99;
-                break;
-            case 17:
-                dx7_fHslider18 = <f32>value / 127.0 * 99;
-                break;
-            case 18:
-                dx7_fHslider19 = <f32>value / 127.0;
-                break;
-            case 19:
-                dx7_fHslider35 = <f32>value / 127.0 * 7;
-                break;
-            case 20:
-                dx7_fHslider23 = -7 + <f32>value / 127.0 * 14;
-                break;
-            case 21:
-                dx7_fHslider24 = <f32>value / 127.0 * 31;
-                break;
-            case 22:
-                dx7_fHslider25 = <f32>value / 127.0 * 99;
-                break;
-            case 23:
-                dx7_fHslider0 = <f32>value / 127.0 * 99;
-                break;
-            case 24:
-                dx7_fHslider13 = <f32>value / 127.0 * 99;
-                break;
-            case 25:
-                dx7_fHslider14 = <f32>value / 127.0 * 99;
-                break;
-            case 26:
-                dx7_fHslider11 = <f32>value / 127.0 * 99;
-                break;
-            case 27:
-                dx7_fHslider9 = <f32>value / 127.0 * 99;
-                break;
-            case 28:
-                dx7_fHslider15 = <f32>value / 127.0 * 99;
-                break;
-            case 29:
-                dx7_fHslider16 = <f32>value / 127.0 * 99;
-                break;
-            case 30:
-                dx7_fHslider12 = <f32>value / 127.0 * 99;
-                break;
-            case 31:
-                dx7_fHslider1 = <f32>value / 127.0 * 99;
-                break;
-            case 32:
-                dx7_fHslider7 = <f32>value / 127.0 * 7;
-                break;
-            case 33:
-                dx7_fHslider17 = <f32>value / 127.0 * 3;
-                break;
-            case 34:
-                dx7_fHslider10 = <f32>value / 127.0 * 7;
-                break;
-            case 35:
-                dx7_fHslider4 = <f32>value / 127.0 * 99;
-                break;
-            case 36:
-                dx7_fHslider5 = <f32>value / 127.0 * 99;
-                break;
-            case 37:
-                dx7_fHslider6 = <f32>value / 127.0 * 99;
-                break;
-            case 38:
-                dx7_fEntry0 = <f32>value / 127.0 * 3;
-                break;
-            case 39:
-                dx7_fEntry1 = <f32>value / 127.0 * 3;
-                break;
-            case 40:
-                dx7_fHslider51 = -7 + <f32>value / 127.0 * 14;
-                break;
-            case 41:
-                dx7_fHslider52 = <f32>value / 127.0 * 31;
-                break;
-            case 42:
-                dx7_fHslider53 = <f32>value / 127.0 * 99;
-                break;
-            case 43:
-                dx7_fHslider36 = <f32>value / 127.0 * 99;
-                break;
-            case 44:
-                dx7_fHslider46 = <f32>value / 127.0 * 99;
-                break;
-            case 45:
-                dx7_fHslider47 = <f32>value / 127.0 * 99;
-                break;
-            case 46:
-                dx7_fHslider44 = <f32>value / 127.0 * 99;
-                break;
-            case 47:
-                dx7_fHslider42 = <f32>value / 127.0 * 99;
-                break;
-            case 48:
-                dx7_fHslider48 = <f32>value / 127.0 * 99;
-                break;
-            case 49:
-                dx7_fHslider49 = <f32>value / 127.0 * 99;
-                break;
-            case 50:
-                dx7_fHslider45 = <f32>value / 127.0 * 99;
-                break;
-            case 51:
-                dx7_fHslider37 = <f32>value / 127.0 * 99;
-                break;
-            case 52:
-                dx7_fHslider41 = <f32>value / 127.0 * 7;
-                break;
-            case 53:
-                dx7_fHslider50 = <f32>value / 127.0 * 3;
-                break;
-            case 54:
-                dx7_fHslider43 = <f32>value / 127.0 * 7;
-                break;
-            case 55:
-                dx7_fHslider38 = <f32>value / 127.0 * 99;
-                break;
-            case 56:
-                dx7_fHslider39 = <f32>value / 127.0 * 99;
-                break;
-            case 57:
-                dx7_fHslider40 = <f32>value / 127.0 * 99;
-                break;
-            case 58:
-                dx7_fEntry3 = <f32>value / 127.0 * 3;
-                break;
-            case 59:
-                dx7_fEntry4 = <f32>value / 127.0 * 3;
-                break;
-            case 60:
-                dx7_fHslider69 = -7 + <f32>value / 127.0 * 14;
-                break;
-            case 61:
-                dx7_fHslider70 = <f32>value / 127.0 * 31;
-                break;
-            case 62:
-                dx7_fHslider71 = <f32>value / 127.0 * 99;
-                break;
-            case 63:
-                dx7_fHslider54 = <f32>value / 127.0 * 99;
-                break;
-            case 65:
-                dx7_fHslider64 = <f32>value / 127.0 * 99;
-                break;
-            case 66:
-                dx7_fHslider65 = <f32>value / 127.0 * 99;
-                break;
-            case 67:
-                dx7_fHslider62 = <f32>value / 127.0 * 99;
-                break;
-            case 68:
-                dx7_fHslider60 = <f32>value / 127.0 * 99;
-                break;
-            case 69:
-                dx7_fHslider66 = <f32>value / 127.0 * 99;
-                break;
-            case 70:
-                dx7_fHslider67 = <f32>value / 127.0 * 99;
-                break;
-            case 71:
-                dx7_fHslider63 = <f32>value / 127.0 * 99;
-                break;
-            case 72:
-                dx7_fHslider55 = <f32>value / 127.0 * 99;
-                break;
-            case 73:
-                dx7_fHslider59 = <f32>value / 127.0 * 7;
-                break;
-            case 74:
-                dx7_fHslider68 = <f32>value / 127.0 * 3;
-                break;
-            case 75:
-                dx7_fHslider61 = <f32>value / 127.0 * 7;
-                break;
-            case 76:
-                dx7_fHslider56 = <f32>value / 127.0 * 99;
-                break;
-            case 77:
-                dx7_fHslider57 = <f32>value / 127.0 * 99;
-                break;
-            case 78:
-                dx7_fHslider58 = <f32>value / 127.0 * 99;
-                break;
-            case 79:
-                dx7_fEntry5 = <f32>value / 127.0 * 3;
-                break;
-            case 80:
-                dx7_fEntry6 = <f32>value / 127.0 * 3;
-                break;
-            case 81:
-                dx7_fHslider87 = -7 + <f32>value / 127.0 * 14;
-                break;
-            case 82:
-                dx7_fHslider88 = <f32>value / 127.0 * 31;
-                break;
-            case 83:
-                dx7_fHslider89 = <f32>value / 127.0 * 99;
-                break;
-            case 84:
-                dx7_fHslider72 = <f32>value / 127.0 * 99;
-                break;
-            case 85:
-                dx7_fHslider82 = <f32>value / 127.0 * 99;
-                break;
-            case 86:
-                dx7_fHslider83 = <f32>value / 127.0 * 99;
-                break;
-            case 87:
-                dx7_fHslider80 = <f32>value / 127.0 * 99;
-                break;
-            case 88:
-                dx7_fHslider78 = <f32>value / 127.0 * 99;
-                break;
-            case 89:
-                dx7_fHslider84 = <f32>value / 127.0 * 99;
-                break;
-            case 90:
-                dx7_fHslider85 = <f32>value / 127.0 * 99;
-                break;
-            case 92:
-                dx7_fHslider81 = <f32>value / 127.0 * 99;
-                break;
-            case 93:
-                dx7_fHslider73 = <f32>value / 127.0 * 99;
-                break;
-            case 94:
-                dx7_fHslider77 = <f32>value / 127.0 * 7;
-                break;
-            case 95:
-                dx7_fHslider86 = <f32>value / 127.0 * 3;
-                break;
-            case 96:
-                dx7_fHslider79 = <f32>value / 127.0 * 7;
-                break;
-            case 97:
-                dx7_fHslider74 = <f32>value / 127.0 * 99;
-                break;
-            case 98:
-                dx7_fHslider75 = <f32>value / 127.0 * 99;
-                break;
-            case 99:
-                dx7_fHslider76 = <f32>value / 127.0 * 99;
-                break;
-            case 100:
-                dx7_fEntry7 = <f32>value / 127.0 * 3;
-                break;
-            case 101:
-                dx7_fEntry8 = <f32>value / 127.0 * 3;
-                break;
-            case 102:
-                dx7_fHslider105 = -7 + <f32>value / 127.0 * 14;
-                break;
-            case 103:
-                dx7_fHslider106 = <f32>value / 127.0 * 31;
-                break;
-            case 104:
-                dx7_fHslider107 = <f32>value / 127.0 * 99;
-                break;
-            case 105:
-                dx7_fHslider90 = <f32>value / 127.0 * 99;
-                break;
-            case 106:
-                dx7_fHslider100 = <f32>value / 127.0 * 99;
-                break;
-            case 107:
-                dx7_fHslider101 = <f32>value / 127.0 * 99;
-                break;
-            case 108:
-                dx7_fHslider98 = <f32>value / 127.0 * 99;
-                break;
-            case 109:
-                dx7_fHslider96 = <f32>value / 127.0 * 99;
-                break;
-            case 110:
-                dx7_fHslider102 = <f32>value / 127.0 * 99;
-                break;
-            case 111:
-                dx7_fHslider103 = <f32>value / 127.0 * 99;
-                break;
-            case 112:
-                dx7_fHslider99 = <f32>value / 127.0 * 99;
-                break;
-            case 113:
-                dx7_fHslider91 = <f32>value / 127.0 * 99;
-                break;
-            case 114:
-                dx7_fHslider95 = <f32>value / 127.0 * 7;
-                break;
-            case 115:
-                dx7_fHslider104 = <f32>value / 127.0 * 3;
-                break;
-            case 116:
-                dx7_fHslider97 = <f32>value / 127.0 * 7;
-                break;
-            case 117:
-                dx7_fHslider92 = <f32>value / 127.0 * 99;
-                break;
-            case 118:
-                dx7_fHslider93 = <f32>value / 127.0 * 99;
-                break;
-            case 119:
-                dx7_fHslider94 = <f32>value / 127.0 * 99;
-                break;
-            case 120:
-                dx7_fEntry9 = <f32>value / 127.0 * 3;
-                break;
-            case 121:
-                dx7_fEntry10 = <f32>value / 127.0 * 3;
-                break;
-            case 122:
-                dx7_fHslider123 = -7 + <f32>value / 127.0 * 14;
-                break;
-            case 123:
-                dx7_fHslider124 = <f32>value / 127.0 * 31;
-                break;
-            case 124:
-                dx7_fHslider125 = <f32>value / 127.0 * 99;
-                break;
-            case 125:
-                dx7_fHslider108 = <f32>value / 127.0 * 99;
-                break;
-            case 126:
-                dx7_fHslider118 = <f32>value / 127.0 * 99;
-                break;
-            case 127:
-                dx7_fHslider119 = <f32>value / 127.0 * 99;
-                break;
+                this._setParam(<u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb, value);
+                break;
+        }
+    }
+
+    private _setParam(param: u16, value: u8): void {
+        switch (param) {
+            case 0: dx7_fHslider126 = <f32>value / 127.0 * 7; break;
+            case 1: dx7_fHslider2 = -24 + <f32>value / 127.0 * 48; break;
+            case 2: dx7_fHslider22 = <f32>value / 127.0; break;
+            case 3: dx7_fHslider27 = <f32>value / 127.0 * 99; break;
+            case 4: dx7_fHslider30 = <f32>value / 127.0 * 99; break;
+            case 5: dx7_fHslider31 = <f32>value / 127.0 * 99; break;
+            case 6: dx7_fHslider26 = <f32>value / 127.0 * 99; break;
+            case 7: dx7_fHslider29 = <f32>value / 127.0 * 99; break;
+            case 8: dx7_fHslider32 = <f32>value / 127.0 * 99; break;
+            case 9: dx7_fHslider33 = <f32>value / 127.0 * 99; break;
+            case 10: dx7_fHslider28 = <f32>value / 127.0 * 99; break;
+            case 11: dx7_fEntry2 = <f32>value / 127.0 * 5; break;
+            case 12: dx7_fHslider20 = <f32>value / 127.0 * 99; break;
+            case 13: dx7_fHslider21 = <f32>value / 127.0 * 99; break;
+            case 14: dx7_fHslider34 = <f32>value / 127.0 * 99; break;
+            case 15: dx7_fHslider18 = <f32>value / 127.0 * 99; break;
+            case 16: dx7_fHslider19 = <f32>value / 127.0; break;
+            case 17: dx7_fHslider35 = <f32>value / 127.0 * 7; break;
+            case 18: dx7_fHslider23 = -7 + <f32>value / 127.0 * 14; break;
+            case 19: dx7_fHslider24 = <f32>value / 127.0 * 31; break;
+            case 20: dx7_fHslider25 = <f32>value / 127.0 * 99; break;
+            case 21: dx7_fHslider0 = <f32>value / 127.0 * 99; break;
+            case 22: dx7_fHslider13 = <f32>value / 127.0 * 99; break;
+            case 23: dx7_fHslider14 = <f32>value / 127.0 * 99; break;
+            case 24: dx7_fHslider11 = <f32>value / 127.0 * 99; break;
+            case 25: dx7_fHslider9 = <f32>value / 127.0 * 99; break;
+            case 26: dx7_fHslider15 = <f32>value / 127.0 * 99; break;
+            case 27: dx7_fHslider16 = <f32>value / 127.0 * 99; break;
+            case 28: dx7_fHslider12 = <f32>value / 127.0 * 99; break;
+            case 29: dx7_fHslider1 = <f32>value / 127.0 * 99; break;
+            case 30: dx7_fHslider7 = <f32>value / 127.0 * 7; break;
+            case 31: dx7_fHslider17 = <f32>value / 127.0 * 3; break;
+            case 32: dx7_fHslider10 = <f32>value / 127.0 * 7; break;
+            case 33: dx7_fHslider4 = <f32>value / 127.0 * 99; break;
+            case 34: dx7_fHslider5 = <f32>value / 127.0 * 99; break;
+            case 35: dx7_fHslider6 = <f32>value / 127.0 * 99; break;
+            case 36: dx7_fEntry0 = <f32>value / 127.0 * 3; break;
+            case 37: dx7_fEntry1 = <f32>value / 127.0 * 3; break;
+            case 38: dx7_fHslider51 = -7 + <f32>value / 127.0 * 14; break;
+            case 39: dx7_fHslider52 = <f32>value / 127.0 * 31; break;
+            case 40: dx7_fHslider53 = <f32>value / 127.0 * 99; break;
+            case 41: dx7_fHslider36 = <f32>value / 127.0 * 99; break;
+            case 42: dx7_fHslider46 = <f32>value / 127.0 * 99; break;
+            case 43: dx7_fHslider47 = <f32>value / 127.0 * 99; break;
+            case 44: dx7_fHslider44 = <f32>value / 127.0 * 99; break;
+            case 45: dx7_fHslider42 = <f32>value / 127.0 * 99; break;
+            case 46: dx7_fHslider48 = <f32>value / 127.0 * 99; break;
+            case 47: dx7_fHslider49 = <f32>value / 127.0 * 99; break;
+            case 48: dx7_fHslider45 = <f32>value / 127.0 * 99; break;
+            case 49: dx7_fHslider37 = <f32>value / 127.0 * 99; break;
+            case 50: dx7_fHslider41 = <f32>value / 127.0 * 7; break;
+            case 51: dx7_fHslider50 = <f32>value / 127.0 * 3; break;
+            case 52: dx7_fHslider43 = <f32>value / 127.0 * 7; break;
+            case 53: dx7_fHslider38 = <f32>value / 127.0 * 99; break;
+            case 54: dx7_fHslider39 = <f32>value / 127.0 * 99; break;
+            case 55: dx7_fHslider40 = <f32>value / 127.0 * 99; break;
+            case 56: dx7_fEntry3 = <f32>value / 127.0 * 3; break;
+            case 57: dx7_fEntry4 = <f32>value / 127.0 * 3; break;
+            case 58: dx7_fHslider69 = -7 + <f32>value / 127.0 * 14; break;
+            case 59: dx7_fHslider70 = <f32>value / 127.0 * 31; break;
+            case 60: dx7_fHslider71 = <f32>value / 127.0 * 99; break;
+            case 61: dx7_fHslider54 = <f32>value / 127.0 * 99; break;
+            case 62: dx7_fHslider64 = <f32>value / 127.0 * 99; break;
+            case 63: dx7_fHslider65 = <f32>value / 127.0 * 99; break;
+            case 64: dx7_fHslider62 = <f32>value / 127.0 * 99; break;
+            case 65: dx7_fHslider60 = <f32>value / 127.0 * 99; break;
+            case 66: dx7_fHslider66 = <f32>value / 127.0 * 99; break;
+            case 67: dx7_fHslider67 = <f32>value / 127.0 * 99; break;
+            case 68: dx7_fHslider63 = <f32>value / 127.0 * 99; break;
+            case 69: dx7_fHslider55 = <f32>value / 127.0 * 99; break;
+            case 70: dx7_fHslider59 = <f32>value / 127.0 * 7; break;
+            case 71: dx7_fHslider68 = <f32>value / 127.0 * 3; break;
+            case 72: dx7_fHslider61 = <f32>value / 127.0 * 7; break;
+            case 73: dx7_fHslider56 = <f32>value / 127.0 * 99; break;
+            case 74: dx7_fHslider57 = <f32>value / 127.0 * 99; break;
+            case 75: dx7_fHslider58 = <f32>value / 127.0 * 99; break;
+            case 76: dx7_fEntry5 = <f32>value / 127.0 * 3; break;
+            case 77: dx7_fEntry6 = <f32>value / 127.0 * 3; break;
+            case 78: dx7_fHslider87 = -7 + <f32>value / 127.0 * 14; break;
+            case 79: dx7_fHslider88 = <f32>value / 127.0 * 31; break;
+            case 80: dx7_fHslider89 = <f32>value / 127.0 * 99; break;
+            case 81: dx7_fHslider72 = <f32>value / 127.0 * 99; break;
+            case 82: dx7_fHslider82 = <f32>value / 127.0 * 99; break;
+            case 83: dx7_fHslider83 = <f32>value / 127.0 * 99; break;
+            case 84: dx7_fHslider80 = <f32>value / 127.0 * 99; break;
+            case 85: dx7_fHslider78 = <f32>value / 127.0 * 99; break;
+            case 86: dx7_fHslider84 = <f32>value / 127.0 * 99; break;
+            case 87: dx7_fHslider85 = <f32>value / 127.0 * 99; break;
+            case 88: dx7_fHslider81 = <f32>value / 127.0 * 99; break;
+            case 89: dx7_fHslider73 = <f32>value / 127.0 * 99; break;
+            case 90: dx7_fHslider77 = <f32>value / 127.0 * 7; break;
+            case 91: dx7_fHslider86 = <f32>value / 127.0 * 3; break;
+            case 92: dx7_fHslider79 = <f32>value / 127.0 * 7; break;
+            case 93: dx7_fHslider74 = <f32>value / 127.0 * 99; break;
+            case 94: dx7_fHslider75 = <f32>value / 127.0 * 99; break;
+            case 95: dx7_fHslider76 = <f32>value / 127.0 * 99; break;
+            case 96: dx7_fEntry7 = <f32>value / 127.0 * 3; break;
+            case 97: dx7_fEntry8 = <f32>value / 127.0 * 3; break;
+            case 98: dx7_fHslider105 = -7 + <f32>value / 127.0 * 14; break;
+            case 99: dx7_fHslider106 = <f32>value / 127.0 * 31; break;
+            case 100: dx7_fHslider107 = <f32>value / 127.0 * 99; break;
+            case 101: dx7_fHslider90 = <f32>value / 127.0 * 99; break;
+            case 102: dx7_fHslider100 = <f32>value / 127.0 * 99; break;
+            case 103: dx7_fHslider101 = <f32>value / 127.0 * 99; break;
+            case 104: dx7_fHslider98 = <f32>value / 127.0 * 99; break;
+            case 105: dx7_fHslider96 = <f32>value / 127.0 * 99; break;
+            case 106: dx7_fHslider102 = <f32>value / 127.0 * 99; break;
+            case 107: dx7_fHslider103 = <f32>value / 127.0 * 99; break;
+            case 108: dx7_fHslider99 = <f32>value / 127.0 * 99; break;
+            case 109: dx7_fHslider91 = <f32>value / 127.0 * 99; break;
+            case 110: dx7_fHslider95 = <f32>value / 127.0 * 7; break;
+            case 111: dx7_fHslider104 = <f32>value / 127.0 * 3; break;
+            case 112: dx7_fHslider97 = <f32>value / 127.0 * 7; break;
+            case 113: dx7_fHslider92 = <f32>value / 127.0 * 99; break;
+            case 114: dx7_fHslider93 = <f32>value / 127.0 * 99; break;
+            case 115: dx7_fHslider94 = <f32>value / 127.0 * 99; break;
+            case 116: dx7_fEntry9 = <f32>value / 127.0 * 3; break;
+            case 117: dx7_fEntry10 = <f32>value / 127.0 * 3; break;
+            case 118: dx7_fHslider123 = -7 + <f32>value / 127.0 * 14; break;
+            case 119: dx7_fHslider124 = <f32>value / 127.0 * 31; break;
+            case 120: dx7_fHslider125 = <f32>value / 127.0 * 99; break;
+            case 121: dx7_fHslider108 = <f32>value / 127.0 * 99; break;
+            case 122: dx7_fHslider118 = <f32>value / 127.0 * 99; break;
+            case 123: dx7_fHslider119 = <f32>value / 127.0 * 99; break;
+            case 124: dx7_fHslider116 = <f32>value / 127.0 * 99; break;
+            case 125: dx7_fHslider114 = <f32>value / 127.0 * 99; break;
+            case 126: dx7_fHslider120 = <f32>value / 127.0 * 99; break;
+            case 127: dx7_fHslider121 = <f32>value / 127.0 * 99; break;
+            case 128: dx7_fHslider117 = <f32>value / 127.0 * 99; break;
+            case 129: dx7_fHslider109 = <f32>value / 127.0 * 99; break;
+            case 130: dx7_fHslider113 = <f32>value / 127.0 * 7; break;
+            case 131: dx7_fHslider122 = <f32>value / 127.0 * 3; break;
+            case 132: dx7_fHslider115 = <f32>value / 127.0 * 7; break;
+            case 133: dx7_fHslider110 = <f32>value / 127.0 * 99; break;
+            case 134: dx7_fHslider111 = <f32>value / 127.0 * 99; break;
+            case 135: dx7_fHslider112 = <f32>value / 127.0 * 99; break;
+            case 136: dx7_fEntry11 = <f32>value / 127.0 * 3; break;
+            case 137: dx7_fEntry12 = <f32>value / 127.0 * 3; break;
         }
     }
 }
@@ -1740,254 +1519,558 @@ export function initializeMidiSynth(): void {
     midichannels[0].controlchange(10, 64);
     midichannels[0].controlchange(91, 10);
 
-    // Feedback (CC 0, range: 0–7, default: 0)
-    midichannels[0].controlchange(0, 0);
-    // Transpose (CC 1, range: -24–24, default: 0)
-    midichannels[0].controlchange(1, 64);
-    // Osc Key Sync (CC 2, range: 0–1, default: 1)
-    midichannels[0].controlchange(2, 127);
-    // L1 (CC 3, range: 0–99, default: 50)
-    midichannels[0].controlchange(3, 64);
-    // L2 (CC 4, range: 0–99, default: 50)
-    midichannels[0].controlchange(4, 64);
-    // L3 (CC 5, range: 0–99, default: 50)
-    midichannels[0].controlchange(5, 64);
-    // L4 (CC 6, range: 0–99, default: 50)
-    midichannels[0].controlchange(6, 64);
-    // R1 (CC 8, range: 0–99, default: 99)
-    midichannels[0].controlchange(8, 127);
-    // R2 (CC 9, range: 0–99, default: 99)
-    midichannels[0].controlchange(9, 127);
-    // R3 (CC 11, range: 0–99, default: 99)
-    midichannels[0].controlchange(11, 127);
-    // R4 (CC 12, range: 0–99, default: 99)
-    midichannels[0].controlchange(12, 127);
-    // Wave (CC 13, range: 0–5, default: 0)
-    midichannels[0].controlchange(13, 0);
-    // Speed (CC 14, range: 0–99, default: 35)
-    midichannels[0].controlchange(14, 45);
-    // Delay (CC 15, range: 0–99, default: 0)
-    midichannels[0].controlchange(15, 0);
-    // PMD (CC 16, range: 0–99, default: 0)
-    midichannels[0].controlchange(16, 0);
-    // AMD (CC 17, range: 0–99, default: 0)
-    midichannels[0].controlchange(17, 0);
-    // Sync (CC 18, range: 0–1, default: 1)
-    midichannels[0].controlchange(18, 127);
-    // P Mod Sens (CC 19, range: 0–7, default: 3)
-    midichannels[0].controlchange(19, 54);
-    // Tune (CC 20, range: -7–7, default: 0)
-    midichannels[0].controlchange(20, 64);
-    // Coarse (CC 21, range: 0–31, default: 1)
-    midichannels[0].controlchange(21, 4);
-    // Fine (CC 22, range: 0–99, default: 0)
-    midichannels[0].controlchange(22, 0);
-    // L1 (CC 23, range: 0–99, default: 99)
-    midichannels[0].controlchange(23, 127);
-    // L2 (CC 24, range: 0–99, default: 99)
-    midichannels[0].controlchange(24, 127);
-    // L3 (CC 25, range: 0–99, default: 99)
-    midichannels[0].controlchange(25, 127);
-    // L4 (CC 26, range: 0–99, default: 0)
-    midichannels[0].controlchange(26, 0);
-    // R1 (CC 27, range: 0–99, default: 99)
-    midichannels[0].controlchange(27, 127);
-    // R2 (CC 28, range: 0–99, default: 99)
-    midichannels[0].controlchange(28, 127);
-    // R3 (CC 29, range: 0–99, default: 99)
-    midichannels[0].controlchange(29, 127);
-    // R4 (CC 30, range: 0–99, default: 99)
-    midichannels[0].controlchange(30, 127);
-    // Level (CC 31, range: 0–99, default: 99)
-    midichannels[0].controlchange(31, 127);
-    // Key Vel (CC 32, range: 0–7, default: 0)
-    midichannels[0].controlchange(32, 0);
-    // A Mod Sens (CC 33, range: 0–3, default: 0)
-    midichannels[0].controlchange(33, 0);
-    // Rate Scaling (CC 34, range: 0–7, default: 0)
-    midichannels[0].controlchange(34, 0);
-    // Breakpoint (CC 35, range: 0–99, default: 0)
-    midichannels[0].controlchange(35, 0);
-    // L Depth (CC 36, range: 0–99, default: 0)
-    midichannels[0].controlchange(36, 0);
-    // R Depth (CC 37, range: 0–99, default: 0)
-    midichannels[0].controlchange(37, 0);
-    // L Curve (CC 38, range: 0–3, default: 0)
-    midichannels[0].controlchange(38, 0);
-    // R Curve (CC 39, range: 0–3, default: 0)
-    midichannels[0].controlchange(39, 0);
-    // Tune (CC 40, range: -7–7, default: 0)
-    midichannels[0].controlchange(40, 64);
-    // Coarse (CC 41, range: 0–31, default: 1)
-    midichannels[0].controlchange(41, 4);
-    // Fine (CC 42, range: 0–99, default: 0)
-    midichannels[0].controlchange(42, 0);
-    // L1 (CC 43, range: 0–99, default: 99)
-    midichannels[0].controlchange(43, 127);
-    // L2 (CC 44, range: 0–99, default: 99)
-    midichannels[0].controlchange(44, 127);
-    // L3 (CC 45, range: 0–99, default: 99)
-    midichannels[0].controlchange(45, 127);
-    // L4 (CC 46, range: 0–99, default: 0)
-    midichannels[0].controlchange(46, 0);
-    // R1 (CC 47, range: 0–99, default: 99)
-    midichannels[0].controlchange(47, 127);
-    // R2 (CC 48, range: 0–99, default: 99)
-    midichannels[0].controlchange(48, 127);
-    // R3 (CC 49, range: 0–99, default: 99)
-    midichannels[0].controlchange(49, 127);
-    // R4 (CC 50, range: 0–99, default: 99)
-    midichannels[0].controlchange(50, 127);
-    // Level (CC 51, range: 0–99, default: 0)
-    midichannels[0].controlchange(51, 0);
-    // Key Vel (CC 52, range: 0–7, default: 0)
-    midichannels[0].controlchange(52, 0);
-    // A Mod Sens (CC 53, range: 0–3, default: 0)
-    midichannels[0].controlchange(53, 0);
-    // Rate Scaling (CC 54, range: 0–7, default: 0)
-    midichannels[0].controlchange(54, 0);
-    // Breakpoint (CC 55, range: 0–99, default: 0)
-    midichannels[0].controlchange(55, 0);
-    // L Depth (CC 56, range: 0–99, default: 0)
-    midichannels[0].controlchange(56, 0);
-    // R Depth (CC 57, range: 0–99, default: 0)
-    midichannels[0].controlchange(57, 0);
-    // L Curve (CC 58, range: 0–3, default: 0)
-    midichannels[0].controlchange(58, 0);
-    // R Curve (CC 59, range: 0–3, default: 0)
-    midichannels[0].controlchange(59, 0);
-    // Tune (CC 60, range: -7–7, default: 0)
-    midichannels[0].controlchange(60, 64);
-    // Coarse (CC 61, range: 0–31, default: 1)
-    midichannels[0].controlchange(61, 4);
-    // Fine (CC 62, range: 0–99, default: 0)
-    midichannels[0].controlchange(62, 0);
-    // L1 (CC 63, range: 0–99, default: 99)
-    midichannels[0].controlchange(63, 127);
-    // L2 (CC 65, range: 0–99, default: 99)
-    midichannels[0].controlchange(65, 127);
-    // L3 (CC 66, range: 0–99, default: 99)
-    midichannels[0].controlchange(66, 127);
-    // L4 (CC 67, range: 0–99, default: 0)
-    midichannels[0].controlchange(67, 0);
-    // R1 (CC 68, range: 0–99, default: 99)
-    midichannels[0].controlchange(68, 127);
-    // R2 (CC 69, range: 0–99, default: 99)
-    midichannels[0].controlchange(69, 127);
-    // R3 (CC 70, range: 0–99, default: 99)
-    midichannels[0].controlchange(70, 127);
-    // R4 (CC 71, range: 0–99, default: 99)
-    midichannels[0].controlchange(71, 127);
-    // Level (CC 72, range: 0–99, default: 0)
-    midichannels[0].controlchange(72, 0);
-    // Key Vel (CC 73, range: 0–7, default: 0)
-    midichannels[0].controlchange(73, 0);
-    // A Mod Sens (CC 74, range: 0–3, default: 0)
-    midichannels[0].controlchange(74, 0);
-    // Rate Scaling (CC 75, range: 0–7, default: 0)
-    midichannels[0].controlchange(75, 0);
-    // Breakpoint (CC 76, range: 0–99, default: 0)
-    midichannels[0].controlchange(76, 0);
-    // L Depth (CC 77, range: 0–99, default: 0)
-    midichannels[0].controlchange(77, 0);
-    // R Depth (CC 78, range: 0–99, default: 0)
-    midichannels[0].controlchange(78, 0);
-    // L Curve (CC 79, range: 0–3, default: 0)
-    midichannels[0].controlchange(79, 0);
-    // R Curve (CC 80, range: 0–3, default: 0)
-    midichannels[0].controlchange(80, 0);
-    // Tune (CC 81, range: -7–7, default: 0)
-    midichannels[0].controlchange(81, 64);
-    // Coarse (CC 82, range: 0–31, default: 1)
-    midichannels[0].controlchange(82, 4);
-    // Fine (CC 83, range: 0–99, default: 0)
-    midichannels[0].controlchange(83, 0);
-    // L1 (CC 84, range: 0–99, default: 99)
-    midichannels[0].controlchange(84, 127);
-    // L2 (CC 85, range: 0–99, default: 99)
-    midichannels[0].controlchange(85, 127);
-    // L3 (CC 86, range: 0–99, default: 99)
-    midichannels[0].controlchange(86, 127);
-    // L4 (CC 87, range: 0–99, default: 0)
-    midichannels[0].controlchange(87, 0);
-    // R1 (CC 88, range: 0–99, default: 99)
-    midichannels[0].controlchange(88, 127);
-    // R2 (CC 89, range: 0–99, default: 99)
-    midichannels[0].controlchange(89, 127);
-    // R3 (CC 90, range: 0–99, default: 99)
-    midichannels[0].controlchange(90, 127);
-    // R4 (CC 92, range: 0–99, default: 99)
-    midichannels[0].controlchange(92, 127);
-    // Level (CC 93, range: 0–99, default: 0)
-    midichannels[0].controlchange(93, 0);
-    // Key Vel (CC 94, range: 0–7, default: 0)
-    midichannels[0].controlchange(94, 0);
-    // A Mod Sens (CC 95, range: 0–3, default: 0)
-    midichannels[0].controlchange(95, 0);
-    // Rate Scaling (CC 96, range: 0–7, default: 0)
-    midichannels[0].controlchange(96, 0);
-    // Breakpoint (CC 97, range: 0–99, default: 0)
-    midichannels[0].controlchange(97, 0);
-    // L Depth (CC 98, range: 0–99, default: 0)
-    midichannels[0].controlchange(98, 0);
-    // R Depth (CC 99, range: 0–99, default: 0)
+    // Feedback (NRPN 0, range: 0–7, default: 0)
     midichannels[0].controlchange(99, 0);
-    // L Curve (CC 100, range: 0–3, default: 0)
-    midichannels[0].controlchange(100, 0);
-    // R Curve (CC 101, range: 0–3, default: 0)
-    midichannels[0].controlchange(101, 0);
-    // Tune (CC 102, range: -7–7, default: 0)
-    midichannels[0].controlchange(102, 64);
-    // Coarse (CC 103, range: 0–31, default: 1)
-    midichannels[0].controlchange(103, 4);
-    // Fine (CC 104, range: 0–99, default: 0)
-    midichannels[0].controlchange(104, 0);
-    // L1 (CC 105, range: 0–99, default: 99)
-    midichannels[0].controlchange(105, 127);
-    // L2 (CC 106, range: 0–99, default: 99)
-    midichannels[0].controlchange(106, 127);
-    // L3 (CC 107, range: 0–99, default: 99)
-    midichannels[0].controlchange(107, 127);
-    // L4 (CC 108, range: 0–99, default: 0)
-    midichannels[0].controlchange(108, 0);
-    // R1 (CC 109, range: 0–99, default: 99)
-    midichannels[0].controlchange(109, 127);
-    // R2 (CC 110, range: 0–99, default: 99)
-    midichannels[0].controlchange(110, 127);
-    // R3 (CC 111, range: 0–99, default: 99)
-    midichannels[0].controlchange(111, 127);
-    // R4 (CC 112, range: 0–99, default: 99)
-    midichannels[0].controlchange(112, 127);
-    // Level (CC 113, range: 0–99, default: 0)
-    midichannels[0].controlchange(113, 0);
-    // Key Vel (CC 114, range: 0–7, default: 0)
-    midichannels[0].controlchange(114, 0);
-    // A Mod Sens (CC 115, range: 0–3, default: 0)
-    midichannels[0].controlchange(115, 0);
-    // Rate Scaling (CC 116, range: 0–7, default: 0)
-    midichannels[0].controlchange(116, 0);
-    // Breakpoint (CC 117, range: 0–99, default: 0)
-    midichannels[0].controlchange(117, 0);
-    // L Depth (CC 118, range: 0–99, default: 0)
-    midichannels[0].controlchange(118, 0);
-    // R Depth (CC 119, range: 0–99, default: 0)
-    midichannels[0].controlchange(119, 0);
-    // L Curve (CC 120, range: 0–3, default: 0)
-    midichannels[0].controlchange(120, 0);
-    // R Curve (CC 121, range: 0–3, default: 0)
-    midichannels[0].controlchange(121, 0);
-    // Tune (CC 122, range: -7–7, default: 0)
-    midichannels[0].controlchange(122, 64);
-    // Coarse (CC 123, range: 0–31, default: 1)
-    midichannels[0].controlchange(123, 4);
-    // Fine (CC 124, range: 0–99, default: 0)
-    midichannels[0].controlchange(124, 0);
-    // L1 (CC 125, range: 0–99, default: 99)
-    midichannels[0].controlchange(125, 127);
-    // L2 (CC 126, range: 0–99, default: 99)
-    midichannels[0].controlchange(126, 127);
-    // L3 (CC 127, range: 0–99, default: 99)
-    midichannels[0].controlchange(127, 127);
+    midichannels[0].controlchange(98, 0);
+    midichannels[0].controlchange(6, 0);
+    // Transpose (NRPN 1, range: -24–24, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 1);
+    midichannels[0].controlchange(6, 64);
+    // Osc Key Sync (NRPN 2, range: 0–1, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 2);
+    midichannels[0].controlchange(6, 127);
+    // L1 (NRPN 3, range: 0–99, default: 50)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 3);
+    midichannels[0].controlchange(6, 64);
+    // L2 (NRPN 4, range: 0–99, default: 50)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 4);
+    midichannels[0].controlchange(6, 64);
+    // L3 (NRPN 5, range: 0–99, default: 50)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 5);
+    midichannels[0].controlchange(6, 64);
+    // L4 (NRPN 6, range: 0–99, default: 50)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 6);
+    midichannels[0].controlchange(6, 64);
+    // R1 (NRPN 7, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 7);
+    midichannels[0].controlchange(6, 127);
+    // R2 (NRPN 8, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 8);
+    midichannels[0].controlchange(6, 127);
+    // R3 (NRPN 9, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 9);
+    midichannels[0].controlchange(6, 127);
+    // R4 (NRPN 10, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 10);
+    midichannels[0].controlchange(6, 127);
+    // Wave (NRPN 11, range: 0–5, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 11);
+    midichannels[0].controlchange(6, 0);
+    // Speed (NRPN 12, range: 0–99, default: 35)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 12);
+    midichannels[0].controlchange(6, 45);
+    // Delay (NRPN 13, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 13);
+    midichannels[0].controlchange(6, 0);
+    // PMD (NRPN 14, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 14);
+    midichannels[0].controlchange(6, 0);
+    // AMD (NRPN 15, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 15);
+    midichannels[0].controlchange(6, 0);
+    // Sync (NRPN 16, range: 0–1, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 16);
+    midichannels[0].controlchange(6, 127);
+    // P Mod Sens (NRPN 17, range: 0–7, default: 3)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 17);
+    midichannels[0].controlchange(6, 54);
+    // Tune (NRPN 18, range: -7–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 18);
+    midichannels[0].controlchange(6, 64);
+    // Coarse (NRPN 19, range: 0–31, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 19);
+    midichannels[0].controlchange(6, 4);
+    // Fine (NRPN 20, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 20);
+    midichannels[0].controlchange(6, 0);
+    // L1 (NRPN 21, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 21);
+    midichannels[0].controlchange(6, 127);
+    // L2 (NRPN 22, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 22);
+    midichannels[0].controlchange(6, 127);
+    // L3 (NRPN 23, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 23);
+    midichannels[0].controlchange(6, 127);
+    // L4 (NRPN 24, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 24);
+    midichannels[0].controlchange(6, 0);
+    // R1 (NRPN 25, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 25);
+    midichannels[0].controlchange(6, 127);
+    // R2 (NRPN 26, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 26);
+    midichannels[0].controlchange(6, 127);
+    // R3 (NRPN 27, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 27);
+    midichannels[0].controlchange(6, 127);
+    // R4 (NRPN 28, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 28);
+    midichannels[0].controlchange(6, 127);
+    // Level (NRPN 29, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 29);
+    midichannels[0].controlchange(6, 127);
+    // Key Vel (NRPN 30, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 30);
+    midichannels[0].controlchange(6, 0);
+    // A Mod Sens (NRPN 31, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 31);
+    midichannels[0].controlchange(6, 0);
+    // Rate Scaling (NRPN 32, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 32);
+    midichannels[0].controlchange(6, 0);
+    // Breakpoint (NRPN 33, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 33);
+    midichannels[0].controlchange(6, 0);
+    // L Depth (NRPN 34, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 34);
+    midichannels[0].controlchange(6, 0);
+    // R Depth (NRPN 35, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 35);
+    midichannels[0].controlchange(6, 0);
+    // L Curve (NRPN 36, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 36);
+    midichannels[0].controlchange(6, 0);
+    // R Curve (NRPN 37, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 37);
+    midichannels[0].controlchange(6, 0);
+    // Tune (NRPN 38, range: -7–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 38);
+    midichannels[0].controlchange(6, 64);
+    // Coarse (NRPN 39, range: 0–31, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 39);
+    midichannels[0].controlchange(6, 4);
+    // Fine (NRPN 40, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 40);
+    midichannels[0].controlchange(6, 0);
+    // L1 (NRPN 41, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 41);
+    midichannels[0].controlchange(6, 127);
+    // L2 (NRPN 42, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 42);
+    midichannels[0].controlchange(6, 127);
+    // L3 (NRPN 43, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 43);
+    midichannels[0].controlchange(6, 127);
+    // L4 (NRPN 44, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 44);
+    midichannels[0].controlchange(6, 0);
+    // R1 (NRPN 45, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 45);
+    midichannels[0].controlchange(6, 127);
+    // R2 (NRPN 46, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 46);
+    midichannels[0].controlchange(6, 127);
+    // R3 (NRPN 47, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 47);
+    midichannels[0].controlchange(6, 127);
+    // R4 (NRPN 48, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 48);
+    midichannels[0].controlchange(6, 127);
+    // Level (NRPN 49, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 49);
+    midichannels[0].controlchange(6, 0);
+    // Key Vel (NRPN 50, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 50);
+    midichannels[0].controlchange(6, 0);
+    // A Mod Sens (NRPN 51, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 51);
+    midichannels[0].controlchange(6, 0);
+    // Rate Scaling (NRPN 52, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 52);
+    midichannels[0].controlchange(6, 0);
+    // Breakpoint (NRPN 53, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 53);
+    midichannels[0].controlchange(6, 0);
+    // L Depth (NRPN 54, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 54);
+    midichannels[0].controlchange(6, 0);
+    // R Depth (NRPN 55, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 55);
+    midichannels[0].controlchange(6, 0);
+    // L Curve (NRPN 56, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 56);
+    midichannels[0].controlchange(6, 0);
+    // R Curve (NRPN 57, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 57);
+    midichannels[0].controlchange(6, 0);
+    // Tune (NRPN 58, range: -7–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 58);
+    midichannels[0].controlchange(6, 64);
+    // Coarse (NRPN 59, range: 0–31, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 59);
+    midichannels[0].controlchange(6, 4);
+    // Fine (NRPN 60, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 60);
+    midichannels[0].controlchange(6, 0);
+    // L1 (NRPN 61, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 61);
+    midichannels[0].controlchange(6, 127);
+    // L2 (NRPN 62, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 62);
+    midichannels[0].controlchange(6, 127);
+    // L3 (NRPN 63, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 63);
+    midichannels[0].controlchange(6, 127);
+    // L4 (NRPN 64, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 64);
+    midichannels[0].controlchange(6, 0);
+    // R1 (NRPN 65, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 65);
+    midichannels[0].controlchange(6, 127);
+    // R2 (NRPN 66, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 66);
+    midichannels[0].controlchange(6, 127);
+    // R3 (NRPN 67, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 67);
+    midichannels[0].controlchange(6, 127);
+    // R4 (NRPN 68, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 68);
+    midichannels[0].controlchange(6, 127);
+    // Level (NRPN 69, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 69);
+    midichannels[0].controlchange(6, 0);
+    // Key Vel (NRPN 70, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 70);
+    midichannels[0].controlchange(6, 0);
+    // A Mod Sens (NRPN 71, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 71);
+    midichannels[0].controlchange(6, 0);
+    // Rate Scaling (NRPN 72, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 72);
+    midichannels[0].controlchange(6, 0);
+    // Breakpoint (NRPN 73, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 73);
+    midichannels[0].controlchange(6, 0);
+    // L Depth (NRPN 74, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 74);
+    midichannels[0].controlchange(6, 0);
+    // R Depth (NRPN 75, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 75);
+    midichannels[0].controlchange(6, 0);
+    // L Curve (NRPN 76, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 76);
+    midichannels[0].controlchange(6, 0);
+    // R Curve (NRPN 77, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 77);
+    midichannels[0].controlchange(6, 0);
+    // Tune (NRPN 78, range: -7–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 78);
+    midichannels[0].controlchange(6, 64);
+    // Coarse (NRPN 79, range: 0–31, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 79);
+    midichannels[0].controlchange(6, 4);
+    // Fine (NRPN 80, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 80);
+    midichannels[0].controlchange(6, 0);
+    // L1 (NRPN 81, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 81);
+    midichannels[0].controlchange(6, 127);
+    // L2 (NRPN 82, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 82);
+    midichannels[0].controlchange(6, 127);
+    // L3 (NRPN 83, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 83);
+    midichannels[0].controlchange(6, 127);
+    // L4 (NRPN 84, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 84);
+    midichannels[0].controlchange(6, 0);
+    // R1 (NRPN 85, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 85);
+    midichannels[0].controlchange(6, 127);
+    // R2 (NRPN 86, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 86);
+    midichannels[0].controlchange(6, 127);
+    // R3 (NRPN 87, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 87);
+    midichannels[0].controlchange(6, 127);
+    // R4 (NRPN 88, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 88);
+    midichannels[0].controlchange(6, 127);
+    // Level (NRPN 89, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 89);
+    midichannels[0].controlchange(6, 0);
+    // Key Vel (NRPN 90, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 90);
+    midichannels[0].controlchange(6, 0);
+    // A Mod Sens (NRPN 91, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 91);
+    midichannels[0].controlchange(6, 0);
+    // Rate Scaling (NRPN 92, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 92);
+    midichannels[0].controlchange(6, 0);
+    // Breakpoint (NRPN 93, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 93);
+    midichannels[0].controlchange(6, 0);
+    // L Depth (NRPN 94, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 94);
+    midichannels[0].controlchange(6, 0);
+    // R Depth (NRPN 95, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 95);
+    midichannels[0].controlchange(6, 0);
+    // L Curve (NRPN 96, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 96);
+    midichannels[0].controlchange(6, 0);
+    // R Curve (NRPN 97, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 97);
+    midichannels[0].controlchange(6, 0);
+    // Tune (NRPN 98, range: -7–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 98);
+    midichannels[0].controlchange(6, 64);
+    // Coarse (NRPN 99, range: 0–31, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 99);
+    midichannels[0].controlchange(6, 4);
+    // Fine (NRPN 100, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 100);
+    midichannels[0].controlchange(6, 0);
+    // L1 (NRPN 101, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 101);
+    midichannels[0].controlchange(6, 127);
+    // L2 (NRPN 102, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 102);
+    midichannels[0].controlchange(6, 127);
+    // L3 (NRPN 103, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 103);
+    midichannels[0].controlchange(6, 127);
+    // L4 (NRPN 104, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 104);
+    midichannels[0].controlchange(6, 0);
+    // R1 (NRPN 105, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 105);
+    midichannels[0].controlchange(6, 127);
+    // R2 (NRPN 106, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 106);
+    midichannels[0].controlchange(6, 127);
+    // R3 (NRPN 107, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 107);
+    midichannels[0].controlchange(6, 127);
+    // R4 (NRPN 108, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 108);
+    midichannels[0].controlchange(6, 127);
+    // Level (NRPN 109, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 109);
+    midichannels[0].controlchange(6, 0);
+    // Key Vel (NRPN 110, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 110);
+    midichannels[0].controlchange(6, 0);
+    // A Mod Sens (NRPN 111, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 111);
+    midichannels[0].controlchange(6, 0);
+    // Rate Scaling (NRPN 112, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 112);
+    midichannels[0].controlchange(6, 0);
+    // Breakpoint (NRPN 113, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 113);
+    midichannels[0].controlchange(6, 0);
+    // L Depth (NRPN 114, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 114);
+    midichannels[0].controlchange(6, 0);
+    // R Depth (NRPN 115, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 115);
+    midichannels[0].controlchange(6, 0);
+    // L Curve (NRPN 116, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 116);
+    midichannels[0].controlchange(6, 0);
+    // R Curve (NRPN 117, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 117);
+    midichannels[0].controlchange(6, 0);
+    // Tune (NRPN 118, range: -7–7, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 118);
+    midichannels[0].controlchange(6, 64);
+    // Coarse (NRPN 119, range: 0–31, default: 1)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 119);
+    midichannels[0].controlchange(6, 4);
+    // Fine (NRPN 120, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 120);
+    midichannels[0].controlchange(6, 0);
+    // L1 (NRPN 121, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 121);
+    midichannels[0].controlchange(6, 127);
+    // L2 (NRPN 122, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 122);
+    midichannels[0].controlchange(6, 127);
+    // L3 (NRPN 123, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 123);
+    midichannels[0].controlchange(6, 127);
+    // L4 (NRPN 124, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 124);
+    midichannels[0].controlchange(6, 0);
+    // R1 (NRPN 125, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 125);
+    midichannels[0].controlchange(6, 127);
+    // R2 (NRPN 126, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 126);
+    midichannels[0].controlchange(6, 127);
+    // R3 (NRPN 127, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 0);
+    midichannels[0].controlchange(98, 127);
+    midichannels[0].controlchange(6, 127);
+    // R4 (NRPN 128, range: 0–99, default: 99)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 0);
+    midichannels[0].controlchange(6, 127);
+    // Level (NRPN 129, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 1);
+    midichannels[0].controlchange(6, 0);
+    // Key Vel (NRPN 130, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 2);
+    midichannels[0].controlchange(6, 0);
+    // A Mod Sens (NRPN 131, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 3);
+    midichannels[0].controlchange(6, 0);
+    // Rate Scaling (NRPN 132, range: 0–7, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 4);
+    midichannels[0].controlchange(6, 0);
+    // Breakpoint (NRPN 133, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 5);
+    midichannels[0].controlchange(6, 0);
+    // L Depth (NRPN 134, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 6);
+    midichannels[0].controlchange(6, 0);
+    // R Depth (NRPN 135, range: 0–99, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 7);
+    midichannels[0].controlchange(6, 0);
+    // L Curve (NRPN 136, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 8);
+    midichannels[0].controlchange(6, 0);
+    // R Curve (NRPN 137, range: 0–3, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 9);
+    midichannels[0].controlchange(6, 0);
 }
 
 export function postprocess(): void {

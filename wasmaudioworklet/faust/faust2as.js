@@ -952,14 +952,31 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
     const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
 
-    // Assign CCs sequentially, skipping reserved MIDI CCs, capping at 127
+    // Safe CC range: 0-119 (CCs 120-127 are MIDI Channel Mode Messages)
+    const MAX_SAFE_CC = 119;
     const RESERVED_CCS = new Set([7, 10, 64, 91]); // volume, pan, sustain, reverb
-    let ccIndex = 0;
-    for (const p of ccParams) {
-        while (ccIndex <= 127 && RESERVED_CCS.has(ccIndex)) ccIndex++;
-        if (ccIndex > 127) break;
-        p.cc = ccIndex;
-        ccIndex++;
+    let usableCCCount = 0;
+    for (let i = 0; i <= MAX_SAFE_CC; i++) {
+        if (!RESERVED_CCS.has(i)) usableCCCount++;
+    }
+
+    // If params exceed safe CC range, use NRPN addressing for all params
+    const useNRPN = ccParams.length > usableCCCount;
+
+    if (useNRPN) {
+        // NRPN mode: assign sequential param indices
+        for (let i = 0; i < ccParams.length; i++) {
+            ccParams[i].nrpn = i;
+        }
+    } else {
+        // Direct CC mode: sequential assignment, capped at MAX_SAFE_CC
+        let ccIndex = 0;
+        for (const p of ccParams) {
+            while (ccIndex <= MAX_SAFE_CC && RESERVED_CCS.has(ccIndex)) ccIndex++;
+            if (ccIndex > MAX_SAFE_CC) break;
+            p.cc = ccIndex;
+            ccIndex++;
+        }
     }
 
     // Global variable prefix: lowercase DSP filename
@@ -1189,15 +1206,24 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         const globalName = globalFields.get(p.field);
         const def = defaults[p.field] || '0.0';
         const label = p.name.replace(/_/g, ' ');
-        const ccComment = p.cc !== undefined ? ` (CC ${p.cc})` : '';
-        voiceGlobals.push(`// ${label}${ccComment}`);
+        let mappingComment = '';
+        if (useNRPN && p.nrpn !== undefined) {
+            mappingComment = ` (NRPN ${p.nrpn})`;
+        } else if (p.cc !== undefined) {
+            mappingComment = ` (CC ${p.cc})`;
+        }
+        voiceGlobals.push(`// ${label}${mappingComment}`);
         voiceGlobals.push(`let ${globalName}: f32 = ${def};`);
     }
 
-    // Log CC allocation stats
-    const mappedCount = ccParams.filter(p => p.cc !== undefined).length;
+    // Log CC/NRPN allocation stats
     if (ccParams.length > 0) {
-        console.log(`  ${mappedCount}/${ccParams.length} params mapped to MIDI CC (max CC 127)`);
+        if (useNRPN) {
+            console.log(`  ${ccParams.length} params mapped to NRPN (0–${ccParams.length - 1})`);
+        } else {
+            const mappedCount = ccParams.filter(p => p.cc !== undefined).length;
+            console.log(`  ${mappedCount}/${ccParams.length} params mapped to MIDI CC (max CC ${MAX_SAFE_CC})`);
+        }
     }
 
     // === Generate effect code sections ===
@@ -1389,7 +1415,39 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             }
         }
         const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
-        if (ccMappings.length > 0 || voiceCCParams.length > 0) {
+        if (useNRPN && ccParams.length > 0) {
+            // NRPN mode: effect CC mappings via direct switch, voice params via NRPN state machine
+            // Warn if effect CCs conflict with NRPN control CCs
+            for (const cc of ccMappings) {
+                if (cc.cc === 6 || cc.cc === 98 || cc.cc === 99) {
+                    console.warn(`  WARNING: Effect CC ${cc.cc} conflicts with NRPN control CC`);
+                }
+            }
+            effectClass.push('');
+            effectClass.push('    private _nrpnMsb: u8 = 127;');
+            effectClass.push('    private _nrpnLsb: u8 = 127;');
+            effectClass.push('');
+            effectClass.push('    controlchange(controller: u8, value: u8): void {');
+            effectClass.push('        super.controlchange(controller, value);');
+            effectClass.push('        switch (controller) {');
+            // Effect's own direct CC mappings (from Faust [midi:ctrl N] metadata)
+            for (const cc of ccMappings) {
+                effectClass.push(`            case ${cc.cc}:`);
+                effectClass.push(`                this.${cc.field} = ${cc.min} + (<f32>value / 127.0) * ${cc.max - cc.min};`);
+                effectClass.push('                break;');
+            }
+            // NRPN state machine CCs
+            effectClass.push('            case 99: this._nrpnMsb = value; break;');
+            effectClass.push('            case 98: this._nrpnLsb = value; break;');
+            effectClass.push('            case 6:');
+            effectClass.push('                this._setParam(<u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb, value);');
+            effectClass.push('                break;');
+            effectClass.push('        }');
+            effectClass.push('    }');
+            effectClass.push('');
+            generateNRPNSetParam(effectClass, ccParams, globalFields);
+        } else if (ccMappings.length > 0 || voiceCCParams.length > 0) {
+            // Direct CC mode
             effectClass.push('');
             effectClass.push('    controlchange(controller: u8, value: u8): void {');
             effectClass.push('        super.controlchange(controller, value);');
@@ -1418,24 +1476,46 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     // === Generate channel class for voice CC params (no-effect case) ===
     const voiceChannelClass = [];
     const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
-    if (!hasEffect && voiceCCParams.length > 0) {
+    if (!hasEffect && (voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0))) {
         const channelClassName = clsName + 'Channel';
-        voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
-        voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
-        voiceChannelClass.push('        super.controlchange(controller, value);');
-        voiceChannelClass.push('        switch (controller) {');
-        for (const p of voiceCCParams) {
-            const globalName = globalFields.get(p.field);
-            const range = p.max - p.min;
-            const minStr = p.min === 0 ? '' : `${p.min} + `;
-            const rangeStr = range === 1 ? '' : ` * ${range}`;
-            voiceChannelClass.push(`            case ${p.cc}:`);
-            voiceChannelClass.push(`                ${globalName} = ${minStr}<f32>value / 127.0${rangeStr};`);
+        if (useNRPN) {
+            // NRPN mode: state machine for CC 99/98/6 sequence
+            voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
+            voiceChannelClass.push('    private _nrpnMsb: u8 = 127;');
+            voiceChannelClass.push('    private _nrpnLsb: u8 = 127;');
+            voiceChannelClass.push('');
+            voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
+            voiceChannelClass.push('        super.controlchange(controller, value);');
+            voiceChannelClass.push('        switch (controller) {');
+            voiceChannelClass.push('            case 99: this._nrpnMsb = value; break;');
+            voiceChannelClass.push('            case 98: this._nrpnLsb = value; break;');
+            voiceChannelClass.push('            case 6:');
+            voiceChannelClass.push('                this._setParam(<u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb, value);');
             voiceChannelClass.push('                break;');
+            voiceChannelClass.push('        }');
+            voiceChannelClass.push('    }');
+            voiceChannelClass.push('');
+            generateNRPNSetParam(voiceChannelClass, ccParams, globalFields);
+            voiceChannelClass.push('}');
+        } else {
+            // Direct CC mode
+            voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
+            voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
+            voiceChannelClass.push('        super.controlchange(controller, value);');
+            voiceChannelClass.push('        switch (controller) {');
+            for (const p of voiceCCParams) {
+                const globalName = globalFields.get(p.field);
+                const range = p.max - p.min;
+                const minStr = p.min === 0 ? '' : `${p.min} + `;
+                const rangeStr = range === 1 ? '' : ` * ${range}`;
+                voiceChannelClass.push(`            case ${p.cc}:`);
+                voiceChannelClass.push(`                ${globalName} = ${minStr}<f32>value / 127.0${rangeStr};`);
+                voiceChannelClass.push('                break;');
+            }
+            voiceChannelClass.push('        }');
+            voiceChannelClass.push('    }');
+            voiceChannelClass.push('}');
         }
-        voiceChannelClass.push('        }');
-        voiceChannelClass.push('    }');
-        voiceChannelClass.push('}');
     }
 
     // Clean up temp files
@@ -1444,13 +1524,14 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         try { fs.unlinkSync(tmpEffectCFile); } catch (e) {}
     }
 
-    const hasChannelClass = hasEffect || voiceCCParams.length > 0;
+    const hasChannelClass = hasEffect || voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0);
 
     return {
         className: clsName,
         sourceFile: path.basename(inputDsp),
         hasEffect,
         hasChannelClass,
+        useNRPN,
         ccParams,
         globalPrefix,
         externalFunctions, // Map<fnName, { tableName, points, nPoints }>
@@ -1472,6 +1553,47 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             classCode: effectClass,
         },
     };
+}
+
+// ---------------------------------------------------------------------------
+// NRPN helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate the _setParam() method body for NRPN channel classes.
+ * Maps NRPN param indices to global variable assignments.
+ */
+function generateNRPNSetParam(lines, ccParams, globalFields) {
+    lines.push('    private _setParam(param: u16, value: u8): void {');
+    lines.push('        switch (param) {');
+    for (const p of ccParams) {
+        if (p.nrpn === undefined) continue;
+        const globalName = globalFields.get(p.field);
+        const range = p.max - p.min;
+        const minStr = p.min === 0 ? '' : `${p.min} + `;
+        const rangeStr = range === 1 ? '' : ` * ${range}`;
+        lines.push(`            case ${p.nrpn}: ${globalName} = ${minStr}<f32>value / 127.0${rangeStr}; break;`);
+    }
+    lines.push('        }');
+    lines.push('    }');
+}
+
+/**
+ * Generate NRPN default CC sequences for initializeMidiSynth.
+ * Each param requires 3 CC sends: CC 99 (MSB), CC 98 (LSB), CC 6 (value).
+ */
+function generateNRPNDefaults(lines, ccParams, channelIndex) {
+    for (const p of ccParams) {
+        if (p.nrpn === undefined) continue;
+        const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
+        const label = p.name.replace(/_/g, ' ');
+        const msb = Math.floor(p.nrpn / 128);
+        const lsb = p.nrpn % 128;
+        lines.push(`    // ${label} (NRPN ${p.nrpn}, range: ${p.min}\u2013${p.max}, default: ${p.init})`);
+        lines.push(`    midichannels[${channelIndex}].controlchange(99, ${msb});`);
+        lines.push(`    midichannels[${channelIndex}].controlchange(98, ${lsb});`);
+        lines.push(`    midichannels[${channelIndex}].controlchange(6, ${ccDefault});`);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1569,15 +1691,20 @@ function assembleSingleFile(result) {
     out.push(`    midichannels[0].controlchange(10, 64);`);
     out.push(`    midichannels[0].controlchange(91, 10);`);
 
-    // Emit CC defaults for tweakable DSP parameters
-    const ccMapped = (result.ccParams || []).filter(p => p.cc !== undefined);
-    if (ccMapped.length > 0) {
+    // Emit defaults for tweakable DSP parameters
+    if (result.useNRPN && (result.ccParams || []).length > 0) {
         out.push('');
-        for (const p of ccMapped) {
-            const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
-            const label = p.name.replace(/_/g, ' ');
-            out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
-            out.push(`    midichannels[0].controlchange(${p.cc}, ${ccDefault});`);
+        generateNRPNDefaults(out, result.ccParams, 0);
+    } else {
+        const ccMapped = (result.ccParams || []).filter(p => p.cc !== undefined);
+        if (ccMapped.length > 0) {
+            out.push('');
+            for (const p of ccMapped) {
+                const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
+                const label = p.name.replace(/_/g, ' ');
+                out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}\u2013${p.max}, default: ${p.init})`);
+                out.push(`    midichannels[0].controlchange(${p.cc}, ${ccDefault});`);
+            }
         }
     }
 
@@ -1691,15 +1818,20 @@ function assembleBundle(results) {
         out.push(`    midichannels[${i}].controlchange(10, 64);`);
         out.push(`    midichannels[${i}].controlchange(91, 10);`);
 
-        // Emit CC defaults for tweakable DSP parameters (uses pre-assigned CC numbers)
-        const ccMapped = (r.ccParams || []).filter(p => p.cc !== undefined);
-        if (ccMapped.length > 0) {
+        // Emit defaults for tweakable DSP parameters
+        if (r.useNRPN && (r.ccParams || []).length > 0) {
             out.push('');
-            for (const p of ccMapped) {
-                const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
-                const label = p.name.replace(/_/g, ' ');
-                out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
-                out.push(`    midichannels[${i}].controlchange(${p.cc}, ${ccDefault});`);
+            generateNRPNDefaults(out, r.ccParams, i);
+        } else {
+            const ccMapped = (r.ccParams || []).filter(p => p.cc !== undefined);
+            if (ccMapped.length > 0) {
+                out.push('');
+                for (const p of ccMapped) {
+                    const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
+                    const label = p.name.replace(/_/g, ' ');
+                    out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}\u2013${p.max}, default: ${p.init})`);
+                    out.push(`    midichannels[${i}].controlchange(${p.cc}, ${ccDefault});`);
+                }
             }
         }
 
