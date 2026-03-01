@@ -1096,6 +1096,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     }
 
     voiceClass.push(`    private silentSamples: i32 = 0;`);
+    voiceClass.push(`    private releaseSamples: i32 = 0;`);
     voiceClass.push('');
 
     // Constructor
@@ -1145,6 +1146,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         voiceClass.push(`        this.${gateParam.field} = 1.0;`);
     }
     voiceClass.push('        this.silentSamples = 0;');
+    voiceClass.push('        this.releaseSamples = 0;');
     voiceClass.push('    }');
     voiceClass.push('');
 
@@ -1157,9 +1159,9 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     voiceClass.push('    isDone(): boolean {');
     if (gateParam) {
-        voiceClass.push(`        return this.${gateParam.field} == 0.0 && this.silentSamples > 4410;`);
+        voiceClass.push(`        return this.${gateParam.field} == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);`);
     } else {
-        voiceClass.push('        return this.silentSamples > 4410;');
+        voiceClass.push('        return this.silentSamples > 4410 || this.releaseSamples > 441000;');
     }
     voiceClass.push('    }');
     voiceClass.push('');
@@ -1195,11 +1197,14 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     }
 
     voiceClass.push('');
-    voiceClass.push('        if (Mathf.abs(output) < 0.00001) {');
+    voiceClass.push('        if (Mathf.abs(output) < 0.0001) {');
     voiceClass.push('            this.silentSamples++;');
     voiceClass.push('        } else {');
     voiceClass.push('            this.silentSamples = 0;');
     voiceClass.push('        }');
+    if (gateParam) {
+        voiceClass.push(`        if (this.${gateParam.field} == 0.0) this.releaseSamples++;`);
+    }
     voiceClass.push('');
     voiceClass.push('        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
     voiceClass.push('    }');

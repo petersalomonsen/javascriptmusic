@@ -431,6 +431,7 @@ export class Dx7_alg5 extends MidiVoice {
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
+    private releaseSamples: i32 = 0;
 
     constructor(channel: MidiChannel) {
         super(channel);
@@ -517,6 +518,7 @@ export class Dx7_alg5 extends MidiVoice {
         this.nextframe();
         this.fButton0 = 1.0;
         this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     noteoff(): void {
@@ -524,7 +526,7 @@ export class Dx7_alg5 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && this.silentSamples > 4410;
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
     }
 
     nextframe(): void {
@@ -1346,11 +1348,12 @@ export class Dx7_alg5 extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.00001) {
+        if (Mathf.abs(output) < 0.0001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
         }
+        if (this.fButton0 == 0.0) this.releaseSamples++;
 
         this.channel.signal.addMonoSignal(output, 0.5, 0.5);
     }
@@ -1938,6 +1941,7 @@ export class Dx7_alg16 extends MidiVoice {
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
+    private releaseSamples: i32 = 0;
 
     constructor(channel: MidiChannel) {
         super(channel);
@@ -2024,6 +2028,7 @@ export class Dx7_alg16 extends MidiVoice {
         this.nextframe();
         this.fButton0 = 1.0;
         this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     noteoff(): void {
@@ -2031,7 +2036,7 @@ export class Dx7_alg16 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && this.silentSamples > 4410;
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
     }
 
     nextframe(): void {
@@ -2853,11 +2858,12 @@ export class Dx7_alg16 extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.00001) {
+        if (Mathf.abs(output) < 0.0001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
         }
+        if (this.fButton0 == 0.0) this.releaseSamples++;
 
         this.channel.signal.addMonoSignal(output, 0.5, 0.5);
     }
@@ -3445,6 +3451,7 @@ export class Dx7_alg2 extends MidiVoice {
     private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
+    private releaseSamples: i32 = 0;
 
     constructor(channel: MidiChannel) {
         super(channel);
@@ -3531,6 +3538,7 @@ export class Dx7_alg2 extends MidiVoice {
         this.nextframe();
         this.fButton0 = 1.0;
         this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     noteoff(): void {
@@ -3538,7 +3546,7 @@ export class Dx7_alg2 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && this.silentSamples > 4410;
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
     }
 
     nextframe(): void {
@@ -4360,11 +4368,12 @@ export class Dx7_alg2 extends MidiVoice {
         this.iRec58[1] = this.iRec58[0];
         this.fRec59[1] = this.fRec59[0];
 
-        if (Mathf.abs(output) < 0.00001) {
+        if (Mathf.abs(output) < 0.0001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
         }
+        if (this.fButton0 == 0.0) this.releaseSamples++;
 
         this.channel.signal.addMonoSignal(output, 0.5, 0.5);
     }
@@ -4952,6 +4961,7 @@ export class Dx7_alg5_bells extends MidiVoice {
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
+    private releaseSamples: i32 = 0;
 
     constructor(channel: MidiChannel) {
         super(channel);
@@ -5038,6 +5048,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         this.nextframe();
         this.fButton0 = 1.0;
         this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     noteoff(): void {
@@ -5045,7 +5056,7 @@ export class Dx7_alg5_bells extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && this.silentSamples > 4410;
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
     }
 
     nextframe(): void {
@@ -5867,11 +5878,12 @@ export class Dx7_alg5_bells extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.00001) {
+        if (Mathf.abs(output) < 0.0001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
         }
+        if (this.fButton0 == 0.0) this.releaseSamples++;
 
         this.channel.signal.addMonoSignal(output, 0.5, 0.5);
     }
@@ -6459,6 +6471,7 @@ export class Dx7_alg17 extends MidiVoice {
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
+    private releaseSamples: i32 = 0;
 
     constructor(channel: MidiChannel) {
         super(channel);
@@ -6545,6 +6558,7 @@ export class Dx7_alg17 extends MidiVoice {
         this.nextframe();
         this.fButton0 = 1.0;
         this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     noteoff(): void {
@@ -6552,7 +6566,7 @@ export class Dx7_alg17 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && this.silentSamples > 4410;
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
     }
 
     nextframe(): void {
@@ -7374,11 +7388,12 @@ export class Dx7_alg17 extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.00001) {
+        if (Mathf.abs(output) < 0.0001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
         }
+        if (this.fButton0 == 0.0) this.releaseSamples++;
 
         this.channel.signal.addMonoSignal(output, 0.5, 0.5);
     }
@@ -7966,6 +7981,7 @@ export class Dx7_alg21 extends MidiVoice {
     private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
+    private releaseSamples: i32 = 0;
 
     constructor(channel: MidiChannel) {
         super(channel);
@@ -8052,6 +8068,7 @@ export class Dx7_alg21 extends MidiVoice {
         this.nextframe();
         this.fButton0 = 1.0;
         this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     noteoff(): void {
@@ -8059,7 +8076,7 @@ export class Dx7_alg21 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && this.silentSamples > 4410;
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
     }
 
     nextframe(): void {
@@ -8882,11 +8899,12 @@ export class Dx7_alg21 extends MidiVoice {
         this.iRec58[1] = this.iRec58[0];
         this.fRec59[1] = this.fRec59[0];
 
-        if (Mathf.abs(output) < 0.00001) {
+        if (Mathf.abs(output) < 0.0001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
         }
+        if (this.fButton0 == 0.0) this.releaseSamples++;
 
         this.channel.signal.addMonoSignal(output, 0.5, 0.5);
     }
@@ -9474,6 +9492,7 @@ export class Dx7_alg5_hat extends MidiVoice {
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
+    private releaseSamples: i32 = 0;
 
     constructor(channel: MidiChannel) {
         super(channel);
@@ -9560,6 +9579,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         this.nextframe();
         this.fButton0 = 1.0;
         this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     noteoff(): void {
@@ -9567,7 +9587,7 @@ export class Dx7_alg5_hat extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && this.silentSamples > 4410;
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
     }
 
     nextframe(): void {
@@ -10389,11 +10409,12 @@ export class Dx7_alg5_hat extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.00001) {
+        if (Mathf.abs(output) < 0.0001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
         }
+        if (this.fButton0 == 0.0) this.releaseSamples++;
 
         this.channel.signal.addMonoSignal(output, 0.5, 0.5);
     }
