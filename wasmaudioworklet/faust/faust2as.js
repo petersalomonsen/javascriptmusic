@@ -876,6 +876,14 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             midi: midiMeta[m[2]] || {}
         });
     }
+    const checkboxRegex = /ui_interface->addCheckButton\([^,]+,\s*"([^"]+)",\s*&dsp->(\w+)\)/g;
+    while ((m = checkboxRegex.exec(buildUIBody)) !== null) {
+        uiParams.push({
+            name: m[1], field: m[2],
+            init: 0, min: 0, max: 1, step: 1,
+            midi: midiMeta[m[2]] || {}
+        });
+    }
 
     // --- 2h: Extract compute body ---
     const computeRegex = new RegExp(

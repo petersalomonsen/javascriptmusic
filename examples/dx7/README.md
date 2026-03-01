@@ -74,19 +74,19 @@ Then add it to the bundle compilation command and regenerate.
 | 3 | `Dx7_alg5_bells` | Tubular Bells | 5 |
 | 4 | `Dx7_alg17` / `Dx7_alg21` / `Dx7_alg5_hat` | Drum Kit | 17, 21, 5 |
 
-Channel 4 is a drum kit with three DX7 voices mapped to specific notes (kick/snare lowered to octave 2 because Faust DX7 lacks fixed-frequency operator mode):
+Channel 4 is a drum kit with three DX7 voices mapped to standard GM drum notes (all operators use fixed-frequency mode):
 
 | Note | MIDI | Drum | Source |
 |---|---|---|---|
-| `c2` | 24 | Kick (Beefkick) | Coffeeshopped DX7 Drums, Algorithm 17 |
-| `d2` | 26 | Snare (MildSnare) | Coffeeshopped DX7 Drums, Algorithm 21 |
+| `c3` | 36 | Kick (Beefkick) | Coffeeshopped DX7 Drums, Algorithm 17 |
+| `d3` | 38 | Snare (MildSnare) | Coffeeshopped DX7 Drums, Algorithm 21 |
 | `fs3` | 42 | Hi-hat (JunkHat) | Coffeeshopped DX7 Drums, Algorithm 5 |
 
-Each channel has its own set of global parameters, so patches on different channels are fully independent. The drum kit uses NRPN ranges: kick 0-137, snare 138-275, hat 276-413.
+Each channel has its own set of global parameters, so patches on different channels are fully independent. The drum kit uses NRPN ranges: kick 0-143, snare 144-287, hat 288-431.
 
 ## NRPN parameter map
 
-All 138 parameters per algorithm are addressed via NRPN (Non-Registered Parameter Number):
+All 144 parameters per algorithm are addressed via NRPN (Non-Registered Parameter Number):
 
 ```js
 // Send NRPN: CC 99 = MSB, CC 98 = LSB, CC 6 = value
@@ -117,6 +117,7 @@ function nrpn(beat, param, value) {
 | 78–97 | Operator 4 | |
 | 98–117 | Operator 5 | |
 | 118–137 | Operator 6 | |
+| 138–143 | Freq Mode Op 1–6 | 0–1 (0=ratio, 1=fixed) |
 
 **Per operator** (20 parameters, offset from operator base):
 

@@ -213,6 +213,14 @@ function generateNRPN(voice, channel) {
         lines.push(`    nrpn(0, ${base + 19}, ${r3(op.rCurve)}), // R Curve=${CURVE_NAMES[op.rCurve]}`);
     }
 
+    // Freq Mode per operator — NRPN 138-143 (Op1-Op6)
+    lines.push('');
+    lines.push('    // --- Freq Mode (0=ratio, 1=fixed) ---');
+    for (let i = 0; i < 6; i++) {
+        const op = voice.operators[i];
+        lines.push(`    nrpn(0, ${138 + i}, ${r1(op.oscMode)}), // Op${i + 1} Freq Mode=${op.oscMode ? 'fixed' : 'ratio'}`);
+    }
+
     lines.push(']);');
     return lines.join('\n');
 }

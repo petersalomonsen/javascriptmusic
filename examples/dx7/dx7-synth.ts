@@ -284,6 +284,18 @@ let dx7_alg5_fHslider112: f32 = 0;
 let dx7_alg5_fEntry11: f32 = 0;
 // R Curve (NRPN 137)
 let dx7_alg5_fEntry12: f32 = 0;
+// Freq Mode (NRPN 138)
+let dx7_alg5_fCheckbox0: f32 = 0;
+// Freq Mode (NRPN 139)
+let dx7_alg5_fCheckbox1: f32 = 0;
+// Freq Mode (NRPN 140)
+let dx7_alg5_fCheckbox2: f32 = 0;
+// Freq Mode (NRPN 141)
+let dx7_alg5_fCheckbox3: f32 = 0;
+// Freq Mode (NRPN 142)
+let dx7_alg5_fCheckbox4: f32 = 0;
+// Freq Mode (NRPN 143)
+let dx7_alg5_fCheckbox5: f32 = 0;
 
 const Dx7_alg5_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
 const Dx7_alg5_wave_SIG1Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27, 33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174, 190, 206, 222, 238, 250]);
@@ -375,7 +387,6 @@ export class Dx7_alg5 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -391,7 +402,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -400,7 +410,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -409,7 +418,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -418,7 +426,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -427,7 +434,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -597,7 +603,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = _fcast(iSlow47);
         const iSlow66: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fHslider22)));
-        const iSlow67: i32 = _icast(Mathf.round(_fcast(this.fCheckbox0)));
+        const iSlow67: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fCheckbox0)));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(_fcast(dx7_alg5_fHslider23));
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -660,7 +666,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg5_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_fHslider50))))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = _fcast(iSlow127);
-        const iSlow130: i32 = _icast(Mathf.round(_fcast(this.fCheckbox1)));
+        const iSlow130: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fCheckbox1)));
         const fSlow131: f32 = Mathf.round(_fcast(dx7_alg5_fHslider51));
         const iSlow132: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fHslider52)));
         const fSlow133: f32 = Mathf.round(_fcast(dx7_alg5_fHslider53));
@@ -705,7 +711,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow172: i32 = Dx7_alg5_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_fHslider68))))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = _fcast(iSlow172);
-        const iSlow175: i32 = _icast(Mathf.round(_fcast(this.fCheckbox2)));
+        const iSlow175: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fCheckbox2)));
         const fSlow176: f32 = Mathf.round(_fcast(dx7_alg5_fHslider69));
         const iSlow177: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fHslider70)));
         const fSlow178: f32 = Mathf.round(_fcast(dx7_alg5_fHslider71));
@@ -750,7 +756,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow217: i32 = Dx7_alg5_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_fHslider86))))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = _fcast(iSlow217);
-        const iSlow220: i32 = _icast(Mathf.round(_fcast(this.fCheckbox3)));
+        const iSlow220: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fCheckbox3)));
         const fSlow221: f32 = Mathf.round(_fcast(dx7_alg5_fHslider87));
         const iSlow222: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fHslider88)));
         const fSlow223: f32 = Mathf.round(_fcast(dx7_alg5_fHslider89));
@@ -795,7 +801,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow262: i32 = Dx7_alg5_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_fHslider104))))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = _fcast(iSlow262);
-        const iSlow265: i32 = _icast(Mathf.round(_fcast(this.fCheckbox4)));
+        const iSlow265: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fCheckbox4)));
         const fSlow266: f32 = Mathf.round(_fcast(dx7_alg5_fHslider105));
         const iSlow267: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fHslider106)));
         const fSlow268: f32 = Mathf.round(_fcast(dx7_alg5_fHslider107));
@@ -840,7 +846,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow307: i32 = Dx7_alg5_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_fHslider122))))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = _fcast(iSlow307);
-        const iSlow310: i32 = _icast(Mathf.round(_fcast(this.fCheckbox5)));
+        const iSlow310: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fCheckbox5)));
         const fSlow311: f32 = Mathf.round(_fcast(dx7_alg5_fHslider123));
         const iSlow312: i32 = _icast(Mathf.round(_fcast(dx7_alg5_fHslider124)));
         const fSlow313: f32 = Mathf.round(_fcast(dx7_alg5_fHslider125));
@@ -1514,6 +1520,12 @@ export class Dx7_alg5Channel extends MidiChannel {
             case 135: dx7_alg5_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg5_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg5_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg5_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg5_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg5_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg5_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg5_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg5_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -1794,6 +1806,18 @@ let dx7_alg16_fHslider112: f32 = 0;
 let dx7_alg16_fEntry11: f32 = 0;
 // R Curve (NRPN 137)
 let dx7_alg16_fEntry12: f32 = 0;
+// Freq Mode (NRPN 138)
+let dx7_alg16_fCheckbox0: f32 = 0;
+// Freq Mode (NRPN 139)
+let dx7_alg16_fCheckbox1: f32 = 0;
+// Freq Mode (NRPN 140)
+let dx7_alg16_fCheckbox2: f32 = 0;
+// Freq Mode (NRPN 141)
+let dx7_alg16_fCheckbox3: f32 = 0;
+// Freq Mode (NRPN 142)
+let dx7_alg16_fCheckbox4: f32 = 0;
+// Freq Mode (NRPN 143)
+let dx7_alg16_fCheckbox5: f32 = 0;
 
 const Dx7_alg16_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
 const Dx7_alg16_wave_SIG1Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27, 33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174, 190, 206, 222, 238, 250]);
@@ -1885,7 +1909,6 @@ export class Dx7_alg16 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1901,7 +1924,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1910,7 +1932,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1919,7 +1940,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1928,7 +1948,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1937,7 +1956,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -2107,7 +2125,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = _fcast(iSlow47);
         const iSlow66: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fHslider22)));
-        const iSlow67: i32 = _icast(Mathf.round(_fcast(this.fCheckbox0)));
+        const iSlow67: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fCheckbox0)));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(_fcast(dx7_alg16_fHslider23));
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -2170,7 +2188,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg16_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg16_fHslider50))))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = _fcast(iSlow127);
-        const iSlow130: i32 = _icast(Mathf.round(_fcast(this.fCheckbox1)));
+        const iSlow130: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fCheckbox1)));
         const fSlow131: f32 = Mathf.round(_fcast(dx7_alg16_fHslider51));
         const iSlow132: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fHslider52)));
         const fSlow133: f32 = Mathf.round(_fcast(dx7_alg16_fHslider53));
@@ -2215,7 +2233,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow172: i32 = Dx7_alg16_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg16_fHslider68))))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = _fcast(iSlow172);
-        const iSlow175: i32 = _icast(Mathf.round(_fcast(this.fCheckbox2)));
+        const iSlow175: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fCheckbox2)));
         const fSlow176: f32 = Mathf.round(_fcast(dx7_alg16_fHslider69));
         const iSlow177: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fHslider70)));
         const fSlow178: f32 = Mathf.round(_fcast(dx7_alg16_fHslider71));
@@ -2260,7 +2278,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow217: i32 = Dx7_alg16_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg16_fHslider86))))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = _fcast(iSlow217);
-        const iSlow220: i32 = _icast(Mathf.round(_fcast(this.fCheckbox3)));
+        const iSlow220: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fCheckbox3)));
         const fSlow221: f32 = Mathf.round(_fcast(dx7_alg16_fHslider87));
         const iSlow222: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fHslider88)));
         const fSlow223: f32 = Mathf.round(_fcast(dx7_alg16_fHslider89));
@@ -2305,7 +2323,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow262: i32 = Dx7_alg16_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg16_fHslider104))))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = _fcast(iSlow262);
-        const iSlow265: i32 = _icast(Mathf.round(_fcast(this.fCheckbox4)));
+        const iSlow265: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fCheckbox4)));
         const fSlow266: f32 = Mathf.round(_fcast(dx7_alg16_fHslider105));
         const iSlow267: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fHslider106)));
         const fSlow268: f32 = Mathf.round(_fcast(dx7_alg16_fHslider107));
@@ -2350,7 +2368,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow307: i32 = Dx7_alg16_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg16_fHslider122))))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = _fcast(iSlow307);
-        const iSlow310: i32 = _icast(Mathf.round(_fcast(this.fCheckbox5)));
+        const iSlow310: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fCheckbox5)));
         const fSlow311: f32 = Mathf.round(_fcast(dx7_alg16_fHslider123));
         const iSlow312: i32 = _icast(Mathf.round(_fcast(dx7_alg16_fHslider124)));
         const fSlow313: f32 = Mathf.round(_fcast(dx7_alg16_fHslider125));
@@ -3024,6 +3042,12 @@ export class Dx7_alg16Channel extends MidiChannel {
             case 135: dx7_alg16_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg16_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg16_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg16_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg16_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg16_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg16_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg16_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg16_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -3304,6 +3328,18 @@ let dx7_alg2_fHslider113: f32 = 0;
 let dx7_alg2_fEntry11: f32 = 0;
 // R Curve (NRPN 137)
 let dx7_alg2_fEntry12: f32 = 0;
+// Freq Mode (NRPN 138)
+let dx7_alg2_fCheckbox0: f32 = 0;
+// Freq Mode (NRPN 139)
+let dx7_alg2_fCheckbox1: f32 = 0;
+// Freq Mode (NRPN 140)
+let dx7_alg2_fCheckbox2: f32 = 0;
+// Freq Mode (NRPN 141)
+let dx7_alg2_fCheckbox3: f32 = 0;
+// Freq Mode (NRPN 142)
+let dx7_alg2_fCheckbox4: f32 = 0;
+// Freq Mode (NRPN 143)
+let dx7_alg2_fCheckbox5: f32 = 0;
 
 const Dx7_alg2_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
 const Dx7_alg2_wave_SIG1Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27, 33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174, 190, 206, 222, 238, 250]);
@@ -3395,7 +3431,6 @@ export class Dx7_alg2 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3411,7 +3446,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec26: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0;
     private fRec27: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec19: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3421,7 +3455,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec34: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0;
     private fRec35: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec37: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3430,7 +3463,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec42: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0;
     private fRec43: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec45: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3439,7 +3471,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec50: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0;
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3448,7 +3479,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
     private releaseSamples: i32 = 0;
@@ -3617,7 +3647,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = _fcast(iSlow47);
         const iSlow66: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fHslider22)));
-        const iSlow67: i32 = _icast(Mathf.round(_fcast(this.fCheckbox0)));
+        const iSlow67: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fCheckbox0)));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(_fcast(dx7_alg2_fHslider23));
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -3680,7 +3710,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg2_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg2_fHslider50))))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = _fcast(iSlow127);
-        const iSlow130: i32 = _icast(Mathf.round(_fcast(this.fCheckbox1)));
+        const iSlow130: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fCheckbox1)));
         const fSlow131: f32 = Mathf.round(_fcast(dx7_alg2_fHslider51));
         const iSlow132: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fHslider52)));
         const fSlow133: f32 = Mathf.round(_fcast(dx7_alg2_fHslider53));
@@ -3727,7 +3757,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow174: i32 = Dx7_alg2_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg2_fHslider69))))];
         const iSlow175: i32 = iSlow174 != 0;
         const fSlow176: f32 = _fcast(iSlow174);
-        const iSlow177: i32 = _icast(Mathf.round(_fcast(this.fCheckbox2)));
+        const iSlow177: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fCheckbox2)));
         const fSlow178: f32 = Mathf.round(_fcast(dx7_alg2_fHslider70));
         const iSlow179: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fHslider71)));
         const fSlow180: f32 = Mathf.round(_fcast(dx7_alg2_fHslider72));
@@ -3772,7 +3802,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow219: i32 = Dx7_alg2_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg2_fHslider87))))];
         const iSlow220: i32 = iSlow219 != 0;
         const fSlow221: f32 = _fcast(iSlow219);
-        const iSlow222: i32 = _icast(Mathf.round(_fcast(this.fCheckbox3)));
+        const iSlow222: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fCheckbox3)));
         const fSlow223: f32 = Mathf.round(_fcast(dx7_alg2_fHslider88));
         const iSlow224: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fHslider89)));
         const fSlow225: f32 = Mathf.round(_fcast(dx7_alg2_fHslider90));
@@ -3817,7 +3847,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow264: i32 = Dx7_alg2_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg2_fHslider105))))];
         const iSlow265: i32 = iSlow264 != 0;
         const fSlow266: f32 = _fcast(iSlow264);
-        const iSlow267: i32 = _icast(Mathf.round(_fcast(this.fCheckbox4)));
+        const iSlow267: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fCheckbox4)));
         const fSlow268: f32 = Mathf.round(_fcast(dx7_alg2_fHslider106));
         const iSlow269: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fHslider107)));
         const fSlow270: f32 = Mathf.round(_fcast(dx7_alg2_fHslider108));
@@ -3862,7 +3892,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow309: i32 = Dx7_alg2_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg2_fHslider123))))];
         const iSlow310: i32 = iSlow309 != 0;
         const fSlow311: f32 = _fcast(iSlow309);
-        const iSlow312: i32 = _icast(Mathf.round(_fcast(this.fCheckbox5)));
+        const iSlow312: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fCheckbox5)));
         const fSlow313: f32 = Mathf.round(_fcast(dx7_alg2_fHslider124));
         const iSlow314: i32 = _icast(Mathf.round(_fcast(dx7_alg2_fHslider125)));
         const fSlow315: f32 = Mathf.round(_fcast(dx7_alg2_fHslider126));
@@ -4534,6 +4564,12 @@ export class Dx7_alg2Channel extends MidiChannel {
             case 135: dx7_alg2_fHslider113 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg2_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg2_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg2_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg2_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg2_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg2_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg2_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg2_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -4814,6 +4850,18 @@ let dx7_alg5_bells_fHslider112: f32 = 0;
 let dx7_alg5_bells_fEntry11: f32 = 0;
 // R Curve (NRPN 137)
 let dx7_alg5_bells_fEntry12: f32 = 0;
+// Freq Mode (NRPN 138)
+let dx7_alg5_bells_fCheckbox0: f32 = 0;
+// Freq Mode (NRPN 139)
+let dx7_alg5_bells_fCheckbox1: f32 = 0;
+// Freq Mode (NRPN 140)
+let dx7_alg5_bells_fCheckbox2: f32 = 0;
+// Freq Mode (NRPN 141)
+let dx7_alg5_bells_fCheckbox3: f32 = 0;
+// Freq Mode (NRPN 142)
+let dx7_alg5_bells_fCheckbox4: f32 = 0;
+// Freq Mode (NRPN 143)
+let dx7_alg5_bells_fCheckbox5: f32 = 0;
 
 const Dx7_alg5_bells_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
 const Dx7_alg5_bells_wave_SIG1Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27, 33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174, 190, 206, 222, 238, 250]);
@@ -4905,7 +4953,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4921,7 +4968,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4930,7 +4976,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4939,7 +4984,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4948,7 +4992,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4957,7 +5000,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -5127,7 +5169,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = _fcast(iSlow47);
         const iSlow66: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fHslider22)));
-        const iSlow67: i32 = _icast(Mathf.round(_fcast(this.fCheckbox0)));
+        const iSlow67: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fCheckbox0)));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider23));
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -5190,7 +5232,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow127: i32 = Dx7_alg5_bells_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_bells_fHslider50))))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = _fcast(iSlow127);
-        const iSlow130: i32 = _icast(Mathf.round(_fcast(this.fCheckbox1)));
+        const iSlow130: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fCheckbox1)));
         const fSlow131: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider51));
         const iSlow132: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fHslider52)));
         const fSlow133: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider53));
@@ -5235,7 +5277,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow172: i32 = Dx7_alg5_bells_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_bells_fHslider68))))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = _fcast(iSlow172);
-        const iSlow175: i32 = _icast(Mathf.round(_fcast(this.fCheckbox2)));
+        const iSlow175: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fCheckbox2)));
         const fSlow176: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider69));
         const iSlow177: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fHslider70)));
         const fSlow178: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider71));
@@ -5280,7 +5322,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow217: i32 = Dx7_alg5_bells_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_bells_fHslider86))))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = _fcast(iSlow217);
-        const iSlow220: i32 = _icast(Mathf.round(_fcast(this.fCheckbox3)));
+        const iSlow220: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fCheckbox3)));
         const fSlow221: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider87));
         const iSlow222: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fHslider88)));
         const fSlow223: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider89));
@@ -5325,7 +5367,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow262: i32 = Dx7_alg5_bells_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_bells_fHslider104))))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = _fcast(iSlow262);
-        const iSlow265: i32 = _icast(Mathf.round(_fcast(this.fCheckbox4)));
+        const iSlow265: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fCheckbox4)));
         const fSlow266: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider105));
         const iSlow267: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fHslider106)));
         const fSlow268: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider107));
@@ -5370,7 +5412,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow307: i32 = Dx7_alg5_bells_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_bells_fHslider122))))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = _fcast(iSlow307);
-        const iSlow310: i32 = _icast(Mathf.round(_fcast(this.fCheckbox5)));
+        const iSlow310: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fCheckbox5)));
         const fSlow311: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider123));
         const iSlow312: i32 = _icast(Mathf.round(_fcast(dx7_alg5_bells_fHslider124)));
         const fSlow313: f32 = Mathf.round(_fcast(dx7_alg5_bells_fHslider125));
@@ -6044,6 +6086,12 @@ export class Dx7_alg5_bellsChannel extends MidiChannel {
             case 135: dx7_alg5_bells_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg5_bells_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg5_bells_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg5_bells_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg5_bells_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg5_bells_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg5_bells_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg5_bells_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg5_bells_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -6324,6 +6372,18 @@ let dx7_alg17_fHslider91: f32 = 0;
 let dx7_alg17_fEntry9: f32 = 0;
 // R Curve (NRPN 137)
 let dx7_alg17_fEntry10: f32 = 0;
+// Freq Mode (NRPN 138)
+let dx7_alg17_fCheckbox4: f32 = 0;
+// Freq Mode (NRPN 139)
+let dx7_alg17_fCheckbox5: f32 = 0;
+// Freq Mode (NRPN 140)
+let dx7_alg17_fCheckbox0: f32 = 0;
+// Freq Mode (NRPN 141)
+let dx7_alg17_fCheckbox1: f32 = 0;
+// Freq Mode (NRPN 142)
+let dx7_alg17_fCheckbox2: f32 = 0;
+// Freq Mode (NRPN 143)
+let dx7_alg17_fCheckbox3: f32 = 0;
 
 const Dx7_alg17_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
 const Dx7_alg17_wave_SIG1Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27, 33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174, 190, 206, 222, 238, 250]);
@@ -6422,7 +6482,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec16: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec17: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec18: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0;
     private fConst4: f32;
     private fRec20: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec21: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6438,7 +6497,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec30: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0;
     private fRec33: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec34: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6447,7 +6505,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec38: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0;
     private fRec41: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec42: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6456,9 +6513,7 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec46: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0;
     private fRec49: StaticArray<f32> = new StaticArray<f32>(2);
-    private fCheckbox4: f32 = 0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6467,7 +6522,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -6677,7 +6731,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow104: i32 = iSlow103 != 0;
         const fSlow105: f32 = _fcast(iSlow103);
         const iSlow106: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fHslider37)));
-        const iSlow107: i32 = _icast(Mathf.round(_fcast(this.fCheckbox0)));
+        const iSlow107: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fCheckbox0)));
         const fSlow108: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow109: f32 = Mathf.round(_fcast(dx7_alg17_fHslider38));
         const fSlow110: f32 = Mathf.exp(-0.57130724 * fSlow108);
@@ -6740,7 +6794,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow167: i32 = Dx7_alg17_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg17_fHslider65))))];
         const iSlow168: i32 = iSlow167 != 0;
         const fSlow169: f32 = _fcast(iSlow167);
-        const iSlow170: i32 = _icast(Mathf.round(_fcast(this.fCheckbox1)));
+        const iSlow170: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fCheckbox1)));
         const fSlow171: f32 = Mathf.round(_fcast(dx7_alg17_fHslider66));
         const iSlow172: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fHslider67)));
         const fSlow173: f32 = Mathf.round(_fcast(dx7_alg17_fHslider68));
@@ -6785,7 +6839,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow212: i32 = Dx7_alg17_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg17_fHslider83))))];
         const iSlow213: i32 = iSlow212 != 0;
         const fSlow214: f32 = _fcast(iSlow212);
-        const iSlow215: i32 = _icast(Mathf.round(_fcast(this.fCheckbox2)));
+        const iSlow215: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fCheckbox2)));
         const fSlow216: f32 = Mathf.round(_fcast(dx7_alg17_fHslider84));
         const iSlow217: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fHslider85)));
         const fSlow218: f32 = Mathf.round(_fcast(dx7_alg17_fHslider86));
@@ -6830,12 +6884,12 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow257: i32 = Dx7_alg17_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg17_fHslider101))))];
         const iSlow258: i32 = iSlow257 != 0;
         const fSlow259: f32 = _fcast(iSlow257);
-        const iSlow260: i32 = _icast(Mathf.round(_fcast(this.fCheckbox3)));
+        const iSlow260: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fCheckbox3)));
         const fSlow261: f32 = Mathf.round(_fcast(dx7_alg17_fHslider102));
         const iSlow262: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fHslider103)));
         const fSlow263: f32 = Mathf.round(_fcast(dx7_alg17_fHslider104));
         const fSlow264: f32 = ((iSlow260) ? _fcast(_icast(4458616.0 * (fSlow263 + _fcast(100 * (iSlow262 & 3)))) >> 3) + ((fSlow261 > 0.0 ? 1 : 0) ? 13457.0 * fSlow261 : 0.0) : fSlow108 * (72267.445 * fSlow261 * fSlow110 + 24204406.0) + _fcast(Dx7_alg17_itbl5SIG5[_icast(Mathf.round(_fcast(iSlow262 & 31)))]) + _fcast(((_icast(fSlow263)) ? _icast(Mathf.floor(24204406.0 * Mathf.log(0.01 * fSlow263 + 1.0) + 0.5)) : 0)));
-        const iSlow265: i32 = _icast(Mathf.round(_fcast(this.fCheckbox4)));
+        const iSlow265: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fCheckbox4)));
         const fSlow266: f32 = Mathf.round(_fcast(dx7_alg17_fHslider105));
         const iSlow267: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fHslider106)));
         const fSlow268: f32 = Mathf.round(_fcast(dx7_alg17_fHslider107));
@@ -6880,7 +6934,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow307: i32 = Dx7_alg17_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg17_fHslider122))))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = _fcast(iSlow307);
-        const iSlow310: i32 = _icast(Mathf.round(_fcast(this.fCheckbox5)));
+        const iSlow310: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fCheckbox5)));
         const fSlow311: f32 = Mathf.round(_fcast(dx7_alg17_fHslider123));
         const iSlow312: i32 = _icast(Mathf.round(_fcast(dx7_alg17_fHslider124)));
         const fSlow313: f32 = Mathf.round(_fcast(dx7_alg17_fHslider125));
@@ -7554,6 +7608,12 @@ export class Dx7_alg17Channel extends MidiChannel {
             case 135: dx7_alg17_fHslider91 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg17_fEntry9 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg17_fEntry10 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg17_fCheckbox4 = <f32>value / 127.0; break;
+            case 139: dx7_alg17_fCheckbox5 = <f32>value / 127.0; break;
+            case 140: dx7_alg17_fCheckbox0 = <f32>value / 127.0; break;
+            case 141: dx7_alg17_fCheckbox1 = <f32>value / 127.0; break;
+            case 142: dx7_alg17_fCheckbox2 = <f32>value / 127.0; break;
+            case 143: dx7_alg17_fCheckbox3 = <f32>value / 127.0; break;
         }
     }
 }
@@ -7834,6 +7894,18 @@ let dx7_alg21_fHslider95: f32 = 0;
 let dx7_alg21_fEntry9: f32 = 0;
 // R Curve (NRPN 137)
 let dx7_alg21_fEntry10: f32 = 0;
+// Freq Mode (NRPN 138)
+let dx7_alg21_fCheckbox0: f32 = 0;
+// Freq Mode (NRPN 139)
+let dx7_alg21_fCheckbox2: f32 = 0;
+// Freq Mode (NRPN 140)
+let dx7_alg21_fCheckbox1: f32 = 0;
+// Freq Mode (NRPN 141)
+let dx7_alg21_fCheckbox3: f32 = 0;
+// Freq Mode (NRPN 142)
+let dx7_alg21_fCheckbox5: f32 = 0;
+// Freq Mode (NRPN 143)
+let dx7_alg21_fCheckbox4: f32 = 0;
 
 const Dx7_alg21_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
 const Dx7_alg21_wave_SIG1Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27, 33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174, 190, 206, 222, 238, 250]);
@@ -7925,7 +7997,6 @@ export class Dx7_alg21 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7941,7 +8012,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec26: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0;
     private fRec27: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec19: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7951,7 +8021,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec34: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0;
     private fRec35: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec37: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7960,7 +8029,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec42: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0;
     private fRec43: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec45: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7969,7 +8037,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec50: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0;
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7978,7 +8045,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
     private releaseSamples: i32 = 0;
@@ -8147,7 +8213,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = _fcast(iSlow47);
         const iSlow66: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fHslider22)));
-        const iSlow67: i32 = _icast(Mathf.round(_fcast(this.fCheckbox0)));
+        const iSlow67: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fCheckbox0)));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(_fcast(dx7_alg21_fHslider23));
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -8210,7 +8276,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg21_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg21_fHslider50))))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = _fcast(iSlow127);
-        const iSlow130: i32 = _icast(Mathf.round(_fcast(this.fCheckbox1)));
+        const iSlow130: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fCheckbox1)));
         const fSlow131: f32 = Mathf.round(_fcast(dx7_alg21_fHslider51));
         const iSlow132: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fHslider52)));
         const fSlow133: f32 = Mathf.round(_fcast(dx7_alg21_fHslider53));
@@ -8257,7 +8323,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow174: i32 = Dx7_alg21_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg21_fHslider69))))];
         const iSlow175: i32 = iSlow174 != 0;
         const fSlow176: f32 = _fcast(iSlow174);
-        const iSlow177: i32 = _icast(Mathf.round(_fcast(this.fCheckbox2)));
+        const iSlow177: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fCheckbox2)));
         const fSlow178: f32 = Mathf.round(_fcast(dx7_alg21_fHslider70));
         const iSlow179: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fHslider71)));
         const fSlow180: f32 = Mathf.round(_fcast(dx7_alg21_fHslider72));
@@ -8302,7 +8368,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow219: i32 = Dx7_alg21_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg21_fHslider87))))];
         const iSlow220: i32 = iSlow219 != 0;
         const fSlow221: f32 = _fcast(iSlow219);
-        const iSlow222: i32 = _icast(Mathf.round(_fcast(this.fCheckbox3)));
+        const iSlow222: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fCheckbox3)));
         const fSlow223: f32 = Mathf.round(_fcast(dx7_alg21_fHslider88));
         const iSlow224: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fHslider89)));
         const fSlow225: f32 = Mathf.round(_fcast(dx7_alg21_fHslider90));
@@ -8347,7 +8413,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow264: i32 = Dx7_alg21_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg21_fHslider105))))];
         const iSlow265: i32 = iSlow264 != 0;
         const fSlow266: f32 = _fcast(iSlow264);
-        const iSlow267: i32 = _icast(Mathf.round(_fcast(this.fCheckbox4)));
+        const iSlow267: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fCheckbox4)));
         const fSlow268: f32 = Mathf.round(_fcast(dx7_alg21_fHslider106));
         const iSlow269: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fHslider107)));
         const fSlow270: f32 = Mathf.round(_fcast(dx7_alg21_fHslider108));
@@ -8392,7 +8458,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow309: i32 = Dx7_alg21_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg21_fHslider123))))];
         const iSlow310: i32 = iSlow309 != 0;
         const fSlow311: f32 = _fcast(iSlow309);
-        const iSlow312: i32 = _icast(Mathf.round(_fcast(this.fCheckbox5)));
+        const iSlow312: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fCheckbox5)));
         const fSlow313: f32 = Mathf.round(_fcast(dx7_alg21_fHslider124));
         const iSlow314: i32 = _icast(Mathf.round(_fcast(dx7_alg21_fHslider125)));
         const fSlow315: f32 = Mathf.round(_fcast(dx7_alg21_fHslider126));
@@ -9065,6 +9131,12 @@ export class Dx7_alg21Channel extends MidiChannel {
             case 135: dx7_alg21_fHslider95 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg21_fEntry9 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg21_fEntry10 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg21_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg21_fCheckbox2 = <f32>value / 127.0; break;
+            case 140: dx7_alg21_fCheckbox1 = <f32>value / 127.0; break;
+            case 141: dx7_alg21_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg21_fCheckbox5 = <f32>value / 127.0; break;
+            case 143: dx7_alg21_fCheckbox4 = <f32>value / 127.0; break;
         }
     }
 }
@@ -9345,6 +9417,18 @@ let dx7_alg5_hat_fHslider112: f32 = 0;
 let dx7_alg5_hat_fEntry11: f32 = 0;
 // R Curve (NRPN 137)
 let dx7_alg5_hat_fEntry12: f32 = 0;
+// Freq Mode (NRPN 138)
+let dx7_alg5_hat_fCheckbox0: f32 = 0;
+// Freq Mode (NRPN 139)
+let dx7_alg5_hat_fCheckbox1: f32 = 0;
+// Freq Mode (NRPN 140)
+let dx7_alg5_hat_fCheckbox2: f32 = 0;
+// Freq Mode (NRPN 141)
+let dx7_alg5_hat_fCheckbox3: f32 = 0;
+// Freq Mode (NRPN 142)
+let dx7_alg5_hat_fCheckbox4: f32 = 0;
+// Freq Mode (NRPN 143)
+let dx7_alg5_hat_fCheckbox5: f32 = 0;
 
 const Dx7_alg5_hat_wave_SIG0Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46]);
 const Dx7_alg5_hat_wave_SIG1Wave0: StaticArray<i32> = StaticArray.fromArray<i32>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27, 33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174, 190, 206, 222, 238, 250]);
@@ -9436,7 +9520,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9452,7 +9535,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9461,7 +9543,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9470,7 +9551,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9479,7 +9559,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9488,7 +9567,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -9658,7 +9736,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = _fcast(iSlow47);
         const iSlow66: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fHslider22)));
-        const iSlow67: i32 = _icast(Mathf.round(_fcast(this.fCheckbox0)));
+        const iSlow67: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fCheckbox0)));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider23));
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -9721,7 +9799,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow127: i32 = Dx7_alg5_hat_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_hat_fHslider50))))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = _fcast(iSlow127);
-        const iSlow130: i32 = _icast(Mathf.round(_fcast(this.fCheckbox1)));
+        const iSlow130: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fCheckbox1)));
         const fSlow131: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider51));
         const iSlow132: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fHslider52)));
         const fSlow133: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider53));
@@ -9766,7 +9844,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow172: i32 = Dx7_alg5_hat_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_hat_fHslider68))))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = _fcast(iSlow172);
-        const iSlow175: i32 = _icast(Mathf.round(_fcast(this.fCheckbox2)));
+        const iSlow175: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fCheckbox2)));
         const fSlow176: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider69));
         const iSlow177: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fHslider70)));
         const fSlow178: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider71));
@@ -9811,7 +9889,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow217: i32 = Dx7_alg5_hat_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_hat_fHslider86))))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = _fcast(iSlow217);
-        const iSlow220: i32 = _icast(Mathf.round(_fcast(this.fCheckbox3)));
+        const iSlow220: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fCheckbox3)));
         const fSlow221: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider87));
         const iSlow222: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fHslider88)));
         const fSlow223: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider89));
@@ -9856,7 +9934,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow262: i32 = Dx7_alg5_hat_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_hat_fHslider104))))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = _fcast(iSlow262);
-        const iSlow265: i32 = _icast(Mathf.round(_fcast(this.fCheckbox4)));
+        const iSlow265: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fCheckbox4)));
         const fSlow266: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider105));
         const iSlow267: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fHslider106)));
         const fSlow268: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider107));
@@ -9901,7 +9979,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow307: i32 = Dx7_alg5_hat_itbl4SIG4[_icast(Mathf.round(Mathf.round(_fcast(dx7_alg5_hat_fHslider122))))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = _fcast(iSlow307);
-        const iSlow310: i32 = _icast(Mathf.round(_fcast(this.fCheckbox5)));
+        const iSlow310: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fCheckbox5)));
         const fSlow311: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider123));
         const iSlow312: i32 = _icast(Mathf.round(_fcast(dx7_alg5_hat_fHslider124)));
         const fSlow313: f32 = Mathf.round(_fcast(dx7_alg5_hat_fHslider125));
@@ -10575,12 +10653,17 @@ export class Dx7_alg5_hatChannel extends MidiChannel {
             case 135: dx7_alg5_hat_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg5_hat_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg5_hat_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg5_hat_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg5_hat_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg5_hat_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg5_hat_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg5_hat_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg5_hat_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
 
 
-// --- Drum Kit Channel: routes NRPNs to kick (0-137), snare (138-275), hat (276-413) ---
 export class Dx7DrumKitChannel extends MidiChannel {
     private _nrpnMsb: u8 = 127;
     private _nrpnLsb: u8 = 127;
@@ -10602,17 +10685,17 @@ export class Dx7DrumKitChannel extends MidiChannel {
             case 98: this._nrpnLsb = value; break;
             case 6: {
                 const param: u16 = <u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb;
-                if (param < 138) {
+                if (param < 144) {
                     this._kickRouter.controlchange(99, <u8>(param >> 7));
                     this._kickRouter.controlchange(98, <u8>(param & 127));
                     this._kickRouter.controlchange(6, value);
-                } else if (param < 276) {
-                    const p: u16 = param - 138;
+                } else if (param < 288) {
+                    const p: u16 = param - 144;
                     this._snareRouter.controlchange(99, <u8>(p >> 7));
                     this._snareRouter.controlchange(98, <u8>(p & 127));
                     this._snareRouter.controlchange(6, value);
-                } else if (param < 414) {
-                    const p: u16 = param - 276;
+                } else if (param < 432) {
+                    const p: u16 = param - 288;
                     this._hatRouter.controlchange(99, <u8>(p >> 7));
                     this._hatRouter.controlchange(98, <u8>(p & 127));
                     this._hatRouter.controlchange(6, value);
@@ -11181,6 +11264,30 @@ export function initializeMidiSynth(): void {
     midichannels[0].controlchange(99, 1);
     midichannels[0].controlchange(98, 9);
     midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 10);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 11);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 12);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 13);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 14);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 15);
+    midichannels[0].controlchange(6, 0);
 
     midichannels[1] = new Dx7_alg16Channel(10, (channel: MidiChannel) => new Dx7_alg16(channel));
     midichannels[1].controlchange(7, 100);
@@ -11738,6 +11845,30 @@ export function initializeMidiSynth(): void {
     // R Curve (NRPN 137, range: 0–3, default: 0)
     midichannels[1].controlchange(99, 1);
     midichannels[1].controlchange(98, 9);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 10);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 11);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 12);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 13);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 14);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 15);
     midichannels[1].controlchange(6, 0);
 
     midichannels[2] = new Dx7_alg2Channel(10, (channel: MidiChannel) => new Dx7_alg2(channel));
@@ -12297,6 +12428,30 @@ export function initializeMidiSynth(): void {
     midichannels[2].controlchange(99, 1);
     midichannels[2].controlchange(98, 9);
     midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 10);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 11);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 12);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 13);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 14);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 15);
+    midichannels[2].controlchange(6, 0);
 
     midichannels[3] = new Dx7_alg5_bellsChannel(10, (channel: MidiChannel) => new Dx7_alg5_bells(channel));
     midichannels[3].controlchange(7, 100);
@@ -12855,1683 +13010,1341 @@ export function initializeMidiSynth(): void {
     midichannels[3].controlchange(99, 1);
     midichannels[3].controlchange(98, 9);
     midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 10);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 11);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 12);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 13);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 14);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 15);
+    midichannels[3].controlchange(6, 0);
 
-    // --- Channel 4: DX7 Drum Kit (Kick=c2, Snare=d2, Hat=fs3) ---
-    // Note: Kick/Snare mapped to octave 2 because Faust DX7 lacks fixed-frequency
-    // operator mode — lower base frequency compensates for ratio-mode interpretation.
+    // --- Drum Kit (kick/snare/hat) ---
     midichannels[4] = new Dx7DrumKitChannel(6, (channel: MidiChannel, n: i32): MidiVoice => {
-        if (n < 2) { const v = new Dx7_alg17(channel); v.minnote = 24; v.maxnote = 24; return v; }
-        if (n < 4) { const v = new Dx7_alg21(channel); v.minnote = 26; v.maxnote = 26; return v; }
+        if (n < 2) { const v = new Dx7_alg17(channel); v.minnote = 36; v.maxnote = 36; return v; }
+        if (n < 4) { const v = new Dx7_alg21(channel); v.minnote = 38; v.maxnote = 38; return v; }
         const v = new Dx7_alg5_hat(channel); v.minnote = 42; v.maxnote = 42; return v;
     });
     midichannels[4].controlchange(7, 100);
     midichannels[4].controlchange(10, 64);
     midichannels[4].controlchange(91, 10);
 
-
-    // Feedback (NRPN 0, range: 0–7, default: 0)
+    // Kick defaults (NRPN 0-143)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 0);
     midichannels[4].controlchange(6, 0);
-    // Transpose (NRPN 1, range: -24–24, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 1);
     midichannels[4].controlchange(6, 64);
-    // Osc Key Sync (NRPN 2, range: 0–1, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 2);
     midichannels[4].controlchange(6, 127);
-    // L1 (NRPN 3, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 3);
     midichannels[4].controlchange(6, 64);
-    // L2 (NRPN 4, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 4);
     midichannels[4].controlchange(6, 64);
-    // L3 (NRPN 5, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 5);
     midichannels[4].controlchange(6, 64);
-    // L4 (NRPN 6, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 6);
     midichannels[4].controlchange(6, 64);
-    // R1 (NRPN 7, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 7);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 8, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 8);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 9, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 9);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 10, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 10);
     midichannels[4].controlchange(6, 127);
-    // Wave (NRPN 11, range: 0–5, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 11);
     midichannels[4].controlchange(6, 0);
-    // Speed (NRPN 12, range: 0–99, default: 35)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 12);
     midichannels[4].controlchange(6, 45);
-    // Delay (NRPN 13, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 13);
     midichannels[4].controlchange(6, 0);
-    // PMD (NRPN 14, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 14);
     midichannels[4].controlchange(6, 0);
-    // AMD (NRPN 15, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 15);
     midichannels[4].controlchange(6, 0);
-    // Sync (NRPN 16, range: 0–1, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 16);
     midichannels[4].controlchange(6, 127);
-    // P Mod Sens (NRPN 17, range: 0–7, default: 3)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 17);
     midichannels[4].controlchange(6, 54);
-    // Tune (NRPN 18, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 18);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 19, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 19);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 20, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 20);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 21, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 21);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 22, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 22);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 23, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 23);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 24, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 24);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 25, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 25);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 26, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 26);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 27, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 27);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 28, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 28);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 29, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 29);
     midichannels[4].controlchange(6, 127);
-    // Key Vel (NRPN 30, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 30);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 31, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 31);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 32, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 32);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 33, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 33);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 34, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 34);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 35, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 35);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 36, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 36);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 37, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 37);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 38, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 38);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 39, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 39);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 40, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 40);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 41, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 41);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 42, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 42);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 43, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 43);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 44, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 44);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 45, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 45);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 46, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 46);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 47, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 47);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 48, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 48);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 49, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 49);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 50, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 50);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 51, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 51);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 52, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 52);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 53, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 53);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 54, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 54);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 55, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 55);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 56, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 56);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 57, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 57);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 58, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 58);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 59, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 59);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 60, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 60);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 61, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 61);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 62, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 62);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 63, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 63);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 64, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 64);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 65, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 65);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 66, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 66);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 67, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 67);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 68, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 68);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 69, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 69);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 70, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 70);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 71, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 71);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 72, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 72);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 73, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 73);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 74, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 74);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 75, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 75);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 76, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 76);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 77, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 77);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 78, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 78);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 79, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 79);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 80, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 80);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 81, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 81);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 82, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 82);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 83, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 83);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 84, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 84);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 85, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 85);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 86, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 86);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 87, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 87);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 88, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 88);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 89, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 89);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 90, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 90);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 91, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 91);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 92, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 92);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 93, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 93);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 94, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 94);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 95, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 95);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 96, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 96);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 97, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 97);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 98, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 98);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 99, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 99);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 100, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 100);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 101, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 101);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 102, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 102);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 103, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 103);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 104, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 104);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 105, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 105);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 106, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 106);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 107, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 107);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 108, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 108);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 109, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 109);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 110, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 110);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 111, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 111);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 112, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 112);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 113, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 113);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 114, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 114);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 115, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 115);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 116, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 116);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 117, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 117);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 118, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 118);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 119, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 119);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 120, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 120);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 121, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 121);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 122, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 122);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 123, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 123);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 124, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 124);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 125, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 125);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 126, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 126);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 127, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 127);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 128, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 0);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 129, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 1);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 130, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 2);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 131, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 3);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 132, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 4);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 133, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 5);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 134, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 6);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 135, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 7);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 136, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 8);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 137, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 9);
     midichannels[4].controlchange(6, 0);
-
-
-    // --- Snare (Dx7_alg21) defaults: NRPN 138–275 ---
-
-    // Feedback (NRPN 138, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 10);
     midichannels[4].controlchange(6, 0);
-    // Transpose (NRPN 139, range: -24–24, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 11);
-    midichannels[4].controlchange(6, 64);
-    // Osc Key Sync (NRPN 140, range: 0–1, default: 1)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 12);
-    midichannels[4].controlchange(6, 127);
-    // L1 (NRPN 141, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 13);
-    midichannels[4].controlchange(6, 64);
-    // L2 (NRPN 142, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 14);
-    midichannels[4].controlchange(6, 64);
-    // L3 (NRPN 143, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 15);
-    midichannels[4].controlchange(6, 64);
-    // L4 (NRPN 144, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
+
+    // Snare defaults (NRPN 144-287)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 16);
-    midichannels[4].controlchange(6, 64);
-    // R1 (NRPN 145, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 17);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 146, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 18);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 147, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 19);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 148, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 20);
-    midichannels[4].controlchange(6, 127);
-    // Wave (NRPN 149, range: 0–5, default: 0)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 21);
-    midichannels[4].controlchange(6, 0);
-    // Speed (NRPN 150, range: 0–99, default: 35)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 22);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 23);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 24);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 25);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 26);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 27);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 28);
     midichannels[4].controlchange(6, 45);
-    // Delay (NRPN 151, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 1);
-    midichannels[4].controlchange(98, 23);
-    midichannels[4].controlchange(6, 0);
-    // PMD (NRPN 152, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 1);
-    midichannels[4].controlchange(98, 24);
-    midichannels[4].controlchange(6, 0);
-    // AMD (NRPN 153, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 1);
-    midichannels[4].controlchange(98, 25);
-    midichannels[4].controlchange(6, 0);
-    // Sync (NRPN 154, range: 0–1, default: 1)
-    midichannels[4].controlchange(99, 1);
-    midichannels[4].controlchange(98, 26);
-    midichannels[4].controlchange(6, 127);
-    // P Mod Sens (NRPN 155, range: 0–7, default: 3)
-    midichannels[4].controlchange(99, 1);
-    midichannels[4].controlchange(98, 27);
-    midichannels[4].controlchange(6, 54);
-    // Tune (NRPN 156, range: -7–7, default: 0)
-    midichannels[4].controlchange(99, 1);
-    midichannels[4].controlchange(98, 28);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 157, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 29);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 158, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 30);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 159, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 31);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 160, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 32);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 161, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 33);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 162, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 54);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 34);
-    midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 163, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 35);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 164, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 36);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 165, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 37);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 166, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 38);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 167, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 39);
     midichannels[4].controlchange(6, 127);
-    // Key Vel (NRPN 168, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 40);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 169, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 41);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 170, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 42);
-    midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 171, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 43);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 172, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 44);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 173, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 45);
-    midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 174, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 46);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 175, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 47);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 176, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 48);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 177, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 49);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 178, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 50);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 179, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 51);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 180, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 52);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 181, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 53);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 182, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 54);
-    midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 183, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 55);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 184, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 56);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 185, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 57);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 186, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 58);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 187, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 59);
-    midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 188, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 60);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 189, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 61);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 190, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 62);
-    midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 191, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 63);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 192, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 64);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 193, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 65);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 194, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 66);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 195, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 67);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 196, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 68);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 197, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 69);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 198, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 70);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 199, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 71);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 200, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 72);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 201, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 73);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 202, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 74);
-    midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 203, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 75);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 204, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 76);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 205, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 77);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 206, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 78);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 207, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 79);
-    midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 208, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 80);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 209, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 81);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 210, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 82);
-    midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 211, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 83);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 212, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 84);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 213, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 85);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 214, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 86);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 215, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 87);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 216, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 88);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 217, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 89);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 218, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 90);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 219, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 91);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 220, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 92);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 221, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 93);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 222, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 94);
-    midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 223, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 95);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 224, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 96);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 225, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 97);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 226, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 98);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 227, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 99);
-    midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 228, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 100);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 229, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 101);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 230, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 102);
-    midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 231, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 103);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 232, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 104);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 233, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 105);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 234, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 106);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 235, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 107);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 236, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 108);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 237, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 109);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 238, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 110);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 239, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 111);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 240, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 112);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 241, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 113);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 242, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 114);
-    midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 243, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 115);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 244, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 116);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 245, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 117);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 246, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 118);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 247, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 119);
-    midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 248, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 120);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 249, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 121);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 250, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 122);
-    midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 251, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 123);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 252, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 124);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 253, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 125);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 254, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 126);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 255, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 127);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 256, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 0);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 257, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 1);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 258, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 2);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 259, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 3);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 260, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 4);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 261, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 5);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 262, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 6);
-    midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 263, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 7);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 264, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 8);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 265, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 9);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 266, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 10);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 267, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 11);
-    midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 268, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 12);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 269, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 13);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 270, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 14);
-    midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 271, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 15);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 272, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 16);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 273, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 17);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 274, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 18);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 275, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 19);
     midichannels[4].controlchange(6, 0);
-
-
-    // --- Hat (Dx7_alg5_hat) defaults: NRPN 276–413 ---
-
-    // Feedback (NRPN 276, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 20);
     midichannels[4].controlchange(6, 0);
-    // Transpose (NRPN 277, range: -24–24, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 21);
-    midichannels[4].controlchange(6, 64);
-    // Osc Key Sync (NRPN 278, range: 0–1, default: 1)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 22);
-    midichannels[4].controlchange(6, 127);
-    // L1 (NRPN 279, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 23);
-    midichannels[4].controlchange(6, 64);
-    // L2 (NRPN 280, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 24);
-    midichannels[4].controlchange(6, 64);
-    // L3 (NRPN 281, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 25);
-    midichannels[4].controlchange(6, 64);
-    // L4 (NRPN 282, range: 0–99, default: 50)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 26);
-    midichannels[4].controlchange(6, 64);
-    // R1 (NRPN 283, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 27);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 284, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 28);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 285, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 29);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 286, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 30);
-    midichannels[4].controlchange(6, 127);
-    // Wave (NRPN 287, range: 0–5, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 31);
     midichannels[4].controlchange(6, 0);
-    // Speed (NRPN 288, range: 0–99, default: 35)
+
+    // Hat defaults (NRPN 288-431)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 32);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 33);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 34);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 35);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 36);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 37);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 38);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 39);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 40);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 41);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 42);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 43);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 44);
     midichannels[4].controlchange(6, 45);
-    // Delay (NRPN 289, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 33);
-    midichannels[4].controlchange(6, 0);
-    // PMD (NRPN 290, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 34);
-    midichannels[4].controlchange(6, 0);
-    // AMD (NRPN 291, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 35);
-    midichannels[4].controlchange(6, 0);
-    // Sync (NRPN 292, range: 0–1, default: 1)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 36);
-    midichannels[4].controlchange(6, 127);
-    // P Mod Sens (NRPN 293, range: 0–7, default: 3)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 37);
-    midichannels[4].controlchange(6, 54);
-    // Tune (NRPN 294, range: -7–7, default: 0)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 38);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 295, range: 0–31, default: 1)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 39);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 296, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 40);
-    midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 297, range: 0–99, default: 99)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 41);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 298, range: 0–99, default: 99)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 42);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 299, range: 0–99, default: 99)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 43);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 300, range: 0–99, default: 0)
-    midichannels[4].controlchange(99, 2);
-    midichannels[4].controlchange(98, 44);
-    midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 301, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 45);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 302, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 46);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 303, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 47);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 304, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 48);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 305, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 49);
-    midichannels[4].controlchange(6, 127);
-    // Key Vel (NRPN 306, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 54);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 50);
-    midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 307, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 51);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 308, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 52);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 309, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 53);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 310, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 54);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 311, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 55);
-    midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 312, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 56);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 313, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 57);
-    midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 314, range: -7–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 58);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 315, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 59);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 316, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 60);
-    midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 317, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 61);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 318, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 62);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 319, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 63);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 320, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 64);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 321, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 65);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 322, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 66);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 323, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 67);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 324, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 68);
-    midichannels[4].controlchange(6, 127);
-    // Level (NRPN 325, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 69);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 326, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 70);
-    midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 327, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 71);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 328, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 72);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 329, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 73);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 330, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 74);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 331, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 75);
-    midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 332, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 76);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 333, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 77);
-    midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 334, range: -7–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 78);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 335, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 79);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 336, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 80);
-    midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 337, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 81);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 338, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 82);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 339, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 83);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 340, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 84);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 341, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 85);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 342, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 86);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 343, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 87);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 344, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 88);
-    midichannels[4].controlchange(6, 127);
-    // Level (NRPN 345, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 89);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 346, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 90);
-    midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 347, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 91);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 348, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 92);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 349, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 93);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 350, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 94);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 351, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 95);
-    midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 352, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 96);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 353, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 97);
-    midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 354, range: -7–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 98);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 355, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 99);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 356, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 100);
-    midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 357, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 101);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 358, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 102);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 359, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 103);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 360, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 104);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 361, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 105);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 362, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 106);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 363, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 107);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 364, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 108);
-    midichannels[4].controlchange(6, 127);
-    // Level (NRPN 365, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 109);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 366, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 110);
-    midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 367, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 111);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 368, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 112);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 369, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 113);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 370, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 114);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 371, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 115);
-    midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 372, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 116);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 373, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 117);
-    midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 374, range: -7–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 118);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 375, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 119);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 376, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 120);
-    midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 377, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 121);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 378, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 122);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 379, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 123);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 380, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 124);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 381, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 125);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 382, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 126);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 383, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 2);
     midichannels[4].controlchange(98, 127);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 384, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 0);
-    midichannels[4].controlchange(6, 127);
-    // Level (NRPN 385, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 1);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 386, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 2);
-    midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 387, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 3);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 388, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 4);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 389, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 5);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 390, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 6);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 391, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 7);
-    midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 392, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 8);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 393, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 9);
-    midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 394, range: -7–7, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 10);
-    midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 395, range: 0–31, default: 1)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 11);
-    midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 396, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 12);
-    midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 397, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 13);
-    midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 398, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 14);
-    midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 399, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 15);
-    midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 400, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 16);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 401, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 17);
-    midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 402, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 18);
-    midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 403, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 19);
-    midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 404, range: 0–99, default: 99)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 20);
-    midichannels[4].controlchange(6, 127);
-    // Level (NRPN 405, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 0);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 21);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 406, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 22);
-    midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 407, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 64);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 23);
-    midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 408, range: 0–7, default: 0)
+    midichannels[4].controlchange(6, 4);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 24);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 409, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 25);
-    midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 410, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 26);
-    midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 411, range: 0–99, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 27);
-    midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 412, range: 0–3, default: 0)
+    midichannels[4].controlchange(6, 127);
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 28);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 413, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 3);
     midichannels[4].controlchange(98, 29);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 30);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 31);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 32);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 33);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 34);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 35);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 36);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 37);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 38);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 39);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 40);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 41);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 42);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 43);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 44);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 45);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 46);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 47);
     midichannels[4].controlchange(6, 0);
 }
 
