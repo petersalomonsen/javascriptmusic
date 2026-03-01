@@ -1167,9 +1167,9 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     voiceClass.push('    isDone(): boolean {');
     if (gateParam) {
-        voiceClass.push(`        return this.${gateParam.field} == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);`);
+        voiceClass.push(`        return this.${gateParam.field} == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);`);
     } else {
-        voiceClass.push('        return this.silentSamples > 4410 || this.releaseSamples > 441000;');
+        voiceClass.push('        return this.silentSamples > 4410 || this.releaseSamples > 132300;');
     }
     voiceClass.push('    }');
     voiceClass.push('');
@@ -1205,7 +1205,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     }
 
     voiceClass.push('');
-    voiceClass.push('        if (Mathf.abs(output) < 0.0001) {');
+    voiceClass.push('        if (Mathf.abs(output) < 0.001) {');
     voiceClass.push('            this.silentSamples++;');
     voiceClass.push('        } else {');
     voiceClass.push('            this.silentSamples = 0;');

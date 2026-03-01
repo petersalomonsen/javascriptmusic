@@ -532,7 +532,7 @@ export class Dx7_alg5 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);
     }
 
     nextframe(): void {
@@ -1354,7 +1354,7 @@ export class Dx7_alg5 extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.0001) {
+        if (Mathf.abs(output) < 0.001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
@@ -2054,7 +2054,7 @@ export class Dx7_alg16 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);
     }
 
     nextframe(): void {
@@ -2876,7 +2876,7 @@ export class Dx7_alg16 extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.0001) {
+        if (Mathf.abs(output) < 0.001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
@@ -3576,7 +3576,7 @@ export class Dx7_alg2 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);
     }
 
     nextframe(): void {
@@ -4398,7 +4398,7 @@ export class Dx7_alg2 extends MidiVoice {
         this.iRec58[1] = this.iRec58[0];
         this.fRec59[1] = this.fRec59[0];
 
-        if (Mathf.abs(output) < 0.0001) {
+        if (Mathf.abs(output) < 0.001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
@@ -5098,7 +5098,7 @@ export class Dx7_alg5_bells extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);
     }
 
     nextframe(): void {
@@ -5920,7 +5920,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.0001) {
+        if (Mathf.abs(output) < 0.001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
@@ -6620,7 +6620,7 @@ export class Dx7_alg17 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);
     }
 
     nextframe(): void {
@@ -7442,7 +7442,7 @@ export class Dx7_alg17 extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.0001) {
+        if (Mathf.abs(output) < 0.001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
@@ -8142,7 +8142,7 @@ export class Dx7_alg21 extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);
     }
 
     nextframe(): void {
@@ -8965,7 +8965,7 @@ export class Dx7_alg21 extends MidiVoice {
         this.iRec58[1] = this.iRec58[0];
         this.fRec59[1] = this.fRec59[0];
 
-        if (Mathf.abs(output) < 0.0001) {
+        if (Mathf.abs(output) < 0.001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
@@ -9665,7 +9665,7 @@ export class Dx7_alg5_hat extends MidiVoice {
     }
 
     isDone(): boolean {
-        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 441000);
+        return this.fButton0 == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);
     }
 
     nextframe(): void {
@@ -10487,7 +10487,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         this.fRec59[1] = this.fRec59[0];
         this.fRec51[1] = this.fRec51[0];
 
-        if (Mathf.abs(output) < 0.0001) {
+        if (Mathf.abs(output) < 0.001) {
             this.silentSamples++;
         } else {
             this.silentSamples = 0;
