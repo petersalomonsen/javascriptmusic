@@ -529,6 +529,8 @@ export class Dx7_alg5 extends MidiVoice {
 
     noteoff(): void {
         this.fButton0 = 0.0;
+        this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     isDone(): boolean {
@@ -2051,6 +2053,8 @@ export class Dx7_alg16 extends MidiVoice {
 
     noteoff(): void {
         this.fButton0 = 0.0;
+        this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     isDone(): boolean {
@@ -3573,6 +3577,8 @@ export class Dx7_alg2 extends MidiVoice {
 
     noteoff(): void {
         this.fButton0 = 0.0;
+        this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     isDone(): boolean {
@@ -5095,6 +5101,8 @@ export class Dx7_alg5_bells extends MidiVoice {
 
     noteoff(): void {
         this.fButton0 = 0.0;
+        this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     isDone(): boolean {
@@ -6617,6 +6625,8 @@ export class Dx7_alg17 extends MidiVoice {
 
     noteoff(): void {
         this.fButton0 = 0.0;
+        this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     isDone(): boolean {
@@ -8139,6 +8149,8 @@ export class Dx7_alg21 extends MidiVoice {
 
     noteoff(): void {
         this.fButton0 = 0.0;
+        this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     isDone(): boolean {
@@ -9662,6 +9674,8 @@ export class Dx7_alg5_hat extends MidiVoice {
 
     noteoff(): void {
         this.fButton0 = 0.0;
+        this.silentSamples = 0;
+        this.releaseSamples = 0;
     }
 
     isDone(): boolean {

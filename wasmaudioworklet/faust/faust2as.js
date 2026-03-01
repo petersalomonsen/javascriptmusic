@@ -1162,6 +1162,8 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     if (gateParam) {
         voiceClass.push(`        this.${gateParam.field} = 0.0;`);
     }
+    voiceClass.push('        this.silentSamples = 0;');
+    voiceClass.push('        this.releaseSamples = 0;');
     voiceClass.push('    }');
     voiceClass.push('');
 
