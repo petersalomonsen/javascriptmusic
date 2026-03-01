@@ -7,7 +7,7 @@ Yamaha DX7 synthesizer running as a transpiled AssemblyScript instrument via the
 | File | Description |
 |---|---|
 | `dx7-synth.ts` | Generated multi-algorithm synth bundle (paste into the synth editor) |
-| `dx7-sequence.js` | Example sequence with E.Piano 1, Bass 1, Strings 1, and Tubular Bells patches |
+| `dx7-sequence.js` | Example sequence with E.Piano, Bass, Strings, Bells, and Drum Kit patches |
 | `dsp/` | Faust DSP source files for each algorithm variant |
 | `parse-rom.js` | Utility to convert DX7 SysEx ROM files to NRPN patch data |
 
@@ -16,8 +16,12 @@ Yamaha DX7 synthesizer running as a transpiled AssemblyScript instrument via the
 The DX7 Faust implementation uses 6 FM operators with configurable routing (algorithms). Since the algorithm topology is compiled into the DSP, each algorithm variant is a separate Faust source file:
 
 - `dx7_alg2.dsp` — Algorithm 2 (Strings)
-- `dx7_alg5.dsp` — Algorithm 5 (E.Piano, Bells)
+- `dx7_alg5.dsp` — Algorithm 5 (E.Piano)
+- `dx7_alg5_bells.dsp` — Algorithm 5 (Tubular Bells, separate globals)
+- `dx7_alg5_hat.dsp` — Algorithm 5 (JunkHat, separate globals)
 - `dx7_alg16.dsp` — Algorithm 16 (Bass)
+- `dx7_alg17.dsp` — Algorithm 17 (Beefkick)
+- `dx7_alg21.dsp` — Algorithm 21 (MildSnare)
 
 The `faust2as` transpiler compiles these into a single bundle with independent voice classes and NRPN parameter control (138 parameters per algorithm, addressed via MIDI CC 99/98/6).
 
@@ -30,6 +34,9 @@ node faust/faust2as.js --bundle \
   ../examples/dx7/dsp/dx7_alg16.dsp \
   ../examples/dx7/dsp/dx7_alg2.dsp \
   ../examples/dx7/dsp/dx7_alg5_bells.dsp \
+  ../examples/dx7/dsp/dx7_alg17.dsp \
+  ../examples/dx7/dsp/dx7_alg21.dsp \
+  ../examples/dx7/dsp/dx7_alg5_hat.dsp \
   --out ../examples/dx7/dx7-synth.ts
 ```
 
@@ -59,14 +66,23 @@ Then add it to the bundle compilation command and regenerate.
 
 ## Channel layout
 
-| Channel | Voice Class | Patch | Algorithm |
+| Channel | Voice Class(es) | Patch | Algorithm |
 |---|---|---|---|
 | 0 | `Dx7_alg5` | E.Piano 1 | 5 |
 | 1 | `Dx7_alg16` | Bass 1 | 16 |
 | 2 | `Dx7_alg2` | Strings 1 | 2 |
 | 3 | `Dx7_alg5_bells` | Tubular Bells | 5 |
+| 4 | `Dx7_alg17` / `Dx7_alg21` / `Dx7_alg5_hat` | Drum Kit | 17, 21, 5 |
 
-Each channel has its own set of global parameters, so patches on different channels are fully independent.
+Channel 4 is a drum kit with three DX7 voices mapped to specific notes (kick/snare lowered to octave 2 because Faust DX7 lacks fixed-frequency operator mode):
+
+| Note | MIDI | Drum | Source |
+|---|---|---|---|
+| `c2` | 24 | Kick (Beefkick) | Coffeeshopped DX7 Drums, Algorithm 17 |
+| `d2` | 26 | Snare (MildSnare) | Coffeeshopped DX7 Drums, Algorithm 21 |
+| `fs3` | 42 | Hi-hat (JunkHat) | Coffeeshopped DX7 Drums, Algorithm 5 |
+
+Each channel has its own set of global parameters, so patches on different channels are fully independent. The drum kit uses NRPN ranges: kick 0-137, snare 138-275, hat 276-413.
 
 ## NRPN parameter map
 
