@@ -3,6 +3,7 @@
  */
 
 
+
 setBPM(120);
 
 addInstrument('DX7 E.Piano');   // Channel 0 — Algorithm 5
@@ -679,7 +680,7 @@ createTrack(4).play([
     nrpn(0, 27, 0),    // EG R3=0
     nrpn(0, 28, 74),   // EG R4=58
     nrpn(0, 29, 127),  // Level=99
-    nrpn(0, 30, 54),   // Key Vel=3
+    nrpn(0, 30, 73),   // Key Vel=4
     nrpn(0, 31, 0),    // A Mod Sens=0
     nrpn(0, 32, 0),    // Rate Scaling=0
     nrpn(0, 33, 0),    // Breakpoint=A-1
@@ -840,7 +841,7 @@ createTrack(4).play([
     nrpn(0, 171, 26),   // EG R3=20
     nrpn(0, 172, 77),   // EG R4=60
     nrpn(0, 173, 115),  // Level=90
-    nrpn(0, 174, 0),    // Key Vel=0
+    nrpn(0, 174, 73),   // Key Vel=4
     nrpn(0, 175, 0),    // A Mod Sens=0
     nrpn(0, 176, 54),   // Rate Scaling=3
     nrpn(0, 177, 0),    // Breakpoint=A-1
@@ -862,7 +863,7 @@ createTrack(4).play([
     nrpn(0, 191, 26),   // EG R3=20
     nrpn(0, 192, 81),   // EG R4=63
     nrpn(0, 193, 76),   // Level=59
-    nrpn(0, 194, 0),    // Key Vel=0
+    nrpn(0, 194, 73),   // Key Vel=4
     nrpn(0, 195, 0),    // A Mod Sens=0
     nrpn(0, 196, 54),   // Rate Scaling=3
     nrpn(0, 197, 0),    // Breakpoint=A-1
@@ -906,7 +907,7 @@ createTrack(4).play([
     nrpn(0, 231, 26),   // EG R3=20
     nrpn(0, 232, 73),   // EG R4=57
     nrpn(0, 233, 127),  // Level=99
-    nrpn(0, 234, 36),   // Key Vel=2
+    nrpn(0, 234, 73),   // Key Vel=4
     nrpn(0, 235, 0),    // A Mod Sens=0
     nrpn(0, 236, 54),   // Rate Scaling=3
     nrpn(0, 237, 0),    // Breakpoint=A-1
@@ -928,7 +929,7 @@ createTrack(4).play([
     nrpn(0, 251, 26),  // EG R3=20
     nrpn(0, 252, 76),  // EG R4=59
     nrpn(0, 253, 115), // Level=90
-    nrpn(0, 254, 36),  // Key Vel=2
+    nrpn(0, 254, 73),  // Key Vel=4
     nrpn(0, 255, 0),   // A Mod Sens=0
     nrpn(0, 256, 54),  // Rate Scaling=3
     nrpn(0, 257, 0),   // Breakpoint=A-1
@@ -1001,7 +1002,7 @@ createTrack(4).play([
     nrpn(0, 315, 127),  // EG R3=99
     nrpn(0, 316, 63),   // EG R4=49
     nrpn(0, 317, 119),  // Level=93
-    nrpn(0, 318, 0),    // Key Vel=0
+    nrpn(0, 318, 73),   // Key Vel=4
     nrpn(0, 319, 0),    // A Mod Sens=0
     nrpn(0, 320, 127),  // Rate Scaling=7
     nrpn(0, 321, 0),    // Breakpoint=A-1
@@ -1045,7 +1046,7 @@ createTrack(4).play([
     nrpn(0, 355, 127),  // EG R3=99
     nrpn(0, 356, 63),   // EG R4=49
     nrpn(0, 357, 117),  // Level=91
-    nrpn(0, 358, 0),    // Key Vel=0
+    nrpn(0, 358, 73),   // Key Vel=4
     nrpn(0, 359, 0),    // A Mod Sens=0
     nrpn(0, 360, 127),  // Rate Scaling=7
     nrpn(0, 361, 0),    // Breakpoint=A-1
@@ -1089,7 +1090,7 @@ createTrack(4).play([
     nrpn(0, 395, 127), // EG R3=99
     nrpn(0, 396, 76),  // EG R4=59
     nrpn(0, 397, 127), // Level=99
-    nrpn(0, 398, 0),   // Key Vel=0
+    nrpn(0, 398, 73),  // Key Vel=4
     nrpn(0, 399, 0),   // A Mod Sens=0
     nrpn(0, 400, 127), // Rate Scaling=7
     nrpn(0, 401, 0),   // Breakpoint=A-1
@@ -1166,9 +1167,28 @@ createTrack(2).play([[ 0.0, a5(1.78, 87) ],
 [ 3.93, f5(4.03, 79) ]].quantize(4));
 
 
-await createTrack(4).steps(1,[
-  fs3,fs3,fs3,fs3,
-  fs3,fs3,fs3,fs3
+createTrack(1).steps(2,[
+	f4,f4,f4,f4,
+  c5,c5,c5,c5,
+  g4,g4,g4,g4,
+  as4,as4,as4,as4,
+]);
+
+createTrack(4).steps(4,[
+	c3,,,,
+  	d3,,,,
+  	,,c3,,
+    d3,,,,
+    c3,,,,
+  	d3,,,,
+  	c3,,c3,,
+    d3,,,,
+]);
+await createTrack(4).steps(2,[
+  fs3,fs3(0.1,20),fs3,fs3(0.1,20),
+  fs3,fs3(0.1,20),fs3,fs3(0.1,20),
+  fs3,fs3(0.1,20),fs3,fs3(0.1,20),
+  fs3,fs3(0.1,20),fs3,fs3(0.1,20)
 ]);
 stopRecording();
 loopHere();
