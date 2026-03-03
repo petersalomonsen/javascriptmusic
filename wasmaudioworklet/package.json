@@ -28,7 +28,7 @@
         "patch-version": "npm --no-git-tag-version version patch",
         "serve": "http-server -p 8080 .",
         "test-e2e": "npx playwright test",
-        "test-faust": "node faust/generate-test-sources.js && wtr faust/faust2as.spec.js"
+        "test-faust": "node ../tools/faust2as/generate-test-sources.js && wtr faust/faust2as.spec.js"
     },
     "devDependencies": {
         "@as-pect/cli": "^8.1.0",

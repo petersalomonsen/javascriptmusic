@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Generates faust-test-sources.js by transpiling example Faust DSP files.
-// Run this before the browser tests: node faust/generate-test-sources.js
+// Run this before the browser tests: node tools/faust2as/generate-test-sources.js
 
 import { execSync } from 'child_process';
 import fs from 'fs';
@@ -56,6 +56,6 @@ for (const [name, source] of Object.entries(sources)) {
     lines.push('');
 }
 
-const outPath = path.join(__dirname, 'faust-test-sources.js');
+const outPath = path.join(rootDir, 'wasmaudioworklet', 'faust', 'faust-test-sources.js');
 fs.writeFileSync(outPath, lines.join('\n'));
 console.log(`\nGenerated: ${outPath}`);

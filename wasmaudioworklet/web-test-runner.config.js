@@ -5,6 +5,7 @@ export default {
     '**/*.spec.js', // include `.spec.ts` files
     '!./node_modules/**/*', // exclude any node modules
     '!./e2e/**/*', // exclude Playwright e2e tests
+    '!./faust/faust2as.spec.js', // run separately via `npm run test-faust`
   ],
   concurrency: 1,
   watch: false,

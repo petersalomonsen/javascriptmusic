@@ -52,7 +52,7 @@ if (!bundleMode) {
         className = base.charAt(0).toUpperCase() + base.slice(1).replace(/MIDI$/i, '');
     }
     if (!outputPath) {
-        outputPath = path.resolve(__dirname, '..', 'synth1', 'assembly', 'midi', 'instruments', className.toLowerCase() + '.ts');
+        outputPath = path.resolve(__dirname, '..', '..', 'wasmaudioworklet', 'synth1', 'assembly', 'midi', 'instruments', className.toLowerCase() + '.ts');
     }
 } else {
     if (!outputPath) {

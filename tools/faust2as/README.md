@@ -9,8 +9,7 @@ Transpiles Faust `.dsp` physical model instruments into AssemblyScript `MidiVoic
 Generates one `.ts` file per DSP with the voice class, channel class, `initializeMidiSynth()` and `postprocess()`. The output can be pasted directly into the web app's AssemblyScript code editor.
 
 ```bash
-cd wasmaudioworklet
-node faust/faust2as.js <input.dsp> [--name ClassName] [--out output.ts]
+node tools/faust2as/faust2as.js <input.dsp> [--name ClassName] [--out output.ts]
 ```
 
 ### Bundle mode
@@ -18,8 +17,7 @@ node faust/faust2as.js <input.dsp> [--name ClassName] [--out output.ts]
 Combines multiple DSPs into a single file with all voice/channel classes, a shared `initializeMidiSynth()` that wires each DSP to a MIDI channel, and an empty `postprocess()`. Also suitable for pasting into the web app.
 
 ```bash
-cd wasmaudioworklet
-node faust/faust2as.js --bundle <dsp1.dsp> [dsp2.dsp ...] [--out output.ts]
+node tools/faust2as/faust2as.js --bundle <dsp1.dsp> [dsp2.dsp ...] [--out output.ts]
 ```
 
 ### Options
@@ -27,23 +25,23 @@ node faust/faust2as.js --bundle <dsp1.dsp> [dsp2.dsp ...] [--out output.ts]
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--name` | Class name for the generated voice (single-file only) | Derived from filename |
-| `--out` | Output `.ts` file path | `synth1/assembly/midi/instruments/<name>.ts` |
+| `--out` | Output `.ts` file path | `wasmaudioworklet/synth1/assembly/midi/instruments/<name>.ts` |
 | `--bundle` | Bundle multiple DSPs into one file | Off |
 
 ### Examples
 
 ```bash
-# Single instrument
-node faust/faust2as.js ../resources/faust/examples/generator/dx7.dsp
+# Single instrument (from repo root)
+node tools/faust2as/faust2as.js resources/faust/examples/generator/dx7.dsp
 
 # Single instrument with custom output
-node faust/faust2as.js ../resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
-  --out synth1/assembly/midi/instruments/clarinet.ts
+node tools/faust2as/faust2as.js resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
+  --out wasmaudioworklet/synth1/assembly/midi/instruments/clarinet.ts
 
 # Bundle: DX7 + Clarinet on MIDI channels 0 and 1
-node faust/faust2as.js --bundle \
-  ../resources/faust/examples/generator/dx7.dsp \
-  ../resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
+node tools/faust2as/faust2as.js --bundle \
+  resources/faust/examples/generator/dx7.dsp \
+  resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
   --out /tmp/faust_bundle.ts
 ```
 
