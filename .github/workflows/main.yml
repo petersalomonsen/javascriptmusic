@@ -33,6 +33,7 @@ jobs:
           yarn playwright install
           yarn playwright install-deps
           yarn createbrowsersourcebundle
+          node faust/generate-test-sources.js
           xvfb-run yarn wtr
   assemblyscriptsynth:
     name: AssemblyScript synth
