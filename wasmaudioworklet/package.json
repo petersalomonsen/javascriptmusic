@@ -26,7 +26,9 @@
         "bundle-songcompiler": "rollup -c rollup-config-songcompiler.js",
         "bundle-musicandshadervideoplayer": "(cd player/musicandshadervideoplayer && rollup -c rollup.config.js)",
         "patch-version": "npm --no-git-tag-version version patch",
-        "serve": "http-server -p 8080 ."
+        "serve": "http-server -p 8080 .",
+        "test-e2e": "npx playwright test",
+        "test-faust": "node ../tools/faust2as/generate-test-sources.js && npx playwright test e2e/faust2as-compilation.spec.js"
     },
     "devDependencies": {
         "@as-pect/cli": "^8.1.0",

@@ -4,6 +4,7 @@ export default {
   files: [
     '**/*.spec.js', // include `.spec.ts` files
     '!./node_modules/**/*', // exclude any node modules
+    '!./e2e/**/*', // exclude Playwright e2e tests
   ],
   concurrency: 1,
   watch: false,
@@ -30,7 +31,11 @@ export default {
           'media.autoplay.allow-extension-background-pages': true,
           'media.autoplay.blocking_policy': 0,
           'dom.require_user_interaction_for_audio': false, // Remove user gesture requirement
-          'dom.audiochannel.mutedByDefault': false
+          'dom.audiochannel.mutedByDefault': false,
+          'dom.webmidi.enabled': true,            // Enable WebMIDI API
+          'midi.testing': true,                   // Allow WebMIDI without user gesture
+          'webgl.force-enabled': true,            // Enable WebGL in headless mode
+          'webgl.disabled': false
         }
       }
     }),

@@ -25,7 +25,8 @@ describe('wasm-git client', async function () {
         assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), config.songfilename);
         assert.equal(
             dircontents.find(direntry => direntry.endsWith('.ts')) ||
-            dircontents.find(direntry => direntry.endsWith('.xml'))
+            dircontents.find(direntry => direntry.endsWith('.xml')) ||
+            dircontents.find(direntry => direntry.endsWith('.dsp'))
             , config.synthfilename);
     });
 

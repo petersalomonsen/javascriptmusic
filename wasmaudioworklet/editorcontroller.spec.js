@@ -1,6 +1,6 @@
 import { waitForAppReady } from './app.js';
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
-import { commitAndSyncRemote, log } from './wasmgit/wasmgitclient.js';
+import { commitAndSyncRemote, log, writefileandstage } from './wasmgit/wasmgitclient.js';
 import { songsource as sointutestsong, expectedYaml } from './sointu/sointutestsong.js';
 
 describe('editorcontroller', async function () {
@@ -351,6 +351,79 @@ describe('editorcontroller with git', async function () {
             dircontents = e.dircontents;
             assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), 'song.js');
             assert.equal(dircontents.find(direntry => direntry.endsWith('.ts')), 'synth.ts');
+        }
+        assert.isTrue((await log()).indexOf(commitComment) > -1, 'expecting to find commit comment in log');
+
+        const idbrequest = indexedDB.open(`/${gitrepo}`);
+        const db = await new Promise(resolve =>
+            idbrequest.onsuccess = (e) => resolve(e.target.result)
+        );
+        assert.isTrue(db.objectStoreNames.contains('FILE_DATA'), 'file system should have been persisted');
+    });
+});
+
+describe('editorcontroller with git and faust dsp', async function () {
+    this.timeout(60000);
+    const gitrepo = 'test5512332';
+    this.afterAll(async () => {
+        document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
+        window.history.pushState({}, '', '?');
+        assert.equal(location.search, '');
+        window.indexedDB.deleteDatabase(`/${gitrepo}`);
+    });
+    it('should store and commit a .dsp synth file in git', async () => {
+        window.indexedDB.deleteDatabase(`/${gitrepo}`);
+        window.history.pushState({}, '', `?gitrepo=${gitrepo}`);
+        assert.equal(`?gitrepo=${gitrepo}`, location.search);
+
+        document.documentElement.appendChild(document.createElement('app-javascriptmusic'));
+        await waitForAppReady();
+
+        let wasmgitui = null;
+
+        do {
+            console.log('waiting for wasm git to be ready');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            wasmgitui = document.querySelector('app-javascriptmusic')
+                .shadowRoot.querySelector('wasmgit-ui');
+        } while (wasmgitui === null);
+
+        assert.isOk(wasmgitui);
+
+        const faustSource = `import("stdfaust.lib");
+
+freq = hslider("freq", 440, 20, 20000, 0.01);
+gate = button("gate");
+gain = hslider("gain", 0.5, 0, 1, 0.01);
+
+process = os.sawtooth(freq)
+    : fi.lowpass(2, freq * 4)
+    : *(en.adsr(0.01, 0.1, 0.7, 0.3, gate))
+    : *(gain);
+`;
+
+        const songSource = `setBPM(120);
+
+await createTrack(0).steps(4, [
+    c4,,e4,,
+    g4,,c5,,
+]);
+
+loopHere();
+`;
+
+        await writefileandstage('synth.dsp', faustSource);
+        await writefileandstage('song.js', songSource);
+
+        const commitComment = 'added faust synth and song';
+        let dircontents;
+        try {
+            await commitAndSyncRemote(commitComment);
+            assert.isTrue(false, 'expecting not to be able to push to remote');
+        } catch (e) {
+            dircontents = e.dircontents;
+            assert.equal(dircontents.find(direntry => direntry.endsWith('.js')), 'song.js');
+            assert.equal(dircontents.find(direntry => direntry.endsWith('.dsp')), 'synth.dsp');
         }
         assert.isTrue((await log()).indexOf(commitComment) > -1, 'expecting to find commit comment in log');
 

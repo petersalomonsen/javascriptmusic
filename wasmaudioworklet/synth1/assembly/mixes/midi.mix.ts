@@ -1,6 +1,7 @@
 import { midichannels, MidiChannel, MidiVoice, SineOscillator, Envelope, notefreq } from './globalimports';
 import { outputline } from '../midi/midisynth';
-import { hardclip } from '../synth/clip';
+import { hardclip } from '../synth/clip';
+import { ElecGuitar } from '../midi/instruments/elecguitar';
 
 class SimpleSine extends MidiVoice {
     osc: SineOscillator = new SineOscillator();
@@ -27,7 +28,7 @@ class SimpleSine extends MidiVoice {
 }
 
 export function initializeMidiSynth(): void {
-    midichannels[0] = new MidiChannel(6, (channel: MidiChannel) => new SimpleSine(channel));
+    midichannels[0] = new MidiChannel(6, (channel: MidiChannel) => new ElecGuitar(channel));
 }
 
 export function postprocess(): void {
