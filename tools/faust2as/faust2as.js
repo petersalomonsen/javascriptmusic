@@ -4,8 +4,8 @@
 // Usage: node faust2as.js <input.dsp> [--name ClassName] [--out output.ts]
 //        node faust2as.js --bundle <dsp1> <dsp2> ... [--out output.ts]
 //
-// Runs `faust -lang c` on the input .dsp file, then parses the generated C
-// and emits an AssemblyScript MidiVoice subclass.
+// Runs `faust -lang asc` on the input .dsp file, then reshapes the generated
+// AssemblyScript class into a MidiVoice subclass for the synth engine.
 
 import { execSync } from 'child_process';
 import fs from 'fs';
@@ -30,12 +30,14 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
 }
 
 const bundleMode = args.includes('--bundle');
+const forEditor = args.includes('--for-editor');
 let outputPath = null;
 let className = null;
 const dspFiles = [];
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--bundle') continue;
+    if (args[i] === '--for-editor') continue;
     if (args[i] === '--name' && args[i + 1]) { className = args[++i]; continue; }
     if (args[i] === '--out' && args[i + 1]) { outputPath = args[++i]; continue; }
     dspFiles.push(args[i]);
@@ -61,614 +63,469 @@ if (!bundleMode) {
 }
 
 // ---------------------------------------------------------------------------
-// Transpile C expressions to AssemblyScript
+// Detect faust binary with AS backend support
 // ---------------------------------------------------------------------------
 
-function transpileExpr(expr, ctx) {
-    let out = expr;
-
-    // Remove trailing semicolon for processing (we'll add it back)
-    const hasSemicolon = out.endsWith(';');
-    if (hasSemicolon) out = out.slice(0, -1);
-
-    // dsp-> → this.
-    out = out.replace(/dsp->/g, 'this.');
-
-    // Replace this.field → globalName for global UI params (shared across voices)
-    if (ctx.globalFields) {
-        for (const [field, globalName] of ctx.globalFields) {
-            out = out.replace(new RegExp(`this\\.${field}\\b`, 'g'), globalName);
-        }
+function findFaustBinary() {
+    // Check for local build with AS backend first
+    const localBuild = path.resolve(__dirname, '..', '..', 'resources', 'faust', 'build', 'bin', 'faust');
+    if (fs.existsSync(localBuild)) {
+        return localBuild;
     }
-
-    // (float)this.fSampleRate or (float)(this.fSampleRate) → SAMPLERATE
-    out = out.replace(/\(float\)\s*\(?this\.fSampleRate\)?/g, 'SAMPLERATE');
-
-    // ClassName_faustpower2_f → faustpower2_f (etc.)
-    for (const h of ctx.helperFns) {
-        out = out.replace(new RegExp(`${ctx.className}_${h.fnName}`, 'g'), h.fnName);
-    }
-
-    // SIG0 static table names: ftbl0ClassNameSIG0 → ftbl0SIG0
-    for (const table of ctx.sig0Tables) {
-        const shortName = table.name.replace(ctx.className, '');
-        if (shortName !== table.name) {
-            out = out.replace(new RegExp(table.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ctx.tablePrefix + shortName);
-        }
-    }
-
-    // Wave data array names: fClassNameSIG0Wave0 → _wave_SIG0Wave0 (also iClassName for int waves)
-    // Use \b word boundary to avoid matching fPianoSIG0Wave0 inside fPianoSIG0Wave0_idx
-    for (const wave of ctx.sigWaveArrays) {
-        const prefix = wave.isInt ? 'i' : 'f';
-        const shortName = wave.name.replace(`${prefix}${ctx.className}`, ctx.wavePrefix + '_wave_');
-        if (shortName !== wave.name) {
-            out = out.replace(new RegExp(`\\b${wave.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'), shortName);
-        }
-    }
-
-    // Math functions: fminf(a,b) → Mathf.min(a,b), etc.
-    const mathMap = {
-        'fminf': 'Mathf.min', 'fmaxf': 'Mathf.max', 'floorf': 'Mathf.floor',
-        'sinf': 'Mathf.sin', 'cosf': 'Mathf.cos', 'tanf': 'Mathf.tan',
-        'expf': 'Mathf.exp', 'logf': 'Mathf.log', 'log10f': 'Mathf.log10',
-        'powf': 'Mathf.pow', 'sqrtf': 'Mathf.sqrt', 'fabsf': 'Mathf.abs',
-        'rintf': 'Mathf.round', 'roundf': 'Mathf.round', 'ceilf': 'Mathf.ceil',
-        'atanf': 'Mathf.atan', 'atan2f': 'Mathf.atan2',
-        'asinf': 'Mathf.asin', 'acosf': 'Mathf.acos',
-    };
-    for (const [cFn, asFn] of Object.entries(mathMap)) {
-        out = out.replace(new RegExp(`\\b${cFn}\\(`, 'g'), `${asFn}(`);
-    }
-
-    // Integer math helpers: min_i/max_i → min<i32>/max<i32> (AS built-ins)
-    out = out.replace(/\bmin_i\(/g, 'min<i32>(');
-    out = out.replace(/\bmax_i\(/g, 'max<i32>(');
-
-    // Boolean-to-int wrapping: MUST happen BEFORE type cast replacement
-    // so that (int) and (float) casts are not confused with < > comparisons.
-    // In C, comparisons return int (0 or 1). In AS, they return bool.
-    // When comparisons are used in arithmetic (bitwise OR, multiplication, addition),
-    // they need explicit ? 1 : 0 wrapping.
-    // Protect bitwise shift operators from being split by comparison matching
-    out = out.replace(/>>/g, '__RSHIFT__');
-    out = out.replace(/<</g, '__LSHIFT__');
-    // Pass 1: Simple comparisons where both sides have no nested parens
-    out = out.replace(/\(([^()]+?)\s*(==|!=|<=|>=|<|>)\s*([^()]+?)\)/g,
-        (match, lhs, op, rhs) => {
-            if (lhs.trim() === 'int' || lhs.trim() === 'float') return match;
-            return `(${lhs.trim()} ${op} ${rhs.trim()} ? 1 : 0)`;
-        });
-    // Pass 2: Comparisons where LHS is a function call like (func(args) op value)
-    out = out.replace(/\(([\w.]+\([^)]*\))\s*(==|!=|<=|>=|<|>)\s*([^()]+?)\)/g,
-        (match, lhs, op, rhs) => `(${lhs} ${op} ${rhs.trim()} ? 1 : 0)`);
-    // Pass 3: Comparisons where RHS is a function call like (value op func(args))
-    out = out.replace(/\(([^()]+?)\s*(==|!=|<=|>=|<|>)\s*([\w.]+\([^)]*\))\)/g,
-        (match, lhs, op, rhs) => `(${lhs.trim()} ${op} ${rhs} ? 1 : 0)`);
-    // Restore shift operators
-    out = out.replace(/__RSHIFT__/g, '>>');
-    out = out.replace(/__LSHIFT__/g, '<<');
-
-    // Type casts: (float)(expr) → _fcast(expr), (int)(expr) → _icast(expr)
-    // Uses generic inline helpers to avoid AS contextual typing issues:
-    // <f32>(100 * iSlow) would contextually type 100 as f32, causing f32*i32 error.
-    // _fcast(100 * iSlow) evaluates the arg at its natural type (i32), then converts.
-    out = out.replace(/\(float\)\(/g, '_fcast(');
-    out = out.replace(/\(int\)\(/g, '_icast(');
-    // Handle (float)simple_var and (int)simple_var
-    out = out.replace(/\(float\)(\w[\w.[\]]*)/g, '<f32>$1');
-    out = out.replace(/\(int\)(\w[\w.[\]]*)/g, '<i32>$1');
-
-    // FAUSTFLOAT cast
-    out = out.replace(/\(FAUSTFLOAT\)/g, '');
-
-    // float suffix: 0.5f → 0.5, 1e+01f → 1e+01, 1.0e+01f → 1.0e+01
-    out = out.replace(/(\d+\.?\d*(?:e[+-]?\d+)?)f\b/gi, '$1');
-
-    if (hasSemicolon) out += ';';
-    return out;
+    // Fall back to system faust
+    return 'faust';
 }
 
-function transpileStatement(stmt, ctx) {
-    const trimmed = stmt.trim();
-
-    // Variable declarations: float varname = expr;
-    const floatDeclMatch = trimmed.match(/^float\s+(\w+)\s*=\s*(.*);$/);
-    if (floatDeclMatch) {
-        const varName = floatDeclMatch[1];
-        const expr = transpileExpr(floatDeclMatch[2], ctx);
-        return `const ${varName}: f32 = ${expr};`;
-    }
-
-    // int variable declarations: int varname = expr;
-    const intDeclMatch = trimmed.match(/^int\s+(\w+)\s*=\s*(.*);$/);
-    if (intDeclMatch) {
-        const varName = intDeclMatch[1];
-        const expr = transpileExpr(intDeclMatch[2], ctx);
-        return `const ${varName}: i32 = ${expr};`;
-    }
-
-    // Assignment: dsp->field = expr;
-    const assignMatch = trimmed.match(/^(dsp->\S+)\s*=\s*(.*);$/);
-    if (assignMatch) {
-        let lhs = transpileExpr(assignMatch[1], ctx);
-        let rhs = transpileExpr(assignMatch[2], ctx);
-        return `${lhs} = ${rhs};`;
-    }
-
-    // output0[i0] = expr; → placeholder for voice output
-    const outputMatch = trimmed.match(/^output0\[\w+\]\s*=\s*(.*);$/);
-    if (outputMatch) {
-        const expr = transpileExpr(outputMatch[1], ctx);
-        return `__OUTPUT_ASSIGN__ = ${expr};`;
-    }
-
-    // Fallback: just transpile
-    return transpileExpr(trimmed, ctx);
-}
-
-// Transpile the delay shift section — may contain inline C99 loops
-function transpileDelayShifts(lines, ctx) {
-    const result = [];
-    let i = 0;
-    while (i < lines.length) {
-        const trimmed = lines[i].trim();
-
-        // Inner C99 loop for arrays > 3: for (j0 = 3; (j0 > 0); j0 = (j0 - 1)) {
-        // Also handles non-parenthesized: for (j0 = 3; j0 > 0; j0 = j0 - 1) {
-        const loopMatch = trimmed.match(/^for\s*\(\s*(\w+)\s*=\s*(\d+);\s*\(?\s*\1\s*>\s*0\s*\)?;\s*\1\s*=\s*\(?\s*\1\s*-\s*1\s*\)?\s*\)\s*\{$/);
-        if (loopMatch) {
-            const varName = loopMatch[1];
-            const start = parseInt(loopMatch[2]);
-            // Next line is the assignment: dsp->fRec33[j0] = dsp->fRec33[(j0 - 1)];
-            // Also handles non-parenthesized: dsp->fRec33[j0 - 1]
-            i++;
-            const assignLine = lines[i] ? lines[i].trim() : '';
-            // Extract array name from: dsp->fRecN[j0] = dsp->fRecN[(j0 - 1)] or dsp->fRecN[j0 - 1];
-            const arrMatch = assignLine.match(/dsp->(\w+)\[(\w+)\]\s*=\s*dsp->(\w+)\[\(?\s*\2\s*-\s*1\s*\)?]/);
-            if (arrMatch) {
-                // Unroll: this.fRec33[3] = this.fRec33[2]; this.fRec33[2] = this.fRec33[1]; this.fRec33[1] = this.fRec33[0];
-                for (let j = start; j > 0; j--) {
-                    result.push(`this.${arrMatch[1]}[${j}] = this.${arrMatch[1]}[${j - 1}];`);
-                }
-            }
-            // Skip closing brace
-            i++;
-            if (lines[i] && lines[i].trim() === '}') i++;
-            continue;
-        }
-
-        // Regular delay shift: dsp->fRec29[1] = dsp->fRec29[0];
-        if (trimmed && trimmed !== '{' && trimmed !== '}') {
-            result.push(transpileStatement(trimmed, ctx));
-        }
-        i++;
-    }
-    return result;
-}
-
-// Transpile instanceClear body
-function transpileInstanceClear(body) {
-    const lines = body.split('\n');
-    const result = [];
-    let i = 0;
-    while (i < lines.length) {
-        const trimmed = lines[i].trim();
-
-        // IOTA assignment: dsp->IOTA = 0;
-        if (trimmed.match(/dsp->IOTA\S*\s*=\s*0/)) {
-            const iotaMatch = trimmed.match(/dsp->(\w+)\s*=\s*0/);
-            result.push(`this.${iotaMatch[1]} = 0;`);
-            i++;
-            continue;
-        }
-
-        // C99 loop for zeroing arrays
-        // Handles both: for (l0 = 0; (l0 < 2); l0 = (l0 + 1)) and for (l0 = 0; l0 < 2; l0 = l0 + 1)
-        const forMatch = trimmed.match(/for\s*\(\s*\w+\s*=\s*0;\s*\(?\s*\w+\s*<\s*(\d+)\s*\)?;\s*\w+\s*=\s*\(?\s*\w+\s*\+\s*1\s*\)?\s*\)/);
-        if (forMatch) {
-            const count = parseInt(forMatch[1]);
-            // Look ahead for the assignment line
-            for (let j = i + 1; j < lines.length && j < i + 5; j++) {
-                const innerLine = lines[j].trim();
-                const assignMatch = innerLine.match(/dsp->(\w+)\[\w+\]\s*=\s*([0-9.]+f?)\s*;/);
-                if (assignMatch) {
-                    const arrName = assignMatch[1];
-                    const val = assignMatch[2].replace(/f$/, '');
-                    result.push(`for (let i = 0; i < ${count}; i++) { this.${arrName}[i] = ${val}; }`);
-                    break;
-                }
-            }
-        }
-        i++;
-    }
-    return result;
-}
-
-// Transpile instanceConstants body
-function transpileInstanceConstants(body, ctx) {
-    const lines = body.split('\n');
-    const result = [];
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === '{' || trimmed === '}') continue;
-        if (trimmed.startsWith('dsp->fSampleRate')) continue; // skip sample rate assignment
-
-        // Local variable: float fConstN = expr;
-        const localMatch = trimmed.match(/^float\s+(\w+)\s*=\s*(.*);$/);
-        if (localMatch) {
-            const expr = transpileExpr(localMatch[2], ctx);
-            result.push(`const ${localMatch[1]}: f32 = ${expr};`);
-            continue;
-        }
-
-        // Assignment: dsp->fConstN = expr;
-        const assignMatch = trimmed.match(/^dsp->(\w+)\s*=\s*(.*);$/);
-        if (assignMatch) {
-            const expr = transpileExpr(assignMatch[2], ctx);
-            result.push(`this.${assignMatch[1]} = ${expr};`);
-            continue;
-        }
-    }
-    return result;
-}
-
-// Transpile SIG0 fill function
-function transpileSig0Fill(fillBody, tableName, ctx) {
-    const lines = fillBody.split('\n');
-    const result = [];
-    let inLoop = false;
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === '{' || trimmed === '}') continue;
-        if (trimmed.startsWith('/*') || trimmed.startsWith('//')) continue;
-        if (trimmed.match(/^int\s+\w+\s*;$/)) continue; // loop var declaration
-
-        // for loop start
-        if (trimmed.match(/^for\s*\(/)) {
-            const forMatch = trimmed.match(/for\s*\(\s*\w+\s*=\s*0;\s*\(?\s*\w+\s*<\s*count\s*\)?;\s*\w+\s*=\s*\(?\s*\w+\s*\+\s*1\s*\)?\s*\)/);
-            if (forMatch) {
-                result.push(`for (let i = 0; i < ${tableName}.length; i++) {`);
-                inLoop = true;
-                continue;
-            }
-        }
-
-        if (inLoop) {
-            // dsp->field[0] = expr; → sig0Field0 = expr;
-            let transpiled = trimmed;
-            transpiled = transpiled.replace(/dsp->/g, '');
-            transpiled = transpiled.replace(/table\[i1\]/g, `${tableName}[i]`);
-            transpiled = transpiled.replace(/table\[\w+\]/g, `${tableName}[i]`);
-            transpiled = transpileExpr(transpiled, ctx);
-            result.push('    ' + transpiled);
-        }
-    }
-    if (inLoop) result.push('}');
-
-    return result;
-}
+const FAUST_BIN = findFaustBinary();
 
 // ---------------------------------------------------------------------------
-// Helper: Parse effect C source (reuses same patterns as voice parsing)
+// Parse UI metadata from getJSON() embedded in AS output
 // ---------------------------------------------------------------------------
 
-function parseEffectC(cSrc, clsName) {
-    let m;
+function extractUIFromJSON(asSource) {
+    const getJSONMatch = asSource.match(/getJSON\(\)\s*:\s*string\s*\{[\s\S]*?return\s+"((?:[^"\\]|\\.)*)"\s*;/m);
+    if (!getJSONMatch) return { uiParams: [], numInputs: 0, numOutputs: 0 };
 
-    // Helper functions
-    const helperFnRegex = new RegExp(`static\\s+float\\s+${clsName}_(\\w+)\\s*\\(([^)]*)\\)\\s*\\{([^}]+)\\}`, 'g');
-    const helperFns = [];
-    while ((m = helperFnRegex.exec(cSrc)) !== null) {
-        helperFns.push({ fnName: m[1], params: m[2], body: m[3].trim() });
+    // Decode escaped string content
+    const normalized = getJSONMatch[1].replace(/\\'/g, "'");
+    let json;
+    try {
+        json = JSON.parse(JSON.parse(`"${normalized}"`));
+    } catch (e) {
+        console.warn('Warning: Could not parse getJSON() metadata');
+        return { uiParams: [], numInputs: 0, numOutputs: 0 };
     }
 
-    // Wave data arrays (float and int)
-    const sigWaveRegex = new RegExp(
-        `static\\s+(float|int)\\s+([fi]${clsName}SIG\\d+Wave\\d+)\\s*\\[(\\d+)\\]\\s*=\\s*\\{([^}]+)\\}`, 'g'
-    );
-    const sigWaveArrays = [];
-    while ((m = sigWaveRegex.exec(cSrc)) !== null) {
-        const isInt = m[1] === 'int';
-        const values = m[4].split(',').map(v => v.trim().replace(/f$/i, ''));
-        sigWaveArrays.push({ name: m[2], size: parseInt(m[3]), values, isInt });
-    }
-
-    // SIG struct definitions
-    const sig0StructRegex = new RegExp(`typedef\\s+struct\\s*\\{([^}]+)\\}\\s*${clsName}SIG(\\d+)\\s*;`, 'g');
-    const sig0Structs = [];
-    while ((m = sig0StructRegex.exec(cSrc)) !== null) {
-        sig0Structs.push({ sigIndex: m[2], fields: m[1] });
-    }
-
-    // SIG table declarations (float and int)
-    const sig0TableRegex = new RegExp(`static\\s+(float|int)\\s+([fi]tbl\\d+${clsName}SIG\\d+)\\s*\\[(\\d+)\\]\\s*;`, 'g');
-    const sig0Tables = [];
-    while ((m = sig0TableRegex.exec(cSrc)) !== null) {
-        sig0Tables.push({ name: m[2], size: parseInt(m[3]), isInt: m[1] === 'int' });
-    }
-
-    // SIG fill functions (float* table or int* table)
-    const sig0FillRegex = new RegExp(
-        `static\\s+void\\s+fill${clsName}SIG(\\d+)\\s*\\(${clsName}SIG\\d+\\*\\s*dsp,\\s*int\\s+count,\\s*(?:float|int)\\*\\s+table\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
-    );
-    const sig0Fills = [];
-    while ((m = sig0FillRegex.exec(cSrc)) !== null) {
-        sig0Fills.push({ sigIndex: m[1], body: m[2] });
-    }
-
-    // SIG init functions
-    const sig0InitRegex = new RegExp(
-        `static\\s+void\\s+instanceInit${clsName}SIG(\\d+)\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
-    );
-    const sig0Inits = [];
-    while ((m = sig0InitRegex.exec(cSrc)) !== null) {
-        sig0Inits.push({ sigIndex: m[1], body: m[2] });
-    }
-
-    // Main struct fields
-    const structRegex = new RegExp(`typedef\\s+struct\\s*\\{([^{}]*)\\}\\s*${clsName}\\s*;`);
-    const structMatch = cSrc.match(structRegex);
-    if (!structMatch) {
-        console.error(`Could not find main struct for effect ${clsName}`);
-        process.exit(1);
-    }
-    const fields = [];
-    const fieldRegex = /\s*(FAUSTFLOAT|float|int)\s+(\w+)(?:\[(\d+)\])?\s*;/g;
-    while ((m = fieldRegex.exec(structMatch[1])) !== null) {
-        if (m[2] === 'fSampleRate') continue;
-        fields.push({ type: m[1], name: m[2], arraySize: m[3] ? parseInt(m[3]) : null });
-    }
-
-    // Default values
-    const resetUIRegex = new RegExp(
-        `void\\s+instanceResetUserInterface${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
-    );
-    const resetUIMatch = resetUIRegex.exec(cSrc);
-    const defaults = {};
-    if (resetUIMatch) {
-        const defaultRegex = /dsp->(\w+)\s*=\s*\(FAUSTFLOAT\)\(?([\d.eE+-]+f?)\)?/g;
-        while ((m = defaultRegex.exec(resetUIMatch[1])) !== null) {
-            let val = m[2].replace(/f$/, '');
-            val = parseFloat(val).toString();
-            defaults[m[1]] = val;
-        }
-    }
-
-    // instanceClear
-    const clearRegex = new RegExp(
-        `void\\s+instanceClear${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
-    );
-    const clearMatch = clearRegex.exec(cSrc);
-    const clearBody = clearMatch ? clearMatch[1] : '';
-
-    // instanceConstants
-    const constRegex = new RegExp(
-        `void\\s+instanceConstants${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
-    );
-    const constMatch = constRegex.exec(cSrc);
-    const constBody = constMatch ? constMatch[1] : '';
-
-    // buildUserInterface (for MIDI CC metadata on effect params)
-    const buildUIRegex = new RegExp(
-        `void\\s+buildUserInterface${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`, 'gm'
-    );
-    const buildUIMatch = buildUIRegex.exec(cSrc);
-    const buildUIBody = buildUIMatch ? buildUIMatch[1] : '';
-
+    const numInputs = json.inputs || 0;
+    const numOutputs = json.outputs || 0;
     const uiParams = [];
-    const declareRegex = /ui_interface->declare\([^,]+,\s*&dsp->(\w+),\s*"(\w+)",\s*"([^"]+)"\)/g;
-    const midiMeta = {};
-    while ((m = declareRegex.exec(buildUIBody)) !== null) {
-        if (!midiMeta[m[1]]) midiMeta[m[1]] = {};
-        midiMeta[m[1]][m[2]] = m[3];
-    }
-    const sliderRegex = /ui_interface->(?:add(?:Horizontal|Vertical)Slider|addNumEntry)\([^,]+,\s*"([^"]+)",\s*&dsp->(\w+),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)\)/g;
-    while ((m = sliderRegex.exec(buildUIBody)) !== null) {
-        uiParams.push({
-            name: m[1], field: m[2],
-            init: parseFloat(m[3]), min: parseFloat(m[4]), max: parseFloat(m[5]), step: parseFloat(m[6]),
-            midi: midiMeta[m[2]] || {}
-        });
-    }
 
-    // Compute body — parse with effect-aware input/output handling
-    const computeRegex = new RegExp(
-        `void\\s+compute${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}\\s*(?:#ifdef|$)`, 'gm'
-    );
-    const computeMatch = computeRegex.exec(cSrc);
-    if (!computeMatch) {
-        console.error(`Could not find compute function for effect ${clsName}`);
+    function walkUI(items) {
+        for (const item of items || []) {
+            if (item.type === 'vgroup' || item.type === 'hgroup' || item.type === 'tgroup') {
+                walkUI(item.items || []);
+            } else if (item.varname) {
+                const param = {
+                    name: item.label,
+                    field: item.varname,
+                    address: item.address || '',
+                    init: item.init ?? 0,
+                    min: item.min ?? 0,
+                    max: item.max ?? 1,
+                    step: item.step ?? 0.01,
+                    isButton: item.type === 'button',
+                    midi: {},
+                };
+                // Extract midi metadata from meta array
+                if (item.meta) {
+                    for (const m of item.meta) {
+                        for (const [key, val] of Object.entries(m)) {
+                            param.midi[key] = val;
+                        }
+                    }
+                }
+                uiParams.push(param);
+            }
+        }
+    }
+    walkUI(json.ui || []);
+
+    return { uiParams, numInputs, numOutputs };
+}
+
+// ---------------------------------------------------------------------------
+// Parse AS source: extract class fields, methods, subcontainers
+// ---------------------------------------------------------------------------
+
+function parseASSource(asSource, clsName) {
+    // Extract class body from `export class ClassName { ... }`
+    const classMatch = asSource.match(new RegExp(`export\\s+class\\s+${clsName}\\s*\\{([\\s\\S]*)\\}\\s*$`, 'm'));
+    if (!classMatch) {
+        console.error(`Could not find export class ${clsName} in AS output`);
         process.exit(1);
     }
+    const classBody = classMatch[1];
 
-    const computeLines = computeMatch[1].split('\n');
-    const fSlowDecls = [];
-    const loopBodyLines = [];
-    const delayShiftLines = [];
+    // Extract fields (instance and static)
+    const fields = [];
+    const staticFields = [];
+    const fieldRegex = /^\s+(static\s+)?(\w+):\s*(f32|i32)(\[\])?\s*(?:=\s*([^;]+))?\s*;/gm;
+    let m;
+    while ((m = fieldRegex.exec(classBody)) !== null) {
+        const isStatic = !!m[1];
+        const field = {
+            name: m[2],
+            type: m[3],       // 'f32' or 'i32'
+            isArray: !!m[4],   // has []
+            initializer: m[5] ? m[5].trim() : null,
+        };
+        if (isStatic) {
+            staticFields.push(field);
+        } else {
+            fields.push(field);
+        }
+    }
+
+    // Extract method bodies by name
+    function extractMethod(methodName) {
+        // Match: methodName(...): returnType { ... }
+        // Use brace counting for accurate extraction
+        const methodStart = classBody.indexOf(methodName + '(');
+        if (methodStart === -1) return '';
+        const braceStart = classBody.indexOf('{', methodStart);
+        if (braceStart === -1) return '';
+
+        let depth = 0;
+        let i = braceStart;
+        for (; i < classBody.length; i++) {
+            if (classBody[i] === '{') depth++;
+            if (classBody[i] === '}') depth--;
+            if (depth === 0) break;
+        }
+        return classBody.substring(braceStart + 1, i).trim();
+    }
+
+    const instanceConstants = extractMethod('instanceConstants');
+    const instanceClear = extractMethod('instanceClear');
+    const instanceResetUI = extractMethod('instanceResetUserInterface');
+    const computeBody = extractMethod('compute');
+
+    // Extract defaults from instanceResetUserInterface
+    const defaults = {};
+    const defaultRegex = /this\.(\w+)\s*=\s*([^;]+);/g;
+    while ((m = defaultRegex.exec(instanceResetUI)) !== null) {
+        defaults[m[1]] = m[2].trim();
+    }
+
+    // Extract subcontainer classes (SIG classes) and their free functions
+    // These appear before the main export class
+    const mainClassStart = asSource.indexOf(`export class ${clsName}`);
+    const preClassSource = asSource.substring(0, mainClassStart);
+
+    // Extract SIG class bodies
+    const sigClasses = [];
+    const sigClassRegex = /class\s+(\w+SIG\d+)\s*\{([\s\S]*?)\n\}/g;
+    while ((m = sigClassRegex.exec(preClassSource)) !== null) {
+        sigClasses.push({ name: m[1], body: m[2] });
+    }
+
+    // Extract free functions (newXxxSIG0, fillXxxSIG0, etc.)
+    const freeFunctions = [];
+    const freeFnRegex = /^function\s+(\w+)\s*\([^)]*\)\s*:\s*\w+\s*\{[\s\S]*?\n\}/gm;
+    while ((m = freeFnRegex.exec(preClassSource)) !== null) {
+        freeFunctions.push({ name: m[1], code: m[0] });
+    }
+
+    // Extract classInit body (for SIG table initialization)
+    const classInit = extractMethod('static classInit');
+
+    return {
+        fields,
+        staticFields,
+        defaults,
+        instanceConstants,
+        instanceClear,
+        computeBody,
+        classInit,
+        sigClasses,
+        freeFunctions,
+        preClassSource,
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Parse compute body into structural sections
+// ---------------------------------------------------------------------------
+
+function parseComputeBody(computeBody) {
+    const lines = computeBody.split('\n');
+    const preLoopDecls = [];     // let output0, output1, fSlow/iSlow declarations
+    const loopBodyLines = [];    // lines inside the for loop
+    const delayShiftLines = [];  // delay shifts after output assignment
     let inLoop = false;
     let loopBraceDepth = 0;
-    let afterLastOutput = false;
-    let numInputs = 0;
-    let numOutputs = 0;
+    let afterOutputAssignment = false;
 
-    for (let i = 0; i < computeLines.length; i++) {
-        const line = computeLines[i];
+    // Track brace depth inside the main for loop so we can distinguish
+    // the main loop's closing brace from inner for-loop braces (delay shifts)
+    let innerForDepth = 0;
+
+    for (const line of lines) {
         const trimmed = line.trim();
+        if (!trimmed) continue;
 
-        // Count input/output declarations
-        if (trimmed.match(/FAUSTFLOAT\*\s+input\d+/)) { numInputs++; continue; }
-        if (trimmed.startsWith('FAUSTFLOAT* output')) { numOutputs++; continue; }
+        // Output channel declarations (before loop)
+        if (!inLoop && trimmed.match(/^let\s+output\d+:/)) continue;
 
-        // fSlow/iSlow declarations (before the loop)
-        if (!inLoop && (trimmed.startsWith('float fSlow') || trimmed.startsWith('int iSlow'))) {
-            fSlowDecls.push(trimmed);
+        // fSlow/iSlow declarations (before loop)
+        if (!inLoop && (trimmed.startsWith('let fSlow') || trimmed.startsWith('let iSlow'))) {
+            preLoopDecls.push(trimmed);
             continue;
         }
 
-        // Detect loop start
-        if (!inLoop && trimmed.match(/for\s*\(\w+\s*=\s*0/)) {
+        // Detect main loop start
+        if (!inLoop && trimmed.match(/^for\s*\(/)) {
             inLoop = true;
             loopBraceDepth = 0;
             continue;
         }
 
         if (inLoop) {
+            // Track brace depth to know when the main loop ends
             for (const ch of trimmed) {
                 if (ch === '{') loopBraceDepth++;
                 if (ch === '}') loopBraceDepth--;
             }
 
-            if (trimmed === '' || trimmed === '{' || trimmed === '}') continue;
-            if (trimmed.startsWith('/*') || trimmed.startsWith('//')) continue;
-            if (trimmed.match(/^int\s+[ij]\d+\s*;$/)) continue;
-            if (trimmed.match(/^for\s*\(\s*[ij]\d+\s*=\s*0/)) continue;
+            // Skip the main loop's opening/closing braces
+            if (loopBraceDepth < 0) break; // main loop closed
 
-            // For effects: keep BOTH output0 and output1 in loopBodyLines
-            // afterLastOutput is set after output1 (or output0 if only 1 output)
-            if (trimmed.match(/output[01]\[/)) {
-                loopBodyLines.push(trimmed);
-                const isLastOutput = (numOutputs >= 2 && trimmed.match(/output1\[/)) ||
-                                     (numOutputs === 1 && trimmed.match(/output0\[/));
-                if (isLastOutput) afterLastOutput = true;
+            // Output assignments
+            if (trimmed.match(/^output[01]\[\w+\]\s*=/)) {
+                afterOutputAssignment = true;
+                if (trimmed.match(/^output0\[/)) {
+                    loopBodyLines.push(trimmed);
+                }
                 continue;
             }
 
-            if (afterLastOutput) {
+            if (afterOutputAssignment) {
+                // In the delay shift section, inner for loops appear for array shifts
+                // e.g. `for (let j0: i32 = 3; j0 > 0; ...) {`
+                if (trimmed.match(/^for\s*\(/)) {
+                    innerForDepth++;
+                    delayShiftLines.push(trimmed);
+                    continue;
+                }
+                if (trimmed === '}' && innerForDepth > 0) {
+                    innerForDepth--;
+                    delayShiftLines.push(trimmed);
+                    continue;
+                }
+                if (trimmed === '{') continue; // skip standalone opening braces
                 delayShiftLines.push(trimmed);
             } else {
+                if (trimmed === '{' || trimmed === '}') continue;
                 loopBodyLines.push(trimmed);
             }
         }
     }
 
-    return {
-        helperFns, sigWaveArrays, sig0Structs, sig0Tables, sig0Fills, sig0Inits,
-        fields, defaults, clearBody, constBody, uiParams,
-        fSlowDecls, loopBodyLines, delayShiftLines,
-        numInputs, numOutputs,
-    };
+    return { preLoopDecls, loopBodyLines, delayShiftLines };
 }
 
 // ---------------------------------------------------------------------------
-// Helper: Pre-process effect input references in C lines
+// Reshape AS code for MidiVoice context
 // ---------------------------------------------------------------------------
 
-function preprocessEffectInputs(line, numInputs) {
+function reshapeASLine(line, clsName, globalFields, staticFieldMap) {
     let out = line;
-    if (numInputs >= 2) {
-        out = out.replace(/\(float\)\(?input0\[\w+\]\)?/g, 'this.signal.left');
-        out = out.replace(/\(float\)\(?input1\[\w+\]\)?/g, 'this.signal.right');
-    } else if (numInputs === 1) {
-        out = out.replace(/\(float\)\(?input0\[\w+\]\)?/g, '((this.signal.left + this.signal.right) * 0.5)');
+
+    // Replace this.field → globalName for global UI params
+    if (globalFields) {
+        for (const [field, globalName] of globalFields) {
+            out = out.replace(new RegExp(`this\\.${field}\\b`, 'g'), globalName);
+        }
     }
+
+    // Replace ClassName.staticField → shortened name
+    if (staticFieldMap) {
+        for (const [fullName, shortName] of staticFieldMap) {
+            out = out.replace(new RegExp(`${clsName}\\.${fullName}\\b`, 'g'), shortName);
+        }
+    }
+
+    // Replace <f32>(this.fSampleRate) or this.fSampleRate with SAMPLERATE
+    out = out.replace(/<f32>\(this\.fSampleRate\)/g, 'SAMPLERATE');
+    out = out.replace(/\bthis\.fSampleRate\b/g, 'SAMPLERATE');
+
+    // Replace Array<T> with StaticArray<T>
+    out = out.replace(/new Array<(f32|i32)>/g, 'new StaticArray<$1>');
+    out = out.replace(/\b(f32|i32)\[\]/g, 'StaticArray<$1>');
+
+    // Fix Faust AS backend type ambiguities:
+    // 1. Inside <f32>(), bare integer literals like `100` are inferred as f32,
+    //    causing f32*i32 errors. Add explicit <i32> cast.
+    out = out.replace(/<f32>\((\d+) \* \(/g, '<f32>(<i32>$1 * (');
+    // 2. Ternary with <i32> true branch and bare `0` false branch inside <f32>()
+    //    context: the `0` is inferred as f32, causing type mismatch.
+    out = out.replace(/\) : 0\)\)/g, ') : <i32>0))');
+
     return out;
 }
 
-// ---------------------------------------------------------------------------
-// External header (ffunction) support — LookupTable parsing
-// ---------------------------------------------------------------------------
+function reshapeInstanceConstants(body, clsName, staticFieldMap) {
+    const lines = body.split('\n');
+    const result = [];
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        // Skip fSampleRate assignment — we use SAMPLERATE
+        if (trimmed.match(/this\.fSampleRate\s*=\s*sample_rate/)) continue;
 
-const SYSTEM_HEADERS = new Set(['math.h', 'stdint.h', 'stdlib.h', 'string.h', 'stdio.h']);
+        let out = reshapeASLine(trimmed, clsName, null, staticFieldMap);
 
-function parseExternalHeader(headerPath) {
-    const src = fs.readFileSync(headerPath, 'utf-8');
-    const functions = new Map();
+        // Convert `this.fConstN = expr;` to keep `this.` prefix
+        // Convert `let fConstN: f32 = expr;` → `const fConstN: f32 = expr;`
+        out = out.replace(/^let\s+(fConst\w+)/, 'const $1');
 
-    // 1. Extract point arrays: double tableName_points[N*2] = { ... };
-    const pointArrays = new Map();
-    const pointRegex = /double\s+(\w+_points)\s*\[\s*\d+\s*\*\s*2\s*\]\s*=\s*\{([^}]+)\}/g;
-    let m;
-    while ((m = pointRegex.exec(src)) !== null) {
-        const values = m[2].split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
-        pointArrays.set(m[1], values);
+        result.push(out);
     }
+    return result;
+}
 
-    // 2. Extract LookupTable declarations: LookupTable tableName(&pointsName[0], N);
-    const tableMap = new Map(); // tableName → { pointsArrayName, nPoints }
-    const tableRegex = /LookupTable\s+(\w+)\s*\(\s*&\s*(\w+_points)\s*\[\s*0\s*\]\s*,\s*(\d+)\s*\)/g;
-    while ((m = tableRegex.exec(src)) !== null) {
-        tableMap.set(m[1], { pointsArrayName: m[2], nPoints: parseInt(m[3]) });
-    }
+function reshapeInstanceClear(body) {
+    const lines = body.split('\n');
+    const result = [];
+    let inForLoop = false;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
 
-    // 3. Extract getter functions: float getValueXxx(float index) { return tableName.getValue(index); }
-    const getterRegex = /float\s+(getValue\w+|getvalue\w+|getValuer\w+)\s*\(\s*float\s+\w+\s*\)\s*\{\s*return\s+(\w+)\.getValue\s*\(\s*\w+\s*\)\s*;\s*\}/g;
-    while ((m = getterRegex.exec(src)) !== null) {
-        const fnName = m[1];
-        const tableName = m[2];
-        const tableInfo = tableMap.get(tableName);
-        if (tableInfo) {
-            const points = pointArrays.get(tableInfo.pointsArrayName);
-            if (points) {
-                functions.set(fnName, {
-                    tableName,
-                    points,
-                    nPoints: tableInfo.nPoints,
-                });
+        // Detect for loop start
+        if (trimmed.match(/^for\s*\(/)) {
+            // Compact single-line form: for (...) { this.field[i] = 0; }
+            let bodyLine = null;
+            // Look ahead to find the loop body
+            const idx = lines.indexOf(line);
+            for (let j = idx + 1; j < lines.length; j++) {
+                const inner = lines[j].trim();
+                if (!inner) continue;
+                if (inner === '}') break;
+                bodyLine = inner;
+                break;
             }
-        }
-    }
-
-    // 4. Extract simple array readers: float readXxx(int index) { ... return arrayName[index]; }
-    // (for modalBar-style tables — not LookupTable-based)
-    const arrayReaderRegex = /float\s+(read\w+)\s*\(\s*int\s+\w+\s*\)\s*\{[^}]*static\s+float\s+(\w+)\s*\[\s*[^\]]+\]\s*=\s*\{([^}]+)\}[^}]*return\s+\w+\[\s*\w+\s*\]\s*;/gs;
-    while ((m = arrayReaderRegex.exec(src)) !== null) {
-        const fnName = m[1];
-        const values = m[3].split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
-        functions.set(fnName, {
-            tableName: m[2],
-            points: values,
-            nPoints: -1, // flag: simple array, not LookupTable
-        });
-    }
-
-    return { functions };
-}
-
-function generateLookupTableAS(fnName, tableInfo, prefix) {
-    const lines = [];
-    const arrayName = `${prefix}${tableInfo.tableName}_points`;
-
-    if (tableInfo.nPoints === -1) {
-        // Simple array reader (e.g. readMarmstk1)
-        lines.push(`const ${arrayName}: StaticArray<f32> = StaticArray.fromArray<f32>([${tableInfo.points.join(', ')}]);`);
-        lines.push(`function ${fnName}(index: i32): f32 { return ${arrayName}[index]; }`);
-    } else {
-        // LookupTable with linear interpolation
-        const ptsStr = tableInfo.points.map(v => v.toString()).join(', ');
-        lines.push(`const ${arrayName}: StaticArray<f64> = StaticArray.fromArray<f64>([${ptsStr}]);`);
-        lines.push(`function ${fnName}(x: f32): f32 {`);
-        lines.push(`    const pts = ${arrayName};`);
-        lines.push(`    const n: i32 = ${tableInfo.nPoints};`);
-        lines.push(`    let i: i32 = 0;`);
-        lines.push(`    while (<f64>x > pts[i * 2]) {`);
-        lines.push(`        i++;`);
-        lines.push(`        if (i >= n) return <f32>pts[(n - 1) * 2 + 1];`);
-        lines.push(`    }`);
-        lines.push(`    if (i == 0) return <f32>pts[1];`);
-        lines.push(`    const ratio: f64 = (<f64>x - pts[(i - 1) * 2]) / (pts[i * 2] - pts[(i - 1) * 2]);`);
-        lines.push(`    return <f32>(pts[(i - 1) * 2 + 1] * (1.0 - ratio) + pts[i * 2 + 1] * ratio);`);
-        lines.push(`}`);
-    }
-    return lines;
-}
-
-function detectExternalHeaders(cSource, inputDsp) {
-    const headers = [];
-    const headerRegex = /#include\s+<(\w+\.h)>/g;
-    let m;
-    while ((m = headerRegex.exec(cSource)) !== null) {
-        if (!SYSTEM_HEADERS.has(m[1])) {
-            const headerPath = path.resolve(path.dirname(inputDsp), m[1]);
-            if (fs.existsSync(headerPath)) {
-                headers.push({ name: m[1], path: headerPath });
+            if (bodyLine) {
+                result.push(`${trimmed.replace(/\{$/, '').trim()} { ${bodyLine} }`);
+                inForLoop = true;
             } else {
-                console.warn(`Warning: External header ${m[1]} referenced but not found at ${headerPath}`);
+                result.push(trimmed);
+            }
+            continue;
+        }
+
+        // Skip lines already consumed by the compact form
+        if (inForLoop && (trimmed === '}' || trimmed.match(/^this\.\w+\[\w+\]\s*=\s*/))) {
+            if (trimmed === '}') inForLoop = false;
+            continue;
+        }
+
+        inForLoop = false;
+        result.push(trimmed);
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// Reshape SIG subcontainers into flat init functions
+// ---------------------------------------------------------------------------
+
+function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
+    const sigTables = [];
+    const sigInit = [];
+
+    // Extract static table declarations from the main class
+    for (const sf of parsed.staticFields) {
+        const shortName = tablePrefix + sf.name.replace(clsName, '');
+        const asType = sf.type;
+        if (sf.isArray && sf.initializer) {
+            const sizeMatch = sf.initializer.match(/new\s+Array<\w+>\((\d+)\)/);
+            if (sizeMatch) {
+                sigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${sizeMatch[1]});`);
             }
         }
     }
-    return headers;
+
+    if (parsed.sigClasses.length === 0) return { sigTables, sigInit, waveDataGlobals: [] };
+
+    sigInit.push(`let ${sigPrefix}_sig0_initialized: bool = false;`);
+    sigInit.push('');
+    sigInit.push(`function ${sigPrefix}_initSIG0Tables(): void {`);
+    sigInit.push(`    if (${sigPrefix}_sig0_initialized) return;`);
+    sigInit.push(`    ${sigPrefix}_sig0_initialized = true;`);
+
+    // Extract wave data globals from pre-class source (e.g. let iDX7SIG0Wave0: i32[] = [...])
+    const waveDataGlobals = [];
+    const waveDataRegex = /^let\s+(\w+Wave\d+):\s*(f32|i32)\[\]\s*=\s*(\[[^\]]*\]);/gm;
+    let wm;
+    while ((wm = waveDataRegex.exec(parsed.preClassSource)) !== null) {
+        const name = wm[1];
+        const type = wm[2];
+        const data = wm[3];
+        waveDataGlobals.push(`const ${name}: StaticArray<${type}> = ${data};`);
+    }
+
+    for (const sigClass of parsed.sigClasses) {
+        // Extract fields from SIG class (initializer is optional)
+        const sigFieldRegex = /^\s+(\w+):\s*(f32|i32)(\[\])?\s*(?:=\s*([^;]+))?;/gm;
+        let m;
+        while ((m = sigFieldRegex.exec(sigClass.body)) !== null) {
+            const fieldName = m[1];
+            const type = m[2];
+            const isArray = !!m[3];
+            const init = m[4] ? m[4].trim() : null;
+            if (fieldName === 'fSampleRate') continue;
+
+            const localName = `sig0_${fieldName}`;
+            if (isArray && init) {
+                const sizeMatch = init.match(/new\s+Array<\w+>\((\d+)\)/);
+                if (sizeMatch) {
+                    sigInit.push(`    const ${localName}: StaticArray<${type}> = new StaticArray<${type}>(${sizeMatch[1]});`);
+                }
+            } else {
+                sigInit.push(`    let ${localName}: ${type} = 0;`);
+            }
+        }
+
+        // Extract fill method body
+        const fillMatch = sigClass.body.match(/fill\w+\([^)]*\)\s*:\s*void\s*\{([\s\S]*?)\n\s{1,4}\}/);
+        if (fillMatch) {
+            const tableShortName = sigTables.length > 0
+                ? sigTables[sigTables.length - 1].match(/const\s+(\w+):/)?.[1] || 'ftbl0SIG0'
+                : 'ftbl0SIG0';
+
+            const fillBody = fillMatch[1];
+            const fillLines = fillBody.split('\n');
+            let inFillLoop = false;
+            for (const line of fillLines) {
+                let trimmed = line.trim();
+                if (!trimmed) continue;
+
+                // Replace this.field → sig0_field
+                trimmed = trimmed.replace(/this\.(\w+)/g, (_match, field) => {
+                    if (field === 'fSampleRate') return 'SAMPLERATE';
+                    return `sig0_${field}`;
+                });
+
+                // Replace table[iN] → shortTableName[i]
+                trimmed = trimmed.replace(/table\[\w+\]/g, `${tableShortName}[i]`);
+
+                // Replace for loop header
+                const forMatch = trimmed.match(/^for\s*\(\s*let\s+\w+:\s*i32\s*=\s*0;\s*\w+\s*<\s*count;/);
+                if (forMatch) {
+                    trimmed = trimmed.replace(/for\s*\(\s*let\s+\w+:\s*i32\s*=\s*0;\s*\w+\s*<\s*count;/, `for (let i: i32 = 0; i < ${tableShortName}.length;`);
+                    trimmed = trimmed.replace(/(\w+)\s*=\s*\1\s*\+\s*1\)/, 'i = i + 1)');
+                    sigInit.push('    ' + trimmed);
+                    inFillLoop = true;
+                    continue;
+                }
+
+                if (inFillLoop) {
+                    sigInit.push('        ' + trimmed);
+                } else {
+                    sigInit.push('    ' + trimmed);
+                }
+            }
+            if (inFillLoop) {
+                sigInit.push('    }');
+            }
+        }
+    }
+
+    sigInit.push('}');
+    sigInit.push('');
+
+    return { sigTables, sigInit, waveDataGlobals };
 }
 
 // ---------------------------------------------------------------------------
@@ -678,22 +535,18 @@ function detectExternalHeaders(cSource, inputDsp) {
 function transpileDsp(inputDsp, clsName, options = {}) {
     const {
         voiceTablePrefix = '',
-        voiceWavePrefix = '',
         effectTablePrefix = '_eff_',
-        effectWavePrefix = '_eff_',
         voiceSigPrefix = '',
         effectSigPrefix = '_eff',
     } = options;
 
-    let m;
-
-    // === Step 1: Run Faust compiler to get C output ===
+    // === Step 1: Run Faust compiler to get AS output ===
 
     const dspSource = fs.readFileSync(path.resolve(inputDsp), 'utf-8');
     const hasEffect = /^\s*effect\s*=/m.test(dspSource);
 
-    const tmpCFile = `/tmp/faust2as_${clsName}.c`;
-    const faustCmd = `faust -lang c -cn ${clsName} "${path.resolve(inputDsp)}" -o "${tmpCFile}"`;
+    const tmpASFile = `/tmp/faust2as_${clsName}.ts`;
+    const faustCmd = `"${FAUST_BIN}" -lang asc -cn ${clsName} -I /opt/homebrew/share/faust "${path.resolve(inputDsp)}" -o "${tmpASFile}"`;
     console.log(`Running: ${faustCmd}`);
     try {
         execSync(faustCmd, { stdio: 'inherit' });
@@ -702,15 +555,15 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         process.exit(1);
     }
 
-    const cSource = fs.readFileSync(tmpCFile, 'utf-8');
+    const asSource = fs.readFileSync(tmpASFile, 'utf-8');
 
+    let effectASSource = null;
+    let tmpEffectASFile = null;
     const effectClassName = clsName + 'Effect';
-    let effectCSource = null;
-    let tmpEffectCFile = null;
 
     if (hasEffect) {
-        tmpEffectCFile = `/tmp/faust2as_${effectClassName}.c`;
-        const effectFaustCmd = `faust -lang c -cn ${effectClassName} -pn effect "${path.resolve(inputDsp)}" -o "${tmpEffectCFile}"`;
+        tmpEffectASFile = `/tmp/faust2as_${effectClassName}.ts`;
+        const effectFaustCmd = `"${FAUST_BIN}" -lang asc -cn ${effectClassName} -pn effect -I /opt/homebrew/share/faust "${path.resolve(inputDsp)}" -o "${tmpEffectASFile}"`;
         console.log(`Running: ${effectFaustCmd}`);
         try {
             execSync(effectFaustCmd, { stdio: 'inherit' });
@@ -718,266 +571,45 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             console.error('Faust effect compilation failed');
             process.exit(1);
         }
-        effectCSource = fs.readFileSync(tmpEffectCFile, 'utf-8');
+        effectASSource = fs.readFileSync(tmpEffectASFile, 'utf-8');
         console.log(`Detected effect declaration — will generate ${clsName}Channel MidiChannel subclass`);
     }
 
-    // === Step 1b: Detect and parse external header files (ffunction support) ===
-    const externalFunctions = new Map(); // fnName → tableInfo
-    const allExternalHeaders = [
-        ...detectExternalHeaders(cSource, inputDsp),
-        ...(effectCSource ? detectExternalHeaders(effectCSource, inputDsp) : []),
-    ];
-    const parsedHeaders = new Set();
-    for (const header of allExternalHeaders) {
-        if (parsedHeaders.has(header.path)) continue;
-        parsedHeaders.add(header.path);
-        console.log(`Parsing external header: ${header.name}`);
-        const parsed = parseExternalHeader(header.path);
-        for (const [fnName, info] of parsed.functions) {
-            if (!externalFunctions.has(fnName)) {
-                externalFunctions.set(fnName, info);
-            }
-        }
-    }
-    if (externalFunctions.size > 0) {
-        console.log(`Found ${externalFunctions.size} external lookup table functions: ${[...externalFunctions.keys()].join(', ')}`);
+    // === Step 2: Parse AS output ===
+
+    const parsed = parseASSource(asSource, clsName);
+    const { uiParams } = extractUIFromJSON(asSource);
+
+    // Build static field name map: ClassName.ftbl0ClassNameSIG0 → ftbl0SIG0
+    const staticFieldMap = new Map();
+    for (const sf of parsed.staticFields) {
+        const shortName = voiceTablePrefix + sf.name.replace(clsName, '');
+        staticFieldMap.set(sf.name, shortName);
     }
 
-    // === Step 2: Parse C output ===
+    // === Step 3: Determine global UI parameters ===
 
-    // --- 2a: Extract helper functions (e.g. faustpower2_f) ---
-    const helperFnRegex = new RegExp(`static\\s+float\\s+${clsName}_(\\w+)\\s*\\(([^)]*)\\)\\s*\\{([^}]+)\\}`, 'g');
-    const helperFns = [];
-    while ((m = helperFnRegex.exec(cSource)) !== null) {
-        helperFns.push({ fnName: m[1], params: m[2], body: m[3].trim() });
-    }
+    const freqParam = uiParams.find(p => p.name === 'freq' || p.address.endsWith('/freq'));
+    const gateParam = uiParams.find(p => p.isButton && (p.name === 'gate' || p.address.endsWith('/gate')));
+    const gainParam = uiParams.find(p => p.name === 'gain' || p.address.endsWith('/gain'));
 
-    // --- 2b: Extract SIG structs, fill functions, and wave data arrays ---
-    const sig0Structs = [];
-    const sig0Tables = [];
-    const sig0Fills = [];
-    const sigWaveArrays = [];
-
-    const sigWaveRegex = new RegExp(
-        `static\\s+(float|int)\\s+([fi]${clsName}SIG\\d+Wave\\d+)\\s*\\[(\\d+)\\]\\s*=\\s*\\{([^}]+)\\}`,
-        'g'
-    );
-    while ((m = sigWaveRegex.exec(cSource)) !== null) {
-        const values = m[4].split(',').map(v => v.trim().replace(/f$/i, ''));
-        sigWaveArrays.push({ name: m[2], size: parseInt(m[3]), values, isInt: m[1] === 'int' });
-    }
-
-    const sig0StructRegex = new RegExp(`typedef\\s+struct\\s*\\{([^}]+)\\}\\s*${clsName}SIG(\\d+)\\s*;`, 'g');
-    while ((m = sig0StructRegex.exec(cSource)) !== null) {
-        sig0Structs.push({ sigIndex: m[2], fields: m[1] });
-    }
-
-    const sig0TableRegex = new RegExp(`static\\s+(float|int)\\s+([fi]tbl\\d+${clsName}SIG\\d+)\\s*\\[(\\d+)\\]\\s*;`, 'g');
-    while ((m = sig0TableRegex.exec(cSource)) !== null) {
-        sig0Tables.push({ name: m[2], size: parseInt(m[3]), isInt: m[1] === 'int' });
-    }
-
-    const sig0FillRegex = new RegExp(
-        `static\\s+void\\s+fill${clsName}SIG(\\d+)\\s*\\(${clsName}SIG\\d+\\*\\s*dsp,\\s*int\\s+count,\\s*(?:float|int)\\*\\s+table\\)\\s*\\{([\\s\\S]*?)^\\}`,
-        'gm'
-    );
-    while ((m = sig0FillRegex.exec(cSource)) !== null) {
-        sig0Fills.push({ sigIndex: m[1], body: m[2] });
-    }
-
-    const sig0InitRegex = new RegExp(
-        `static\\s+void\\s+instanceInit${clsName}SIG(\\d+)\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`,
-        'gm'
-    );
-    const sig0Inits = [];
-    while ((m = sig0InitRegex.exec(cSource)) !== null) {
-        sig0Inits.push({ sigIndex: m[1], body: m[2] });
-    }
-
-    // --- 2c: Extract main struct fields ---
-    const structRegex = new RegExp(`typedef\\s+struct\\s*\\{([^{}]*)\\}\\s*${clsName}\\s*;`);
-    const structMatch = cSource.match(structRegex);
-    if (!structMatch) {
-        console.error(`Could not find main struct for ${clsName}`);
-        process.exit(1);
-    }
-
-    const structBody = structMatch[1];
-    const fields = [];
-    const fieldRegex = /\s*(FAUSTFLOAT|float|int)\s+(\w+)(?:\[(\d+)\])?\s*;/g;
-    while ((m = fieldRegex.exec(structBody)) !== null) {
-        if (m[2] === 'fSampleRate') continue;
-        fields.push({ type: m[1], name: m[2], arraySize: m[3] ? parseInt(m[3]) : null });
-    }
-
-    // --- 2d: Extract instanceResetUserInterface (default values) ---
-    const resetUIRegex = new RegExp(
-        `void\\s+instanceResetUserInterface${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`,
-        'gm'
-    );
-    const resetUIMatch = resetUIRegex.exec(cSource);
-    const defaults = {};
-    if (resetUIMatch) {
-        const defaultRegex = /dsp->(\w+)\s*=\s*\(FAUSTFLOAT\)\(?([\d.eE+-]+f?)\)?/g;
-        while ((m = defaultRegex.exec(resetUIMatch[1])) !== null) {
-            let val = m[2].replace(/f$/, '');
-            val = parseFloat(val).toString();
-            defaults[m[1]] = val;
-        }
-    }
-
-    // --- 2e: Extract instanceClear ---
-    const clearRegex = new RegExp(
-        `void\\s+instanceClear${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`,
-        'gm'
-    );
-    const clearMatch = clearRegex.exec(cSource);
-    const clearBody = clearMatch ? clearMatch[1] : '';
-
-    // --- 2f: Extract instanceConstants ---
-    const constRegex = new RegExp(
-        `void\\s+instanceConstants${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`,
-        'gm'
-    );
-    const constMatch = constRegex.exec(cSource);
-    const constBody = constMatch ? constMatch[1] : '';
-
-    // --- 2g: Extract buildUserInterface ---
-    const buildUIRegex = new RegExp(
-        `void\\s+buildUserInterface${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}`,
-        'gm'
-    );
-    const buildUIMatch = buildUIRegex.exec(cSource);
-    const buildUIBody = buildUIMatch ? buildUIMatch[1] : '';
-
-    const uiParams = [];
-    const declareRegex = /ui_interface->declare\([^,]+,\s*&dsp->(\w+),\s*"(\w+)",\s*"([^"]+)"\)/g;
-    const midiMeta = {};
-    while ((m = declareRegex.exec(buildUIBody)) !== null) {
-        if (!midiMeta[m[1]]) midiMeta[m[1]] = {};
-        midiMeta[m[1]][m[2]] = m[3];
-    }
-
-    const sliderRegex = /ui_interface->(?:add(?:Horizontal|Vertical)Slider|addNumEntry)\([^,]+,\s*"([^"]+)",\s*&dsp->(\w+),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?),\s*\(FAUSTFLOAT\)([\d.eE+-]+f?)\)/g;
-    while ((m = sliderRegex.exec(buildUIBody)) !== null) {
-        uiParams.push({
-            name: m[1], field: m[2],
-            init: parseFloat(m[3]), min: parseFloat(m[4]), max: parseFloat(m[5]), step: parseFloat(m[6]),
-            midi: midiMeta[m[2]] || {}
-        });
-    }
-    const buttonRegex = /ui_interface->addButton\([^,]+,\s*"([^"]+)",\s*&dsp->(\w+)\)/g;
-    while ((m = buttonRegex.exec(buildUIBody)) !== null) {
-        uiParams.push({
-            name: m[1], field: m[2],
-            init: 0, min: 0, max: 1, step: 1,
-            isButton: true,
-            midi: midiMeta[m[2]] || {}
-        });
-    }
-    const checkboxRegex = /ui_interface->addCheckButton\([^,]+,\s*"([^"]+)",\s*&dsp->(\w+)\)/g;
-    while ((m = checkboxRegex.exec(buildUIBody)) !== null) {
-        uiParams.push({
-            name: m[1], field: m[2],
-            init: 0, min: 0, max: 1, step: 1,
-            midi: midiMeta[m[2]] || {}
-        });
-    }
-
-    // --- 2h: Extract compute body ---
-    const computeRegex = new RegExp(
-        `void\\s+compute${clsName}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)^\\}\\s*(?:#ifdef|$)`,
-        'gm'
-    );
-    const computeMatch = computeRegex.exec(cSource);
-    if (!computeMatch) {
-        console.error(`Could not find compute function for ${clsName}`);
-        process.exit(1);
-    }
-    const computeBody = computeMatch[1];
-
-    const computeLines = computeBody.split('\n');
-    const fSlowDecls = [];
-    const loopBodyLines = [];
-    const delayShiftLines = [];
-    let inLoop = false;
-    let loopBraceDepth = 0;
-    let afterOutputAssignment = false;
-
-    for (let i = 0; i < computeLines.length; i++) {
-        const line = computeLines[i];
-        const trimmed = line.trim();
-
-        if (trimmed.startsWith('FAUSTFLOAT* output')) continue;
-
-        if (!inLoop && (trimmed.startsWith('float fSlow') || trimmed.startsWith('int iSlow'))) {
-            fSlowDecls.push(trimmed);
-            continue;
-        }
-
-        if (!inLoop && trimmed.match(/for\s*\(\w+\s*=\s*0/)) {
-            inLoop = true;
-            loopBraceDepth = 0;
-            continue;
-        }
-
-        if (inLoop) {
-            for (const ch of trimmed) {
-                if (ch === '{') loopBraceDepth++;
-                if (ch === '}') loopBraceDepth--;
-            }
-
-            if (trimmed === '' || trimmed === '{' || trimmed === '}') continue;
-            if (trimmed.startsWith('/*') || trimmed.startsWith('//')) continue;
-            if (trimmed.match(/^int\s+[ij]\d+\s*;$/)) continue;
-            if (trimmed.match(/^for\s*\(\s*[ij]\d+\s*=\s*0/)) continue;
-
-            if (trimmed.match(/output[01]\[/)) {
-                afterOutputAssignment = true;
-                if (trimmed.match(/output0\[/)) {
-                    loopBodyLines.push(trimmed);
-                }
-                continue;
-            }
-
-            if (afterOutputAssignment) {
-                delayShiftLines.push(trimmed);
-            } else {
-                loopBodyLines.push(trimmed);
-            }
-        }
-    }
-
-    // === Determine global UI parameters ===
-
-    // freq/gate/gain are standard Faust MIDI polyphony params — they stay per-voice
-    const freqParam = uiParams.find(p => p.name === 'freq');
-    const gateParam = uiParams.find(p => p.isButton && p.name === 'gate');
-    const gainParam = uiParams.find(p => p.name === 'gain');
-
-    // All other non-button UI params become global variables shared across voices
     const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
     const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
 
-    // Safe CC range: 0-119 (CCs 120-127 are MIDI Channel Mode Messages)
     const MAX_SAFE_CC = 119;
-    const RESERVED_CCS = new Set([7, 10, 64, 91]); // volume, pan, sustain, reverb
+    const RESERVED_CCS = new Set([7, 10, 64, 91]);
     let usableCCCount = 0;
     for (let i = 0; i <= MAX_SAFE_CC; i++) {
         if (!RESERVED_CCS.has(i)) usableCCCount++;
     }
 
-    // If params exceed safe CC range, use NRPN addressing for all params
     const useNRPN = ccParams.length > usableCCCount;
 
     if (useNRPN) {
-        // NRPN mode: assign sequential param indices
         for (let i = 0; i < ccParams.length; i++) {
             ccParams[i].nrpn = i;
         }
     } else {
-        // Direct CC mode: sequential assignment, capped at MAX_SAFE_CC
         let ccIndex = 0;
         for (const p of ccParams) {
             while (ccIndex <= MAX_SAFE_CC && RESERVED_CCS.has(ccIndex)) ccIndex++;
@@ -987,130 +619,50 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         }
     }
 
-    // Global variable prefix: lowercase DSP filename
     const globalPrefix = path.basename(inputDsp, '.dsp') + '_';
-
-    // Map UI param fields → global variable names (except per-voice freq/gain/gate)
     const globalFields = new Map();
     for (const p of ccParams) {
         globalFields.set(p.field, globalPrefix + p.field);
     }
 
-    // === Generate voice code sections ===
+    // === Step 4: Generate SIG tables and init ===
 
-    const voiceCtx = {
-        className: clsName,
-        helperFns,
-        sig0Tables,
-        sigWaveArrays,
-        tablePrefix: voiceTablePrefix,
-        wavePrefix: voiceWavePrefix,
-        globalFields,
-    };
+    const { sigTables: voiceSigTables, sigInit: voiceSigInit, waveDataGlobals: voiceWaveData } = reshapeSIGInit(
+        parsed, clsName, voiceTablePrefix, voiceSigPrefix
+    );
 
-    // Voice wave data
-    const voiceWaveData = [];
-    for (const wave of sigWaveArrays) {
-        const prefix = wave.isInt ? 'i' : 'f';
-        const shortName = wave.name.replace(`${prefix}${clsName}`, voiceWavePrefix + '_wave_');
-        const asType = wave.isInt ? 'i32' : 'f32';
-        voiceWaveData.push(`const ${shortName}: StaticArray<${asType}> = StaticArray.fromArray<${asType}>([${wave.values.join(', ')}]);`);
-    }
+    // === Step 5: Generate voice class ===
 
-    // Voice SIG tables
-    const voiceSigTables = [];
-    for (const table of sig0Tables) {
-        const shortName = voiceTablePrefix + table.name.replace(clsName, '');
-        const asType = table.isInt ? 'i32' : 'f32';
-        voiceSigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${table.size});`);
-    }
-
-    // Voice SIG init function
-    const voiceSigInit = [];
-    if (sig0Fills.length > 0) {
-        voiceSigInit.push(`let ${voiceSigPrefix}_sig0_initialized: bool = false;`);
-        voiceSigInit.push('');
-        voiceSigInit.push(`function ${voiceSigPrefix}_initSIG0Tables(): void {`);
-        voiceSigInit.push(`    if (${voiceSigPrefix}_sig0_initialized) return;`);
-        voiceSigInit.push(`    ${voiceSigPrefix}_sig0_initialized = true;`);
-
-        for (let idx = 0; idx < sig0Fills.length; idx++) {
-            const fill = sig0Fills[idx];
-            const table = sig0Tables[idx];
-            const shortTableName = table
-                ? voiceTablePrefix + table.name.replace(clsName, '')
-                : `${voiceTablePrefix}ftbl${idx}SIG${fill.sigIndex}`;
-
-            const sig0Struct = sig0Structs[idx];
-            const sigFields = [];
-            if (sig0Struct) {
-                const sigFieldRegex = /\s*(int|float)\s+(\w+)(?:\[(\d+)\])?\s*;/g;
-                let fm;
-                while ((fm = sigFieldRegex.exec(sig0Struct.fields)) !== null) {
-                    sigFields.push({ type: fm[1], name: fm[2], arraySize: fm[3] ? parseInt(fm[3]) : null });
-                }
-
-                for (const sf of sigFields) {
-                    const asType = sf.type === 'float' ? 'f32' : 'i32';
-                    if (sf.arraySize) {
-                        voiceSigInit.push(`    const sig${fill.sigIndex}_${sf.name}: StaticArray<${asType}> = new StaticArray<${asType}>(${sf.arraySize});`);
-                    } else {
-                        voiceSigInit.push(`    let sig${fill.sigIndex}_${sf.name}: ${asType} = 0;`);
-                    }
-                }
-            }
-
-            const fillLines = transpileSig0Fill(fill.body, shortTableName, voiceCtx);
-            for (let line of fillLines) {
-                for (const sf of sigFields) {
-                    line = line.replace(new RegExp(`\\b${sf.name}\\b`, 'g'), `sig${fill.sigIndex}_${sf.name}`);
-                }
-                voiceSigInit.push('    ' + line);
-            }
-        }
-        voiceSigInit.push('}');
-        voiceSigInit.push('');
-    }
-
-    // Voice helper functions
-    const voiceHelpers = [];
-    for (const h of helperFns) {
-        const asParams = h.params.replace(/float\s+(\w+)/g, '$1: f32').replace(/int\s+(\w+)/g, '$1: i32');
-        const asBody = transpileExpr(h.body, voiceCtx);
-        voiceHelpers.push({ fnName: h.fnName, code: `function ${h.fnName}(${asParams}): f32 { ${asBody} }` });
-    }
-
-    // Voice class
     const voiceClass = [];
-
     voiceClass.push(`export class ${clsName} extends MidiVoice {`);
 
-    for (const field of fields) {
-        const isUI = field.type === 'FAUSTFLOAT';
-        // Skip global UI params — they're emitted as module-level variables
-        if (isUI && globalFields.has(field.name)) continue;
-        if (field.arraySize) {
-            const asType = (field.type === 'int') ? 'i32' : 'f32';
-            voiceClass.push(`    private ${field.name}: StaticArray<${asType}> = new StaticArray<${asType}>(${field.arraySize});`);
-        } else if (field.name === 'IOTA' || field.name.startsWith('IOTA')) {
+    // Fields
+    for (const field of parsed.fields) {
+        if (field.name === 'fSampleRate') continue;
+        if (globalFields.has(field.name)) continue;
+
+        if (field.isArray) {
+            const sizeMatch = field.initializer ? field.initializer.match(/new\s+Array<\w+>\((\d+)\)/) : null;
+            const size = sizeMatch ? sizeMatch[1] : '0';
+            voiceClass.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
+        } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
             voiceClass.push(`    private ${field.name}: i32 = 0;`);
-        } else if (isUI) {
-            const def = defaults[field.name] || '0.0';
-            voiceClass.push(`    private ${field.name}: f32 = ${def};`);
+        } else if (parsed.defaults[field.name] !== undefined) {
+            voiceClass.push(`    private ${field.name}: f32 = ${parsed.defaults[field.name]};`);
+        } else if (field.initializer) {
+            voiceClass.push(`    private ${field.name}: ${field.type} = ${field.initializer};`);
         } else {
-            const asType = (field.type === 'int') ? 'i32' : 'f32';
-            voiceClass.push(`    private ${field.name}: ${asType};`);
+            voiceClass.push(`    private ${field.name}: ${field.type};`);
         }
     }
-
-    voiceClass.push(`    private silentSamples: i32 = 0;`);
-    voiceClass.push(`    private releaseSamples: i32 = 0;`);
+    voiceClass.push('    private silentSamples: i32 = 0;');
+    voiceClass.push('    private releaseSamples: i32 = 0;');
     voiceClass.push('');
 
     // Constructor
     voiceClass.push('    constructor(channel: MidiChannel) {');
     voiceClass.push('        super(channel);');
-    if (sig0Fills.length > 0) {
+    if (parsed.sigClasses.length > 0) {
         voiceClass.push(`        ${voiceSigPrefix}_initSIG0Tables();`);
     }
     voiceClass.push('        this.instanceConstants();');
@@ -1120,7 +672,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     // instanceConstants
     voiceClass.push('    private instanceConstants(): void {');
-    const constLines = transpileInstanceConstants(constBody, voiceCtx);
+    const constLines = reshapeInstanceConstants(parsed.instanceConstants, clsName, staticFieldMap);
     for (const line of constLines) {
         voiceClass.push('        ' + line);
     }
@@ -1129,7 +681,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     // instanceClear
     voiceClass.push('    private instanceClear(): void {');
-    const clearLines = transpileInstanceClear(clearBody);
+    const clearLines = reshapeInstanceClear(parsed.instanceClear, clsName);
     for (const line of clearLines) {
         voiceClass.push('        ' + line);
     }
@@ -1146,9 +698,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         voiceClass.push(`        this.${gainParam.field} = <f32>velocity / 127.0;`);
     }
     if (gateParam) {
-        // Force gate 0→1 transition so Faust envelope edge detection retriggers.
-        // Without this, a sustained voice (noteoff never called due to sustain pedal)
-        // would not retrigger because gate stays at 1.0 and the DSP sees no rising edge.
         voiceClass.push(`        this.${gateParam.field} = 0.0;`);
         voiceClass.push('        this.nextframe();');
         voiceClass.push(`        this.${gateParam.field} = 1.0;`);
@@ -1179,30 +728,38 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     // nextframe
     voiceClass.push('    nextframe(): void {');
 
-    for (const decl of fSlowDecls) {
-        const transpiled = transpileStatement(decl, voiceCtx);
-        voiceClass.push('        ' + transpiled);
+    const { preLoopDecls, loopBodyLines, delayShiftLines } = parseComputeBody(parsed.computeBody);
+
+    // Pre-loop declarations (fSlow/iSlow)
+    for (const decl of preLoopDecls) {
+        let line = reshapeASLine(decl, clsName, globalFields, staticFieldMap);
+        // Convert `let` to `const` for fSlow/iSlow
+        line = line.replace(/^let\s+(fSlow|iSlow)/, 'const $1');
+        voiceClass.push('        ' + line);
     }
     voiceClass.push('');
 
-    for (const line of loopBodyLines) {
-        let transpiled = transpileStatement(line, voiceCtx);
+    // Loop body
+    for (const bodyLine of loopBodyLines) {
+        let line = reshapeASLine(bodyLine, clsName, globalFields, staticFieldMap);
 
-        if (transpiled.includes('__OUTPUT_ASSIGN__')) {
-            const exprMatch = transpiled.match(/__OUTPUT_ASSIGN__\s*=\s*(.*);$/);
-            if (exprMatch) {
-                voiceClass.push(`        const output: f32 = ${exprMatch[1]};`);
-            }
+        // Handle output assignment: output0[i0] = expr; → const output: f32 = expr;
+        const outputMatch = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
+        if (outputMatch) {
+            voiceClass.push(`        const output: f32 = ${outputMatch[1]};`);
             continue;
         }
 
-        voiceClass.push('        ' + transpiled);
-    }
+        // Convert `let` to `const` for local temp vars (fTemp, iTemp, fRec local assigns)
+        line = line.replace(/^let\s+(fTemp|iTemp|fRec\d|iRec\d)/, 'const $1');
 
+        voiceClass.push('        ' + line);
+    }
     voiceClass.push('');
 
-    const delayLines = transpileDelayShifts(delayShiftLines, voiceCtx);
-    for (const line of delayLines) {
+    // Delay shifts
+    for (const shiftLine of delayShiftLines) {
+        const line = reshapeASLine(shiftLine, clsName, globalFields, staticFieldMap);
         voiceClass.push('        ' + line);
     }
 
@@ -1220,11 +777,12 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     voiceClass.push('    }');
     voiceClass.push('}');
 
-    // === Generate global variable declarations for shared UI params ===
+    // === Step 6: Generate global variable declarations ===
+
     const voiceGlobals = [];
     for (const p of ccParams) {
         const globalName = globalFields.get(p.field);
-        const def = defaults[p.field] || '0.0';
+        const def = parsed.defaults[p.field] || '0.0';
         const label = p.name.replace(/_/g, ' ');
         let mappingComment = '';
         if (useNRPN && p.nrpn !== undefined) {
@@ -1236,7 +794,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         voiceGlobals.push(`let ${globalName}: f32 = ${def};`);
     }
 
-    // Log CC/NRPN allocation stats
     if (ccParams.length > 0) {
         if (useNRPN) {
             console.log(`  ${ccParams.length} params mapped to NRPN (0–${ccParams.length - 1})`);
@@ -1246,7 +803,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         }
     }
 
-    // === Generate effect code sections ===
+    // === Step 7: Generate effect code sections ===
 
     const effectWaveData = [];
     const effectSigTables = [];
@@ -1254,102 +811,41 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     const effectHelpers = [];
     const effectClass = [];
 
-    if (hasEffect && effectCSource) {
-        const eff = parseEffectC(effectCSource, effectClassName);
+    if (hasEffect && effectASSource) {
+        const effParsed = parseASSource(effectASSource, effectClassName);
+        const effUI = extractUIFromJSON(effectASSource);
 
-        const effectCtx = {
-            className: effectClassName,
-            helperFns: eff.helperFns,
-            sig0Tables: eff.sig0Tables,
-            sigWaveArrays: eff.sigWaveArrays,
-            tablePrefix: effectTablePrefix,
-            wavePrefix: effectWavePrefix,
-        };
-
-        // Effect wave data
-        for (const wave of eff.sigWaveArrays) {
-            const prefix = wave.isInt ? 'i' : 'f';
-            const shortName = wave.name.replace(`${prefix}${effectClassName}`, effectWavePrefix + '_wave_');
-            const asType = wave.isInt ? 'i32' : 'f32';
-            effectWaveData.push(`const ${shortName}: StaticArray<${asType}> = StaticArray.fromArray<${asType}>([${wave.values.join(', ')}]);`);
+        const effStaticFieldMap = new Map();
+        for (const sf of effParsed.staticFields) {
+            const shortName = effectTablePrefix + sf.name.replace(effectClassName, '');
+            effStaticFieldMap.set(sf.name, shortName);
         }
 
         // Effect SIG tables
-        for (const table of eff.sig0Tables) {
-            const shortName = effectTablePrefix + table.name.replace(effectClassName, '');
-            const asType = table.isInt ? 'i32' : 'f32';
-            effectSigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${table.size});`);
-        }
-
-        // Effect SIG init function
-        if (eff.sig0Fills.length > 0) {
-            effectSigInit.push(`let ${effectSigPrefix}_sig0_initialized: bool = false;`);
-            effectSigInit.push('');
-            effectSigInit.push(`function ${effectSigPrefix}_initSIG0Tables(): void {`);
-            effectSigInit.push(`    if (${effectSigPrefix}_sig0_initialized) return;`);
-            effectSigInit.push(`    ${effectSigPrefix}_sig0_initialized = true;`);
-
-            for (let idx = 0; idx < eff.sig0Fills.length; idx++) {
-                const fill = eff.sig0Fills[idx];
-                const table = eff.sig0Tables[idx];
-                const shortTableName = table
-                    ? effectTablePrefix + table.name.replace(effectClassName, '')
-                    : `${effectTablePrefix}ftbl${idx}SIG${fill.sigIndex}`;
-
-                const sig0Struct = eff.sig0Structs[idx];
-                const sigFields = [];
-                if (sig0Struct) {
-                    const sigFieldRegex = /\s*(int|float)\s+(\w+)(?:\[(\d+)\])?\s*;/g;
-                    let fm;
-                    while ((fm = sigFieldRegex.exec(sig0Struct.fields)) !== null) {
-                        sigFields.push({ type: fm[1], name: fm[2], arraySize: fm[3] ? parseInt(fm[3]) : null });
-                    }
-                    for (const sf of sigFields) {
-                        const asType = sf.type === 'float' ? 'f32' : 'i32';
-                        if (sf.arraySize) {
-                            effectSigInit.push(`    const sig${fill.sigIndex}_${sf.name}: StaticArray<${asType}> = new StaticArray<${asType}>(${sf.arraySize});`);
-                        } else {
-                            effectSigInit.push(`    let sig${fill.sigIndex}_${sf.name}: ${asType} = 0;`);
-                        }
-                    }
-                }
-
-                const fillLines = transpileSig0Fill(fill.body, shortTableName, effectCtx);
-                for (let line of fillLines) {
-                    for (const sf of sigFields) {
-                        line = line.replace(new RegExp(`\\b${sf.name}\\b`, 'g'), `sig${fill.sigIndex}_${sf.name}`);
-                    }
-                    effectSigInit.push('    ' + line);
-                }
-            }
-            effectSigInit.push('}');
-            effectSigInit.push('');
-        }
-
-        // Effect helper functions
-        for (const h of eff.helperFns) {
-            const asParams = h.params.replace(/float\s+(\w+)/g, '$1: f32').replace(/int\s+(\w+)/g, '$1: i32');
-            const asBody = transpileExpr(h.body, effectCtx);
-            effectHelpers.push({ fnName: h.fnName, code: `function ${h.fnName}(${asParams}): f32 { ${asBody} }` });
-        }
+        const effSIG = reshapeSIGInit(effParsed, effectClassName, effectTablePrefix, effectSigPrefix);
+        effectSigTables.push(...effSIG.sigTables);
+        effectSigInit.push(...effSIG.sigInit);
+        effectWaveData.push(...effSIG.waveDataGlobals);
 
         // Effect MidiChannel subclass
         const channelClassName = clsName + 'Channel';
         effectClass.push(`export class ${channelClassName} extends MidiChannel {`);
 
-        for (const field of eff.fields) {
-            const isUI = field.type === 'FAUSTFLOAT';
-            if (field.arraySize) {
-                const asType = (field.type === 'int') ? 'i32' : 'f32';
-                effectClass.push(`    private ${field.name}: StaticArray<${asType}> = new StaticArray<${asType}>(${field.arraySize});`);
-            } else if (field.name === 'IOTA' || field.name.startsWith('IOTA')) {
+        for (const field of effParsed.fields) {
+            if (field.name === 'fSampleRate') continue;
+
+            if (field.isArray) {
+                const sizeMatch = field.initializer ? field.initializer.match(/new\s+Array<\w+>\((\d+)\)/) : null;
+                const size = sizeMatch ? sizeMatch[1] : '0';
+                effectClass.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
+            } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
                 effectClass.push(`    private ${field.name}: i32 = 0;`);
-            } else if (isUI) {
-                const def = eff.defaults[field.name] || '0.0';
-                effectClass.push(`    private ${field.name}: f32 = ${def};`);
+            } else if (effParsed.defaults[field.name] !== undefined) {
+                effectClass.push(`    private ${field.name}: f32 = ${effParsed.defaults[field.name]};`);
+            } else if (field.initializer) {
+                effectClass.push(`    private ${field.name}: ${field.type} = ${field.initializer};`);
             } else {
-                const asType = (field.type === 'int') ? 'i32' : 'f32';
-                effectClass.push(`    private ${field.name}: ${asType};`);
+                effectClass.push(`    private ${field.name}: ${field.type};`);
             }
         }
         effectClass.push('');
@@ -1357,7 +853,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         // Constructor
         effectClass.push('    constructor(numvoices: i32, factoryFunc: (channel: MidiChannel, voiceindex: i32) => MidiVoice) {');
         effectClass.push('        super(numvoices, factoryFunc);');
-        if (eff.sig0Fills.length > 0) {
+        if (effParsed.sigClasses.length > 0) {
             effectClass.push(`        ${effectSigPrefix}_initSIG0Tables();`);
         }
         effectClass.push('        this._effectInstanceConstants();');
@@ -1367,7 +863,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
         // _effectInstanceConstants
         effectClass.push('    private _effectInstanceConstants(): void {');
-        const effConstLines = transpileInstanceConstants(eff.constBody, effectCtx);
+        const effConstLines = reshapeInstanceConstants(effParsed.instanceConstants, effectClassName, effStaticFieldMap);
         for (const line of effConstLines) {
             effectClass.push('        ' + line);
         }
@@ -1376,7 +872,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
         // _effectInstanceClear
         effectClass.push('    private _effectInstanceClear(): void {');
-        const effClearLines = transpileInstanceClear(eff.clearBody);
+        const effClearLines = reshapeInstanceClear(effParsed.instanceClear, effectClassName);
         for (const line of effClearLines) {
             effectClass.push('        ' + line);
         }
@@ -1385,43 +881,49 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
         // preprocess()
         effectClass.push('    preprocess(): void {');
+        const effCompute = parseComputeBody(effParsed.computeBody);
 
-        for (const decl of eff.fSlowDecls) {
-            let line = preprocessEffectInputs(decl, eff.numInputs);
-            effectClass.push('        ' + transpileStatement(line, effectCtx));
+        for (const decl of effCompute.preLoopDecls) {
+            let line = reshapeASLine(decl, effectClassName, null, effStaticFieldMap);
+            line = line.replace(/^let\s+(fSlow|iSlow)/, 'const $1');
+            effectClass.push('        ' + line);
         }
-        if (eff.fSlowDecls.length > 0) effectClass.push('');
+        if (effCompute.preLoopDecls.length > 0) effectClass.push('');
 
-        for (const line of eff.loopBodyLines) {
-            const preprocessed = preprocessEffectInputs(line, eff.numInputs);
+        for (const bodyLine of effCompute.loopBodyLines) {
+            let line = reshapeASLine(bodyLine, effectClassName, null, effStaticFieldMap);
 
-            const out0Match = preprocessed.match(/^output0\[\w+\]\s*=\s*\(FAUSTFLOAT\)(.*);$/);
+            // Handle input references
+            line = line.replace(/input0\[\w+\]/g, 'this.signal.left');
+            line = line.replace(/input1\[\w+\]/g, 'this.signal.right');
+
+            // Handle output assignments
+            const out0Match = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
             if (out0Match) {
-                const expr = transpileExpr(out0Match[1], effectCtx);
-                effectClass.push(`        this.signal.left = ${expr};`);
+                effectClass.push(`        this.signal.left = ${out0Match[1]};`);
                 continue;
             }
-            const out1Match = preprocessed.match(/^output1\[\w+\]\s*=\s*\(FAUSTFLOAT\)(.*);$/);
+            const out1Match = line.match(/^output1\[\w+\]\s*=\s*(.*);$/);
             if (out1Match) {
-                const expr = transpileExpr(out1Match[1], effectCtx);
-                effectClass.push(`        this.signal.right = ${expr};`);
+                effectClass.push(`        this.signal.right = ${out1Match[1]};`);
                 continue;
             }
 
-            effectClass.push('        ' + transpileStatement(preprocessed, effectCtx));
+            line = line.replace(/^let\s+(fTemp|iTemp)/, 'const $1');
+            effectClass.push('        ' + line);
         }
         effectClass.push('');
 
-        const effDelayLines = transpileDelayShifts(eff.delayShiftLines, effectCtx);
-        for (const line of effDelayLines) {
+        for (const shiftLine of effCompute.delayShiftLines) {
+            const line = reshapeASLine(shiftLine, effectClassName, null, effStaticFieldMap);
             effectClass.push('        ' + line);
         }
 
         effectClass.push('    }');
 
-        // controlchange() — merge effect CC mappings + voice global CC mappings
+        // controlchange()
         const ccMappings = [];
-        for (const param of eff.uiParams) {
+        for (const param of effUI.uiParams) {
             if (param.midi && param.midi.midi) {
                 const ccMatch = param.midi.midi.match(/ctrl\s+(\d+)/);
                 if (ccMatch) {
@@ -1436,13 +938,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         }
         const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
         if (useNRPN && ccParams.length > 0) {
-            // NRPN mode: effect CC mappings via direct switch, voice params via NRPN state machine
-            // Warn if effect CCs conflict with NRPN control CCs
-            for (const cc of ccMappings) {
-                if (cc.cc === 6 || cc.cc === 98 || cc.cc === 99) {
-                    console.warn(`  WARNING: Effect CC ${cc.cc} conflicts with NRPN control CC`);
-                }
-            }
             effectClass.push('');
             effectClass.push('    private _nrpnMsb: u8 = 127;');
             effectClass.push('    private _nrpnLsb: u8 = 127;');
@@ -1450,13 +945,11 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             effectClass.push('    controlchange(controller: u8, value: u8): void {');
             effectClass.push('        super.controlchange(controller, value);');
             effectClass.push('        switch (controller) {');
-            // Effect's own direct CC mappings (from Faust [midi:ctrl N] metadata)
             for (const cc of ccMappings) {
                 effectClass.push(`            case ${cc.cc}:`);
                 effectClass.push(`                this.${cc.field} = ${cc.min} + (<f32>value / 127.0) * ${cc.max - cc.min};`);
                 effectClass.push('                break;');
             }
-            // NRPN state machine CCs
             effectClass.push('            case 99: this._nrpnMsb = value; break;');
             effectClass.push('            case 98: this._nrpnLsb = value; break;');
             effectClass.push('            case 6:');
@@ -1467,7 +960,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             effectClass.push('');
             generateNRPNSetParam(effectClass, ccParams, globalFields);
         } else if (ccMappings.length > 0 || voiceCCParams.length > 0) {
-            // Direct CC mode
             effectClass.push('');
             effectClass.push('    controlchange(controller: u8, value: u8): void {');
             effectClass.push('        super.controlchange(controller, value);');
@@ -1493,13 +985,13 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         effectClass.push('}');
     }
 
-    // === Generate channel class for voice CC params (no-effect case) ===
+    // === Step 8: Generate channel class for voice CC params (no-effect case) ===
+
     const voiceChannelClass = [];
     const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
     if (!hasEffect && (voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0))) {
         const channelClassName = clsName + 'Channel';
         if (useNRPN) {
-            // NRPN mode: state machine for CC 99/98/6 sequence
             voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
             voiceChannelClass.push('    private _nrpnMsb: u8 = 127;');
             voiceChannelClass.push('    private _nrpnLsb: u8 = 127;');
@@ -1518,7 +1010,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             generateNRPNSetParam(voiceChannelClass, ccParams, globalFields);
             voiceChannelClass.push('}');
         } else {
-            // Direct CC mode
             voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
             voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
             voiceChannelClass.push('        super.controlchange(controller, value);');
@@ -1539,9 +1030,9 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     }
 
     // Clean up temp files
-    try { fs.unlinkSync(tmpCFile); } catch (e) {}
-    if (tmpEffectCFile) {
-        try { fs.unlinkSync(tmpEffectCFile); } catch (e) {}
+    try { fs.unlinkSync(tmpASFile); } catch (e) {}
+    if (tmpEffectASFile) {
+        try { fs.unlinkSync(tmpEffectASFile); } catch (e) {}
     }
 
     const hasChannelClass = hasEffect || voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0);
@@ -1554,14 +1045,14 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         useNRPN,
         ccParams,
         globalPrefix,
-        externalFunctions, // Map<fnName, { tableName, points, nPoints }>
-        uiParams, // Array of { name, field, init, min, max, step, isButton?, midi }
+        externalFunctions: new Map(),
+        uiParams,
         voice: {
             globals: voiceGlobals,
             waveData: voiceWaveData,
             sigTables: voiceSigTables,
             sigInit: voiceSigInit,
-            helpers: voiceHelpers,
+            helpers: [],
             classCode: voiceClass,
             channelClass: voiceChannelClass,
         },
@@ -1579,10 +1070,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 // NRPN helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Generate the _setParam() method body for NRPN channel classes.
- * Maps NRPN param indices to global variable assignments.
- */
 function generateNRPNSetParam(lines, ccParams, globalFields) {
     lines.push('    private _setParam(param: u16, value: u8): void {');
     lines.push('        switch (param) {');
@@ -1598,10 +1085,6 @@ function generateNRPNSetParam(lines, ccParams, globalFields) {
     lines.push('    }');
 }
 
-/**
- * Generate NRPN default CC sequences for initializeMidiSynth.
- * Each param requires 3 CC sends: CC 99 (MSB), CC 98 (LSB), CC 6 (value).
- */
 function generateNRPNDefaults(lines, ccParams, channelIndex) {
     for (const p of ccParams) {
         if (p.nrpn === undefined) continue;
@@ -1623,29 +1106,27 @@ function generateNRPNDefaults(lines, ccParams, channelIndex) {
 function assembleSingleFile(result) {
     const out = [];
 
-    // Header
     out.push(`// Faust-generated ${result.className}`);
-    out.push(`// Auto-transpiled from Faust DSP by faust2as.js`);
+    out.push(`// Auto-transpiled from Faust DSP by faust2as.js (AS backend)`);
     out.push(`// Source: ${result.sourceFile}`);
     out.push('');
 
-    // Imports
-    out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
-    out.push("import { SAMPLERATE } from '../environment';");
+    if (forEditor) {
+        out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
+        out.push("import { SAMPLERATE } from '../environment';");
+    } else {
+        out.push("import { MidiVoice, MidiChannel, midichannels } from '../midisynth';");
+        out.push("import { notefreq } from '../../synth/note';");
+        out.push("import { SAMPLERATE } from '../../environment';");
+    }
     out.push('');
 
-    // Generic cast helpers — avoid AS contextual typing issues with <f32>/<i32>
-    out.push('@inline function _fcast<T>(x: T): f32 { return <f32>x; }');
-    out.push('@inline function _icast<T>(x: T): i32 { return <i32>x; }');
-    out.push('');
-
-    // External lookup table functions (from ffunction headers like piano.h)
+    // External lookup table functions (from ffunction headers)
     if (result.externalFunctions.size > 0) {
         const emittedTables = new Set();
         for (const [fnName, info] of result.externalFunctions) {
             const lines = generateLookupTableAS(fnName, info, '');
             for (const line of lines) {
-                // Deduplicate: avoid emitting same table data array twice if shared
                 if (line.startsWith('const ') && emittedTables.has(line)) continue;
                 if (line.startsWith('const ')) emittedTables.add(line);
                 out.push(line);
@@ -1684,21 +1165,17 @@ function assembleSingleFile(result) {
 
     // Effect sections
     if (result.hasEffect) {
-        // Effect wave data
         out.push(...result.effect.waveData);
         if (result.effect.waveData.length > 0) out.push('');
 
-        // Effect SIG tables + init
         out.push(...result.effect.sigTables);
         out.push(...result.effect.sigInit);
 
-        // Effect helpers (deduplicated against voice helpers)
         const voiceHelperNames = new Set(result.voice.helpers.map(h => h.fnName));
         const uniqueEffectHelpers = result.effect.helpers.filter(h => !voiceHelperNames.has(h.fnName));
         for (const h of uniqueEffectHelpers) out.push(h.code);
         if (uniqueEffectHelpers.length > 0) out.push('');
 
-        // Effect channel class (includes voice CC handling)
         out.push(...result.effect.classCode);
         out.push('');
     }
@@ -1711,7 +1188,6 @@ function assembleSingleFile(result) {
     out.push(`    midichannels[0].controlchange(10, 64);`);
     out.push(`    midichannels[0].controlchange(91, 10);`);
 
-    // Emit defaults for tweakable DSP parameters
     if (result.useNRPN && (result.ccParams || []).length > 0) {
         out.push('');
         generateNRPNDefaults(out, result.ccParams, 0);
@@ -1744,20 +1220,19 @@ function assembleSingleFile(result) {
 function assembleBundle(results) {
     const out = [];
 
-    // Header
     out.push('// Faust-generated synth bundle');
-    out.push('// Auto-transpiled from Faust DSP by faust2as.js');
+    out.push('// Auto-transpiled from Faust DSP by faust2as.js (AS backend)');
     out.push(`// Sources: ${results.map(r => r.sourceFile).join(', ')}`);
     out.push('');
 
-    // Bundle imports
-    out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
-    out.push("import { SAMPLERATE } from '../environment';");
-    out.push('');
-
-    // Generic cast helpers — avoid AS contextual typing issues with <f32>/<i32>
-    out.push('@inline function _fcast<T>(x: T): f32 { return <f32>x; }');
-    out.push('@inline function _icast<T>(x: T): i32 { return <i32>x; }');
+    if (forEditor) {
+        out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
+        out.push("import { SAMPLERATE } from '../environment';");
+    } else {
+        out.push("import { MidiVoice, MidiChannel, midichannels } from '../midisynth';");
+        out.push("import { notefreq } from '../../synth/note';");
+        out.push("import { SAMPLERATE } from '../../environment';");
+    }
     out.push('');
 
     // Deduplicated helper functions
@@ -1770,53 +1245,27 @@ function assembleBundle(results) {
     for (const code of allHelpers.values()) out.push(code);
     if (allHelpers.size > 0) out.push('');
 
-    // Deduplicated external lookup table functions (ffunction headers)
-    const emittedExternalFns = new Set();
-    const emittedExternalTables = new Set();
-    for (const r of results) {
-        if (r.externalFunctions.size > 0) {
-            for (const [fnName, info] of r.externalFunctions) {
-                if (emittedExternalFns.has(fnName)) continue;
-                emittedExternalFns.add(fnName);
-                const prefix = r.className + '_';
-                const lines = generateLookupTableAS(fnName, info, prefix);
-                for (const line of lines) {
-                    if (line.startsWith('const ') && emittedExternalTables.has(line)) continue;
-                    if (line.startsWith('const ')) emittedExternalTables.add(line);
-                    out.push(line);
-                }
-            }
-        }
-    }
-    if (emittedExternalFns.size > 0) out.push('');
-
     // Per-DSP: globals, wave data, SIG tables, SIG init, classes
     for (const r of results) {
-        // Global variables for shared DSP parameters
         if (r.voice.globals.length > 0) {
             out.push(...r.voice.globals);
             out.push('');
         }
 
-        // Voice wave data
         out.push(...r.voice.waveData);
         if (r.voice.waveData.length > 0) out.push('');
 
-        // Voice SIG tables + init
         out.push(...r.voice.sigTables);
         out.push(...r.voice.sigInit);
 
-        // Voice class
         out.push(...r.voice.classCode);
         out.push('');
 
-        // Voice channel class (no-effect case with CC params)
         if (r.voice.channelClass.length > 0) {
             out.push(...r.voice.channelClass);
             out.push('');
         }
 
-        // Effect sections
         if (r.hasEffect) {
             out.push(...r.effect.waveData);
             if (r.effect.waveData.length > 0) out.push('');
@@ -1838,7 +1287,6 @@ function assembleBundle(results) {
         out.push(`    midichannels[${i}].controlchange(10, 64);`);
         out.push(`    midichannels[${i}].controlchange(91, 10);`);
 
-        // Emit defaults for tweakable DSP parameters
         if (r.useNRPN && (r.ccParams || []).length > 0) {
             out.push('');
             generateNRPNDefaults(out, r.ccParams, i);

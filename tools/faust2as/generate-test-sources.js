@@ -32,7 +32,7 @@ for (const { name, dspPath } of dspFiles) {
     const tmpOut = path.join(__dirname, `_tmp_${name}.ts`);
     console.log(`Transpiling ${name}...`);
     try {
-        execSync(`node ${path.join(__dirname, 'faust2as.js')} "${dspPath}" --out "${tmpOut}"`, {
+        execSync(`node ${path.join(__dirname, 'faust2as.js')} "${dspPath}" --for-editor --out "${tmpOut}"`, {
             cwd: path.resolve(__dirname, '..'),
             stdio: 'inherit',
         });
