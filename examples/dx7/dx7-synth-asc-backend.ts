@@ -10590,6 +10590,48 @@ export class Dx7_alg5_hatChannel extends MidiChannel {
     }
 }
 
+export class Dx7DrumKitChannel extends MidiChannel {
+    private _nrpnMsb: u8 = 127;
+    private _nrpnLsb: u8 = 127;
+    private _kickRouter: Dx7_alg17Channel;
+    private _snareRouter: Dx7_alg21Channel;
+    private _hatRouter: Dx7_alg5_hatChannel;
+
+    constructor(numvoices: i32, factoryFunc: (channel: MidiChannel, voiceindex: i32) => MidiVoice) {
+        super(numvoices, factoryFunc);
+        this._kickRouter = new Dx7_alg17Channel(1, (channel: MidiChannel) => new Dx7_alg17(channel));
+        this._snareRouter = new Dx7_alg21Channel(1, (channel: MidiChannel) => new Dx7_alg21(channel));
+        this._hatRouter = new Dx7_alg5_hatChannel(1, (channel: MidiChannel) => new Dx7_alg5_hat(channel));
+    }
+
+    controlchange(controller: u8, value: u8): void {
+        super.controlchange(controller, value);
+        switch (controller) {
+            case 99: this._nrpnMsb = value; break;
+            case 98: this._nrpnLsb = value; break;
+            case 6: {
+                const param: u16 = <u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb;
+                if (param < 144) {
+                    this._kickRouter.controlchange(99, <u8>(param >> 7));
+                    this._kickRouter.controlchange(98, <u8>(param & 127));
+                    this._kickRouter.controlchange(6, value);
+                } else if (param < 288) {
+                    const p: u16 = param - 144;
+                    this._snareRouter.controlchange(99, <u8>(p >> 7));
+                    this._snareRouter.controlchange(98, <u8>(p & 127));
+                    this._snareRouter.controlchange(6, value);
+                } else if (param < 432) {
+                    const p: u16 = param - 288;
+                    this._hatRouter.controlchange(99, <u8>(p >> 7));
+                    this._hatRouter.controlchange(98, <u8>(p & 127));
+                    this._hatRouter.controlchange(6, value);
+                }
+                break;
+            }
+        }
+    }
+}
+
 export function initializeMidiSynth(): void {
     midichannels[0] = new Dx7_alg5Channel(10, (channel: MidiChannel) => new Dx7_alg5(channel));
     midichannels[0].controlchange(7, 100);
@@ -12823,1679 +12865,1317 @@ export function initializeMidiSynth(): void {
     midichannels[3].controlchange(98, 9);
     midichannels[3].controlchange(6, 0);
 
-    midichannels[4] = new Dx7_alg17Channel(10, (channel: MidiChannel) => new Dx7_alg17(channel));
+    // --- Drum Kit (kick/snare/hat) ---
+    midichannels[4] = new Dx7DrumKitChannel(6, (channel: MidiChannel, n: i32): MidiVoice => {
+        if (n < 2) { const v = new Dx7_alg17(channel); v.minnote = 36; v.maxnote = 36; return v; }
+        if (n < 4) { const v = new Dx7_alg21(channel); v.minnote = 38; v.maxnote = 38; return v; }
+        const v = new Dx7_alg5_hat(channel); v.minnote = 42; v.maxnote = 42; return v;
+    });
     midichannels[4].controlchange(7, 100);
     midichannels[4].controlchange(10, 64);
     midichannels[4].controlchange(91, 10);
 
-    // Feedback (NRPN 0, range: 0–7, default: 0)
+    // Kick defaults (NRPN 0-143)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 0);
     midichannels[4].controlchange(6, 0);
-    // Transpose (NRPN 1, range: -24–24, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 1);
     midichannels[4].controlchange(6, 64);
-    // Osc Key Sync (NRPN 2, range: 0–1, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 2);
     midichannels[4].controlchange(6, 127);
-    // L1 (NRPN 3, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 3);
     midichannels[4].controlchange(6, 64);
-    // L2 (NRPN 4, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 4);
     midichannels[4].controlchange(6, 64);
-    // L3 (NRPN 5, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 5);
     midichannels[4].controlchange(6, 64);
-    // L4 (NRPN 6, range: 0–99, default: 50)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 6);
     midichannels[4].controlchange(6, 64);
-    // R1 (NRPN 7, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 7);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 8, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 8);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 9, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 9);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 10, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 10);
     midichannels[4].controlchange(6, 127);
-    // Wave (NRPN 11, range: 0–5, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 11);
     midichannels[4].controlchange(6, 0);
-    // Speed (NRPN 12, range: 0–99, default: 35)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 12);
     midichannels[4].controlchange(6, 45);
-    // Delay (NRPN 13, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 13);
     midichannels[4].controlchange(6, 0);
-    // PMD (NRPN 14, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 14);
     midichannels[4].controlchange(6, 0);
-    // AMD (NRPN 15, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 15);
     midichannels[4].controlchange(6, 0);
-    // Sync (NRPN 16, range: 0–1, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 16);
     midichannels[4].controlchange(6, 127);
-    // P Mod Sens (NRPN 17, range: 0–7, default: 3)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 17);
     midichannels[4].controlchange(6, 54);
-    // Tune (NRPN 18, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 18);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 19, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 19);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 20, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 20);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 21, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 21);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 22, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 22);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 23, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 23);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 24, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 24);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 25, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 25);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 26, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 26);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 27, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 27);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 28, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 28);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 29, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 29);
     midichannels[4].controlchange(6, 127);
-    // Key Vel (NRPN 30, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 30);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 31, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 31);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 32, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 32);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 33, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 33);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 34, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 34);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 35, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 35);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 36, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 36);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 37, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 37);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 38, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 38);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 39, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 39);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 40, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 40);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 41, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 41);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 42, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 42);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 43, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 43);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 44, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 44);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 45, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 45);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 46, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 46);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 47, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 47);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 48, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 48);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 49, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 49);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 50, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 50);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 51, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 51);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 52, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 52);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 53, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 53);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 54, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 54);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 55, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 55);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 56, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 56);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 57, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 57);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 58, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 58);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 59, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 59);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 60, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 60);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 61, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 61);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 62, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 62);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 63, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 63);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 64, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 64);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 65, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 65);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 66, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 66);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 67, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 67);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 68, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 68);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 69, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 69);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 70, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 70);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 71, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 71);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 72, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 72);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 73, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 73);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 74, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 74);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 75, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 75);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 76, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 76);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 77, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 77);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 78, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 78);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 79, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 79);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 80, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 80);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 81, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 81);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 82, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 82);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 83, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 83);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 84, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 84);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 85, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 85);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 86, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 86);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 87, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 87);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 88, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 88);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 89, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 89);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 90, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 90);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 91, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 91);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 92, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 92);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 93, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 93);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 94, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 94);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 95, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 95);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 96, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 96);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 97, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 97);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 98, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 98);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 99, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 99);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 100, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 100);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 101, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 101);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 102, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 102);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 103, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 103);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 104, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 104);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 105, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 105);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 106, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 106);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 107, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 107);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 108, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 108);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 109, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 109);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 110, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 110);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 111, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 111);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 112, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 112);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 113, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 113);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 114, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 114);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 115, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 115);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 116, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 116);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 117, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 117);
     midichannels[4].controlchange(6, 0);
-    // Tune (NRPN 118, range: -7–7, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 118);
     midichannels[4].controlchange(6, 64);
-    // Coarse (NRPN 119, range: 0–31, default: 1)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 119);
     midichannels[4].controlchange(6, 4);
-    // Fine (NRPN 120, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 120);
     midichannels[4].controlchange(6, 0);
-    // L1 (NRPN 121, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 121);
     midichannels[4].controlchange(6, 127);
-    // L2 (NRPN 122, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 122);
     midichannels[4].controlchange(6, 127);
-    // L3 (NRPN 123, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 123);
     midichannels[4].controlchange(6, 127);
-    // L4 (NRPN 124, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 124);
     midichannels[4].controlchange(6, 0);
-    // R1 (NRPN 125, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 125);
     midichannels[4].controlchange(6, 127);
-    // R2 (NRPN 126, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 126);
     midichannels[4].controlchange(6, 127);
-    // R3 (NRPN 127, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 0);
     midichannels[4].controlchange(98, 127);
     midichannels[4].controlchange(6, 127);
-    // R4 (NRPN 128, range: 0–99, default: 99)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 0);
     midichannels[4].controlchange(6, 127);
-    // Level (NRPN 129, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 1);
     midichannels[4].controlchange(6, 0);
-    // Key Vel (NRPN 130, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 2);
     midichannels[4].controlchange(6, 0);
-    // A Mod Sens (NRPN 131, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 3);
     midichannels[4].controlchange(6, 0);
-    // Rate Scaling (NRPN 132, range: 0–7, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 4);
     midichannels[4].controlchange(6, 0);
-    // Breakpoint (NRPN 133, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 5);
     midichannels[4].controlchange(6, 0);
-    // L Depth (NRPN 134, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 6);
     midichannels[4].controlchange(6, 0);
-    // R Depth (NRPN 135, range: 0–99, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 7);
     midichannels[4].controlchange(6, 0);
-    // L Curve (NRPN 136, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 8);
     midichannels[4].controlchange(6, 0);
-    // R Curve (NRPN 137, range: 0–3, default: 0)
     midichannels[4].controlchange(99, 1);
     midichannels[4].controlchange(98, 9);
     midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 10);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 11);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 12);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 13);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 14);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 15);
+    midichannels[4].controlchange(6, 0);
 
-    midichannels[5] = new Dx7_alg21Channel(10, (channel: MidiChannel) => new Dx7_alg21(channel));
-    midichannels[5].controlchange(7, 100);
-    midichannels[5].controlchange(10, 64);
-    midichannels[5].controlchange(91, 10);
+    // Snare defaults (NRPN 144-287)
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 16);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 17);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 18);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 19);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 20);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 21);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 22);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 23);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 24);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 25);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 26);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 27);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 28);
+    midichannels[4].controlchange(6, 45);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 29);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 30);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 31);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 32);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 33);
+    midichannels[4].controlchange(6, 54);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 34);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 35);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 36);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 37);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 38);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 39);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 40);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 41);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 42);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 43);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 44);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 45);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 46);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 47);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 48);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 49);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 50);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 51);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 52);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 53);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 54);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 55);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 56);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 57);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 58);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 59);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 60);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 61);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 62);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 63);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 64);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 65);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 66);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 67);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 68);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 69);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 70);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 71);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 72);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 73);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 74);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 75);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 76);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 77);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 78);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 79);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 80);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 81);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 82);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 83);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 84);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 85);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 86);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 87);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 88);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 89);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 90);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 91);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 92);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 93);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 94);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 95);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 96);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 97);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 98);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 99);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 100);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 101);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 102);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 103);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 104);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 105);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 106);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 107);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 108);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 109);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 110);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 111);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 112);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 113);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 114);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 115);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 116);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 117);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 118);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 119);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 120);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 121);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 122);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 123);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 124);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 125);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 126);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 1);
+    midichannels[4].controlchange(98, 127);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 0);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 1);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 2);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 3);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 4);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 5);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 6);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 7);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 8);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 9);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 10);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 11);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 12);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 13);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 14);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 15);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 16);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 17);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 18);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 19);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 20);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 21);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 22);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 23);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 24);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 25);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 26);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 27);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 28);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 29);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 30);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 31);
+    midichannels[4].controlchange(6, 0);
 
-    // Feedback (NRPN 0, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 0);
-    midichannels[5].controlchange(6, 0);
-    // Transpose (NRPN 1, range: -24–24, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 1);
-    midichannels[5].controlchange(6, 64);
-    // Osc Key Sync (NRPN 2, range: 0–1, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 2);
-    midichannels[5].controlchange(6, 127);
-    // L1 (NRPN 3, range: 0–99, default: 50)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 3);
-    midichannels[5].controlchange(6, 64);
-    // L2 (NRPN 4, range: 0–99, default: 50)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 4);
-    midichannels[5].controlchange(6, 64);
-    // L3 (NRPN 5, range: 0–99, default: 50)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 5);
-    midichannels[5].controlchange(6, 64);
-    // L4 (NRPN 6, range: 0–99, default: 50)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 6);
-    midichannels[5].controlchange(6, 64);
-    // R1 (NRPN 7, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 7);
-    midichannels[5].controlchange(6, 127);
-    // R2 (NRPN 8, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 8);
-    midichannels[5].controlchange(6, 127);
-    // R3 (NRPN 9, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 9);
-    midichannels[5].controlchange(6, 127);
-    // R4 (NRPN 10, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 10);
-    midichannels[5].controlchange(6, 127);
-    // Wave (NRPN 11, range: 0–5, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 11);
-    midichannels[5].controlchange(6, 0);
-    // Speed (NRPN 12, range: 0–99, default: 35)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 12);
-    midichannels[5].controlchange(6, 45);
-    // Delay (NRPN 13, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 13);
-    midichannels[5].controlchange(6, 0);
-    // PMD (NRPN 14, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 14);
-    midichannels[5].controlchange(6, 0);
-    // AMD (NRPN 15, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 15);
-    midichannels[5].controlchange(6, 0);
-    // Sync (NRPN 16, range: 0–1, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 16);
-    midichannels[5].controlchange(6, 127);
-    // P Mod Sens (NRPN 17, range: 0–7, default: 3)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 17);
-    midichannels[5].controlchange(6, 54);
-    // Tune (NRPN 18, range: -7–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 18);
-    midichannels[5].controlchange(6, 64);
-    // Coarse (NRPN 19, range: 0–31, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 19);
-    midichannels[5].controlchange(6, 4);
-    // Fine (NRPN 20, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 20);
-    midichannels[5].controlchange(6, 0);
-    // L1 (NRPN 21, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 21);
-    midichannels[5].controlchange(6, 127);
-    // L2 (NRPN 22, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 22);
-    midichannels[5].controlchange(6, 127);
-    // L3 (NRPN 23, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 23);
-    midichannels[5].controlchange(6, 127);
-    // L4 (NRPN 24, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 24);
-    midichannels[5].controlchange(6, 0);
-    // R1 (NRPN 25, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 25);
-    midichannels[5].controlchange(6, 127);
-    // R2 (NRPN 26, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 26);
-    midichannels[5].controlchange(6, 127);
-    // R3 (NRPN 27, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 27);
-    midichannels[5].controlchange(6, 127);
-    // R4 (NRPN 28, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 28);
-    midichannels[5].controlchange(6, 127);
-    // Level (NRPN 29, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 29);
-    midichannels[5].controlchange(6, 127);
-    // Key Vel (NRPN 30, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 30);
-    midichannels[5].controlchange(6, 0);
-    // A Mod Sens (NRPN 31, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 31);
-    midichannels[5].controlchange(6, 0);
-    // Rate Scaling (NRPN 32, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 32);
-    midichannels[5].controlchange(6, 0);
-    // Breakpoint (NRPN 33, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 33);
-    midichannels[5].controlchange(6, 0);
-    // L Depth (NRPN 34, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 34);
-    midichannels[5].controlchange(6, 0);
-    // R Depth (NRPN 35, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 35);
-    midichannels[5].controlchange(6, 0);
-    // L Curve (NRPN 36, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 36);
-    midichannels[5].controlchange(6, 0);
-    // R Curve (NRPN 37, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 37);
-    midichannels[5].controlchange(6, 0);
-    // Tune (NRPN 38, range: -7–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 38);
-    midichannels[5].controlchange(6, 64);
-    // Coarse (NRPN 39, range: 0–31, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 39);
-    midichannels[5].controlchange(6, 4);
-    // Fine (NRPN 40, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 40);
-    midichannels[5].controlchange(6, 0);
-    // L1 (NRPN 41, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 41);
-    midichannels[5].controlchange(6, 127);
-    // L2 (NRPN 42, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 42);
-    midichannels[5].controlchange(6, 127);
-    // L3 (NRPN 43, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 43);
-    midichannels[5].controlchange(6, 127);
-    // L4 (NRPN 44, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 44);
-    midichannels[5].controlchange(6, 0);
-    // R1 (NRPN 45, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 45);
-    midichannels[5].controlchange(6, 127);
-    // R2 (NRPN 46, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 46);
-    midichannels[5].controlchange(6, 127);
-    // R3 (NRPN 47, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 47);
-    midichannels[5].controlchange(6, 127);
-    // R4 (NRPN 48, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 48);
-    midichannels[5].controlchange(6, 127);
-    // Level (NRPN 49, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 49);
-    midichannels[5].controlchange(6, 0);
-    // Key Vel (NRPN 50, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 50);
-    midichannels[5].controlchange(6, 0);
-    // A Mod Sens (NRPN 51, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 51);
-    midichannels[5].controlchange(6, 0);
-    // Rate Scaling (NRPN 52, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 52);
-    midichannels[5].controlchange(6, 0);
-    // Breakpoint (NRPN 53, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 53);
-    midichannels[5].controlchange(6, 0);
-    // L Depth (NRPN 54, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 54);
-    midichannels[5].controlchange(6, 0);
-    // R Depth (NRPN 55, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 55);
-    midichannels[5].controlchange(6, 0);
-    // L Curve (NRPN 56, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 56);
-    midichannels[5].controlchange(6, 0);
-    // R Curve (NRPN 57, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 57);
-    midichannels[5].controlchange(6, 0);
-    // Tune (NRPN 58, range: -7–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 58);
-    midichannels[5].controlchange(6, 64);
-    // Coarse (NRPN 59, range: 0–31, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 59);
-    midichannels[5].controlchange(6, 4);
-    // Fine (NRPN 60, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 60);
-    midichannels[5].controlchange(6, 0);
-    // L1 (NRPN 61, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 61);
-    midichannels[5].controlchange(6, 127);
-    // L2 (NRPN 62, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 62);
-    midichannels[5].controlchange(6, 127);
-    // L3 (NRPN 63, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 63);
-    midichannels[5].controlchange(6, 127);
-    // L4 (NRPN 64, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 64);
-    midichannels[5].controlchange(6, 0);
-    // R1 (NRPN 65, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 65);
-    midichannels[5].controlchange(6, 127);
-    // R2 (NRPN 66, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 66);
-    midichannels[5].controlchange(6, 127);
-    // R3 (NRPN 67, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 67);
-    midichannels[5].controlchange(6, 127);
-    // R4 (NRPN 68, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 68);
-    midichannels[5].controlchange(6, 127);
-    // Level (NRPN 69, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 69);
-    midichannels[5].controlchange(6, 0);
-    // Key Vel (NRPN 70, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 70);
-    midichannels[5].controlchange(6, 0);
-    // A Mod Sens (NRPN 71, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 71);
-    midichannels[5].controlchange(6, 0);
-    // Rate Scaling (NRPN 72, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 72);
-    midichannels[5].controlchange(6, 0);
-    // Breakpoint (NRPN 73, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 73);
-    midichannels[5].controlchange(6, 0);
-    // L Depth (NRPN 74, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 74);
-    midichannels[5].controlchange(6, 0);
-    // R Depth (NRPN 75, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 75);
-    midichannels[5].controlchange(6, 0);
-    // L Curve (NRPN 76, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 76);
-    midichannels[5].controlchange(6, 0);
-    // R Curve (NRPN 77, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 77);
-    midichannels[5].controlchange(6, 0);
-    // Tune (NRPN 78, range: -7–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 78);
-    midichannels[5].controlchange(6, 64);
-    // Coarse (NRPN 79, range: 0–31, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 79);
-    midichannels[5].controlchange(6, 4);
-    // Fine (NRPN 80, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 80);
-    midichannels[5].controlchange(6, 0);
-    // L1 (NRPN 81, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 81);
-    midichannels[5].controlchange(6, 127);
-    // L2 (NRPN 82, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 82);
-    midichannels[5].controlchange(6, 127);
-    // L3 (NRPN 83, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 83);
-    midichannels[5].controlchange(6, 127);
-    // L4 (NRPN 84, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 84);
-    midichannels[5].controlchange(6, 0);
-    // R1 (NRPN 85, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 85);
-    midichannels[5].controlchange(6, 127);
-    // R2 (NRPN 86, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 86);
-    midichannels[5].controlchange(6, 127);
-    // R3 (NRPN 87, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 87);
-    midichannels[5].controlchange(6, 127);
-    // R4 (NRPN 88, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 88);
-    midichannels[5].controlchange(6, 127);
-    // Level (NRPN 89, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 89);
-    midichannels[5].controlchange(6, 0);
-    // Key Vel (NRPN 90, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 90);
-    midichannels[5].controlchange(6, 0);
-    // A Mod Sens (NRPN 91, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 91);
-    midichannels[5].controlchange(6, 0);
-    // Rate Scaling (NRPN 92, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 92);
-    midichannels[5].controlchange(6, 0);
-    // Breakpoint (NRPN 93, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 93);
-    midichannels[5].controlchange(6, 0);
-    // L Depth (NRPN 94, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 94);
-    midichannels[5].controlchange(6, 0);
-    // R Depth (NRPN 95, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 95);
-    midichannels[5].controlchange(6, 0);
-    // L Curve (NRPN 96, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 96);
-    midichannels[5].controlchange(6, 0);
-    // R Curve (NRPN 97, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 97);
-    midichannels[5].controlchange(6, 0);
-    // Tune (NRPN 98, range: -7–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 98);
-    midichannels[5].controlchange(6, 64);
-    // Coarse (NRPN 99, range: 0–31, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 99);
-    midichannels[5].controlchange(6, 4);
-    // Fine (NRPN 100, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 100);
-    midichannels[5].controlchange(6, 0);
-    // L1 (NRPN 101, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 101);
-    midichannels[5].controlchange(6, 127);
-    // L2 (NRPN 102, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 102);
-    midichannels[5].controlchange(6, 127);
-    // L3 (NRPN 103, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 103);
-    midichannels[5].controlchange(6, 127);
-    // L4 (NRPN 104, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 104);
-    midichannels[5].controlchange(6, 0);
-    // R1 (NRPN 105, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 105);
-    midichannels[5].controlchange(6, 127);
-    // R2 (NRPN 106, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 106);
-    midichannels[5].controlchange(6, 127);
-    // R3 (NRPN 107, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 107);
-    midichannels[5].controlchange(6, 127);
-    // R4 (NRPN 108, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 108);
-    midichannels[5].controlchange(6, 127);
-    // Level (NRPN 109, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 109);
-    midichannels[5].controlchange(6, 0);
-    // Key Vel (NRPN 110, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 110);
-    midichannels[5].controlchange(6, 0);
-    // A Mod Sens (NRPN 111, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 111);
-    midichannels[5].controlchange(6, 0);
-    // Rate Scaling (NRPN 112, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 112);
-    midichannels[5].controlchange(6, 0);
-    // Breakpoint (NRPN 113, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 113);
-    midichannels[5].controlchange(6, 0);
-    // L Depth (NRPN 114, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 114);
-    midichannels[5].controlchange(6, 0);
-    // R Depth (NRPN 115, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 115);
-    midichannels[5].controlchange(6, 0);
-    // L Curve (NRPN 116, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 116);
-    midichannels[5].controlchange(6, 0);
-    // R Curve (NRPN 117, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 117);
-    midichannels[5].controlchange(6, 0);
-    // Tune (NRPN 118, range: -7–7, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 118);
-    midichannels[5].controlchange(6, 64);
-    // Coarse (NRPN 119, range: 0–31, default: 1)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 119);
-    midichannels[5].controlchange(6, 4);
-    // Fine (NRPN 120, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 120);
-    midichannels[5].controlchange(6, 0);
-    // L1 (NRPN 121, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 121);
-    midichannels[5].controlchange(6, 127);
-    // L2 (NRPN 122, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 122);
-    midichannels[5].controlchange(6, 127);
-    // L3 (NRPN 123, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 123);
-    midichannels[5].controlchange(6, 127);
-    // L4 (NRPN 124, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 124);
-    midichannels[5].controlchange(6, 0);
-    // R1 (NRPN 125, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 125);
-    midichannels[5].controlchange(6, 127);
-    // R2 (NRPN 126, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 126);
-    midichannels[5].controlchange(6, 127);
-    // R3 (NRPN 127, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 0);
-    midichannels[5].controlchange(98, 127);
-    midichannels[5].controlchange(6, 127);
-    // R4 (NRPN 128, range: 0–99, default: 99)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 0);
-    midichannels[5].controlchange(6, 127);
-    // Level (NRPN 129, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 1);
-    midichannels[5].controlchange(6, 0);
-    // Key Vel (NRPN 130, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 2);
-    midichannels[5].controlchange(6, 0);
-    // A Mod Sens (NRPN 131, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 3);
-    midichannels[5].controlchange(6, 0);
-    // Rate Scaling (NRPN 132, range: 0–7, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 4);
-    midichannels[5].controlchange(6, 0);
-    // Breakpoint (NRPN 133, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 5);
-    midichannels[5].controlchange(6, 0);
-    // L Depth (NRPN 134, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 6);
-    midichannels[5].controlchange(6, 0);
-    // R Depth (NRPN 135, range: 0–99, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 7);
-    midichannels[5].controlchange(6, 0);
-    // L Curve (NRPN 136, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 8);
-    midichannels[5].controlchange(6, 0);
-    // R Curve (NRPN 137, range: 0–3, default: 0)
-    midichannels[5].controlchange(99, 1);
-    midichannels[5].controlchange(98, 9);
-    midichannels[5].controlchange(6, 0);
-
-    midichannels[6] = new Dx7_alg5_hatChannel(10, (channel: MidiChannel) => new Dx7_alg5_hat(channel));
-    midichannels[6].controlchange(7, 100);
-    midichannels[6].controlchange(10, 64);
-    midichannels[6].controlchange(91, 10);
-
-    // Feedback (NRPN 0, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 0);
-    midichannels[6].controlchange(6, 0);
-    // Transpose (NRPN 1, range: -24–24, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 1);
-    midichannels[6].controlchange(6, 64);
-    // Osc Key Sync (NRPN 2, range: 0–1, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 2);
-    midichannels[6].controlchange(6, 127);
-    // L1 (NRPN 3, range: 0–99, default: 50)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 3);
-    midichannels[6].controlchange(6, 64);
-    // L2 (NRPN 4, range: 0–99, default: 50)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 4);
-    midichannels[6].controlchange(6, 64);
-    // L3 (NRPN 5, range: 0–99, default: 50)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 5);
-    midichannels[6].controlchange(6, 64);
-    // L4 (NRPN 6, range: 0–99, default: 50)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 6);
-    midichannels[6].controlchange(6, 64);
-    // R1 (NRPN 7, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 7);
-    midichannels[6].controlchange(6, 127);
-    // R2 (NRPN 8, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 8);
-    midichannels[6].controlchange(6, 127);
-    // R3 (NRPN 9, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 9);
-    midichannels[6].controlchange(6, 127);
-    // R4 (NRPN 10, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 10);
-    midichannels[6].controlchange(6, 127);
-    // Wave (NRPN 11, range: 0–5, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 11);
-    midichannels[6].controlchange(6, 0);
-    // Speed (NRPN 12, range: 0–99, default: 35)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 12);
-    midichannels[6].controlchange(6, 45);
-    // Delay (NRPN 13, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 13);
-    midichannels[6].controlchange(6, 0);
-    // PMD (NRPN 14, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 14);
-    midichannels[6].controlchange(6, 0);
-    // AMD (NRPN 15, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 15);
-    midichannels[6].controlchange(6, 0);
-    // Sync (NRPN 16, range: 0–1, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 16);
-    midichannels[6].controlchange(6, 127);
-    // P Mod Sens (NRPN 17, range: 0–7, default: 3)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 17);
-    midichannels[6].controlchange(6, 54);
-    // Tune (NRPN 18, range: -7–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 18);
-    midichannels[6].controlchange(6, 64);
-    // Coarse (NRPN 19, range: 0–31, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 19);
-    midichannels[6].controlchange(6, 4);
-    // Fine (NRPN 20, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 20);
-    midichannels[6].controlchange(6, 0);
-    // L1 (NRPN 21, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 21);
-    midichannels[6].controlchange(6, 127);
-    // L2 (NRPN 22, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 22);
-    midichannels[6].controlchange(6, 127);
-    // L3 (NRPN 23, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 23);
-    midichannels[6].controlchange(6, 127);
-    // L4 (NRPN 24, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 24);
-    midichannels[6].controlchange(6, 0);
-    // R1 (NRPN 25, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 25);
-    midichannels[6].controlchange(6, 127);
-    // R2 (NRPN 26, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 26);
-    midichannels[6].controlchange(6, 127);
-    // R3 (NRPN 27, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 27);
-    midichannels[6].controlchange(6, 127);
-    // R4 (NRPN 28, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 28);
-    midichannels[6].controlchange(6, 127);
-    // Level (NRPN 29, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 29);
-    midichannels[6].controlchange(6, 127);
-    // Key Vel (NRPN 30, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 30);
-    midichannels[6].controlchange(6, 0);
-    // A Mod Sens (NRPN 31, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 31);
-    midichannels[6].controlchange(6, 0);
-    // Rate Scaling (NRPN 32, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 32);
-    midichannels[6].controlchange(6, 0);
-    // Breakpoint (NRPN 33, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 33);
-    midichannels[6].controlchange(6, 0);
-    // L Depth (NRPN 34, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 34);
-    midichannels[6].controlchange(6, 0);
-    // R Depth (NRPN 35, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 35);
-    midichannels[6].controlchange(6, 0);
-    // L Curve (NRPN 36, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 36);
-    midichannels[6].controlchange(6, 0);
-    // R Curve (NRPN 37, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 37);
-    midichannels[6].controlchange(6, 0);
-    // Tune (NRPN 38, range: -7–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 38);
-    midichannels[6].controlchange(6, 64);
-    // Coarse (NRPN 39, range: 0–31, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 39);
-    midichannels[6].controlchange(6, 4);
-    // Fine (NRPN 40, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 40);
-    midichannels[6].controlchange(6, 0);
-    // L1 (NRPN 41, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 41);
-    midichannels[6].controlchange(6, 127);
-    // L2 (NRPN 42, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 42);
-    midichannels[6].controlchange(6, 127);
-    // L3 (NRPN 43, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 43);
-    midichannels[6].controlchange(6, 127);
-    // L4 (NRPN 44, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 44);
-    midichannels[6].controlchange(6, 0);
-    // R1 (NRPN 45, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 45);
-    midichannels[6].controlchange(6, 127);
-    // R2 (NRPN 46, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 46);
-    midichannels[6].controlchange(6, 127);
-    // R3 (NRPN 47, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 47);
-    midichannels[6].controlchange(6, 127);
-    // R4 (NRPN 48, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 48);
-    midichannels[6].controlchange(6, 127);
-    // Level (NRPN 49, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 49);
-    midichannels[6].controlchange(6, 0);
-    // Key Vel (NRPN 50, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 50);
-    midichannels[6].controlchange(6, 0);
-    // A Mod Sens (NRPN 51, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 51);
-    midichannels[6].controlchange(6, 0);
-    // Rate Scaling (NRPN 52, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 52);
-    midichannels[6].controlchange(6, 0);
-    // Breakpoint (NRPN 53, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 53);
-    midichannels[6].controlchange(6, 0);
-    // L Depth (NRPN 54, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 54);
-    midichannels[6].controlchange(6, 0);
-    // R Depth (NRPN 55, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 55);
-    midichannels[6].controlchange(6, 0);
-    // L Curve (NRPN 56, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 56);
-    midichannels[6].controlchange(6, 0);
-    // R Curve (NRPN 57, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 57);
-    midichannels[6].controlchange(6, 0);
-    // Tune (NRPN 58, range: -7–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 58);
-    midichannels[6].controlchange(6, 64);
-    // Coarse (NRPN 59, range: 0–31, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 59);
-    midichannels[6].controlchange(6, 4);
-    // Fine (NRPN 60, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 60);
-    midichannels[6].controlchange(6, 0);
-    // L1 (NRPN 61, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 61);
-    midichannels[6].controlchange(6, 127);
-    // L2 (NRPN 62, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 62);
-    midichannels[6].controlchange(6, 127);
-    // L3 (NRPN 63, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 63);
-    midichannels[6].controlchange(6, 127);
-    // L4 (NRPN 64, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 64);
-    midichannels[6].controlchange(6, 0);
-    // R1 (NRPN 65, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 65);
-    midichannels[6].controlchange(6, 127);
-    // R2 (NRPN 66, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 66);
-    midichannels[6].controlchange(6, 127);
-    // R3 (NRPN 67, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 67);
-    midichannels[6].controlchange(6, 127);
-    // R4 (NRPN 68, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 68);
-    midichannels[6].controlchange(6, 127);
-    // Level (NRPN 69, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 69);
-    midichannels[6].controlchange(6, 0);
-    // Key Vel (NRPN 70, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 70);
-    midichannels[6].controlchange(6, 0);
-    // A Mod Sens (NRPN 71, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 71);
-    midichannels[6].controlchange(6, 0);
-    // Rate Scaling (NRPN 72, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 72);
-    midichannels[6].controlchange(6, 0);
-    // Breakpoint (NRPN 73, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 73);
-    midichannels[6].controlchange(6, 0);
-    // L Depth (NRPN 74, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 74);
-    midichannels[6].controlchange(6, 0);
-    // R Depth (NRPN 75, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 75);
-    midichannels[6].controlchange(6, 0);
-    // L Curve (NRPN 76, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 76);
-    midichannels[6].controlchange(6, 0);
-    // R Curve (NRPN 77, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 77);
-    midichannels[6].controlchange(6, 0);
-    // Tune (NRPN 78, range: -7–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 78);
-    midichannels[6].controlchange(6, 64);
-    // Coarse (NRPN 79, range: 0–31, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 79);
-    midichannels[6].controlchange(6, 4);
-    // Fine (NRPN 80, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 80);
-    midichannels[6].controlchange(6, 0);
-    // L1 (NRPN 81, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 81);
-    midichannels[6].controlchange(6, 127);
-    // L2 (NRPN 82, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 82);
-    midichannels[6].controlchange(6, 127);
-    // L3 (NRPN 83, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 83);
-    midichannels[6].controlchange(6, 127);
-    // L4 (NRPN 84, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 84);
-    midichannels[6].controlchange(6, 0);
-    // R1 (NRPN 85, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 85);
-    midichannels[6].controlchange(6, 127);
-    // R2 (NRPN 86, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 86);
-    midichannels[6].controlchange(6, 127);
-    // R3 (NRPN 87, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 87);
-    midichannels[6].controlchange(6, 127);
-    // R4 (NRPN 88, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 88);
-    midichannels[6].controlchange(6, 127);
-    // Level (NRPN 89, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 89);
-    midichannels[6].controlchange(6, 0);
-    // Key Vel (NRPN 90, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 90);
-    midichannels[6].controlchange(6, 0);
-    // A Mod Sens (NRPN 91, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 91);
-    midichannels[6].controlchange(6, 0);
-    // Rate Scaling (NRPN 92, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 92);
-    midichannels[6].controlchange(6, 0);
-    // Breakpoint (NRPN 93, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 93);
-    midichannels[6].controlchange(6, 0);
-    // L Depth (NRPN 94, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 94);
-    midichannels[6].controlchange(6, 0);
-    // R Depth (NRPN 95, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 95);
-    midichannels[6].controlchange(6, 0);
-    // L Curve (NRPN 96, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 96);
-    midichannels[6].controlchange(6, 0);
-    // R Curve (NRPN 97, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 97);
-    midichannels[6].controlchange(6, 0);
-    // Tune (NRPN 98, range: -7–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 98);
-    midichannels[6].controlchange(6, 64);
-    // Coarse (NRPN 99, range: 0–31, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 99);
-    midichannels[6].controlchange(6, 4);
-    // Fine (NRPN 100, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 100);
-    midichannels[6].controlchange(6, 0);
-    // L1 (NRPN 101, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 101);
-    midichannels[6].controlchange(6, 127);
-    // L2 (NRPN 102, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 102);
-    midichannels[6].controlchange(6, 127);
-    // L3 (NRPN 103, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 103);
-    midichannels[6].controlchange(6, 127);
-    // L4 (NRPN 104, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 104);
-    midichannels[6].controlchange(6, 0);
-    // R1 (NRPN 105, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 105);
-    midichannels[6].controlchange(6, 127);
-    // R2 (NRPN 106, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 106);
-    midichannels[6].controlchange(6, 127);
-    // R3 (NRPN 107, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 107);
-    midichannels[6].controlchange(6, 127);
-    // R4 (NRPN 108, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 108);
-    midichannels[6].controlchange(6, 127);
-    // Level (NRPN 109, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 109);
-    midichannels[6].controlchange(6, 0);
-    // Key Vel (NRPN 110, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 110);
-    midichannels[6].controlchange(6, 0);
-    // A Mod Sens (NRPN 111, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 111);
-    midichannels[6].controlchange(6, 0);
-    // Rate Scaling (NRPN 112, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 112);
-    midichannels[6].controlchange(6, 0);
-    // Breakpoint (NRPN 113, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 113);
-    midichannels[6].controlchange(6, 0);
-    // L Depth (NRPN 114, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 114);
-    midichannels[6].controlchange(6, 0);
-    // R Depth (NRPN 115, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 115);
-    midichannels[6].controlchange(6, 0);
-    // L Curve (NRPN 116, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 116);
-    midichannels[6].controlchange(6, 0);
-    // R Curve (NRPN 117, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 117);
-    midichannels[6].controlchange(6, 0);
-    // Tune (NRPN 118, range: -7–7, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 118);
-    midichannels[6].controlchange(6, 64);
-    // Coarse (NRPN 119, range: 0–31, default: 1)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 119);
-    midichannels[6].controlchange(6, 4);
-    // Fine (NRPN 120, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 120);
-    midichannels[6].controlchange(6, 0);
-    // L1 (NRPN 121, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 121);
-    midichannels[6].controlchange(6, 127);
-    // L2 (NRPN 122, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 122);
-    midichannels[6].controlchange(6, 127);
-    // L3 (NRPN 123, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 123);
-    midichannels[6].controlchange(6, 127);
-    // L4 (NRPN 124, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 124);
-    midichannels[6].controlchange(6, 0);
-    // R1 (NRPN 125, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 125);
-    midichannels[6].controlchange(6, 127);
-    // R2 (NRPN 126, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 126);
-    midichannels[6].controlchange(6, 127);
-    // R3 (NRPN 127, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 0);
-    midichannels[6].controlchange(98, 127);
-    midichannels[6].controlchange(6, 127);
-    // R4 (NRPN 128, range: 0–99, default: 99)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 0);
-    midichannels[6].controlchange(6, 127);
-    // Level (NRPN 129, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 1);
-    midichannels[6].controlchange(6, 0);
-    // Key Vel (NRPN 130, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 2);
-    midichannels[6].controlchange(6, 0);
-    // A Mod Sens (NRPN 131, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 3);
-    midichannels[6].controlchange(6, 0);
-    // Rate Scaling (NRPN 132, range: 0–7, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 4);
-    midichannels[6].controlchange(6, 0);
-    // Breakpoint (NRPN 133, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 5);
-    midichannels[6].controlchange(6, 0);
-    // L Depth (NRPN 134, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 6);
-    midichannels[6].controlchange(6, 0);
-    // R Depth (NRPN 135, range: 0–99, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 7);
-    midichannels[6].controlchange(6, 0);
-    // L Curve (NRPN 136, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 8);
-    midichannels[6].controlchange(6, 0);
-    // R Curve (NRPN 137, range: 0–3, default: 0)
-    midichannels[6].controlchange(99, 1);
-    midichannels[6].controlchange(98, 9);
-    midichannels[6].controlchange(6, 0);
+    // Hat defaults (NRPN 288-431)
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 32);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 33);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 34);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 35);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 36);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 37);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 38);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 39);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 40);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 41);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 42);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 43);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 44);
+    midichannels[4].controlchange(6, 45);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 45);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 46);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 47);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 48);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 49);
+    midichannels[4].controlchange(6, 54);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 50);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 51);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 52);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 53);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 54);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 55);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 56);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 57);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 58);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 59);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 60);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 61);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 62);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 63);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 64);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 65);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 66);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 67);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 68);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 69);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 70);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 71);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 72);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 73);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 74);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 75);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 76);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 77);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 78);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 79);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 80);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 81);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 82);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 83);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 84);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 85);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 86);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 87);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 88);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 89);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 90);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 91);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 92);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 93);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 94);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 95);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 96);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 97);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 98);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 99);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 100);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 101);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 102);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 103);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 104);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 105);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 106);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 107);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 108);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 109);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 110);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 111);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 112);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 113);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 114);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 115);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 116);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 117);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 118);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 119);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 120);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 121);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 122);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 123);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 124);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 125);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 126);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 2);
+    midichannels[4].controlchange(98, 127);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 0);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 1);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 2);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 3);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 4);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 5);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 6);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 7);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 8);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 9);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 10);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 11);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 12);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 13);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 14);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 15);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 16);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 17);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 18);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 19);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 20);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 21);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 22);
+    midichannels[4].controlchange(6, 64);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 23);
+    midichannels[4].controlchange(6, 4);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 24);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 25);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 26);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 27);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 28);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 29);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 30);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 31);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 32);
+    midichannels[4].controlchange(6, 127);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 33);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 34);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 35);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 36);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 37);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 38);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 39);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 40);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 41);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 42);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 43);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 44);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 45);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 46);
+    midichannels[4].controlchange(6, 0);
+    midichannels[4].controlchange(99, 3);
+    midichannels[4].controlchange(98, 47);
+    midichannels[4].controlchange(6, 0);
 }
 
 export function postprocess(): void {
