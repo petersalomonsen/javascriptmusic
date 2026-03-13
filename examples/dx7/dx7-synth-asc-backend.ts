@@ -281,6 +281,18 @@ let dx7_alg5_fHslider112: f32 = 0.0;
 let dx7_alg5_fEntry11: f32 = 0.0;
 // R Curve (NRPN 137)
 let dx7_alg5_fEntry12: f32 = 0.0;
+// Freq Mode (NRPN 138)
+let dx7_alg5_fCheckbox0: f32 = 0.0;
+// Freq Mode (NRPN 139)
+let dx7_alg5_fCheckbox1: f32 = 0.0;
+// Freq Mode (NRPN 140)
+let dx7_alg5_fCheckbox2: f32 = 0.0;
+// Freq Mode (NRPN 141)
+let dx7_alg5_fCheckbox3: f32 = 0.0;
+// Freq Mode (NRPN 142)
+let dx7_alg5_fCheckbox4: f32 = 0.0;
+// Freq Mode (NRPN 143)
+let dx7_alg5_fCheckbox5: f32 = 0.0;
 
 const iDx7_alg5SIG0Wave0: StaticArray<i32> = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
 const iDx7_alg5SIG1Wave0: StaticArray<i32> = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
@@ -372,7 +384,6 @@ export class Dx7_alg5 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0.0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -388,7 +399,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0.0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -397,7 +407,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0.0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -406,7 +415,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0.0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -415,7 +423,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0.0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -424,7 +431,6 @@ export class Dx7_alg5 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0.0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -596,7 +602,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = <f32>(iSlow47);
         const iSlow66: i32 = <i32>(Mathf.round(dx7_alg5_fHslider22));
-        const iSlow67: i32 = <i32>(Mathf.round(this.fCheckbox0));
+        const iSlow67: i32 = <i32>(Mathf.round(dx7_alg5_fCheckbox0));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(dx7_alg5_fHslider23);
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -659,7 +665,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg5_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_fHslider50)))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = <f32>(iSlow127);
-        const iSlow130: i32 = <i32>(Mathf.round(this.fCheckbox1));
+        const iSlow130: i32 = <i32>(Mathf.round(dx7_alg5_fCheckbox1));
         const fSlow131: f32 = Mathf.round(dx7_alg5_fHslider51);
         const iSlow132: i32 = <i32>(Mathf.round(dx7_alg5_fHslider52));
         const fSlow133: f32 = Mathf.round(dx7_alg5_fHslider53);
@@ -704,7 +710,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow172: i32 = Dx7_alg5_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_fHslider68)))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = <f32>(iSlow172);
-        const iSlow175: i32 = <i32>(Mathf.round(this.fCheckbox2));
+        const iSlow175: i32 = <i32>(Mathf.round(dx7_alg5_fCheckbox2));
         const fSlow176: f32 = Mathf.round(dx7_alg5_fHslider69);
         const iSlow177: i32 = <i32>(Mathf.round(dx7_alg5_fHslider70));
         const fSlow178: f32 = Mathf.round(dx7_alg5_fHslider71);
@@ -749,7 +755,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow217: i32 = Dx7_alg5_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_fHslider86)))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = <f32>(iSlow217);
-        const iSlow220: i32 = <i32>(Mathf.round(this.fCheckbox3));
+        const iSlow220: i32 = <i32>(Mathf.round(dx7_alg5_fCheckbox3));
         const fSlow221: f32 = Mathf.round(dx7_alg5_fHslider87);
         const iSlow222: i32 = <i32>(Mathf.round(dx7_alg5_fHslider88));
         const fSlow223: f32 = Mathf.round(dx7_alg5_fHslider89);
@@ -794,7 +800,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow262: i32 = Dx7_alg5_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_fHslider104)))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = <f32>(iSlow262);
-        const iSlow265: i32 = <i32>(Mathf.round(this.fCheckbox4));
+        const iSlow265: i32 = <i32>(Mathf.round(dx7_alg5_fCheckbox4));
         const fSlow266: f32 = Mathf.round(dx7_alg5_fHslider105);
         const iSlow267: i32 = <i32>(Mathf.round(dx7_alg5_fHslider106));
         const fSlow268: f32 = Mathf.round(dx7_alg5_fHslider107);
@@ -839,7 +845,7 @@ export class Dx7_alg5 extends MidiVoice {
         const iSlow307: i32 = Dx7_alg5_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_fHslider122)))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = <f32>(iSlow307);
-        const iSlow310: i32 = <i32>(Mathf.round(this.fCheckbox5));
+        const iSlow310: i32 = <i32>(Mathf.round(dx7_alg5_fCheckbox5));
         const fSlow311: f32 = Mathf.round(dx7_alg5_fHslider123);
         const iSlow312: i32 = <i32>(Mathf.round(dx7_alg5_fHslider124));
         const fSlow313: f32 = Mathf.round(dx7_alg5_fHslider125);
@@ -1513,6 +1519,12 @@ export class Dx7_alg5Channel extends MidiChannel {
             case 135: dx7_alg5_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg5_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg5_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg5_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg5_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg5_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg5_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg5_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg5_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -1793,6 +1805,18 @@ let dx7_alg16_fHslider112: f32 = 0.0;
 let dx7_alg16_fEntry11: f32 = 0.0;
 // R Curve (NRPN 137)
 let dx7_alg16_fEntry12: f32 = 0.0;
+// Freq Mode (NRPN 138)
+let dx7_alg16_fCheckbox0: f32 = 0.0;
+// Freq Mode (NRPN 139)
+let dx7_alg16_fCheckbox1: f32 = 0.0;
+// Freq Mode (NRPN 140)
+let dx7_alg16_fCheckbox2: f32 = 0.0;
+// Freq Mode (NRPN 141)
+let dx7_alg16_fCheckbox3: f32 = 0.0;
+// Freq Mode (NRPN 142)
+let dx7_alg16_fCheckbox4: f32 = 0.0;
+// Freq Mode (NRPN 143)
+let dx7_alg16_fCheckbox5: f32 = 0.0;
 
 const iDx7_alg16SIG0Wave0: StaticArray<i32> = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
 const iDx7_alg16SIG1Wave0: StaticArray<i32> = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
@@ -1884,7 +1908,6 @@ export class Dx7_alg16 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0.0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1900,7 +1923,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0.0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1909,7 +1931,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0.0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1918,7 +1939,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0.0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1927,7 +1947,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0.0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -1936,7 +1955,6 @@ export class Dx7_alg16 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0.0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -2108,7 +2126,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = <f32>(iSlow47);
         const iSlow66: i32 = <i32>(Mathf.round(dx7_alg16_fHslider22));
-        const iSlow67: i32 = <i32>(Mathf.round(this.fCheckbox0));
+        const iSlow67: i32 = <i32>(Mathf.round(dx7_alg16_fCheckbox0));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(dx7_alg16_fHslider23);
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -2171,7 +2189,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg16_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg16_fHslider50)))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = <f32>(iSlow127);
-        const iSlow130: i32 = <i32>(Mathf.round(this.fCheckbox1));
+        const iSlow130: i32 = <i32>(Mathf.round(dx7_alg16_fCheckbox1));
         const fSlow131: f32 = Mathf.round(dx7_alg16_fHslider51);
         const iSlow132: i32 = <i32>(Mathf.round(dx7_alg16_fHslider52));
         const fSlow133: f32 = Mathf.round(dx7_alg16_fHslider53);
@@ -2216,7 +2234,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow172: i32 = Dx7_alg16_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg16_fHslider68)))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = <f32>(iSlow172);
-        const iSlow175: i32 = <i32>(Mathf.round(this.fCheckbox2));
+        const iSlow175: i32 = <i32>(Mathf.round(dx7_alg16_fCheckbox2));
         const fSlow176: f32 = Mathf.round(dx7_alg16_fHslider69);
         const iSlow177: i32 = <i32>(Mathf.round(dx7_alg16_fHslider70));
         const fSlow178: f32 = Mathf.round(dx7_alg16_fHslider71);
@@ -2261,7 +2279,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow217: i32 = Dx7_alg16_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg16_fHslider86)))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = <f32>(iSlow217);
-        const iSlow220: i32 = <i32>(Mathf.round(this.fCheckbox3));
+        const iSlow220: i32 = <i32>(Mathf.round(dx7_alg16_fCheckbox3));
         const fSlow221: f32 = Mathf.round(dx7_alg16_fHslider87);
         const iSlow222: i32 = <i32>(Mathf.round(dx7_alg16_fHslider88));
         const fSlow223: f32 = Mathf.round(dx7_alg16_fHslider89);
@@ -2306,7 +2324,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow262: i32 = Dx7_alg16_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg16_fHslider104)))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = <f32>(iSlow262);
-        const iSlow265: i32 = <i32>(Mathf.round(this.fCheckbox4));
+        const iSlow265: i32 = <i32>(Mathf.round(dx7_alg16_fCheckbox4));
         const fSlow266: f32 = Mathf.round(dx7_alg16_fHslider105);
         const iSlow267: i32 = <i32>(Mathf.round(dx7_alg16_fHslider106));
         const fSlow268: f32 = Mathf.round(dx7_alg16_fHslider107);
@@ -2351,7 +2369,7 @@ export class Dx7_alg16 extends MidiVoice {
         const iSlow307: i32 = Dx7_alg16_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg16_fHslider122)))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = <f32>(iSlow307);
-        const iSlow310: i32 = <i32>(Mathf.round(this.fCheckbox5));
+        const iSlow310: i32 = <i32>(Mathf.round(dx7_alg16_fCheckbox5));
         const fSlow311: f32 = Mathf.round(dx7_alg16_fHslider123);
         const iSlow312: i32 = <i32>(Mathf.round(dx7_alg16_fHslider124));
         const fSlow313: f32 = Mathf.round(dx7_alg16_fHslider125);
@@ -3025,6 +3043,12 @@ export class Dx7_alg16Channel extends MidiChannel {
             case 135: dx7_alg16_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg16_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg16_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg16_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg16_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg16_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg16_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg16_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg16_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -3305,6 +3329,18 @@ let dx7_alg2_fHslider113: f32 = 0.0;
 let dx7_alg2_fEntry11: f32 = 0.0;
 // R Curve (NRPN 137)
 let dx7_alg2_fEntry12: f32 = 0.0;
+// Freq Mode (NRPN 138)
+let dx7_alg2_fCheckbox0: f32 = 0.0;
+// Freq Mode (NRPN 139)
+let dx7_alg2_fCheckbox1: f32 = 0.0;
+// Freq Mode (NRPN 140)
+let dx7_alg2_fCheckbox2: f32 = 0.0;
+// Freq Mode (NRPN 141)
+let dx7_alg2_fCheckbox3: f32 = 0.0;
+// Freq Mode (NRPN 142)
+let dx7_alg2_fCheckbox4: f32 = 0.0;
+// Freq Mode (NRPN 143)
+let dx7_alg2_fCheckbox5: f32 = 0.0;
 
 const iDx7_alg2SIG0Wave0: StaticArray<i32> = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
 const iDx7_alg2SIG1Wave0: StaticArray<i32> = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
@@ -3396,7 +3432,6 @@ export class Dx7_alg2 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0.0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3412,7 +3447,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec26: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0.0;
     private fRec27: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec19: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3422,7 +3456,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec34: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0.0;
     private fRec35: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec37: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3431,7 +3464,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec42: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0.0;
     private fRec43: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec45: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3440,7 +3472,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec50: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0.0;
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -3449,7 +3480,6 @@ export class Dx7_alg2 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0.0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
     private releaseSamples: i32 = 0;
@@ -3620,7 +3650,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = <f32>(iSlow47);
         const iSlow66: i32 = <i32>(Mathf.round(dx7_alg2_fHslider22));
-        const iSlow67: i32 = <i32>(Mathf.round(this.fCheckbox0));
+        const iSlow67: i32 = <i32>(Mathf.round(dx7_alg2_fCheckbox0));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(dx7_alg2_fHslider23);
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -3683,7 +3713,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg2_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg2_fHslider50)))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = <f32>(iSlow127);
-        const iSlow130: i32 = <i32>(Mathf.round(this.fCheckbox1));
+        const iSlow130: i32 = <i32>(Mathf.round(dx7_alg2_fCheckbox1));
         const fSlow131: f32 = Mathf.round(dx7_alg2_fHslider51);
         const iSlow132: i32 = <i32>(Mathf.round(dx7_alg2_fHslider52));
         const fSlow133: f32 = Mathf.round(dx7_alg2_fHslider53);
@@ -3730,7 +3760,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow174: i32 = Dx7_alg2_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg2_fHslider69)))];
         const iSlow175: i32 = iSlow174 != 0;
         const fSlow176: f32 = <f32>(iSlow174);
-        const iSlow177: i32 = <i32>(Mathf.round(this.fCheckbox2));
+        const iSlow177: i32 = <i32>(Mathf.round(dx7_alg2_fCheckbox2));
         const fSlow178: f32 = Mathf.round(dx7_alg2_fHslider70);
         const iSlow179: i32 = <i32>(Mathf.round(dx7_alg2_fHslider71));
         const fSlow180: f32 = Mathf.round(dx7_alg2_fHslider72);
@@ -3775,7 +3805,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow219: i32 = Dx7_alg2_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg2_fHslider87)))];
         const iSlow220: i32 = iSlow219 != 0;
         const fSlow221: f32 = <f32>(iSlow219);
-        const iSlow222: i32 = <i32>(Mathf.round(this.fCheckbox3));
+        const iSlow222: i32 = <i32>(Mathf.round(dx7_alg2_fCheckbox3));
         const fSlow223: f32 = Mathf.round(dx7_alg2_fHslider88);
         const iSlow224: i32 = <i32>(Mathf.round(dx7_alg2_fHslider89));
         const fSlow225: f32 = Mathf.round(dx7_alg2_fHslider90);
@@ -3820,7 +3850,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow264: i32 = Dx7_alg2_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg2_fHslider105)))];
         const iSlow265: i32 = iSlow264 != 0;
         const fSlow266: f32 = <f32>(iSlow264);
-        const iSlow267: i32 = <i32>(Mathf.round(this.fCheckbox4));
+        const iSlow267: i32 = <i32>(Mathf.round(dx7_alg2_fCheckbox4));
         const fSlow268: f32 = Mathf.round(dx7_alg2_fHslider106);
         const iSlow269: i32 = <i32>(Mathf.round(dx7_alg2_fHslider107));
         const fSlow270: f32 = Mathf.round(dx7_alg2_fHslider108);
@@ -3865,7 +3895,7 @@ export class Dx7_alg2 extends MidiVoice {
         const iSlow309: i32 = Dx7_alg2_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg2_fHslider123)))];
         const iSlow310: i32 = iSlow309 != 0;
         const fSlow311: f32 = <f32>(iSlow309);
-        const iSlow312: i32 = <i32>(Mathf.round(this.fCheckbox5));
+        const iSlow312: i32 = <i32>(Mathf.round(dx7_alg2_fCheckbox5));
         const fSlow313: f32 = Mathf.round(dx7_alg2_fHslider124);
         const iSlow314: i32 = <i32>(Mathf.round(dx7_alg2_fHslider125));
         const fSlow315: f32 = Mathf.round(dx7_alg2_fHslider126);
@@ -4537,6 +4567,12 @@ export class Dx7_alg2Channel extends MidiChannel {
             case 135: dx7_alg2_fHslider113 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg2_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg2_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg2_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg2_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg2_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg2_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg2_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg2_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -4817,6 +4853,18 @@ let dx7_alg5_bells_fHslider112: f32 = 0.0;
 let dx7_alg5_bells_fEntry11: f32 = 0.0;
 // R Curve (NRPN 137)
 let dx7_alg5_bells_fEntry12: f32 = 0.0;
+// Freq Mode (NRPN 138)
+let dx7_alg5_bells_fCheckbox0: f32 = 0.0;
+// Freq Mode (NRPN 139)
+let dx7_alg5_bells_fCheckbox1: f32 = 0.0;
+// Freq Mode (NRPN 140)
+let dx7_alg5_bells_fCheckbox2: f32 = 0.0;
+// Freq Mode (NRPN 141)
+let dx7_alg5_bells_fCheckbox3: f32 = 0.0;
+// Freq Mode (NRPN 142)
+let dx7_alg5_bells_fCheckbox4: f32 = 0.0;
+// Freq Mode (NRPN 143)
+let dx7_alg5_bells_fCheckbox5: f32 = 0.0;
 
 const iDx7_alg5_bellsSIG0Wave0: StaticArray<i32> = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
 const iDx7_alg5_bellsSIG1Wave0: StaticArray<i32> = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
@@ -4908,7 +4956,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0.0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4924,7 +4971,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0.0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4933,7 +4979,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0.0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4942,7 +4987,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0.0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4951,7 +4995,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0.0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -4960,7 +5003,6 @@ export class Dx7_alg5_bells extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0.0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -5132,7 +5174,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = <f32>(iSlow47);
         const iSlow66: i32 = <i32>(Mathf.round(dx7_alg5_bells_fHslider22));
-        const iSlow67: i32 = <i32>(Mathf.round(this.fCheckbox0));
+        const iSlow67: i32 = <i32>(Mathf.round(dx7_alg5_bells_fCheckbox0));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(dx7_alg5_bells_fHslider23);
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -5195,7 +5237,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow127: i32 = Dx7_alg5_bells_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_bells_fHslider50)))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = <f32>(iSlow127);
-        const iSlow130: i32 = <i32>(Mathf.round(this.fCheckbox1));
+        const iSlow130: i32 = <i32>(Mathf.round(dx7_alg5_bells_fCheckbox1));
         const fSlow131: f32 = Mathf.round(dx7_alg5_bells_fHslider51);
         const iSlow132: i32 = <i32>(Mathf.round(dx7_alg5_bells_fHslider52));
         const fSlow133: f32 = Mathf.round(dx7_alg5_bells_fHslider53);
@@ -5240,7 +5282,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow172: i32 = Dx7_alg5_bells_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_bells_fHslider68)))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = <f32>(iSlow172);
-        const iSlow175: i32 = <i32>(Mathf.round(this.fCheckbox2));
+        const iSlow175: i32 = <i32>(Mathf.round(dx7_alg5_bells_fCheckbox2));
         const fSlow176: f32 = Mathf.round(dx7_alg5_bells_fHslider69);
         const iSlow177: i32 = <i32>(Mathf.round(dx7_alg5_bells_fHslider70));
         const fSlow178: f32 = Mathf.round(dx7_alg5_bells_fHslider71);
@@ -5285,7 +5327,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow217: i32 = Dx7_alg5_bells_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_bells_fHslider86)))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = <f32>(iSlow217);
-        const iSlow220: i32 = <i32>(Mathf.round(this.fCheckbox3));
+        const iSlow220: i32 = <i32>(Mathf.round(dx7_alg5_bells_fCheckbox3));
         const fSlow221: f32 = Mathf.round(dx7_alg5_bells_fHslider87);
         const iSlow222: i32 = <i32>(Mathf.round(dx7_alg5_bells_fHslider88));
         const fSlow223: f32 = Mathf.round(dx7_alg5_bells_fHslider89);
@@ -5330,7 +5372,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow262: i32 = Dx7_alg5_bells_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_bells_fHslider104)))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = <f32>(iSlow262);
-        const iSlow265: i32 = <i32>(Mathf.round(this.fCheckbox4));
+        const iSlow265: i32 = <i32>(Mathf.round(dx7_alg5_bells_fCheckbox4));
         const fSlow266: f32 = Mathf.round(dx7_alg5_bells_fHslider105);
         const iSlow267: i32 = <i32>(Mathf.round(dx7_alg5_bells_fHslider106));
         const fSlow268: f32 = Mathf.round(dx7_alg5_bells_fHslider107);
@@ -5375,7 +5417,7 @@ export class Dx7_alg5_bells extends MidiVoice {
         const iSlow307: i32 = Dx7_alg5_bells_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_bells_fHslider122)))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = <f32>(iSlow307);
-        const iSlow310: i32 = <i32>(Mathf.round(this.fCheckbox5));
+        const iSlow310: i32 = <i32>(Mathf.round(dx7_alg5_bells_fCheckbox5));
         const fSlow311: f32 = Mathf.round(dx7_alg5_bells_fHslider123);
         const iSlow312: i32 = <i32>(Mathf.round(dx7_alg5_bells_fHslider124));
         const fSlow313: f32 = Mathf.round(dx7_alg5_bells_fHslider125);
@@ -6049,6 +6091,12 @@ export class Dx7_alg5_bellsChannel extends MidiChannel {
             case 135: dx7_alg5_bells_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg5_bells_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg5_bells_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg5_bells_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg5_bells_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg5_bells_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg5_bells_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg5_bells_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg5_bells_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -6329,6 +6377,18 @@ let dx7_alg17_fHslider91: f32 = 0.0;
 let dx7_alg17_fEntry9: f32 = 0.0;
 // R Curve (NRPN 137)
 let dx7_alg17_fEntry10: f32 = 0.0;
+// Freq Mode (NRPN 138)
+let dx7_alg17_fCheckbox4: f32 = 0.0;
+// Freq Mode (NRPN 139)
+let dx7_alg17_fCheckbox5: f32 = 0.0;
+// Freq Mode (NRPN 140)
+let dx7_alg17_fCheckbox0: f32 = 0.0;
+// Freq Mode (NRPN 141)
+let dx7_alg17_fCheckbox1: f32 = 0.0;
+// Freq Mode (NRPN 142)
+let dx7_alg17_fCheckbox2: f32 = 0.0;
+// Freq Mode (NRPN 143)
+let dx7_alg17_fCheckbox3: f32 = 0.0;
 
 const iDx7_alg17SIG0Wave0: StaticArray<i32> = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
 const iDx7_alg17SIG1Wave0: StaticArray<i32> = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
@@ -6427,7 +6487,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec16: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec17: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec18: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0.0;
     private fConst4: f32;
     private fRec20: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec21: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6443,7 +6502,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec30: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0.0;
     private fRec33: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec34: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6452,7 +6510,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec38: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0.0;
     private fRec41: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec42: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6461,9 +6518,7 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec46: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0.0;
     private fRec49: StaticArray<f32> = new StaticArray<f32>(2);
-    private fCheckbox4: f32 = 0.0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -6472,7 +6527,6 @@ export class Dx7_alg17 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0.0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -6684,7 +6738,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow104: i32 = iSlow103 != 0;
         const fSlow105: f32 = <f32>(iSlow103);
         const iSlow106: i32 = <i32>(Mathf.round(dx7_alg17_fHslider37));
-        const iSlow107: i32 = <i32>(Mathf.round(this.fCheckbox0));
+        const iSlow107: i32 = <i32>(Mathf.round(dx7_alg17_fCheckbox0));
         const fSlow108: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow109: f32 = Mathf.round(dx7_alg17_fHslider38);
         const fSlow110: f32 = Mathf.exp(-0.57130724 * fSlow108);
@@ -6747,7 +6801,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow167: i32 = Dx7_alg17_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg17_fHslider65)))];
         const iSlow168: i32 = iSlow167 != 0;
         const fSlow169: f32 = <f32>(iSlow167);
-        const iSlow170: i32 = <i32>(Mathf.round(this.fCheckbox1));
+        const iSlow170: i32 = <i32>(Mathf.round(dx7_alg17_fCheckbox1));
         const fSlow171: f32 = Mathf.round(dx7_alg17_fHslider66);
         const iSlow172: i32 = <i32>(Mathf.round(dx7_alg17_fHslider67));
         const fSlow173: f32 = Mathf.round(dx7_alg17_fHslider68);
@@ -6792,7 +6846,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow212: i32 = Dx7_alg17_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg17_fHslider83)))];
         const iSlow213: i32 = iSlow212 != 0;
         const fSlow214: f32 = <f32>(iSlow212);
-        const iSlow215: i32 = <i32>(Mathf.round(this.fCheckbox2));
+        const iSlow215: i32 = <i32>(Mathf.round(dx7_alg17_fCheckbox2));
         const fSlow216: f32 = Mathf.round(dx7_alg17_fHslider84);
         const iSlow217: i32 = <i32>(Mathf.round(dx7_alg17_fHslider85));
         const fSlow218: f32 = Mathf.round(dx7_alg17_fHslider86);
@@ -6837,12 +6891,12 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow257: i32 = Dx7_alg17_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg17_fHslider101)))];
         const iSlow258: i32 = iSlow257 != 0;
         const fSlow259: f32 = <f32>(iSlow257);
-        const iSlow260: i32 = <i32>(Mathf.round(this.fCheckbox3));
+        const iSlow260: i32 = <i32>(Mathf.round(dx7_alg17_fCheckbox3));
         const fSlow261: f32 = Mathf.round(dx7_alg17_fHslider102);
         const iSlow262: i32 = <i32>(Mathf.round(dx7_alg17_fHslider103));
         const fSlow263: f32 = Mathf.round(dx7_alg17_fHslider104);
         const fSlow264: f32 = ((iSlow260) ? <f32>(<i32>(4458616.0 * (fSlow263 + <f32>(<i32>100 * (iSlow262 & 3)))) >> 3) + ((fSlow261 > 0.0) ? 13457.0 * fSlow261 : 0.0) : fSlow108 * (72267.445 * fSlow261 * fSlow110 + 24204406.0) + <f32>(Dx7_alg17_itbl5SIG5[<i32>(Mathf.round(<f32>(iSlow262 & 31)))]) + <f32>(((<i32>(fSlow263)) ? <i32>(Mathf.floor(24204406.0 * Mathf.log(0.01 * fSlow263 + 1.0) + 0.5)) : <i32>0)));
-        const iSlow265: i32 = <i32>(Mathf.round(this.fCheckbox4));
+        const iSlow265: i32 = <i32>(Mathf.round(dx7_alg17_fCheckbox4));
         const fSlow266: f32 = Mathf.round(dx7_alg17_fHslider105);
         const iSlow267: i32 = <i32>(Mathf.round(dx7_alg17_fHslider106));
         const fSlow268: f32 = Mathf.round(dx7_alg17_fHslider107);
@@ -6887,7 +6941,7 @@ export class Dx7_alg17 extends MidiVoice {
         const iSlow307: i32 = Dx7_alg17_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg17_fHslider122)))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = <f32>(iSlow307);
-        const iSlow310: i32 = <i32>(Mathf.round(this.fCheckbox5));
+        const iSlow310: i32 = <i32>(Mathf.round(dx7_alg17_fCheckbox5));
         const fSlow311: f32 = Mathf.round(dx7_alg17_fHslider123);
         const iSlow312: i32 = <i32>(Mathf.round(dx7_alg17_fHslider124));
         const fSlow313: f32 = Mathf.round(dx7_alg17_fHslider125);
@@ -7561,6 +7615,12 @@ export class Dx7_alg17Channel extends MidiChannel {
             case 135: dx7_alg17_fHslider91 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg17_fEntry9 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg17_fEntry10 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg17_fCheckbox4 = <f32>value / 127.0; break;
+            case 139: dx7_alg17_fCheckbox5 = <f32>value / 127.0; break;
+            case 140: dx7_alg17_fCheckbox0 = <f32>value / 127.0; break;
+            case 141: dx7_alg17_fCheckbox1 = <f32>value / 127.0; break;
+            case 142: dx7_alg17_fCheckbox2 = <f32>value / 127.0; break;
+            case 143: dx7_alg17_fCheckbox3 = <f32>value / 127.0; break;
         }
     }
 }
@@ -7841,6 +7901,18 @@ let dx7_alg21_fHslider95: f32 = 0.0;
 let dx7_alg21_fEntry9: f32 = 0.0;
 // R Curve (NRPN 137)
 let dx7_alg21_fEntry10: f32 = 0.0;
+// Freq Mode (NRPN 138)
+let dx7_alg21_fCheckbox0: f32 = 0.0;
+// Freq Mode (NRPN 139)
+let dx7_alg21_fCheckbox2: f32 = 0.0;
+// Freq Mode (NRPN 140)
+let dx7_alg21_fCheckbox1: f32 = 0.0;
+// Freq Mode (NRPN 141)
+let dx7_alg21_fCheckbox3: f32 = 0.0;
+// Freq Mode (NRPN 142)
+let dx7_alg21_fCheckbox5: f32 = 0.0;
+// Freq Mode (NRPN 143)
+let dx7_alg21_fCheckbox4: f32 = 0.0;
 
 const iDx7_alg21SIG0Wave0: StaticArray<i32> = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
 const iDx7_alg21SIG1Wave0: StaticArray<i32> = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
@@ -7932,7 +8004,6 @@ export class Dx7_alg21 extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0.0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7948,7 +8019,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec26: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0.0;
     private fRec27: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec19: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7958,7 +8028,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec34: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0.0;
     private fRec35: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec37: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7967,7 +8036,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec42: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0.0;
     private fRec43: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec45: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7976,7 +8044,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec50: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0.0;
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -7985,7 +8052,6 @@ export class Dx7_alg21 extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0.0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
     private releaseSamples: i32 = 0;
@@ -8156,7 +8222,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = <f32>(iSlow47);
         const iSlow66: i32 = <i32>(Mathf.round(dx7_alg21_fHslider22));
-        const iSlow67: i32 = <i32>(Mathf.round(this.fCheckbox0));
+        const iSlow67: i32 = <i32>(Mathf.round(dx7_alg21_fCheckbox0));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(dx7_alg21_fHslider23);
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -8219,7 +8285,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow127: i32 = Dx7_alg21_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg21_fHslider50)))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = <f32>(iSlow127);
-        const iSlow130: i32 = <i32>(Mathf.round(this.fCheckbox1));
+        const iSlow130: i32 = <i32>(Mathf.round(dx7_alg21_fCheckbox1));
         const fSlow131: f32 = Mathf.round(dx7_alg21_fHslider51);
         const iSlow132: i32 = <i32>(Mathf.round(dx7_alg21_fHslider52));
         const fSlow133: f32 = Mathf.round(dx7_alg21_fHslider53);
@@ -8266,7 +8332,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow174: i32 = Dx7_alg21_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg21_fHslider69)))];
         const iSlow175: i32 = iSlow174 != 0;
         const fSlow176: f32 = <f32>(iSlow174);
-        const iSlow177: i32 = <i32>(Mathf.round(this.fCheckbox2));
+        const iSlow177: i32 = <i32>(Mathf.round(dx7_alg21_fCheckbox2));
         const fSlow178: f32 = Mathf.round(dx7_alg21_fHslider70);
         const iSlow179: i32 = <i32>(Mathf.round(dx7_alg21_fHslider71));
         const fSlow180: f32 = Mathf.round(dx7_alg21_fHslider72);
@@ -8311,7 +8377,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow219: i32 = Dx7_alg21_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg21_fHslider87)))];
         const iSlow220: i32 = iSlow219 != 0;
         const fSlow221: f32 = <f32>(iSlow219);
-        const iSlow222: i32 = <i32>(Mathf.round(this.fCheckbox3));
+        const iSlow222: i32 = <i32>(Mathf.round(dx7_alg21_fCheckbox3));
         const fSlow223: f32 = Mathf.round(dx7_alg21_fHslider88);
         const iSlow224: i32 = <i32>(Mathf.round(dx7_alg21_fHslider89));
         const fSlow225: f32 = Mathf.round(dx7_alg21_fHslider90);
@@ -8356,7 +8422,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow264: i32 = Dx7_alg21_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg21_fHslider105)))];
         const iSlow265: i32 = iSlow264 != 0;
         const fSlow266: f32 = <f32>(iSlow264);
-        const iSlow267: i32 = <i32>(Mathf.round(this.fCheckbox4));
+        const iSlow267: i32 = <i32>(Mathf.round(dx7_alg21_fCheckbox4));
         const fSlow268: f32 = Mathf.round(dx7_alg21_fHslider106);
         const iSlow269: i32 = <i32>(Mathf.round(dx7_alg21_fHslider107));
         const fSlow270: f32 = Mathf.round(dx7_alg21_fHslider108);
@@ -8401,7 +8467,7 @@ export class Dx7_alg21 extends MidiVoice {
         const iSlow309: i32 = Dx7_alg21_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg21_fHslider123)))];
         const iSlow310: i32 = iSlow309 != 0;
         const fSlow311: f32 = <f32>(iSlow309);
-        const iSlow312: i32 = <i32>(Mathf.round(this.fCheckbox5));
+        const iSlow312: i32 = <i32>(Mathf.round(dx7_alg21_fCheckbox5));
         const fSlow313: f32 = Mathf.round(dx7_alg21_fHslider124);
         const iSlow314: i32 = <i32>(Mathf.round(dx7_alg21_fHslider125));
         const fSlow315: f32 = Mathf.round(dx7_alg21_fHslider126);
@@ -9074,6 +9140,12 @@ export class Dx7_alg21Channel extends MidiChannel {
             case 135: dx7_alg21_fHslider95 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg21_fEntry9 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg21_fEntry10 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg21_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg21_fCheckbox2 = <f32>value / 127.0; break;
+            case 140: dx7_alg21_fCheckbox1 = <f32>value / 127.0; break;
+            case 141: dx7_alg21_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg21_fCheckbox5 = <f32>value / 127.0; break;
+            case 143: dx7_alg21_fCheckbox4 = <f32>value / 127.0; break;
         }
     }
 }
@@ -9354,6 +9426,18 @@ let dx7_alg5_hat_fHslider112: f32 = 0.0;
 let dx7_alg5_hat_fEntry11: f32 = 0.0;
 // R Curve (NRPN 137)
 let dx7_alg5_hat_fEntry12: f32 = 0.0;
+// Freq Mode (NRPN 138)
+let dx7_alg5_hat_fCheckbox0: f32 = 0.0;
+// Freq Mode (NRPN 139)
+let dx7_alg5_hat_fCheckbox1: f32 = 0.0;
+// Freq Mode (NRPN 140)
+let dx7_alg5_hat_fCheckbox2: f32 = 0.0;
+// Freq Mode (NRPN 141)
+let dx7_alg5_hat_fCheckbox3: f32 = 0.0;
+// Freq Mode (NRPN 142)
+let dx7_alg5_hat_fCheckbox4: f32 = 0.0;
+// Freq Mode (NRPN 143)
+let dx7_alg5_hat_fCheckbox5: f32 = 0.0;
 
 const iDx7_alg5_hatSIG0Wave0: StaticArray<i32> = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
 const iDx7_alg5_hatSIG1Wave0: StaticArray<i32> = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
@@ -9445,7 +9529,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private fConst3: f32;
     private fRec8: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec9: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox0: f32 = 0.0;
     private fConst4: f32;
     private fRec13: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec14: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9461,7 +9544,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec23: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec24: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec25: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox1: f32 = 0.0;
     private fRec26: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec27: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec28: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9470,7 +9552,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec31: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec32: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec33: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox2: f32 = 0.0;
     private fRec34: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec35: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec36: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9479,7 +9560,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec39: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec40: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec41: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox3: f32 = 0.0;
     private fRec42: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec43: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec44: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9488,7 +9568,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec47: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec48: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec49: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox4: f32 = 0.0;
     private fRec50: StaticArray<f32> = new StaticArray<f32>(2);
     private iRec52: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec53: StaticArray<i32> = new StaticArray<i32>(2);
@@ -9497,7 +9576,6 @@ export class Dx7_alg5_hat extends MidiVoice {
     private iRec56: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec57: StaticArray<i32> = new StaticArray<i32>(2);
     private iRec58: StaticArray<i32> = new StaticArray<i32>(2);
-    private fCheckbox5: f32 = 0.0;
     private fRec59: StaticArray<f32> = new StaticArray<f32>(2);
     private fRec51: StaticArray<f32> = new StaticArray<f32>(2);
     private silentSamples: i32 = 0;
@@ -9669,7 +9747,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow64: i32 = fSlow59 >= 4.0;
         const fSlow65: f32 = <f32>(iSlow47);
         const iSlow66: i32 = <i32>(Mathf.round(dx7_alg5_hat_fHslider22));
-        const iSlow67: i32 = <i32>(Mathf.round(this.fCheckbox0));
+        const iSlow67: i32 = <i32>(Mathf.round(dx7_alg5_hat_fCheckbox0));
         const fSlow68: f32 = Mathf.log(4.4e+02 * fSlow3);
         const fSlow69: f32 = Mathf.round(dx7_alg5_hat_fHslider23);
         const fSlow70: f32 = Mathf.exp(-0.57130724 * fSlow68);
@@ -9732,7 +9810,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow127: i32 = Dx7_alg5_hat_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_hat_fHslider50)))];
         const iSlow128: i32 = iSlow127 != 0;
         const fSlow129: f32 = <f32>(iSlow127);
-        const iSlow130: i32 = <i32>(Mathf.round(this.fCheckbox1));
+        const iSlow130: i32 = <i32>(Mathf.round(dx7_alg5_hat_fCheckbox1));
         const fSlow131: f32 = Mathf.round(dx7_alg5_hat_fHslider51);
         const iSlow132: i32 = <i32>(Mathf.round(dx7_alg5_hat_fHslider52));
         const fSlow133: f32 = Mathf.round(dx7_alg5_hat_fHslider53);
@@ -9777,7 +9855,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow172: i32 = Dx7_alg5_hat_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_hat_fHslider68)))];
         const iSlow173: i32 = iSlow172 != 0;
         const fSlow174: f32 = <f32>(iSlow172);
-        const iSlow175: i32 = <i32>(Mathf.round(this.fCheckbox2));
+        const iSlow175: i32 = <i32>(Mathf.round(dx7_alg5_hat_fCheckbox2));
         const fSlow176: f32 = Mathf.round(dx7_alg5_hat_fHslider69);
         const iSlow177: i32 = <i32>(Mathf.round(dx7_alg5_hat_fHslider70));
         const fSlow178: f32 = Mathf.round(dx7_alg5_hat_fHslider71);
@@ -9822,7 +9900,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow217: i32 = Dx7_alg5_hat_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_hat_fHslider86)))];
         const iSlow218: i32 = iSlow217 != 0;
         const fSlow219: f32 = <f32>(iSlow217);
-        const iSlow220: i32 = <i32>(Mathf.round(this.fCheckbox3));
+        const iSlow220: i32 = <i32>(Mathf.round(dx7_alg5_hat_fCheckbox3));
         const fSlow221: f32 = Mathf.round(dx7_alg5_hat_fHslider87);
         const iSlow222: i32 = <i32>(Mathf.round(dx7_alg5_hat_fHslider88));
         const fSlow223: f32 = Mathf.round(dx7_alg5_hat_fHslider89);
@@ -9867,7 +9945,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow262: i32 = Dx7_alg5_hat_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_hat_fHslider104)))];
         const iSlow263: i32 = iSlow262 != 0;
         const fSlow264: f32 = <f32>(iSlow262);
-        const iSlow265: i32 = <i32>(Mathf.round(this.fCheckbox4));
+        const iSlow265: i32 = <i32>(Mathf.round(dx7_alg5_hat_fCheckbox4));
         const fSlow266: f32 = Mathf.round(dx7_alg5_hat_fHslider105);
         const iSlow267: i32 = <i32>(Mathf.round(dx7_alg5_hat_fHslider106));
         const fSlow268: f32 = Mathf.round(dx7_alg5_hat_fHslider107);
@@ -9912,7 +9990,7 @@ export class Dx7_alg5_hat extends MidiVoice {
         const iSlow307: i32 = Dx7_alg5_hat_itbl4SIG4[<i32>(Mathf.round(Mathf.round(dx7_alg5_hat_fHslider122)))];
         const iSlow308: i32 = iSlow307 != 0;
         const fSlow309: f32 = <f32>(iSlow307);
-        const iSlow310: i32 = <i32>(Mathf.round(this.fCheckbox5));
+        const iSlow310: i32 = <i32>(Mathf.round(dx7_alg5_hat_fCheckbox5));
         const fSlow311: f32 = Mathf.round(dx7_alg5_hat_fHslider123);
         const iSlow312: i32 = <i32>(Mathf.round(dx7_alg5_hat_fHslider124));
         const fSlow313: f32 = Mathf.round(dx7_alg5_hat_fHslider125);
@@ -10586,6 +10664,12 @@ export class Dx7_alg5_hatChannel extends MidiChannel {
             case 135: dx7_alg5_hat_fHslider112 = <f32>value / 127.0 * 99; break;
             case 136: dx7_alg5_hat_fEntry11 = <f32>value / 127.0 * 3; break;
             case 137: dx7_alg5_hat_fEntry12 = <f32>value / 127.0 * 3; break;
+            case 138: dx7_alg5_hat_fCheckbox0 = <f32>value / 127.0; break;
+            case 139: dx7_alg5_hat_fCheckbox1 = <f32>value / 127.0; break;
+            case 140: dx7_alg5_hat_fCheckbox2 = <f32>value / 127.0; break;
+            case 141: dx7_alg5_hat_fCheckbox3 = <f32>value / 127.0; break;
+            case 142: dx7_alg5_hat_fCheckbox4 = <f32>value / 127.0; break;
+            case 143: dx7_alg5_hat_fCheckbox5 = <f32>value / 127.0; break;
         }
     }
 }
@@ -11190,6 +11274,30 @@ export function initializeMidiSynth(): void {
     midichannels[0].controlchange(99, 1);
     midichannels[0].controlchange(98, 9);
     midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 10);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 11);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 12);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 13);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 14);
+    midichannels[0].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[0].controlchange(99, 1);
+    midichannels[0].controlchange(98, 15);
+    midichannels[0].controlchange(6, 0);
 
     midichannels[1] = new Dx7_alg16Channel(10, (channel: MidiChannel) => new Dx7_alg16(channel));
     midichannels[1].controlchange(7, 100);
@@ -11747,6 +11855,30 @@ export function initializeMidiSynth(): void {
     // R Curve (NRPN 137, range: 0–3, default: 0)
     midichannels[1].controlchange(99, 1);
     midichannels[1].controlchange(98, 9);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 10);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 11);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 12);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 13);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 14);
+    midichannels[1].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[1].controlchange(99, 1);
+    midichannels[1].controlchange(98, 15);
     midichannels[1].controlchange(6, 0);
 
     midichannels[2] = new Dx7_alg2Channel(10, (channel: MidiChannel) => new Dx7_alg2(channel));
@@ -12306,6 +12438,30 @@ export function initializeMidiSynth(): void {
     midichannels[2].controlchange(99, 1);
     midichannels[2].controlchange(98, 9);
     midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 10);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 11);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 12);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 13);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 14);
+    midichannels[2].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[2].controlchange(99, 1);
+    midichannels[2].controlchange(98, 15);
+    midichannels[2].controlchange(6, 0);
 
     midichannels[3] = new Dx7_alg5_bellsChannel(10, (channel: MidiChannel) => new Dx7_alg5_bells(channel));
     midichannels[3].controlchange(7, 100);
@@ -12863,6 +13019,30 @@ export function initializeMidiSynth(): void {
     // R Curve (NRPN 137, range: 0–3, default: 0)
     midichannels[3].controlchange(99, 1);
     midichannels[3].controlchange(98, 9);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 138, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 10);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 139, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 11);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 140, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 12);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 141, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 13);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 142, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 14);
+    midichannels[3].controlchange(6, 0);
+    // Freq Mode (NRPN 143, range: 0–1, default: 0)
+    midichannels[3].controlchange(99, 1);
+    midichannels[3].controlchange(98, 15);
     midichannels[3].controlchange(6, 0);
 
     // --- Drum Kit (kick/snare/hat) ---

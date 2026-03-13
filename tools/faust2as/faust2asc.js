@@ -113,7 +113,8 @@ function extractUIFromJSON(asSource) {
                     min: item.min ?? 0,
                     max: item.max ?? 1,
                     step: item.step ?? 0.01,
-                    isButton: item.type === 'button' || item.type === 'checkbox',
+                    isButton: item.type === 'button',
+                    isCheckbox: item.type === 'checkbox',
                     midi: {},
                 };
                 // Extract midi metadata from meta array
@@ -605,6 +606,8 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
     const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
     const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
+    // Sort checkboxes to end to match C backend NRPN layout (freq mode = NRPN 138-143)
+    ccParams.sort((a, b) => (a.isCheckbox ? 1 : 0) - (b.isCheckbox ? 1 : 0));
 
     const MAX_SAFE_CC = 119;
     const RESERVED_CCS = new Set([7, 10, 64, 91]);
