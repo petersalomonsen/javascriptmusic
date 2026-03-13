@@ -113,7 +113,7 @@ function extractUIFromJSON(asSource) {
                     min: item.min ?? 0,
                     max: item.max ?? 1,
                     step: item.step ?? 0.01,
-                    isButton: item.type === 'button',
+                    isButton: item.type === 'button' || item.type === 'checkbox',
                     midi: {},
                 };
                 // Extract midi metadata from meta array
@@ -350,6 +350,11 @@ function reshapeASLine(line, clsName, globalFields, staticFieldMap) {
     // 2. Ternary with <i32> true branch and bare `0` false branch inside <f32>()
     //    context: the `0` is inferred as f32, causing type mismatch.
     out = out.replace(/\) : 0\)\)/g, ') : <i32>0))');
+    // 3. Boolean arithmetic in multiplication: (X == 0) * ((Y == 0) + 1)
+    //    In AS, `bool + 1` may stay as bool (truncated to 0 or 1) instead of
+    //    widening to i32(2). Add explicit <i32> cast to force integer arithmetic.
+    out = out.replace(/\((\w+) == 0\) \* \(\((\w+) == 0\) \+ 1\)/g,
+        '<i32>($1 == 0) * (<i32>($2 == 0) + 1)');
 
     return out;
 }
@@ -480,9 +485,14 @@ function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
         // Extract fill method body
         const fillMatch = sigClass.body.match(/fill\w+\([^)]*\)\s*:\s*void\s*\{([\s\S]*?)\n\s{1,4}\}/);
         if (fillMatch) {
-            const tableShortName = sigTables.length > 0
-                ? sigTables[sigTables.length - 1].match(/const\s+(\w+):/)?.[1] || 'ftbl0SIG0'
-                : 'ftbl0SIG0';
+            // Find the table matching this SIG class by its SIG number suffix
+            const sigSuffix = sigClass.name.match(/SIG\d+$/)?.[0] || 'SIG0';
+            const matchingTable = sigTables.find(t => t.includes(sigSuffix));
+            const tableShortName = matchingTable
+                ? matchingTable.match(/const\s+(\w+):/)?.[1] || 'ftbl0SIG0'
+                : (sigTables.length > 0
+                    ? sigTables[sigTables.length - 1].match(/const\s+(\w+):/)?.[1] || 'ftbl0SIG0'
+                    : 'ftbl0SIG0');
 
             const fillBody = fillMatch[1];
             const fillLines = fillBody.split('\n');
@@ -1225,7 +1235,7 @@ function assembleBundle(results) {
     out.push(`// Sources: ${results.map(r => r.sourceFile).join(', ')}`);
     out.push('');
 
-    if (forEditor) {
+    if (forEditor || bundleMode) {
         out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
         out.push("import { SAMPLERATE } from '../environment';");
     } else {
