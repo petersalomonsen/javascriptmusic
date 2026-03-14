@@ -347,16 +347,11 @@ function reshapeASLine(line, clsName, globalFields, staticFieldMap) {
     // Fix Faust AS backend type ambiguities:
     // 1. Inside <f32>(), bare integer literals like `100` are inferred as f32,
     //    causing f32*i32 errors. Add explicit <i32> cast.
-    out = out.replace(/<f32>\((\d+) \* \(/g, '<f32>(<i32>$1 * (');
+    out = out.replace(/<f32>\(\(?(\d+) \* \(/g, (match, num) =>
+        match.replace(`${num} * (`, `<i32>${num} * (`));
     // 2. Ternary with <i32> true branch and bare `0` false branch inside <f32>()
     //    context: the `0` is inferred as f32, causing type mismatch.
     out = out.replace(/\) : 0\)\)/g, ') : <i32>0))');
-    // 3. Boolean arithmetic in multiplication: (X == 0) * ((Y == 0) + 1)
-    //    In AS, `bool + 1` may stay as bool (truncated to 0 or 1) instead of
-    //    widening to i32(2). Add explicit <i32> cast to force integer arithmetic.
-    out = out.replace(/\((\w+) == 0\) \* \(\((\w+) == 0\) \+ 1\)/g,
-        '<i32>($1 == 0) * (<i32>($2 == 0) + 1)');
-
     return out;
 }
 
@@ -515,7 +510,7 @@ function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
                 const forMatch = trimmed.match(/^for\s*\(\s*let\s+\w+:\s*i32\s*=\s*0;\s*\w+\s*<\s*count;/);
                 if (forMatch) {
                     trimmed = trimmed.replace(/for\s*\(\s*let\s+\w+:\s*i32\s*=\s*0;\s*\w+\s*<\s*count;/, `for (let i: i32 = 0; i < ${tableShortName}.length;`);
-                    trimmed = trimmed.replace(/(\w+)\s*=\s*\1\s*\+\s*1\)/, 'i = i + 1)');
+                    trimmed = trimmed.replace(/(\w+)\s*=\s*\(\1\s*\+\s*1\)\)/, 'i = (i + 1))');
                     sigInit.push('    ' + trimmed);
                     inFillLoop = true;
                     continue;
