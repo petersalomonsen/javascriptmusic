@@ -150,14 +150,18 @@ function parseASSource(asSource, clsName) {
     // Extract fields (instance and static)
     const fields = [];
     const staticFields = [];
-    const fieldRegex = /^\s+(static\s+)?(\w+):\s*(f32|i32)(\[\])?\s*(?:=\s*([^;]+))?\s*;/gm;
+    const fieldRegex = /^\s+(static\s+)?(\w+):\s*((?:StaticArray<)?(?:f32|i32)>?)(\[\])?\s*(?:=\s*([^;]+))?\s*;/gm;
     let m;
     while ((m = fieldRegex.exec(classBody)) !== null) {
         const isStatic = !!m[1];
+        const rawType = m[3];
+        // Normalize StaticArray<i32> → i32 for downstream processing, mark as array
+        const isStaticArray = rawType.startsWith('StaticArray<');
+        const baseType = isStaticArray ? rawType.match(/StaticArray<(\w+)>/)[1] : rawType;
         const field = {
             name: m[2],
-            type: m[3],       // 'f32' or 'i32'
-            isArray: !!m[4],   // has []
+            type: baseType,       // 'f32' or 'i32'
+            isArray: !!m[4] || isStaticArray,
             initializer: m[5] ? m[5].trim() : null,
         };
         if (isStatic) {
@@ -340,18 +344,6 @@ function reshapeASLine(line, clsName, globalFields, staticFieldMap) {
     out = out.replace(/<f32>\(this\.fSampleRate\)/g, 'SAMPLERATE');
     out = out.replace(/\bthis\.fSampleRate\b/g, 'SAMPLERATE');
 
-    // Replace Array<T> with StaticArray<T>
-    out = out.replace(/new Array<(f32|i32)>/g, 'new StaticArray<$1>');
-    out = out.replace(/\b(f32|i32)\[\]/g, 'StaticArray<$1>');
-
-    // Fix Faust AS backend type ambiguities:
-    // 1. Inside <f32>(), bare integer literals like `100` are inferred as f32,
-    //    causing f32*i32 errors. Add explicit <i32> cast.
-    out = out.replace(/<f32>\(\(?(\d+) \* \(/g, (match, num) =>
-        match.replace(`${num} * (`, `<i32>${num} * (`));
-    // 2. Ternary with <i32> true branch and bare `0` false branch inside <f32>()
-    //    context: the `0` is inferred as f32, causing type mismatch.
-    out = out.replace(/\) : 0\)\)/g, ') : <i32>0))');
     return out;
 }
 
@@ -430,7 +422,7 @@ function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
         const shortName = tablePrefix + sf.name.replace(clsName, '');
         const asType = sf.type;
         if (sf.isArray && sf.initializer) {
-            const sizeMatch = sf.initializer.match(/new\s+Array<\w+>\((\d+)\)/);
+            const sizeMatch = sf.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/);
             if (sizeMatch) {
                 sigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${sizeMatch[1]});`);
             }
@@ -452,7 +444,8 @@ function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
     while ((wm = waveDataRegex.exec(parsed.preClassSource)) !== null) {
         const name = wm[1];
         const type = wm[2];
-        const data = wm[3];
+        // Strip <i32>() casts from array literal data (Faust 2.85.3+)
+        const data = wm[3].replace(/<i32>\((-?\d+)\)/g, '$1');
         waveDataGlobals.push(`const ${name}: StaticArray<${type}> = ${data};`);
     }
 
@@ -469,7 +462,7 @@ function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
 
             const localName = `sig0_${fieldName}`;
             if (isArray && init) {
-                const sizeMatch = init.match(/new\s+Array<\w+>\((\d+)\)/);
+                const sizeMatch = init.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/);
                 if (sizeMatch) {
                     sigInit.push(`    const ${localName}: StaticArray<${type}> = new StaticArray<${type}>(${sizeMatch[1]});`);
                 }
@@ -506,11 +499,11 @@ function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
                 // Replace table[iN] → shortTableName[i]
                 trimmed = trimmed.replace(/table\[\w+\]/g, `${tableShortName}[i]`);
 
-                // Replace for loop header
-                const forMatch = trimmed.match(/^for\s*\(\s*let\s+\w+:\s*i32\s*=\s*0;\s*\w+\s*<\s*count;/);
+                // Replace for loop header (handles both with and without <i32>() casts from Faust 2.85.3+)
+                const forMatch = trimmed.match(/^for\s*\(\s*let\s+\w+:\s*i32\s*=\s*(?:<i32>\()?0\)?;\s*\w+\s*<\s*count;/);
                 if (forMatch) {
-                    trimmed = trimmed.replace(/for\s*\(\s*let\s+\w+:\s*i32\s*=\s*0;\s*\w+\s*<\s*count;/, `for (let i: i32 = 0; i < ${tableShortName}.length;`);
-                    trimmed = trimmed.replace(/(\w+)\s*=\s*\(\1\s*\+\s*1\)\)/, 'i = (i + 1))');
+                    trimmed = trimmed.replace(/for\s*\(\s*let\s+\w+:\s*i32\s*=\s*(?:<i32>\()?0\)?;\s*\w+\s*<\s*count;/, `for (let i: i32 = 0; i < ${tableShortName}.length;`);
+                    trimmed = trimmed.replace(/(\w+)\s*=\s*\(\1\s*\+\s*(?:<i32>\()?1\)?\)\)/, 'i = (i + 1))');
                     sigInit.push('    ' + trimmed);
                     inFillLoop = true;
                     continue;
@@ -561,7 +554,12 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         process.exit(1);
     }
 
-    const asSource = fs.readFileSync(tmpASFile, 'utf-8');
+    let asSource = fs.readFileSync(tmpASFile, 'utf-8');
+
+    // Strip redundant <i32>() casts in for-loop headers (Faust 2.85.3+)
+    // Only strip in "for (let x: i32 = <i32>(0); x < <i32>(N); x = (x + <i32>(1)))" patterns
+    asSource = asSource.replace(/for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
+        'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))');
 
     let effectASSource = null;
     let tmpEffectASFile = null;
@@ -578,6 +576,9 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             process.exit(1);
         }
         effectASSource = fs.readFileSync(tmpEffectASFile, 'utf-8');
+        // Strip redundant <i32>() casts in for-loop headers (Faust 2.85.3+)
+        effectASSource = effectASSource.replace(/for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
+            'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))');
         console.log(`Detected effect declaration — will generate ${clsName}Channel MidiChannel subclass`);
     }
 
@@ -650,7 +651,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         if (globalFields.has(field.name)) continue;
 
         if (field.isArray) {
-            const sizeMatch = field.initializer ? field.initializer.match(/new\s+Array<\w+>\((\d+)\)/) : null;
+            const sizeMatch = field.initializer ? field.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/) : null;
             const size = sizeMatch ? sizeMatch[1] : '0';
             voiceClass.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
         } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
@@ -843,7 +844,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             if (field.name === 'fSampleRate') continue;
 
             if (field.isArray) {
-                const sizeMatch = field.initializer ? field.initializer.match(/new\s+Array<\w+>\((\d+)\)/) : null;
+                const sizeMatch = field.initializer ? field.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/) : null;
                 const size = sizeMatch ? sizeMatch[1] : '0';
                 effectClass.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
             } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
