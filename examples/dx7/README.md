@@ -6,7 +6,8 @@ Yamaha DX7 synthesizer running as a transpiled AssemblyScript instrument via the
 
 | File | Description |
 |---|---|
-| `dx7-synth.ts` | Generated multi-algorithm synth bundle (paste into the synth editor) |
+| `dx7-synth.ts` | Generated synth bundle using C backend transpiler |
+| `dx7-synth-asc-backend.ts` | Generated synth bundle using ASC backend transpiler |
 | `dx7-sequence.js` | Example sequence with E.Piano, Bass, Strings, Bells, and Drum Kit patches |
 | `dsp/` | Faust DSP source files for each algorithm variant |
 | `parse-rom.js` | Utility to convert DX7 SysEx ROM files to NRPN patch data |
@@ -27,18 +28,37 @@ The `faust2as` transpiler compiles these into a single bundle with independent v
 
 ## Regenerating the synth bundle
 
+**C backend** (`faust2as.js` — uses `faust -lang c`):
+
 ```sh
-cd wasmaudioworklet
-node faust/faust2as.js --bundle \
-  ../examples/dx7/dsp/dx7_alg5.dsp \
-  ../examples/dx7/dsp/dx7_alg16.dsp \
-  ../examples/dx7/dsp/dx7_alg2.dsp \
-  ../examples/dx7/dsp/dx7_alg5_bells.dsp \
-  ../examples/dx7/dsp/dx7_alg17.dsp \
-  ../examples/dx7/dsp/dx7_alg21.dsp \
-  ../examples/dx7/dsp/dx7_alg5_hat.dsp \
-  --out ../examples/dx7/dx7-synth.ts
+node tools/faust2as/faust2as.js --bundle \
+  examples/dx7/dsp/dx7_alg5.dsp \
+  examples/dx7/dsp/dx7_alg16.dsp \
+  examples/dx7/dsp/dx7_alg2.dsp \
+  examples/dx7/dsp/dx7_alg5_bells.dsp \
+  examples/dx7/dsp/dx7_alg17.dsp \
+  examples/dx7/dsp/dx7_alg21.dsp \
+  examples/dx7/dsp/dx7_alg5_hat.dsp \
+  --out examples/dx7/dx7-synth.ts
 ```
+
+**ASC backend** (`faust2asc.js` — uses `faust -lang asc`):
+
+```sh
+node tools/faust2as/faust2asc.js --bundle \
+  examples/dx7/dsp/dx7_alg5.dsp \
+  examples/dx7/dsp/dx7_alg16.dsp \
+  examples/dx7/dsp/dx7_alg2.dsp \
+  examples/dx7/dsp/dx7_alg5_bells.dsp \
+  examples/dx7/dsp/dx7_alg17.dsp \
+  examples/dx7/dsp/dx7_alg21.dsp \
+  examples/dx7/dsp/dx7_alg5_hat.dsp \
+  --out examples/dx7/dx7-synth-asc-backend.ts
+```
+
+### Adding the drum kit
+
+After regenerating, the last three DSPs (alg17, alg21, alg5\_hat) are placed on separate MIDI channels. To combine them into a single drum kit channel, manually add the `Dx7DrumKitChannel` class and replace the three separate channel initializations with a single channel 4. See `dx7-synth.ts` for the reference implementation — the drum kit code is identical for both backends.
 
 ## Adding patches from DX7 ROM files
 
