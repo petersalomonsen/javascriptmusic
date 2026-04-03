@@ -1,22 +1,11 @@
 import { loadScript } from '../common/scriptloader.js';
 
 
-// configure minimal network settings and key storage
-const nearconfig_testnet = {
-    nodeUrl: 'https://rpc.testnet.near.org',
-    walletUrl: 'https://wallet.testnet.near.org',
-    helperUrl: 'https://helper.testnet.near.org',
-    contractName: 'acl.testnet',
-    deps: {
-        keyStore: null
-    }
-};
-
 export const nearconfig = {
-    nodeUrl: 'https://rpc.mainnet.fastnear.com',
-    walletUrl: 'https://app.mynearwallet.com',
-    helperUrl: 'https://helper.mainnet.near.org',
-    contractName: 'wasmgit.near',
+    nodeUrl: 'https://archival-rpc.testnet.fastnear.com',
+    walletUrl: 'https://testnet.mynearwallet.com',
+    helperUrl: 'https://helper.testnet.near.org',
+    contractName: 'wasmgitmusic.testnet',
     deps: {
         keyStore: null
     }
@@ -49,10 +38,18 @@ async function loadAccountData() {
         .connection.signer
         .signMessage(new TextEncoder().encode(tokenMessage), currentUser.accountId, nearconfig.networkId);
 
+    // Extract ed25519 key pair from keystore for service worker signing
+    const keyPair = await nearconfig.deps.keyStore.getKey(nearconfig.networkId || 'testnet', currentUser.accountId);
+    const publicKeyB58 = keyPair.getPublicKey().toString().replace('ed25519:', '');
+    const privateKeyB58 = keyPair.toString().replace('ed25519:', '');
+
     authdata = {
         accessToken: tokenMessage + '.' + btoa(String.fromCharCode(...signature.signature)),
         useremail: currentUser.accountId,
-        username: currentUser.accountId
+        username: currentUser.accountId,
+        // Keys for near-git service worker
+        publicKey: publicKeyB58,
+        privateKey: privateKeyB58,
     };
 }
 
@@ -60,6 +57,7 @@ export async function initNear() {
     await loadScript('https://cdn.jsdelivr.net/npm/near-api-js@0.44.2/dist/near-api-js.min.js');
 
     nearconfig.deps.keyStore = new nearApi.keyStores.BrowserLocalStorageKeyStore();
+    nearconfig.networkId = 'testnet';
     window.near = await nearApi.connect(nearconfig);
     const walletConnection = new nearApi.WalletConnection(near);
     window.walletConnection = walletConnection;

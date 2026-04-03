@@ -1,6 +1,27 @@
-import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
+import { initNear, nearconfig, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
 import { modal } from '../common/ui/modal.js';
+
+async function registerNearGitServiceWorker(authdata, contractId) {
+    await navigator.serviceWorker.register('/near-git-sw.js', { type: 'module' });
+    await navigator.serviceWorker.ready;
+
+    if (!navigator.serviceWorker.controller) {
+        await new Promise(resolve => {
+            navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+        });
+    }
+
+    navigator.serviceWorker.controller.postMessage({
+        type: 'configure',
+        rpcUrl: nearconfig.nodeUrl,
+        contractId: contractId,
+        accountId: authdata.username,
+        publicKey: authdata.publicKey,
+        privateKey: authdata.privateKey,
+    });
+    console.log('NEAR git service worker configured for', authdata.username, 'contract:', contractId);
+}
 
 export const CONFIG_FILE = 'wasmmusic.config.json';
 
@@ -41,20 +62,16 @@ export async function initWASMGitClient(gitrepo) {
         workerMessageListeners = workerMessageListeners.filter(listener => listener(msg) === true);
     }
 
-    gitrepourl = `https://wasm-git.petersalomonsen.com/${gitrepo}`;
-
     try {
         await initNear();
     } catch (e) {
         console.error('Failed to initialize near', e);
     }
     if (nearAuthData) {
-        worker.postMessage(nearAuthData);
-        const result = await new Promise((resolve) =>
-            workerMessageListeners.push((msg) => msg.data.accessTokenConfigured ? resolve(msg.data.accessTokenConfigured) : true)
-        );
-        console.log('Already logged in to near', result);
+        await registerNearGitServiceWorker(nearAuthData, gitrepo);
     }
+
+    gitrepourl = `${location.origin}/near-repo/${gitrepo}.git`;
 
     let dircontents = await synclocal();
 
@@ -114,7 +131,20 @@ export async function synclocal() {
 }
 
 export async function deletelocal() {
-    await callAndWaitForWorker({ command: 'deletelocal' });
+    // Extract repo name from URL
+    const repoName = gitrepourl.substring(gitrepourl.lastIndexOf('/') + 1);
+
+    // Terminate the worker so it releases the OPFS lock
+    worker.terminate();
+
+    // Clear OPFS from the main thread (worker no longer holds the lock)
+    try {
+        const opfsRoot = await navigator.storage.getDirectory();
+        await opfsRoot.removeEntry(repoName, { recursive: true });
+        console.log('Deleted OPFS entry', repoName);
+    } catch (e) {
+        console.error('Error deleting from OPFS', repoName, e);
+    }
 
     if (await modal(`<p>Local clone deleted</p>
             <button onclick="getRootNode().result(null)">Dismiss</button>
@@ -125,9 +155,12 @@ export async function deletelocal() {
 }
 
 export async function pull() {
-    await callAndWaitForWorker({
+    const result = await callAndWaitForWorker({
         command: 'pull'
     });
+    remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(result));
+    await repoHasChanges();
+    return result;
 }
 
 export async function commitAndSyncRemote(commitmessage) {
@@ -146,8 +179,16 @@ export async function readfile(filename) {
         command: 'readfile',
         filename: filename
     });
-    return await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.filename === filename ? resolve(msg.data.filecontents) : true)
+    return await new Promise((resolve, reject) =>
+        workerMessageListeners.push((msg) => {
+            if (msg.data.filename === filename) {
+                resolve(msg.data.filecontents);
+            } else if (msg.data.error && !msg.data.id) {
+                reject(new Error(msg.data.error));
+            } else {
+                return true;
+            }
+        })
     );
 }
 

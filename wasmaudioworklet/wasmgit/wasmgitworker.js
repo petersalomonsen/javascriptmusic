@@ -1,11 +1,12 @@
 let stdout;
 let stderr;
 let captureOutput = false;
-let currentRepoRootDir;
+let currentRepoDir;
 const CONFIG_FILE = 'wasmmusic.config.json';
-const WASM_GIT_BASE_URL = 'https://unpkg.com/wasm-git@0.0.11/';
+const WASM_GIT_BASE_URL = '/wasm-git/';
+const OPFS_MOUNT = '/opfs';
 
-var Module = {
+globalThis.wasmGitModuleOverrides = {
   locateFile: function (s) {
     return WASM_GIT_BASE_URL + s;
   },
@@ -33,33 +34,49 @@ XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
   this.setRequestHeader('Authorization', `Bearer ${accessToken}`);
   lastHttpRequest = this;
 }
-importScripts(WASM_GIT_BASE_URL + 'lg2.js');
 
-const lgPromise = new Promise(resolve => {
-  Module.onRuntimeInitialized = () => {
-    resolve(Module);
-  }
-});
+let lg;
+let FS;
 
-async function persistChanges() {
-  await new Promise((resolve) => FS.syncfs(false, () => resolve));
+const lgPromise = (async () => {
+  const lg2mod = await import(WASM_GIT_BASE_URL + 'lg2_opfs.js');
+  lg = await lg2mod.default();
+  FS = lg.FS;
+
+  // WASMFS doesn't pre-create /home/web_user
+  try { FS.mkdir('/home'); } catch (e) { }
+  try { FS.mkdir('/home/web_user'); } catch (e) { }
+
+  // Create OPFS backend and mount point
+  const backend = lg._lg2_create_opfs_backend();
+  try {
+    lg.ccall('lg2_create_directory', 'number',
+      ['string', 'number', 'number'],
+      [OPFS_MOUNT, 0o777, backend]);
+  } catch (e) { }
+
+  return lg;
+})();
+
+function ensureChdir(dir) {
+  FS.chdir(dir);
 }
 
-async function changeConfig(configPatch) {
-  const config = JSON.parse(FS.readFile(CONFIG_FILE, { encoding: 'utf8' }));
-  Object.assign(config, configPatch);
-  FS.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
-  await persistChanges();
+function callMainInDir(args) {
+  if (currentRepoDir) {
+    ensureChdir(currentRepoDir);
+  }
+  lg.callMain(args);
 }
 
 onmessage = async (msg) => {
-  const lg = await lgPromise;
+  await lgPromise;
 
   function callAndCaptureOutput(args) {
     captureOutput = true;
     stderr = '';
     stdout = '';
-    lg.callMain(args);
+    callMainInDir(args);
     captureOutput = false;
     if (stderr) {
       throw new Error(stderr);
@@ -79,28 +96,36 @@ onmessage = async (msg) => {
     }
   }
 
+  function readdir() {
+    ensureChdir(currentRepoDir);
+    return FS.readdir('.');
+  }
+
   if (msg.data.accessToken) {
     accessToken = msg.data.accessToken;
     username = msg.data.username;
     useremail = msg.data.useremail;
     postMessage({ accessTokenConfigured: true });
   } else if (msg.data.command === 'writefileandstage') {
-    FS.writeFile(msg.data.filename, msg.data.contents);
-    lg.callMain(['add', '--verbose', msg.data.filename]);
-    FS.syncfs(false, () => {
-      console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ dircontents: FS.readdir('.'), repoHasChanges: repoHasChanges() });
-    });
+    ensureChdir(currentRepoDir);
+    // WASMFS+OPFS does not truncate on writeFile — open, truncate, write, close manually
+    const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
+    const data = new TextEncoder().encode(msg.data.contents);
+    FS.write(fd, data, 0, data.length, 0);
+    FS.close(fd);
+    callMainInDir(['add', '--verbose', msg.data.filename]);
+    console.log(currentRepoDir, 'persisted via OPFS');
+    postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
   } else if (msg.data.command === 'dir') {
-    postMessage({ id: msg.data.id, dircontents: FS.readdir('.') });
+    postMessage({ id: msg.data.id, dircontents: readdir() });
   } else if (msg.data.command === 'repohaschanges') {
     postMessage({ repohaschanges: repoHasChanges() });
   } else if (msg.data.command === 'commitpullpush') {
     if (repoHasChanges()) {
-      callMain(['config', 'user.name', username]);
-      callMain(['config', 'user.email', useremail]);
+      callMainInDir(['config', 'user.name', username]);
+      callMainInDir(['config', 'user.email', useremail]);
 
-      lg.callMain(['commit', '-m', msg.data.commitmessage]);
+      callMainInDir(['commit', '-m', msg.data.commitmessage]);
     }
 
     let err = null;
@@ -117,43 +142,75 @@ onmessage = async (msg) => {
         err += ` http status: ${lastHttpRequest.status}`;
       }
     }
-    FS.syncfs(false, () => {
-      console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ id: msg.data.id, error: err ? err : undefined, dircontents: FS.readdir('.') });
-    });
+    console.log(currentRepoDir, 'persisted via OPFS');
+    postMessage({ id: msg.data.id, error: err ? err : undefined, dircontents: readdir() });
   } else if (msg.data.command === 'synclocal') {
-    currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
-    console.log('synclocal', currentRepoRootDir);
+    const repoName = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    currentRepoDir = OPFS_MOUNT + '/' + repoName;
+    console.log('synclocal', currentRepoDir);
 
-    FS.mkdir(`/${currentRepoRootDir}`);
-    FS.mount(IDBFS, {}, `/${currentRepoRootDir}`);
-
-    FS.syncfs(true, () => {
-      if (FS.readdir(`/${currentRepoRootDir}`).find(file => file === '.git')) {
-        FS.chdir(`/${currentRepoRootDir}`);
-        postMessage({ dircontents: FS.readdir('.') });
-        console.log(currentRepoRootDir, 'restored from indexeddb');
+    try {
+      const entries = FS.readdir(currentRepoDir);
+      if (entries.find(file => file === '.git')) {
+        // Create symlink workaround for WASMFS getcwd() bug
+        try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
+        ensureChdir(currentRepoDir);
+        postMessage({ dircontents: readdir() });
+        console.log(currentRepoDir, 'restored from OPFS');
       } else {
-        FS.chdir('/');
-        console.log('no git repo in', currentRepoRootDir);
+        console.log('no git repo in', currentRepoDir);
         postMessage({ dircontents: null });
       }
-    });
+    } catch (e) {
+      console.log('no directory', currentRepoDir);
+      postMessage({ dircontents: null });
+    }
   } else if (msg.data.command === 'deletelocal') {
-    FS.unmount(`/${currentRepoRootDir}`);
-    console.log('deleting database', currentRepoRootDir);
-    self.indexedDB.deleteDatabase('/' + currentRepoRootDir);
-    postMessage({ id: msg.data.id, deleted: currentRepoRootDir });
+    // Recursively remove the repo directory from WASMFS
+    function rmdirRecursive(path) {
+      const entries = FS.readdir(path);
+      for (const entry of entries) {
+        if (entry === '.' || entry === '..') continue;
+        const fullPath = path + '/' + entry;
+        const stat = FS.stat(fullPath);
+        if (FS.isDir(stat.mode)) {
+          rmdirRecursive(fullPath);
+        } else {
+          FS.unlink(fullPath);
+        }
+      }
+      FS.rmdir(path);
+    }
+    const repoName = currentRepoDir.substring(currentRepoDir.lastIndexOf('/') + 1);
+    try {
+      FS.chdir(OPFS_MOUNT);
+      rmdirRecursive(currentRepoDir);
+    } catch (e) {
+      console.error('Error deleting from WASMFS', currentRepoDir, e);
+    }
+    // Also clear the underlying OPFS storage
+    try {
+      const opfsRoot = await navigator.storage.getDirectory();
+      await opfsRoot.removeEntry(repoName, { recursive: true });
+      console.log('Deleted OPFS entry', repoName);
+    } catch (e) {
+      console.error('Error deleting from OPFS', repoName, e);
+    }
+    try { FS.unlink('/' + repoName); } catch (e) { }
+    currentRepoDir = undefined;
+    postMessage({ id: msg.data.id, deleted: repoName });
   } else if (msg.data.command === 'clone') {
-    currentRepoRootDir = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    const repoName = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    currentRepoDir = OPFS_MOUNT + '/' + repoName;
 
-    lg.callMain(['clone', msg.data.url, currentRepoRootDir]);
-    FS.chdir(currentRepoRootDir);
+    callMainInDir(['clone', msg.data.url, currentRepoDir]);
 
-    FS.syncfs(false, () => {
-      console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ dircontents: FS.readdir('.') });
-    });
+    // Create symlink workaround for WASMFS getcwd() bug
+    try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
+    ensureChdir(currentRepoDir);
+
+    console.log(currentRepoDir, 'persisted via OPFS');
+    postMessage({ dircontents: readdir() });
   } else if (msg.data.command === 'diff') {
     try {
       callAndCaptureOutput(['status']);
@@ -165,14 +222,13 @@ onmessage = async (msg) => {
     }
     postMessage({ diff: stdout });
   } else if (msg.data.command === 'pull') {
-    lg.callMain(['fetch', 'origin']);
-    lg.callMain(['merge', 'origin/master']);
-    FS.syncfs(false, () => {
-      console.log(currentRepoRootDir, 'stored to indexeddb');
-      postMessage({ id: msg.data.id, dircontents: FS.readdir('.'), lastHttpStatus: lastHttpRequest.status });
-    });
+    callMainInDir(['fetch', 'origin']);
+    callMainInDir(['merge', 'origin/master']);
+    console.log(currentRepoDir, 'persisted via OPFS');
+    postMessage({ id: msg.data.id, dircontents: readdir(), lastHttpStatus: lastHttpRequest.status });
   } else if (msg.data.command === 'readfile') {
     try {
+      ensureChdir(currentRepoDir);
       postMessage({
         filename: msg.data.filename,
         filecontents: FS.readFile(msg.data.filename, { encoding: 'utf8' })

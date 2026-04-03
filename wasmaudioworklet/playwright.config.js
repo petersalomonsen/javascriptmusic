@@ -6,12 +6,13 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:8080',
     video: 'on',
+    permissions: ['midi'],
     launchOptions: {
       args: ['--autoplay-policy=no-user-gesture-required']
     }
   },
   webServer: {
-    command: 'npx http-server -p 8080 .',
+    command: 'node devserver.js',
     port: 8080,
     reuseExistingServer: true
   }

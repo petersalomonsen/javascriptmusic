@@ -1,0 +1,15 @@
+{
+  "name": "wasm-lib",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "wasm_lib_bg.wasm",
+    "wasm_lib.js",
+    "wasm_lib.d.ts"
+  ],
+  "main": "wasm_lib.js",
+  "types": "wasm_lib.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

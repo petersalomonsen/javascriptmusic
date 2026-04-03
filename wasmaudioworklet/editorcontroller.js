@@ -546,15 +546,32 @@ export async function initEditor(componentRoot) {
         appendToSubtoolbar1(document.createElement('wasmgit-ui'));
 
         addRemoteSyncListener(async () => {
-            gitrepoconfig = await getConfig();
-            storedsongcode = await readfile(gitrepoconfig.songfilename);
-            storedsynthcode = await readfile(gitrepoconfig.synthfilename);
-
-            songsourceeditor.doc.setValue(storedsongcode);
-            synthsourceeditor.doc.setValue(storedsynthcode);
-
-            storedshadercode = await readfile(gitrepoconfig.fragmentshader);
-            shadersourceeditor.doc.setValue(storedshadercode);
+            try {
+                const newconfig = await getConfig();
+                if (newconfig && newconfig.songfilename) {
+                    gitrepoconfig = newconfig;
+                }
+            } catch (e) {
+                console.warn('Failed to read config, using existing', e);
+            }
+            try {
+                if (gitrepoconfig.songfilename) {
+                    storedsongcode = await readfile(gitrepoconfig.songfilename);
+                    songsourceeditor.doc.setValue(storedsongcode);
+                }
+            } catch (e) { }
+            try {
+                if (gitrepoconfig.synthfilename) {
+                    storedsynthcode = await readfile(gitrepoconfig.synthfilename);
+                    synthsourceeditor.doc.setValue(storedsynthcode);
+                }
+            } catch (e) { }
+            try {
+                if (gitrepoconfig.fragmentshader) {
+                    storedshadercode = await readfile(gitrepoconfig.fragmentshader);
+                    shadersourceeditor.doc.setValue(storedshadercode);
+                }
+            } catch (e) { }
         });
         storedsongcode = await readfile(gitrepoconfig.songfilename);
         storedsynthcode = await readfile(gitrepoconfig.synthfilename);
