@@ -76,3 +76,40 @@ jobs:
             cd wasmaudioworklet
             yarn install
             yarn bundle-songcompiler
+  near-git-e2e:
+    name: NEAR Git E2E tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone near-git-storage
+        run: git clone --depth 1 https://github.com/petersalomonsen/near-git-storage.git /tmp/near-git-storage
+      - name: Build sandbox Docker image
+        run: docker build -t near-git-sandbox /tmp/near-git-storage
+      - name: Start sandbox
+        run: |
+          docker run --rm -d -p 3030:8080 --name near-git-sandbox near-git-sandbox
+          for i in $(seq 1 60); do
+            curl -s http://localhost:3030/near-info | grep -q contractId && echo "Sandbox ready" && break
+            sleep 2
+          done
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - name: Install dependencies and Playwright
+        run: |
+          cd wasmaudioworklet
+          yarn install
+          yarn playwright install --with-deps chromium
+      - name: Run NEAR Git E2E tests
+        run: |
+          cd wasmaudioworklet
+          npx playwright test ./e2e/near-git.spec.js -g "save button|discard changes"
+      - name: Stop sandbox
+        if: always()
+        run: docker rm -f near-git-sandbox || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: near-git-test-results
+          path: wasmaudioworklet/test-results/
