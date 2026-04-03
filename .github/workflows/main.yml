@@ -81,13 +81,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Clone near-git-storage
-        run: git clone --depth 1 https://github.com/petersalomonsen/near-git-storage.git /tmp/near-git-storage
-      - name: Build sandbox Docker image
-        run: docker build -t near-git-sandbox /tmp/near-git-storage
-      - name: Start sandbox
+      - name: Start NEAR sandbox
         run: |
-          docker run --rm -d -p 3030:8080 --name near-git-sandbox near-git-sandbox
+          docker run --rm -d -p 3030:8080 --name near-git-sandbox ghcr.io/petersalomonsen/near-git-storage/sandbox:latest
           for i in $(seq 1 60); do
             curl -s http://localhost:3030/near-info | grep -q contractId && echo "Sandbox ready" && break
             sleep 2
