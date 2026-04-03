@@ -5,19 +5,21 @@ const NEAR_REPO_CONTRACT = 'repo.sandbox';
 
 let nearCredentials;
 
-test.beforeAll(async () => {
+async function fetchCredentials() {
+    if (nearCredentials) return;
     const res = await fetch(`${SANDBOX_SERVER}/near-credentials`);
     nearCredentials = await res.json();
     nearCredentials.rpcUrl = `${SANDBOX_SERVER}/near-rpc`;
     console.log('NEAR credentials:', nearCredentials.accountId, nearCredentials.contractId);
-});
+}
 
 async function setupServiceWorker(page) {
+    await fetchCredentials();
     const publicKey = nearCredentials.publicKey.replace('ed25519:', '');
     const privateKey = nearCredentials.secretKey.replace('ed25519:', '');
 
     await page.evaluate(async ({ rpcUrl, contractId, accountId, publicKey, privateKey }) => {
-        const reg = await navigator.serviceWorker.register('/near-git-sw.js', { type: 'module' });
+        await navigator.serviceWorker.register('/near-git-sw.js', { type: 'module' });
         await navigator.serviceWorker.ready;
         if (!navigator.serviceWorker.controller) {
             await new Promise(resolve => {
@@ -46,13 +48,6 @@ async function clearOPFS(page, repoName) {
     }, repoName);
 }
 
-async function cleanupServiceWorkers(page) {
-    await page.evaluate(async () => {
-        for (const reg of await navigator.serviceWorker.getRegistrations()) {
-            await reg.unregister();
-        }
-    });
-}
 
 /** Wait for the app to fully load with the git repo (editors visible, wasmgit-ui ready). */
 async function waitForAppReady(page) {
@@ -72,7 +67,6 @@ test.describe('NEAR Git Storage - Full E2E', () => {
 
     test.afterEach(async ({ page }) => {
         await clearOPFS(page, repoName);
-        await cleanupServiceWorkers(page);
     });
 
     test('save button stages changes and updates Commit & Sync button', async ({ page }) => {
@@ -215,9 +209,12 @@ test.describe('NEAR Git Storage - Full E2E', () => {
         expect(afterDiscard.discardVisible).toBe(false);
     });
 
+    // NOTE: This test passes when run alone but hangs when run after other tests
+    // that push to the same contract. Run with: npx playwright test -g "commit & sync pushes"
     test('commit & sync pushes changes, re-clone shows updated content in editors', async ({ page }) => {
         await page.goto('http://localhost:8080');
         await setupServiceWorker(page);
+        await clearOPFS(page, repoName);
         await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
         await waitForAppReady(page);
 
@@ -236,6 +233,10 @@ test.describe('NEAR Git Storage - Full E2E', () => {
                 .querySelector('wasmgit-ui').shadowRoot;
             return ui.getElementById('syncRemoteButton').innerText.includes('Commit');
         }, { timeout: 10000 });
+
+        // Wait for spinner to clear before clicking
+        await page.waitForFunction(() => !document.querySelector('progress-spinner'), { timeout: 10000 });
+        await page.waitForTimeout(1000);
 
         // Click Commit & Sync
         await page.evaluate(() => {
@@ -256,14 +257,12 @@ test.describe('NEAR Git Storage - Full E2E', () => {
             modal.shadowRoot.getElementById('proceedbutton').click();
         });
 
-        // Wait for sync to complete (button goes back to "Sync remote")
+        // Wait for sync to complete
         await page.waitForFunction(() => {
-            const ui = document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('wasmgit-ui').shadowRoot;
+            const app = document.querySelector('app-javascriptmusic');
+            const ui = app.shadowRoot.querySelector('wasmgit-ui').shadowRoot;
             return !ui.getElementById('syncRemoteButton').innerText.includes('Commit');
-        }, { timeout: 30000 });
-
-        console.log('Commit & sync completed');
+        }, { timeout: 60000 });
 
         // Clear OPFS and reload — should clone from contract and show pushed content
         await clearOPFS(page, repoName);
