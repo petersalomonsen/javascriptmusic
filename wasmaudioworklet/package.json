@@ -29,7 +29,7 @@
         "serve": "node devserver.js",
         "test-e2e": "npx playwright test",
         "test-near-git": "npx playwright test e2e/near-git.spec.js",
-        "near-sandbox": "docker run --rm -p 3030:8080 near-git-sandbox",
+        "near-sandbox": "docker run --rm -p 3030:8080 ghcr.io/petersalomonsen/near-git-storage/sandbox:main",
         "test-faust": "node ../tools/faust2as/generate-test-sources.js && npx playwright test e2e/faust2as-compilation.spec.js"
     },
     "devDependencies": {
