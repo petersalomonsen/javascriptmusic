@@ -108,7 +108,7 @@ onmessage = async (msg) => {
     postMessage({ accessTokenConfigured: true });
   } else if (msg.data.command === 'writefileandstage') {
     ensureChdir(currentRepoDir);
-    // WASMFS+OPFS does not truncate on writeFile — open, truncate, write, close manually
+    // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
     const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
     const data = new TextEncoder().encode(msg.data.contents);
     FS.write(fd, data, 0, data.length, 0);

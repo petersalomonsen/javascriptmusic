@@ -48,8 +48,6 @@ async function clearOPFS(page, repoName) {
     }, repoName);
 }
 
-
-/** Wait for the app to fully load with the git repo (editors visible, wasmgit-ui ready). */
 async function waitForAppReady(page) {
     await page.waitForFunction(() => {
         const app = document.querySelector('app-javascriptmusic');
@@ -62,155 +60,125 @@ async function waitForAppReady(page) {
     }, { timeout: 60000 });
 }
 
+function setEditorContent(page, content) {
+    return page.evaluate((text) => {
+        document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror.setValue(text);
+    }, content);
+}
+
+function getEditorContent(page) {
+    return page.evaluate(() => {
+        return document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror.getValue();
+    });
+}
+
+/** Push a baseline commit via worker (fast, no UI). */
+async function pushBaseline(page, repoName, content) {
+    await page.evaluate(async ({ repoUrl, content }) => {
+        const worker = new Worker(new URL('/wasmgit/wasmgitworker.js', location.origin), { type: 'module' });
+        let resolveNext;
+        const pending = [];
+        worker.onmessage = (msg) => {
+            if (resolveNext) { const r = resolveNext; resolveNext = null; r(msg.data); }
+            else pending.push(msg.data);
+        };
+        const next = () => pending.length > 0 ? Promise.resolve(pending.shift()) : new Promise(r => { resolveNext = r; });
+
+        worker.postMessage({ command: 'clone', url: repoUrl });
+        await next();
+        worker.postMessage({ command: 'writefileandstage', filename: 'song.js', contents: content });
+        await next();
+        let id = 100;
+        worker.postMessage({ command: 'config', args: ['user.name', 'Test'], id: id++ });
+        await next();
+        worker.postMessage({ command: 'config', args: ['user.email', 'test@test.com'], id: id++ });
+        await next();
+        worker.postMessage({ command: 'commitpullpush', commitmessage: 'baseline', id: id++ });
+        await next();
+        worker.terminate();
+    }, { repoUrl: `http://localhost:8080/near-repo/${repoName}`, content });
+}
+
 test.describe('NEAR Git Storage - Full E2E', () => {
     const repoName = NEAR_REPO_CONTRACT + '.git';
+
+    const saveButton = page => page.locator('#savesongbutton');
+    const syncButton = page => page.locator('#syncRemoteButton');
+    const discardButton = page => page.locator('#discardChangesButton');
+    const spinner = page => page.locator('progress-spinner');
+    const commitMessage = page => page.locator('#commitMessageField');
+    const proceedButton = page => page.locator('#proceedbutton');
 
     test.afterEach(async ({ page }) => {
         await clearOPFS(page, repoName);
     });
 
     test('save button stages changes and updates Commit & Sync button', async ({ page }) => {
-        // Set up service worker, then load app with gitrepo
         await page.goto('http://localhost:8080');
         await setupServiceWorker(page);
         await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
         await waitForAppReady(page);
 
-        // Verify initial button state is "Sync remote" (no changes)
-        const initialButtonText = await page.evaluate(() => {
-            const app = document.querySelector('app-javascriptmusic').shadowRoot;
-            return app.querySelector('wasmgit-ui').shadowRoot.getElementById('syncRemoteButton').innerText;
-        });
-        console.log('Initial button:', initialButtonText);
-
         // Modify the song editor content
-        await page.evaluate(() => {
-            const app = document.querySelector('app-javascriptmusic').shadowRoot;
-            app.querySelector('#editor .CodeMirror').CodeMirror.setValue(
-                '// modified by playwright\nconsole.log("hello");\n'
-            );
-        });
+        await setEditorContent(page, '// modified by playwright\nconsole.log("hello");\n');
 
         // Click the save button
-        await page.evaluate(() => {
-            document.querySelector('app-javascriptmusic').shadowRoot
-                .getElementById('savesongbutton').click();
-        });
+        await saveButton(page).click();
 
-        // Wait for button state to update to "Commit & Sync"
-        await page.waitForFunction(() => {
-            const app = document.querySelector('app-javascriptmusic');
-            const ui = app.shadowRoot.querySelector('wasmgit-ui').shadowRoot;
-            return ui.getElementById('syncRemoteButton').innerText.includes('Commit');
-        }, { timeout: 10000 });
-
-        const afterSave = await page.evaluate(() => {
-            const ui = document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('wasmgit-ui').shadowRoot;
-            return {
-                buttonText: ui.getElementById('syncRemoteButton').innerText,
-                discardVisible: ui.getElementById('discardChangesButton').style.display !== 'none',
-            };
-        });
-        console.log('After save:', afterSave);
-
-        expect(afterSave.buttonText).toContain('Commit');
-        expect(afterSave.discardVisible).toBe(true);
+        // Wait for Commit & Sync to appear
+        await expect(syncButton(page)).toHaveText('Commit & Sync', { timeout: 10000 });
+        await expect(discardButton(page)).toBeVisible();
     });
 
     test('discard changes reverts editor content immediately', async ({ page }) => {
         const committedContent = '// committed baseline\nconsole.log("original");\n';
 
-        // Push a baseline commit via worker first (fast, no UI)
+        // Push a baseline via worker
         await page.goto('http://localhost:8080');
         await setupServiceWorker(page);
-        await page.evaluate(async ({ repoUrl, content }) => {
-            const worker = new Worker(new URL('/wasmgit/wasmgitworker.js', location.origin), { type: 'module' });
-            let resolveNext;
-            const pending = [];
-            worker.onmessage = (msg) => {
-                if (resolveNext) { const r = resolveNext; resolveNext = null; r(msg.data); }
-                else pending.push(msg.data);
-            };
-            const next = () => pending.length > 0 ? Promise.resolve(pending.shift()) : new Promise(r => { resolveNext = r; });
-
-            worker.postMessage({ command: 'clone', url: repoUrl });
-            await next();
-            worker.postMessage({ command: 'writefileandstage', filename: 'song.js', contents: content });
-            await next();
-            let id = 100;
-            worker.postMessage({ command: 'config', args: ['user.name', 'Test'], id: id++ });
-            await next();
-            worker.postMessage({ command: 'config', args: ['user.email', 'test@test.com'], id: id++ });
-            await next();
-            worker.postMessage({ command: 'commitpullpush', commitmessage: 'baseline', id: id++ });
-            await next();
-            worker.terminate();
-        }, { repoUrl: `http://localhost:8080/near-repo/${repoName}`, content: committedContent });
+        await pushBaseline(page, repoName, committedContent);
         console.log('Baseline pushed via worker');
 
-        // Clear OPFS and load the app UI (will clone the committed baseline)
+        // Clear OPFS and load the app UI
         await clearOPFS(page, repoName);
         await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
         await waitForAppReady(page);
 
-        // Verify editor loaded the committed content
-        const originalContent = await page.evaluate(() => {
-            return document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('#editor .CodeMirror').CodeMirror.getValue();
-        });
-        console.log('Loaded content:', JSON.stringify(originalContent));
-
-        // Modify and save
-        await page.evaluate(() => {
-            const app = document.querySelector('app-javascriptmusic').shadowRoot;
-            app.querySelector('#editor .CodeMirror').CodeMirror.setValue('// this should be discarded\n');
-            app.getElementById('savesongbutton').click();
-        });
-
-        // Wait for changes to be staged
-        await page.waitForFunction(() => {
-            const ui = document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('wasmgit-ui').shadowRoot;
-            return ui.getElementById('syncRemoteButton').innerText.includes('Commit');
-        }, { timeout: 10000 });
-
-        await page.screenshot({ path: 'test-results/before-discard.png' });
-
-        // Click discard changes
-        await page.evaluate(() => {
-            document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('wasmgit-ui').shadowRoot
-                .getElementById('discardChangesButton').click();
-        });
-
-        // Wait for editor to revert (remoteSyncListener should update editors without reload)
+        // Wait for editor to load the committed content
         await page.waitForFunction((expected) => {
             const app = document.querySelector('app-javascriptmusic');
-            const editor = app.shadowRoot.querySelector('#editor .CodeMirror').CodeMirror;
-            return editor.getValue() === expected;
-        }, originalContent, { timeout: 15000 });
+            if (!app || !app.shadowRoot) return false;
+            const editor = app.shadowRoot.querySelector('#editor .CodeMirror');
+            if (!editor || !editor.CodeMirror) return false;
+            return editor.CodeMirror.getValue() === expected;
+        }, committedContent, { timeout: 15000 });
+        console.log('Loaded content:', JSON.stringify(committedContent));
 
-        await page.screenshot({ path: 'test-results/after-discard.png' });
+        // Modify and save
+        await setEditorContent(page, '// this should be discarded\n');
+        await saveButton(page).click();
 
-        const afterDiscard = await page.evaluate(() => {
-            const app = document.querySelector('app-javascriptmusic').shadowRoot;
-            const ui = app.querySelector('wasmgit-ui').shadowRoot;
-            return {
-                content: app.querySelector('#editor .CodeMirror').CodeMirror.getValue(),
-                buttonText: ui.getElementById('syncRemoteButton').innerText,
-                discardVisible: ui.getElementById('discardChangesButton').style.display !== 'none',
-            };
-        });
-        console.log('After discard:', afterDiscard);
+        // Wait for changes to be staged
+        await expect(syncButton(page)).toHaveText('Commit & Sync', { timeout: 10000 });
 
-        expect(afterDiscard.content).toBe(originalContent);
-        expect(afterDiscard.buttonText).not.toContain('Commit');
-        expect(afterDiscard.discardVisible).toBe(false);
+        // Click discard
+        await discardButton(page).click();
+
+        // Wait for editor to revert
+        await page.waitForFunction((expected) => {
+            const app = document.querySelector('app-javascriptmusic');
+            const editor = app.shadowRoot.querySelector('#editor .CodeMirror');
+            return editor && editor.CodeMirror && editor.CodeMirror.getValue() === expected;
+        }, committedContent, { timeout: 15000 });
+
+        const afterContent = await getEditorContent(page);
+        expect(afterContent).toBe(committedContent);
+        await expect(syncButton(page)).not.toHaveText('Commit & Sync');
+        await expect(discardButton(page)).not.toBeVisible();
     });
 
-    // NOTE: This test passes when run alone but hangs when run after other tests
-    // that push to the same contract. Run with: npx playwright test -g "commit & sync pushes"
     test('commit & sync pushes changes, re-clone shows updated content in editors', async ({ page }) => {
         await page.goto('http://localhost:8080');
         await setupServiceWorker(page);
@@ -221,48 +189,27 @@ test.describe('NEAR Git Storage - Full E2E', () => {
         const testContent = '// pushed by playwright e2e test\nconsole.log("v1");\n';
 
         // Modify and save
-        await page.evaluate((content) => {
-            const app = document.querySelector('app-javascriptmusic').shadowRoot;
-            app.querySelector('#editor .CodeMirror').CodeMirror.setValue(content);
-            app.getElementById('savesongbutton').click();
-        }, testContent);
+        await setEditorContent(page, testContent);
+        await saveButton(page).click();
 
-        // Wait for Commit & Sync to appear
-        await page.waitForFunction(() => {
-            const ui = document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('wasmgit-ui').shadowRoot;
-            return ui.getElementById('syncRemoteButton').innerText.includes('Commit');
-        }, { timeout: 10000 });
-
-        // Wait for spinner to clear before clicking
-        await page.waitForFunction(() => !document.querySelector('progress-spinner'), { timeout: 10000 });
-        await page.waitForTimeout(1000);
+        // Wait for Commit & Sync and spinner to clear
+        await expect(syncButton(page)).toHaveText('Commit & Sync', { timeout: 10000 });
+        await expect(spinner(page)).not.toBeAttached({ timeout: 10000 });
 
         // Click Commit & Sync
-        await page.evaluate(() => {
-            document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('wasmgit-ui').shadowRoot
-                .getElementById('syncRemoteButton').click();
-        });
+        await syncButton(page).click();
 
-        // Wait for commit modal and click proceed
-        await page.waitForFunction(() => {
-            const modal = document.querySelector('wasmgit-commit-modal');
-            return modal && modal.shadowRoot && modal.shadowRoot.getElementById('proceedbutton');
-        }, { timeout: 10000 });
+        // Wait for commit modal, fill message, click proceed
+        await expect(proceedButton(page)).toBeVisible({ timeout: 10000 });
+        await commitMessage(page).fill('e2e test commit');
+        await proceedButton(page).click();
 
-        await page.evaluate(() => {
-            const modal = document.querySelector('wasmgit-commit-modal');
-            modal.shadowRoot.getElementById('commitMessageField').value = 'e2e test commit';
-            modal.shadowRoot.getElementById('proceedbutton').click();
-        });
+        // Wait for spinner to appear then disappear (sync in progress → complete)
+        await expect(spinner(page)).toBeAttached({ timeout: 5000 });
+        await expect(spinner(page)).not.toBeAttached({ timeout: 60000 });
 
-        // Wait for sync to complete
-        await page.waitForFunction(() => {
-            const app = document.querySelector('app-javascriptmusic');
-            const ui = app.shadowRoot.querySelector('wasmgit-ui').shadowRoot;
-            return !ui.getElementById('syncRemoteButton').innerText.includes('Commit');
-        }, { timeout: 60000 });
+        // Verify sync completed — button should no longer say "Commit & Sync"
+        await expect(syncButton(page)).not.toHaveText('Commit & Sync', { timeout: 5000 });
 
         // Clear OPFS and reload — should clone from contract and show pushed content
         await clearOPFS(page, repoName);
@@ -276,10 +223,7 @@ test.describe('NEAR Git Storage - Full E2E', () => {
             return editor && editor.CodeMirror && editor.CodeMirror.getValue() === expected;
         }, testContent, { timeout: 30000 });
 
-        const afterReclone = await page.evaluate(() => {
-            return document.querySelector('app-javascriptmusic').shadowRoot
-                .querySelector('#editor .CodeMirror').CodeMirror.getValue();
-        });
+        const afterReclone = await getEditorContent(page);
         expect(afterReclone).toBe(testContent);
     });
 });
