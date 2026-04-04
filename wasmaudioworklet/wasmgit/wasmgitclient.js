@@ -2,7 +2,7 @@ import { initNear, nearconfig, authdata as nearAuthData, login as nearLogin, log
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
 import { modal } from '../common/ui/modal.js';
 
-async function registerNearGitServiceWorker(authdata, contractId) {
+async function registerNearGitServiceWorker(contractId, authdata) {
     await navigator.serviceWorker.register('/near-git-sw.js', { type: 'module' });
     await navigator.serviceWorker.ready;
 
@@ -12,15 +12,19 @@ async function registerNearGitServiceWorker(authdata, contractId) {
         });
     }
 
-    navigator.serviceWorker.controller.postMessage({
+    // Only send config if we have new info (avoid overwriting existing keys with empty config)
+    const config = {
         type: 'configure',
         rpcUrl: nearconfig.nodeUrl,
         contractId: contractId,
-        accountId: authdata.username,
-        publicKey: authdata.publicKey,
-        privateKey: authdata.privateKey,
-    });
-    console.log('NEAR git service worker configured for', authdata.username, 'contract:', contractId);
+    };
+    if (authdata) {
+        config.accountId = authdata.username;
+        config.publicKey = authdata.publicKey;
+        config.privateKey = authdata.privateKey;
+    }
+    navigator.serviceWorker.controller.postMessage(config);
+    console.log('NEAR git service worker configured for contract:', contractId, authdata ? 'with auth' : 'read-only');
 }
 
 export const CONFIG_FILE = 'wasmmusic.config.json';
@@ -67,8 +71,12 @@ export async function initWASMGitClient(gitrepo) {
     } catch (e) {
         console.error('Failed to initialize near', e);
     }
+    // Register service worker — with keys if logged in, read-only otherwise
     if (nearAuthData) {
-        await registerNearGitServiceWorker(nearAuthData, gitrepo);
+        await registerNearGitServiceWorker(gitrepo, nearAuthData);
+    } else if (!navigator.serviceWorker.controller) {
+        // Only register read-only if no SW is already controlling (avoids overwriting test config)
+        await registerNearGitServiceWorker(gitrepo);
     }
 
     gitrepourl = `${location.origin}/near-repo/${gitrepo}.git`;
