@@ -1,11 +1,9 @@
 import { loadScript } from '../common/scriptloader.js';
 
-
 export const nearconfig = {
     nodeUrl: 'https://archival-rpc.testnet.fastnear.com',
     walletUrl: 'https://testnet.mynearwallet.com',
     helperUrl: 'https://helper.testnet.near.org',
-    contractName: 'wasmgitmusic.testnet',
     deps: {
         keyStore: null
     }
@@ -13,13 +11,13 @@ export const nearconfig = {
 
 export let authdata = null;
 
-// open a connection to the NEAR platform
+let currentContractId = null;
 
 export async function login() {
-    await walletConnection.requestSignIn(
-        nearconfig.contractName,
-        'WASM-git'
-    );
+    await walletConnection.requestSignIn({
+        contractId: currentContractId,
+        methodNames: ['push_objects', 'register_push'],
+    });
     await loadAccountData();
 }
 
@@ -53,7 +51,8 @@ async function loadAccountData() {
     };
 }
 
-export async function initNear() {
+export async function initNear(contractId) {
+    currentContractId = contractId;
     await loadScript('https://cdn.jsdelivr.net/npm/near-api-js@0.44.2/dist/near-api-js.min.js');
 
     nearconfig.deps.keyStore = new nearApi.keyStores.BrowserLocalStorageKeyStore();

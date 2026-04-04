@@ -67,7 +67,7 @@ export async function initWASMGitClient(gitrepo) {
     }
 
     try {
-        await initNear();
+        await initNear(gitrepo);
     } catch (e) {
         console.error('Failed to initialize near', e);
     }
