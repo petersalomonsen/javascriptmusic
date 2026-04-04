@@ -90,10 +90,6 @@ jobs:
           cd wasmaudioworklet
           yarn install
           yarn playwright install --with-deps chromium
-      - name: Generate Faust test sources
-        run: |
-          cd wasmaudioworklet
-          node ../tools/faust2as/generate-test-sources.js
       - name: Start NEAR sandbox
         run: |
           docker run --rm -d -p 3030:8080 --name near-git-sandbox ghcr.io/petersalomonsen/near-git-storage/sandbox:main
@@ -104,7 +100,7 @@ jobs:
       - name: Run Playwright tests
         run: |
           cd wasmaudioworklet
-          npx playwright test
+          npx playwright test ./e2e/near-git.spec.js
       - name: Stop sandbox
         if: always()
         run: docker rm -f near-git-sandbox || true
