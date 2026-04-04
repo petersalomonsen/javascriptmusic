@@ -180,21 +180,26 @@ test.describe('NEAR Git Storage - Full E2E', () => {
     });
 
     test('commit & sync pushes changes, re-clone shows updated content in editors', async ({ page }) => {
+        const initialContent = '// initial for commit test\n';
+        const testContent = '// pushed by playwright e2e test\nconsole.log("v1");\n';
+
+        // Ensure the contract has a baseline commit
         await page.goto('http://localhost:8080');
         await setupServiceWorker(page);
+        await pushBaseline(page, repoName, initialContent);
+        console.log('Commit test: baseline pushed');
+
         await clearOPFS(page, repoName);
         await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
         await waitForAppReady(page);
-
-        const testContent = '// pushed by playwright e2e test\nconsole.log("v1");\n';
 
         // Modify and save
         await setEditorContent(page, testContent);
         await saveButton(page).click();
 
-        // Wait for Commit & Sync and spinner to clear
-        await expect(syncButton(page)).toHaveText('Commit & Sync', { timeout: 10000 });
-        await expect(spinner(page)).not.toBeAttached({ timeout: 10000 });
+        // Wait for spinner from compileSong to clear, then for button to update
+        await expect(spinner(page)).not.toBeAttached({ timeout: 30000 });
+        await expect(syncButton(page)).toHaveText('Commit & Sync', { timeout: 15000 });
 
         // Click Commit & Sync
         await syncButton(page).click();
