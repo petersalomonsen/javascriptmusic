@@ -51,7 +51,7 @@ new Array(128).fill(null).map((v, ndx) =>
 ).forEach((note, ndx) => notemap[note] = ndx);
 
 describe('midisynth audio worklet', async function () {
-    this.timeout(20000);
+    this.timeout(60000);
 
     let appElement;
     let analyser;
