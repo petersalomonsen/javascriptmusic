@@ -76,18 +76,11 @@ jobs:
             cd wasmaudioworklet
             yarn install
             yarn bundle-songcompiler
-  near-git-e2e:
-    name: NEAR Git E2E tests
+  playwright-e2e:
+    name: Playwright E2E tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Start NEAR sandbox
-        run: |
-          docker run --rm -d -p 3030:8080 --name near-git-sandbox ghcr.io/petersalomonsen/near-git-storage/sandbox:main
-          for i in $(seq 1 60); do
-            curl -s http://localhost:3030/near-info | grep -q contractId && echo "Sandbox ready" && break
-            sleep 2
-          done
       - name: Use Node.js 20.x
         uses: actions/setup-node@v3
         with:
@@ -97,15 +90,26 @@ jobs:
           cd wasmaudioworklet
           yarn install
           yarn playwright install --with-deps chromium
-      - name: Run NEAR Git E2E tests
+      - name: Generate Faust test sources
         run: |
           cd wasmaudioworklet
-          npx playwright test ./e2e/near-git.spec.js -g "save button|discard changes"
+          node ../tools/faust2as/generate-test-sources.js
+      - name: Start NEAR sandbox
+        run: |
+          docker run --rm -d -p 3030:8080 --name near-git-sandbox ghcr.io/petersalomonsen/near-git-storage/sandbox:main
+          for i in $(seq 1 60); do
+            curl -s http://localhost:3030/near-info | grep -q contractId && echo "Sandbox ready" && break
+            sleep 2
+          done
+      - name: Run Playwright tests
+        run: |
+          cd wasmaudioworklet
+          npx playwright test
       - name: Stop sandbox
         if: always()
         run: docker rm -f near-git-sandbox || true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: near-git-test-results
+          name: playwright-test-results
           path: wasmaudioworklet/test-results/
