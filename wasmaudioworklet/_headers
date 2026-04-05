@@ -2,6 +2,6 @@
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
 
-/login.html
+/login
   ! Cross-Origin-Opener-Policy
   ! Cross-Origin-Embedder-Policy
