@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Login - NEAR Git</title>
+    <style>
+        body { font-family: monospace; background: #111; color: #4a4; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { text-align: center; }
+        #status { margin: 1rem 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Connecting wallet...</h2>
+        <div id="status">Initializing...</div>
+    </div>
+    <script type="module">
+        const params = new URLSearchParams(location.search);
+        const contractId = params.get('contractId');
+        const returnUrl = params.get('returnUrl') || '/';
+        const statusEl = document.getElementById('status');
+
+        if (!contractId) {
+            statusEl.textContent = 'Error: missing contractId parameter';
+        } else {
+            run().catch(err => { statusEl.textContent = 'Error: ' + err.message; });
+        }
+
+        async function run() {
+            statusEl.textContent = 'Loading wallet connector...';
+            const { NearConnector } = await import('https://cdn.jsdelivr.net/npm/@hot-labs/near-connect@0.11.1/+esm');
+            const network = params.get('network') || 'testnet';
+            const connector = new NearConnector({ network });
+
+            // Generate ed25519 keypair for function call access key
+            statusEl.textContent = 'Generating access key...';
+            const naclModule = await import('https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/+esm');
+            const nacl = naclModule.default || naclModule;
+            const pair = nacl.sign.keyPair();
+            const publicKey = base58Encode(pair.publicKey);
+            const privateKey = base58Encode(pair.secretKey);
+
+            let wallet;
+
+            connector.on('wallet:signIn', async (event) => {
+                const accounts = event.accounts || [];
+                if (accounts.length === 0) {
+                    statusEl.textContent = 'No accounts returned from wallet.';
+                    return;
+                }
+                wallet = event.wallet || await connector.wallet();
+                const accountId = accounts[0].accountId;
+
+                statusEl.textContent = `Connected as ${accountId}. Adding access key...`;
+
+                try {
+                    await wallet.signAndSendTransaction({
+                        receiverId: accountId,
+                        actions: [{
+                            type: 'AddKey',
+                            params: {
+                                publicKey: 'ed25519:' + publicKey,
+                                accessKey: {
+                                    permission: {
+                                        receiverId: contractId,
+                                        methodNames: ['push_objects', 'register_push'],
+                                        allowance: '250000000000000000000000',
+                                    },
+                                },
+                            },
+                        }],
+                    });
+
+                    // Store key in localStorage (accessible from the main app on same origin)
+                    const keyData = { accountId, publicKey, privateKey };
+                    localStorage.setItem('near-git-key:' + contractId, JSON.stringify(keyData));
+
+                    statusEl.textContent = 'Key created! Redirecting...';
+                    setTimeout(() => { location.href = returnUrl; }, 500);
+                } catch (err) {
+                    statusEl.textContent = 'Error adding key: ' + err.message;
+                }
+            });
+
+            statusEl.textContent = 'Opening wallet...';
+            await connector.connect();
+        }
+
+        function base58Encode(bytes) {
+            const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+            let result = '';
+            let num = BigInt('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(''));
+            while (num > 0n) {
+                result = ALPHABET[Number(num % 58n)] + result;
+                num = num / 58n;
+            }
+            for (const byte of bytes) {
+                if (byte === 0) result = '1' + result;
+                else break;
+            }
+            return result;
+        }
+    </script>
+</body>
+</html>

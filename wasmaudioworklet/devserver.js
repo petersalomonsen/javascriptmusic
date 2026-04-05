@@ -30,7 +30,7 @@ const MIME_TYPES = {
 
 const CROSS_ORIGIN_HEADERS = {
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'require-corp',
+  'Cross-Origin-Embedder-Policy': 'credentialless',
 };
 
 async function handleWasmGitProxy(req, res) {

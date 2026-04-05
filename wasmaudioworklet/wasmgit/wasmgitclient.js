@@ -361,31 +361,18 @@ customElements.define('wasmgit-ui',
                     await changeCurrentSong(selectedSongNdx);                    
                 }
             });
-            const updateAuthUI = () => {
-                if (nearAuthData) {
-                    this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
-                    this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';
-                    this.shadowRoot.getElementById('logoutButton').style.display = 'block';
-                    this.shadowRoot.getElementById('loginButton').style.display = 'none';
-                    this.shadowRoot.getElementById('logoutButton').onclick = async () => {
-                        await nearLogout();
-                        location.reload();
-                    };
-                } else {
-                    this.shadowRoot.getElementById('loginButton').style.display = 'block';
-                    this.shadowRoot.getElementById('logoutButton').style.display = 'none';
-                    this.shadowRoot.getElementById('loggedinuserspan').style.display = 'none';
-                    this.shadowRoot.getElementById('loginButton').onclick = async () => {
-                        await nearLogin();
-                        // After wallet connect + key creation, update UI and service worker
-                        if (nearAuthData) {
-                            await registerNearGitServiceWorker(gitrepourl.split('/').pop().replace('.git', ''), nearAuthData);
-                            updateAuthUI();
-                        }
-                    };
-                }
-            };
-            updateAuthUI();
+            if (nearAuthData) {
+                this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
+                this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';
+                this.shadowRoot.getElementById('logoutButton').style.display = 'block';
+                this.shadowRoot.getElementById('loginButton').style.display = 'none';
+                this.shadowRoot.getElementById('logoutButton').onclick = () => nearLogout();
+            } else {
+                this.shadowRoot.getElementById('loginButton').style.display = 'block';
+                this.shadowRoot.getElementById('logoutButton').style.display = 'none';
+                this.shadowRoot.getElementById('loggedinuserspan').style.display = 'none';
+                this.shadowRoot.getElementById('loginButton').onclick = () => nearLogin();
+            }
             updateCommitAndSyncButtonState(await repoHasChanges());
         }
     });
