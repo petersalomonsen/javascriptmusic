@@ -12,6 +12,7 @@
 import init, {
     parse_packfile,
     build_packfile,
+    build_packfile_with_bases,
     apply_delta,
     git_sha1,
     create_signed_transaction,
@@ -355,9 +356,93 @@ async function handleReceivePack(body) {
     }
 
     if (rest.length > 0) {
-        // Store the raw packfile directly on-chain with ref updates
-        const packB64 = uint8ArrayToBase64(rest);
+        // Parse the incoming pack to get individual objects
+        const parseJson = parse_packfile(rest);
+        const parseResult = JSON.parse(parseJson);
 
+        // Extract resolved objects
+        const newObjects = (parseResult.objects || []).map(obj => ({
+            obj_type: obj.obj_type,
+            data: obj.data, // already base64
+        }));
+
+        // Resolve any deltas within the incoming pack
+        if (parseResult.deltas && parseResult.deltas.length > 0) {
+            const localMap = {};
+            for (const obj of newObjects) {
+                const data = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
+                localMap[git_sha1(obj.obj_type, data)] = obj;
+            }
+            for (const delta of parseResult.deltas) {
+                const base = localMap[delta.base_sha];
+                if (base) {
+                    const baseData = Uint8Array.from(atob(base.data), c => c.charCodeAt(0));
+                    const deltaData = Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0));
+                    const resolved = apply_delta(baseData, deltaData);
+                    const obj = { obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) };
+                    const sha = git_sha1(base.obj_type, resolved);
+                    localMap[sha] = obj;
+                    newObjects.push(obj);
+                }
+            }
+        }
+
+        // Fetch existing objects from on-chain packs as delta bases
+        let packData;
+        const packCount = await nearViewCall('get_pack_count', {});
+        if (packCount > 0) {
+            // Get existing packs and extract objects as bases
+            const existingPacks = await nearViewCallBorsh('get_packs', 0);
+            const baseObjects = [];
+            const baseMap = {};
+            for (const packBytes of existingPacks) {
+                const p = JSON.parse(parse_packfile(packBytes));
+                for (const obj of (p.objects || [])) {
+                    const data = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
+                    const sha = git_sha1(obj.obj_type, data);
+                    if (!baseMap[sha]) {
+                        baseMap[sha] = true;
+                        baseObjects.push(obj);
+                    }
+                }
+                // Resolve ofs_deltas within each existing pack
+                if (p.deltas) {
+                    for (const delta of p.deltas) {
+                        if (baseMap[delta.base_sha]) {
+                            // find the base in baseObjects
+                            const base = baseObjects.find(o => {
+                                const d = Uint8Array.from(atob(o.data), c => c.charCodeAt(0));
+                                return git_sha1(o.obj_type, d) === delta.base_sha;
+                            });
+                            if (base) {
+                                const baseData = Uint8Array.from(atob(base.data), c => c.charCodeAt(0));
+                                const deltaData = Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0));
+                                const resolved = apply_delta(baseData, deltaData);
+                                const sha = git_sha1(base.obj_type, resolved);
+                                if (!baseMap[sha]) {
+                                    baseMap[sha] = true;
+                                    baseObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Filter out objects we already have
+            const filteredNew = newObjects.filter(obj => {
+                const data = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
+                return !baseMap[git_sha1(obj.obj_type, data)];
+            });
+
+            console.log(`[near-git-sw] push: ${filteredNew.length} new objects, ${baseObjects.length} bases`);
+            packData = build_packfile_with_bases(JSON.stringify(filteredNew), JSON.stringify(baseObjects));
+        } else {
+            // First push — no bases
+            packData = build_packfile(JSON.stringify(newObjects));
+        }
+
+        const packB64 = uint8ArrayToBase64(packData);
         const pushResult = await nearFunctionCall('push', {
             pack_data: packB64,
             ref_updates: refUpdates,

@@ -34,6 +34,13 @@ export function borsh_encode_shas(shas_json: string): Uint8Array;
 export function build_packfile(objects_json: string): Uint8Array;
 
 /**
+ * Build a thin packfile with delta compression against external base objects.
+ * `objects_json`: new objects to include (JSON array of {obj_type, data(base64)})
+ * `bases_json`: existing objects for delta computation, NOT included in output
+ */
+export function build_packfile_with_bases(objects_json: string, bases_json: string): Uint8Array;
+
+/**
  * Create a signed NEAR function call transaction, returned as base64.
  *
  * - `signer_id`: e.g. "alice.near"
@@ -78,6 +85,7 @@ export interface InitOutput {
     readonly borsh_encode_push_objects: (a: number, b: number) => [number, number, number, number];
     readonly borsh_encode_shas: (a: number, b: number) => [number, number, number, number];
     readonly build_packfile: (a: number, b: number) => [number, number, number, number];
+    readonly build_packfile_with_bases: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly create_signed_transaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: bigint, n: number, o: number, p: bigint, q: number, r: number) => [number, number, number, number];
     readonly git_sha1: (a: number, b: number, c: number, d: number) => [number, number];
     readonly parse_packfile: (a: number, b: number) => [number, number, number, number];

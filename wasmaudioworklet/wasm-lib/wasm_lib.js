@@ -105,6 +105,28 @@ export function build_packfile(objects_json) {
 }
 
 /**
+ * Build a thin packfile with delta compression against external base objects.
+ * `objects_json`: new objects to include (JSON array of {obj_type, data(base64)})
+ * `bases_json`: existing objects for delta computation, NOT included in output
+ * @param {string} objects_json
+ * @param {string} bases_json
+ * @returns {Uint8Array}
+ */
+export function build_packfile_with_bases(objects_json, bases_json) {
+    const ptr0 = passStringToWasm0(objects_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(bases_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.build_packfile_with_bases(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Create a signed NEAR function call transaction, returned as base64.
  *
  * - `signer_id`: e.g. "alice.near"

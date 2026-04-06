@@ -6,6 +6,7 @@ export const borsh_decode_objects: (a: number, b: number) => [number, number, nu
 export const borsh_encode_push_objects: (a: number, b: number) => [number, number, number, number];
 export const borsh_encode_shas: (a: number, b: number) => [number, number, number, number];
 export const build_packfile: (a: number, b: number) => [number, number, number, number];
+export const build_packfile_with_bases: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const create_signed_transaction: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: bigint, n: number, o: number, p: bigint, q: number, r: number) => [number, number, number, number];
 export const git_sha1: (a: number, b: number, c: number, d: number) => [number, number];
 export const parse_packfile: (a: number, b: number) => [number, number, number, number];
