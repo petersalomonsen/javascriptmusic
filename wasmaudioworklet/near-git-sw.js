@@ -347,6 +347,8 @@ async function handleReceivePack(body) {
             const oldSha = parts[0].split('\0').pop();
             const newSha = parts[1];
             const refName = parts.slice(2).join(' ').split('\0')[0];
+            // Skip no-op ref updates (nothing changed)
+            if (oldSha === newSha) continue;
             refUpdates.push({
                 name: refName,
                 old_sha: oldSha === ZERO_SHA ? null : oldSha,
@@ -436,19 +438,26 @@ async function handleReceivePack(body) {
             });
 
             console.log(`[near-git-sw] push: ${filteredNew.length} new objects, ${baseObjects.length} bases`);
-            packData = build_packfile_with_bases(JSON.stringify(filteredNew), JSON.stringify(baseObjects));
+
+            if (filteredNew.length === 0 && refUpdates.length === 0) {
+                console.log('[near-git-sw] nothing to push, skipping contract call');
+            } else {
+                packData = build_packfile_with_bases(JSON.stringify(filteredNew), JSON.stringify(baseObjects));
+            }
         } else {
             // First push — no bases
             packData = build_packfile(JSON.stringify(newObjects));
         }
 
-        const packB64 = uint8ArrayToBase64(packData);
-        const pushResult = await nearFunctionCall('push', {
-            pack_data: packB64,
-            ref_updates: refUpdates,
-        });
-        if (!pushResult.success) {
-            return makeReceivePackResponse([`ng unpack ${pushResult.error}`]);
+        if (packData) {
+            const packB64 = uint8ArrayToBase64(packData);
+            const pushResult = await nearFunctionCall('push', {
+                pack_data: packB64,
+                ref_updates: refUpdates,
+            });
+            if (!pushResult.success) {
+                return makeReceivePackResponse([`ng unpack ${pushResult.error}`]);
+            }
         }
     }
 
