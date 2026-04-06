@@ -1,12 +1,12 @@
 /**
- * NEAR Git Service Worker (standalone)
+ * NEAR Git Service Worker (stateless)
  *
  * Intercepts git smart HTTP requests and translates them to NEAR contract
- * calls — no git HTTP server required. Uses a WASM module for packfile
- * parsing/building and NEAR transaction signing.
+ * calls. Contract ID is derived from the URL path, credentials from the
+ * Authorization header, and RPC URL from the network (testnet/mainnet).
  *
- * Configuration is received via a 'configure' message from the main thread:
- *   { type: 'configure', rpcUrl, contractId, accountId, publicKey, privateKey }
+ * URL format: /near-repo/<contractId>.git/<git-endpoint>
+ * Auth header: Authorization: Bearer <JSON {accountId, publicKey, privateKey}>
  */
 
 import init, {
@@ -18,63 +18,37 @@ import init, {
     create_signed_transaction,
 } from './wasm-lib/wasm_lib.js';
 
-let config = null;
-let configPromise = null;
 let wasmReady = false;
 
 const wasmInit = init(new URL('./wasm-lib/wasm_lib_bg.wasm', self.location.origin));
 
-async function saveConfig(cfg) {
-    const cache = await caches.open('near-git-config');
-    await cache.put(`/__config__/${cfg.contractId}`, new Response(JSON.stringify(cfg)));
-    await cache.put('/__config__/current', new Response(cfg.contractId));
-}
-
-async function loadConfig() {
-    const cache = await caches.open('near-git-config');
-    const currentResp = await cache.match('/__config__/current');
-    if (!currentResp) return null;
-    const contractId = await currentResp.text();
-    const configResp = await cache.match(`/__config__/${contractId}`);
-    if (!configResp) return null;
-    return configResp.json();
-}
-
-self.addEventListener('message', async (event) => {
-    if (event.data && event.data.type === 'configure') {
-        if (config) {
-            config = { ...config, ...event.data };
-            for (const key of Object.keys(config)) {
-                if (config[key] === undefined) delete config[key];
-            }
-        } else {
-            config = event.data;
-        }
-        await saveConfig(config);
-        console.log('[near-git-sw] configured:', config.contractId, config.accountId || 'read-only');
-    }
-});
-
-async function ensureReady() {
+async function ensureWasm() {
     if (!wasmReady) {
         await wasmInit;
         wasmReady = true;
     }
-    if (!config) {
-        config = await loadConfig();
+}
+
+function extractContractId(path) {
+    const match = path.match(/^\/near-repo\/([^/]+?)\.git\//);
+    return match ? match[1] : null;
+}
+
+function extractAuth(request) {
+    const auth = request.headers.get('Authorization');
+    if (!auth || !auth.startsWith('Bearer ')) return null;
+    try {
+        return JSON.parse(auth.slice(7));
+    } catch (e) {
+        return null;
     }
-    if (!config) {
-        if (!configPromise) {
-            configPromise = new Promise(resolve => {
-                const check = () => {
-                    if (config) { resolve(config); }
-                    else { setTimeout(check, 50); }
-                };
-                check();
-            });
-        }
-        await configPromise;
+}
+
+function rpcUrlForContract(contractId) {
+    if (contractId.endsWith('.testnet') || contractId.endsWith('.test.near')) {
+        return 'https://archival-rpc.testnet.fastnear.com';
     }
+    return 'https://rpc.mainnet.near.org';
 }
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -95,25 +69,38 @@ self.addEventListener('fetch', (event) => {
 });
 
 async function handleGitRequest(request, url) {
-    await ensureReady();
+    await ensureWasm();
+
     const path = url.pathname;
+    const contractId = extractContractId(path);
+    if (!contractId) {
+        return new Response('Bad request: cannot extract contract ID', { status: 400 });
+    }
+
+    const rpcUrl = rpcUrlForContract(contractId);
+    const auth = extractAuth(request); // null for read-only (clone/fetch)
+
+    const ctx = { contractId, rpcUrl, auth };
 
     if (path.endsWith('/info/refs')) {
-        return handleInfoRefs(url.searchParams.get('service'));
+        return handleInfoRefs(ctx, url.searchParams.get('service'));
     }
     if (path.endsWith('/git-receive-pack')) {
-        return handleReceivePack(new Uint8Array(await request.arrayBuffer()));
+        if (!auth) {
+            return new Response('Authentication required for push', { status: 401 });
+        }
+        return handleReceivePack(ctx, new Uint8Array(await request.arrayBuffer()));
     }
     if (path.endsWith('/git-upload-pack')) {
-        return handleUploadPack(new Uint8Array(await request.arrayBuffer()));
+        return handleUploadPack(ctx, new Uint8Array(await request.arrayBuffer()));
     }
     return new Response('Not found', { status: 404 });
 }
 
 // --- NEAR RPC ---
 
-async function nearRpc(method, params) {
-    const res = await fetch(config.rpcUrl, {
+async function nearRpc(ctx, method, params) {
+    const res = await fetch(ctx.rpcUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 'q', method, params }),
@@ -121,11 +108,11 @@ async function nearRpc(method, params) {
     return res.json();
 }
 
-async function nearViewCall(method, args) {
-    const json = await nearRpc('query', {
+async function nearViewCall(ctx, method, args) {
+    const json = await nearRpc(ctx, 'query', {
         request_type: 'call_function',
         finality: 'optimistic',
-        account_id: config.contractId,
+        account_id: ctx.contractId,
         method_name: method,
         args_base64: btoa(JSON.stringify(args)),
     });
@@ -133,22 +120,19 @@ async function nearViewCall(method, args) {
     return JSON.parse(new TextDecoder().decode(new Uint8Array(json.result.result)));
 }
 
-/// Borsh view call: encode arg as borsh u32, decode result as borsh Vec<Vec<u8>>.
-async function nearViewCallBorsh(method, fromIndex) {
-    // Borsh-encode u32
+async function nearViewCallBorsh(ctx, method, fromIndex) {
     const argBytes = new Uint8Array(4);
     new DataView(argBytes.buffer).setUint32(0, fromIndex, true);
 
-    const json = await nearRpc('query', {
+    const json = await nearRpc(ctx, 'query', {
         request_type: 'call_function',
         finality: 'optimistic',
-        account_id: config.contractId,
+        account_id: ctx.contractId,
         method_name: method,
         args_base64: uint8ToBase64(argBytes),
     });
     if (json.error) throw new Error(JSON.stringify(json.error));
 
-    // Decode borsh Vec<Vec<u8>>: u32 length, then each Vec<u8> is u32 length + bytes
     const data = new Uint8Array(json.result.result);
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let pos = 0;
@@ -168,44 +152,40 @@ function uint8ToBase64(bytes) {
     return btoa(binary);
 }
 
-async function nearFunctionCall(method, args) {
-    // Get nonce and block hash
-    const accessKeyRes = await nearRpc('query', {
+async function nearFunctionCall(ctx, method, args) {
+    const { auth } = ctx;
+
+    const accessKeyRes = await nearRpc(ctx, 'query', {
         request_type: 'view_access_key',
         finality: 'optimistic',
-        account_id: config.accountId,
-        public_key: `ed25519:${config.publicKey}`,
+        account_id: auth.accountId,
+        public_key: `ed25519:${auth.publicKey}`,
     });
     if (accessKeyRes.error) throw new Error(JSON.stringify(accessKeyRes.error));
     const nonce = accessKeyRes.result.nonce + 1;
     const blockHash = accessKeyRes.result.block_hash;
 
-    // Encode args: borsh for push, JSON for others
     let argsBytes;
     if (method === 'push') {
         // Borsh-encode: Vec<u8> pack_data + Vec<RefUpdate> ref_updates
         const packData = Uint8Array.from(atob(args.pack_data), c => c.charCodeAt(0));
         const refUpdates = args.ref_updates || [];
 
-        // Manual borsh: pack_data as Vec<u8>
         const parts = [];
         const packLen = new Uint8Array(4);
         new DataView(packLen.buffer).setUint32(0, packData.length, true);
         parts.push(packLen);
         parts.push(packData);
 
-        // ref_updates as Vec<RefUpdate>
         const refLen = new Uint8Array(4);
         new DataView(refLen.buffer).setUint32(0, refUpdates.length, true);
         parts.push(refLen);
         for (const u of refUpdates) {
-            // name: String
             const nameBytes = new TextEncoder().encode(u.name);
             const nameLen = new Uint8Array(4);
             new DataView(nameLen.buffer).setUint32(0, nameBytes.length, true);
             parts.push(nameLen);
             parts.push(nameBytes);
-            // old_sha: Option<String>
             if (u.old_sha) {
                 parts.push(new Uint8Array([1]));
                 const oldBytes = new TextEncoder().encode(u.old_sha);
@@ -216,7 +196,6 @@ async function nearFunctionCall(method, args) {
             } else {
                 parts.push(new Uint8Array([0]));
             }
-            // new_sha: String
             const newBytes = new TextEncoder().encode(u.new_sha);
             const newLen = new Uint8Array(4);
             new DataView(newLen.buffer).setUint32(0, newBytes.length, true);
@@ -231,12 +210,11 @@ async function nearFunctionCall(method, args) {
         argsBytes = new TextEncoder().encode(JSON.stringify(args));
     }
 
-    // Create signed transaction using WASM module
     const signedTxBase64 = create_signed_transaction(
-        config.accountId,
-        config.publicKey,
-        config.privateKey,
-        config.contractId,
+        auth.accountId,
+        auth.publicKey,
+        auth.privateKey,
+        ctx.contractId,
         method,
         argsBytes,
         BigInt(nonce),
@@ -245,8 +223,7 @@ async function nearFunctionCall(method, args) {
         '0',
     );
 
-    // Broadcast
-    const broadcastRes = await nearRpc('broadcast_tx_commit', [signedTxBase64]);
+    const broadcastRes = await nearRpc(ctx, 'broadcast_tx_commit', [signedTxBase64]);
     if (broadcastRes.error) {
         return { success: false, error: JSON.stringify(broadcastRes.error) };
     }
@@ -309,8 +286,8 @@ function readPktLines(data) {
 const ZERO_SHA = '0000000000000000000000000000000000000000';
 const CAPABILITIES = 'report-status delete-refs';
 
-async function handleInfoRefs(service) {
-    const refs = await nearViewCall('get_refs', {});
+async function handleInfoRefs(ctx, service) {
+    const refs = await nearViewCall(ctx, 'get_refs', {});
     const parts = [];
     parts.push(pktLineEncodeString(`# service=${service}\n`));
     parts.push(pktLineFlush());
@@ -335,7 +312,7 @@ async function handleInfoRefs(service) {
     });
 }
 
-async function handleReceivePack(body) {
+async function handleReceivePack(ctx, body) {
     const { lines, rest } = readPktLines(body);
     const decoder = new TextDecoder();
 
@@ -358,17 +335,14 @@ async function handleReceivePack(body) {
     }
 
     if (rest.length > 0) {
-        // Parse the incoming pack to get individual objects
         const parseJson = parse_packfile(rest);
         const parseResult = JSON.parse(parseJson);
 
-        // Extract resolved objects
         const newObjects = (parseResult.objects || []).map(obj => ({
             obj_type: obj.obj_type,
-            data: obj.data, // already base64
+            data: obj.data,
         }));
 
-        // Resolve any deltas within the incoming pack
         if (parseResult.deltas && parseResult.deltas.length > 0) {
             const localMap = {};
             for (const obj of newObjects) {
@@ -389,12 +363,10 @@ async function handleReceivePack(body) {
             }
         }
 
-        // Fetch existing objects from on-chain packs as delta bases
         let packData;
-        const packCount = await nearViewCall('get_pack_count', {});
+        const packCount = await nearViewCall(ctx, 'get_pack_count', {});
         if (packCount > 0) {
-            // Get existing packs and extract objects as bases
-            const existingPacks = await nearViewCallBorsh('get_packs', 0);
+            const existingPacks = await nearViewCallBorsh(ctx, 'get_packs', 0);
             const baseObjects = [];
             const baseMap = {};
             for (const packBytes of existingPacks) {
@@ -407,11 +379,9 @@ async function handleReceivePack(body) {
                         baseObjects.push(obj);
                     }
                 }
-                // Resolve ofs_deltas within each existing pack
                 if (p.deltas) {
                     for (const delta of p.deltas) {
                         if (baseMap[delta.base_sha]) {
-                            // find the base in baseObjects
                             const base = baseObjects.find(o => {
                                 const d = Uint8Array.from(atob(o.data), c => c.charCodeAt(0));
                                 return git_sha1(o.obj_type, d) === delta.base_sha;
@@ -431,7 +401,6 @@ async function handleReceivePack(body) {
                 }
             }
 
-            // Filter out objects we already have
             const filteredNew = newObjects.filter(obj => {
                 const data = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
                 return !baseMap[git_sha1(obj.obj_type, data)];
@@ -445,13 +414,12 @@ async function handleReceivePack(body) {
                 packData = build_packfile_with_bases(JSON.stringify(filteredNew), JSON.stringify(baseObjects));
             }
         } else {
-            // First push — no bases
             packData = build_packfile(JSON.stringify(newObjects));
         }
 
         if (packData) {
             const packB64 = uint8ArrayToBase64(packData);
-            const pushResult = await nearFunctionCall('push', {
+            const pushResult = await nearFunctionCall(ctx, 'push', {
                 pack_data: packB64,
                 ref_updates: refUpdates,
             });
@@ -468,7 +436,7 @@ async function handleReceivePack(body) {
     return makeReceivePackResponse(statusLines);
 }
 
-async function handleUploadPack(body) {
+async function handleUploadPack(ctx, body) {
     const { lines } = readPktLines(body);
     const decoder = new TextDecoder();
     const wants = [];
@@ -487,8 +455,7 @@ async function handleUploadPack(body) {
         );
     }
 
-    // Get all packfiles from contract and merge into one response
-    const packCount = await nearViewCall('get_pack_count', {});
+    const packCount = await nearViewCall(ctx, 'get_pack_count', {});
     console.log(`[near-git-sw] fetching ${packCount} packs`);
 
     if (packCount === 0) {
@@ -498,10 +465,8 @@ async function handleUploadPack(body) {
         );
     }
 
-    // Fetch all packs via borsh view call
-    const packsResult = await nearViewCallBorsh('get_packs', 0);
+    const packsResult = await nearViewCallBorsh(ctx, 'get_packs', 0);
 
-    // Parse all packs, merge objects, rebuild into one pack
     const allObjects = [];
     const localMap = {};
     for (const packBytes of packsResult) {
@@ -517,7 +482,6 @@ async function handleUploadPack(body) {
                 }
             }
         }
-        // Resolve deltas using accumulated objects
         if (parseResult.deltas) {
             for (const delta of parseResult.deltas) {
                 const deltaData = Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0));
