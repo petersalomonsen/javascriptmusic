@@ -43,7 +43,6 @@ async function loadConfig() {
 
 self.addEventListener('message', async (event) => {
     if (event.data && event.data.type === 'configure') {
-        // Merge with existing config — don't overwrite keys with undefined
         if (config) {
             config = { ...config, ...event.data };
             for (const key of Object.keys(config)) {
@@ -66,7 +65,6 @@ async function ensureReady() {
         config = await loadConfig();
     }
     if (!config) {
-        // Wait for the main message listener to set config
         if (!configPromise) {
             configPromise = new Promise(resolve => {
                 const check = () => {
