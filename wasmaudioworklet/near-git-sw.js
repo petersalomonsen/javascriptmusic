@@ -25,21 +25,7 @@ import init, {
 let config = null;
 let configPromise = null;
 let wasmReady = false;
-const CONFIG_CACHE_KEY = 'near-git-config';
-
 const wasmInit = init(new URL('./wasm-lib/wasm_lib_bg.wasm', self.location.origin));
-
-async function saveConfig(cfg) {
-    const cache = await caches.open(CONFIG_CACHE_KEY);
-    await cache.put('/__near-git-config__', new Response(JSON.stringify(cfg)));
-}
-
-async function loadConfig() {
-    const cache = await caches.open(CONFIG_CACHE_KEY);
-    const resp = await cache.match('/__near-git-config__');
-    if (resp) return resp.json();
-    return null;
-}
 
 self.addEventListener('message', async (event) => {
     if (event.data && event.data.type === 'configure') {
@@ -51,7 +37,6 @@ self.addEventListener('message', async (event) => {
         } else {
             config = event.data;
         }
-        await saveConfig(config);
         console.log('[near-git-sw] configured:', config.contractId, config.accountId || 'read-only');
     }
 });
@@ -60,9 +45,6 @@ async function ensureReady() {
     if (!wasmReady) {
         await wasmInit;
         wasmReady = true;
-    }
-    if (!config) {
-        config = await loadConfig();
     }
     if (!config) {
         if (!configPromise) {
