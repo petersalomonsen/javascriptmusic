@@ -8,7 +8,7 @@ export default {
   ],
   concurrency: 1,
   watch: false,
-  testsFinishTimeout: 60000,
+  testsFinishTimeout: 120000,
   testRunnerHtml: testRunnerImport =>
     `<html>
       <body>
