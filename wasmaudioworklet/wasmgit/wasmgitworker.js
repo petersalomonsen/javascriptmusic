@@ -58,8 +58,6 @@ const lgPromise = (async () => {
   return lg;
 })();
 
-let defaultBranch = null;
-
 function ensureChdir(dir) {
   FS.chdir(dir);
 }
@@ -69,36 +67,6 @@ function callMainInDir(args) {
     ensureChdir(currentRepoDir);
   }
   lg.callMain(args);
-}
-
-function detectDefaultBranch() {
-  if (defaultBranch) return defaultBranch;
-  try {
-    ensureChdir(currentRepoDir);
-    // Check which branch HEAD points to via git status
-    captureOutput = true;
-    stderr = '';
-    stdout = '';
-    callMainInDir(['status']);
-    captureOutput = false;
-    const match = stdout.match(/# On branch (\S+)/);
-    if (match) {
-      defaultBranch = match[1];
-    }
-  } catch (e) { }
-  if (!defaultBranch) {
-    // Fallback: check if main or master exists
-    try {
-      ensureChdir(currentRepoDir);
-      const gitDir = currentRepoDir + '/.git/refs/remotes/origin';
-      const refs = FS.readdir(gitDir).filter(f => f !== '.' && f !== '..');
-      if (refs.includes('main')) defaultBranch = 'main';
-      else if (refs.includes('master')) defaultBranch = 'master';
-    } catch (e) { }
-  }
-  defaultBranch = defaultBranch || 'main';
-  console.log('Default branch:', defaultBranch);
-  return defaultBranch;
 }
 
 onmessage = async (msg) => {
@@ -165,7 +133,7 @@ onmessage = async (msg) => {
     try {
       callAndCaptureOutput(['fetch', 'origin']);
       if (stdout.indexOf('Received 0/0 objects') === -1) {
-        callAndCaptureOutput(['merge', 'origin/' + detectDefaultBranch()]);
+        callAndCaptureOutput(['merge', 'FETCH_HEAD']);
       }
       callAndCaptureOutput(['push']);
     } catch (e) {
@@ -247,7 +215,7 @@ onmessage = async (msg) => {
     try {
       callAndCaptureOutput(['status']);
       if (stdout.indexOf('On branch Not currently on any branch') === -1) {
-        callAndCaptureOutput(['diff', detectDefaultBranch()]);
+        callAndCaptureOutput(['diff', 'HEAD']);
       }
     } catch (e) {
 
@@ -255,7 +223,7 @@ onmessage = async (msg) => {
     postMessage({ diff: stdout });
   } else if (msg.data.command === 'pull') {
     callMainInDir(['fetch', 'origin']);
-    callMainInDir(['merge', 'origin/' + detectDefaultBranch()]);
+    callMainInDir(['merge', 'FETCH_HEAD']);
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ id: msg.data.id, dircontents: readdir(), lastHttpStatus: lastHttpRequest.status });
   } else if (msg.data.command === 'readfile') {
