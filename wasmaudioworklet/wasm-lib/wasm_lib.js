@@ -21,6 +21,73 @@ export function apply_delta(source, delta) {
 }
 
 /**
+ * Decode borsh get_objects result → JSON string
+ * `[[sha, {obj_type, data(base64)}], [sha, null], ...]`
+ * @param {Uint8Array} data
+ * @returns {string}
+ */
+export function borsh_decode_objects(data) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.borsh_decode_objects(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Borsh-encode git objects for push_objects (JSON input with base64 data → borsh bytes).
+ *
+ * Input: JSON array of `[{sha, obj_type, data(base64)}, ...]`
+ * Output: borsh-encoded `Vec<GitObject>` bytes
+ * @param {string} objects_json
+ * @returns {Uint8Array}
+ */
+export function borsh_encode_push_objects(objects_json) {
+    const ptr0 = passStringToWasm0(objects_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.borsh_encode_push_objects(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Borsh-encode SHA list for get_objects (JSON array → borsh bytes).
+ *
+ * Input: JSON array of SHA strings `["abc123", ...]`
+ * Output: borsh-encoded `Vec<String>` bytes
+ * @param {string} shas_json
+ * @returns {Uint8Array}
+ */
+export function borsh_encode_shas(shas_json) {
+    const ptr0 = passStringToWasm0(shas_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.borsh_encode_shas(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Build a packfile from objects (JSON array of {obj_type, data(base64)}).
  * @param {string} objects_json
  * @returns {Uint8Array}
@@ -45,7 +112,7 @@ export function build_packfile(objects_json) {
  * - `private_key_b58`: base58-encoded ed25519 private key (without "ed25519:" prefix)
  * - `receiver_id`: contract account, e.g. "repo.near"
  * - `method_name`: e.g. "push_objects"
- * - `args_json`: JSON string of method arguments
+ * - `args`: raw method argument bytes (borsh or JSON depending on method)
  * - `nonce`: access key nonce + 1
  * - `block_hash_b58`: recent block hash in base58
  * - `gas`: gas to attach (e.g. 300000000000000 = 300 TGas)
@@ -55,14 +122,14 @@ export function build_packfile(objects_json) {
  * @param {string} private_key_b58
  * @param {string} receiver_id
  * @param {string} method_name
- * @param {string} args_json
+ * @param {Uint8Array} args
  * @param {bigint} nonce
  * @param {string} block_hash_b58
  * @param {bigint} gas
  * @param {string} deposit
  * @returns {string}
  */
-export function create_signed_transaction(signer_id, public_key_b58, private_key_b58, receiver_id, method_name, args_json, nonce, block_hash_b58, gas, deposit) {
+export function create_signed_transaction(signer_id, public_key_b58, private_key_b58, receiver_id, method_name, args, nonce, block_hash_b58, gas, deposit) {
     let deferred10_0;
     let deferred10_1;
     try {
@@ -76,7 +143,7 @@ export function create_signed_transaction(signer_id, public_key_b58, private_key
         const len3 = WASM_VECTOR_LEN;
         const ptr4 = passStringToWasm0(method_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len4 = WASM_VECTOR_LEN;
-        const ptr5 = passStringToWasm0(args_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const ptr5 = passArray8ToWasm0(args, wasm.__wbindgen_malloc);
         const len5 = WASM_VECTOR_LEN;
         const ptr6 = passStringToWasm0(block_hash_b58, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len6 = WASM_VECTOR_LEN;
@@ -144,6 +211,34 @@ export function parse_packfile(data) {
     } finally {
         wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
     }
+}
+
+/**
+ * Zlib-compress data.
+ * @param {Uint8Array} data
+ * @returns {Uint8Array}
+ */
+export function zlib_compress(data) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.zlib_compress(ptr0, len0);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Zlib-decompress data.
+ * @param {Uint8Array} data
+ * @returns {Uint8Array}
+ */
+export function zlib_decompress(data) {
+    const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.zlib_decompress(ptr0, len0);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 function __wbg_get_imports() {
