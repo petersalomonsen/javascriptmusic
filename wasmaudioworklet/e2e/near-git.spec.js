@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const SANDBOX_SERVER = 'http://localhost:3030';
-const NEAR_REPO_CONTRACT = 'repo.sandbox';
+const NEAR_REPO_CONTRACT = 'repo.factory.sandbox';
 
 let nearCredentials;
 
@@ -18,7 +18,15 @@ async function setupServiceWorker(page) {
     const publicKey = nearCredentials.publicKey.replace('ed25519:', '');
     const privateKey = nearCredentials.secretKey.replace('ed25519:', '');
 
-    await page.evaluate(async ({ rpcUrl, contractId, accountId, publicKey, privateKey }) => {
+    await page.evaluate(async ({ contractId, accountId, publicKey, privateKey }) => {
+        // Seed localStorage so initNear() picks up credentials when the app loads.
+        // The stateless service worker reads credentials from each request's
+        // Authorization header (set by the wasmgit Web Worker), which the app
+        // populates from nearAuthData / localStorage.
+        localStorage.setItem(`near-git-key:${contractId}`, JSON.stringify({
+            accountId, publicKey, privateKey,
+        }));
+
         await navigator.serviceWorker.register('/near-git-sw.js', { type: 'module' });
         await navigator.serviceWorker.ready;
         if (!navigator.serviceWorker.controller) {
@@ -26,14 +34,8 @@ async function setupServiceWorker(page) {
                 navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
             });
         }
-        navigator.serviceWorker.controller.postMessage({
-            type: 'configure',
-            rpcUrl, contractId, accountId, publicKey, privateKey,
-        });
-        await new Promise(r => setTimeout(r, 500));
     }, {
-        rpcUrl: nearCredentials.rpcUrl,
-        contractId: nearCredentials.contractId,
+        contractId: NEAR_REPO_CONTRACT,
         accountId: nearCredentials.accountId,
         publicKey, privateKey,
     });
@@ -76,7 +78,14 @@ function getEditorContent(page) {
 
 /** Push a baseline commit via worker (fast, no UI). */
 async function pushBaseline(page, repoName, content) {
-    await page.evaluate(async ({ repoUrl, content }) => {
+    const publicKey = nearCredentials.publicKey.replace('ed25519:', '');
+    const privateKey = nearCredentials.secretKey.replace('ed25519:', '');
+    const accessToken = JSON.stringify({
+        accountId: nearCredentials.accountId,
+        publicKey, privateKey,
+    });
+
+    await page.evaluate(async ({ repoUrl, content, accessToken, username }) => {
         const worker = new Worker(new URL('/wasmgit/wasmgitworker.js', location.origin), { type: 'module' });
         let resolveNext;
         const pending = [];
@@ -86,19 +95,40 @@ async function pushBaseline(page, repoName, content) {
         };
         const next = () => pending.length > 0 ? Promise.resolve(pending.shift()) : new Promise(r => { resolveNext = r; });
 
+        // Stateless service worker requires Authorization: Bearer <JSON>
+        // on git-receive-pack — give the worker the access token first.
+        worker.postMessage({ accessToken, username, useremail: username });
+        await next();
+
         worker.postMessage({ command: 'clone', url: repoUrl });
         await next();
+
+        // Cloning an empty contract leaves no .git — mirror what the app does
+        // in initWASMGitClient and run init + remote add so the cwd is a valid repo.
+        let id = 100;
+        worker.postMessage({ command: 'init', args: ['.'], id: id++ });
+        await next();
+        worker.postMessage({ command: 'remote', args: ['add', 'origin', repoUrl], id: id++ });
+        await next();
+
         worker.postMessage({ command: 'writefileandstage', filename: 'song.js', contents: content });
         await next();
-        let id = 100;
         worker.postMessage({ command: 'config', args: ['user.name', 'Test'], id: id++ });
         await next();
         worker.postMessage({ command: 'config', args: ['user.email', 'test@test.com'], id: id++ });
         await next();
         worker.postMessage({ command: 'commitpullpush', commitmessage: 'baseline', id: id++ });
-        await next();
+        const pushReply = await next();
         worker.terminate();
-    }, { repoUrl: `http://localhost:8080/near-repo/${repoName}`, content });
+        if (pushReply && pushReply.error) {
+            throw new Error('pushBaseline failed: ' + pushReply.error);
+        }
+    }, {
+        repoUrl: `http://localhost:8080/near-repo/${repoName}`,
+        content,
+        accessToken,
+        username: nearCredentials.accountId,
+    });
 }
 
 test.describe('NEAR Git Storage - Full E2E', () => {

@@ -45,6 +45,11 @@ function extractAuth(request) {
 }
 
 function rpcUrlForContract(contractId) {
+    // .sandbox is a non-real suffix used by the e2e harness; route to the
+    // local docker sandbox RPC proxy so tests don't hit live networks.
+    if (contractId.endsWith('.sandbox')) {
+        return 'http://localhost:3030/near-rpc';
+    }
     if (contractId.endsWith('.testnet') || contractId.endsWith('.test.near')) {
         return 'https://archival-rpc.testnet.fastnear.com';
     }
