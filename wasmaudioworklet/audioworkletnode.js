@@ -353,7 +353,7 @@ export function initAudioWorkletNode(componentRoot) {
     }
 
     if (typeof navigator.requestMIDIAccess === 'function') {
-        startmidi();
+        startmidi().catch(e => console.warn('MIDI access unavailable:', e.message));
     }
 
     window.lowerkeyboardkeys = ["KeyZ", "KeyS", "KeyX", "KeyD", "KeyC", "KeyV", "KeyG", "KeyB", "KeyH", "KeyN", "KeyJ", "KeyM", "Comma", "KeyL", "Period", "Semicolon", "Slash"];
