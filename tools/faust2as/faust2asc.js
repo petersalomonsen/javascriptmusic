@@ -23,14 +23,16 @@ const args = process.argv.slice(2);
 if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage: node faust2as.js <input.dsp> [--name ClassName] [--out output.ts]`);
     console.log(`       node faust2as.js --bundle <dsp1> <dsp2> ... [--out output.ts]`);
-    console.log(`  --name    Class name for the generated MidiVoice (default: derived from filename)`);
-    console.log(`  --out     Output .ts file path`);
-    console.log(`  --bundle  Transpile multiple DSPs into a single bundle with initializeMidiSynth()`);
+    console.log(`  --name      Class name for the generated MidiVoice (default: derived from filename)`);
+    console.log(`  --out       Output .ts file path`);
+    console.log(`  --bundle    Transpile multiple DSPs into a single bundle with initializeMidiSynth()`);
+    console.log(`  --mastering Generate a global stereo effect wired into postprocess() on outputline`);
     process.exit(0);
 }
 
 const bundleMode = args.includes('--bundle');
 const forEditor = args.includes('--for-editor');
+const masteringMode = args.includes('--mastering');
 let outputPath = null;
 let className = null;
 const dspFiles = [];
@@ -38,6 +40,7 @@ const dspFiles = [];
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--bundle') continue;
     if (args[i] === '--for-editor') continue;
+    if (args[i] === '--mastering') continue;
     if (args[i] === '--name' && args[i + 1]) { className = args[++i]; continue; }
     if (args[i] === '--out' && args[i + 1]) { outputPath = args[++i]; continue; }
     dspFiles.push(args[i]);
@@ -48,7 +51,18 @@ if (dspFiles.length === 0) {
     process.exit(1);
 }
 
-if (!bundleMode) {
+function toClassName(base) {
+    return base.split(/[_\-]/).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('').replace(/MIDI$/i, '');
+}
+
+if (masteringMode) {
+    if (!className) {
+        className = toClassName(path.basename(dspFiles[0], '.dsp'));
+    }
+    if (!outputPath) {
+        outputPath = path.resolve(__dirname, '..', '..', 'wasmaudioworklet', 'synth1', 'assembly', 'midi', 'instruments', className.toLowerCase() + '.ts');
+    }
+} else if (!bundleMode) {
     if (!className) {
         const base = path.basename(dspFiles[0], '.dsp');
         className = base.charAt(0).toUpperCase() + base.slice(1).replace(/MIDI$/i, '');
@@ -245,15 +259,24 @@ function parseASSource(asSource, clsName) {
 function parseComputeBody(computeBody) {
     const lines = computeBody.split('\n');
     const preLoopDecls = [];     // let output0, output1, fSlow/iSlow declarations
-    const loopBodyLines = [];    // lines inside the for loop
-    const delayShiftLines = [];  // delay shifts after output assignment
+    const loopBodyLines = [];    // lines inside the for loop (computation + output writes)
+    const delayShiftLines = [];  // state-shift lines at the tail of the loop
     let inLoop = false;
     let loopBraceDepth = 0;
-    let afterOutputAssignment = false;
-
-    // Track brace depth inside the main for loop so we can distinguish
-    // the main loop's closing brace from inner for-loop braces (delay shifts)
+    let inDelayShifts = false;
     let innerForDepth = 0;
+
+    // A delay-shift line shifts state to the next sample, e.g.
+    //   this.fRec1[<i32>(1)] = this.fRec1[<i32>(0)];
+    //   this.IOTA0 = (this.IOTA0 + <i32>(1));
+    // The shift copies SAME field from index N to N+1 — that's how we tell it
+    // apart from recursion lines like `this.fRec25[0] = this.fRec26[0];` that
+    // are still part of the computation phase.
+    function isDelayShiftStart(line) {
+        const m = line.match(/^this\.(\w+)\[<i32>\(\d+\)\]\s*=\s*this\.(\w+)\[/);
+        if (m && m[1] === m[2]) return true;
+        return /^this\.IOTA\d+\s*=/.test(line);
+    }
 
     for (const line of lines) {
         const trimmed = line.trim();
@@ -285,18 +308,14 @@ function parseComputeBody(computeBody) {
             // Skip the main loop's opening/closing braces
             if (loopBraceDepth < 0) break; // main loop closed
 
-            // Output assignments
-            if (trimmed.match(/^output[01]\[\w+\]\s*=/)) {
-                afterOutputAssignment = true;
-                if (trimmed.match(/^output0\[/)) {
-                    loopBodyLines.push(trimmed);
-                }
-                continue;
+            // Detect transition into the state-shift tail by pattern. Keep all
+            // computation (including output0/output1 writes and any state
+            // updates between them) in loopBodyLines.
+            if (!inDelayShifts && isDelayShiftStart(trimmed)) {
+                inDelayShifts = true;
             }
 
-            if (afterOutputAssignment) {
-                // In the delay shift section, inner for loops appear for array shifts
-                // e.g. `for (let j0: i32 = 3; j0 > 0; ...) {`
+            if (inDelayShifts) {
                 if (trimmed.match(/^for\s*\(/)) {
                     innerForDepth++;
                     delayShiftLines.push(trimmed);
@@ -307,7 +326,7 @@ function parseComputeBody(computeBody) {
                     delayShiftLines.push(trimmed);
                     continue;
                 }
-                if (trimmed === '{') continue; // skip standalone opening braces
+                if (trimmed === '{') continue;
                 delayShiftLines.push(trimmed);
             } else {
                 if (trimmed === '{' || trimmed === '}') continue;
@@ -751,6 +770,10 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     // Loop body
     for (const bodyLine of loopBodyLines) {
         let line = reshapeASLine(bodyLine, clsName, globalFields, staticFieldMap);
+
+        // Mono voice path: ignore output1 (right channel) — voices write a single
+        // sample via addMonoSignal. Stereo handling lives in the effect/mastering paths.
+        if (line.match(/^output1\[/)) continue;
 
         // Handle output assignment: output0[i0] = expr; → const output: f32 = expr;
         const outputMatch = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
@@ -1324,11 +1347,174 @@ function assembleBundle(results) {
 }
 
 // ---------------------------------------------------------------------------
+// Mastering mode: standalone stereo effect on outputline
+// ---------------------------------------------------------------------------
+
+function transpileMastering(inputDsp, clsName) {
+    const dspPath = path.resolve(inputDsp);
+    const dspDir = path.dirname(dspPath);
+
+    const tmpASFile = `/tmp/faust2as_${clsName}.ts`;
+    const faustCmd = `"${FAUST_BIN}" -lang asc -cn ${clsName} -I "${dspDir}" -I /opt/homebrew/share/faust "${dspPath}" -o "${tmpASFile}"`;
+    console.log(`Running: ${faustCmd}`);
+    try {
+        execSync(faustCmd, { stdio: 'inherit' });
+    } catch (e) {
+        console.error('Faust compilation failed');
+        process.exit(1);
+    }
+
+    let asSource = fs.readFileSync(tmpASFile, 'utf-8');
+    asSource = asSource.replace(/for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
+        'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))');
+
+    const parsed = parseASSource(asSource, clsName);
+    const { numInputs, numOutputs } = extractUIFromJSON(asSource);
+
+    if (numInputs !== 2 || numOutputs !== 2) {
+        console.error(`Mastering mode requires stereo I/O (2 in, 2 out). Got ${numInputs} in, ${numOutputs} out.`);
+        process.exit(1);
+    }
+
+    const tablePrefix = '_' + clsName + '_';
+    const sigPrefix = '_' + clsName;
+    const staticFieldMap = new Map();
+    for (const sf of parsed.staticFields) {
+        staticFieldMap.set(sf.name, tablePrefix + sf.name.replace(clsName, ''));
+    }
+
+    const sigResult = reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix);
+
+    const out = [];
+    out.push(`// Mastering effect: ${clsName}`);
+    out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--mastering)`);
+    out.push(`// Source: ${path.basename(inputDsp)}`);
+    out.push('');
+    out.push("import { outputline, midichannels } from '../mixes/globalimports';");
+    out.push("import { SAMPLERATE } from '../environment';");
+    out.push('');
+
+    if (sigResult.waveDataGlobals.length > 0) {
+        out.push(...sigResult.waveDataGlobals);
+        out.push('');
+    }
+    if (sigResult.sigTables.length > 0) {
+        out.push(...sigResult.sigTables);
+    }
+    if (sigResult.sigInit.length > 0) {
+        out.push(...sigResult.sigInit);
+    }
+
+    out.push(`export class ${clsName} {`);
+
+    for (const field of parsed.fields) {
+        if (field.name === 'fSampleRate') continue;
+        if (field.isArray) {
+            const sizeMatch = field.initializer ? field.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/) : null;
+            const size = sizeMatch ? sizeMatch[1] : '0';
+            out.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
+        } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
+            out.push(`    private ${field.name}: i32 = 0;`);
+        } else if (parsed.defaults[field.name] !== undefined) {
+            out.push(`    private ${field.name}: f32 = ${parsed.defaults[field.name]};`);
+        } else if (field.initializer) {
+            out.push(`    private ${field.name}: ${field.type} = ${field.initializer};`);
+        } else {
+            out.push(`    private ${field.name}: ${field.type};`);
+        }
+    }
+    out.push('');
+
+    out.push('    constructor() {');
+    if (parsed.sigClasses.length > 0) {
+        out.push(`        ${sigPrefix}_initSIG0Tables();`);
+    }
+    out.push('        this.instanceConstants();');
+    out.push('        this.instanceClear();');
+    out.push('    }');
+    out.push('');
+
+    out.push('    private instanceConstants(): void {');
+    const constLines = reshapeInstanceConstants(parsed.instanceConstants, clsName, staticFieldMap);
+    for (const line of constLines) out.push('        ' + line);
+    out.push('    }');
+    out.push('');
+
+    out.push('    private instanceClear(): void {');
+    const clearLines = reshapeInstanceClear(parsed.instanceClear, clsName);
+    for (const line of clearLines) out.push('        ' + line);
+    out.push('    }');
+    out.push('');
+
+    out.push('    process(): void {');
+    out.push('        const _inL: f32 = outputline.left;');
+    out.push('        const _inR: f32 = outputline.right;');
+    out.push('');
+
+    const compute = parseComputeBody(parsed.computeBody);
+
+    for (const decl of compute.preLoopDecls) {
+        let line = reshapeASLine(decl, clsName, null, staticFieldMap);
+        line = line.replace(/^let\s+(fSlow|iSlow)/, 'const $1');
+        out.push('        ' + line);
+    }
+    if (compute.preLoopDecls.length > 0) out.push('');
+
+    for (const bodyLine of compute.loopBodyLines) {
+        let line = reshapeASLine(bodyLine, clsName, null, staticFieldMap);
+
+        line = line.replace(/input0\[\w+\]/g, '_inL');
+        line = line.replace(/input1\[\w+\]/g, '_inR');
+
+        const out0Match = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
+        if (out0Match) {
+            out.push(`        outputline.left = ${out0Match[1]};`);
+            continue;
+        }
+        const out1Match = line.match(/^output1\[\w+\]\s*=\s*(.*);$/);
+        if (out1Match) {
+            out.push(`        outputline.right = ${out1Match[1]};`);
+            continue;
+        }
+
+        line = line.replace(/^let\s+(fTemp|iTemp|fRec\d|iRec\d)/, 'const $1');
+        out.push('        ' + line);
+    }
+    out.push('');
+
+    for (const shiftLine of compute.delayShiftLines) {
+        const line = reshapeASLine(shiftLine, clsName, null, staticFieldMap);
+        out.push('        ' + line);
+    }
+
+    out.push('    }');
+    out.push('}');
+    out.push('');
+
+    const instanceVar = clsName.charAt(0).toLowerCase() + clsName.slice(1);
+    out.push(`const ${instanceVar}: ${clsName} = new ${clsName}();`);
+    out.push('');
+    out.push('export function initializeMidiSynth(): void {');
+    out.push('}');
+    out.push('');
+    out.push('export function postprocess(): void {');
+    out.push(`    ${instanceVar}.process();`);
+    out.push('}');
+    out.push('');
+
+    try { fs.unlinkSync(tmpASFile); } catch (e) {}
+
+    return out;
+}
+
+// ---------------------------------------------------------------------------
 // Main: Execute
 // ---------------------------------------------------------------------------
 
 let output;
-if (bundleMode) {
+if (masteringMode) {
+    output = transpileMastering(dspFiles[0], className);
+} else if (bundleMode) {
     const results = dspFiles.map(dsp => {
         const base = path.basename(dsp, '.dsp');
         const name = base.charAt(0).toUpperCase() + base.slice(1).replace(/MIDI$/i, '');
