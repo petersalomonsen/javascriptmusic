@@ -34,7 +34,7 @@ node tools/faust2as/faust2asc.js --mastering \
   examples/master_me/dsp/master_me.dsp
 ```
 
-The transpiler runs `faust -lang asc` (requires the local Faust build at `resources/faust/build/bin/faust` with the AS backend), parses the generated class, and emits a standalone class plus `initializeMidiSynth()` / `postprocess()` exports.
+The transpiler runs `faust -lang asc` via [`@psalomo/faustwasm`](https://www.npmjs.com/package/@psalomo/faustwasm) — a wasm-compiled libfaust with the AssemblyScript backend enabled — so no native Faust install is required. Run `npm install` in `tools/faust2as/` once. The transpiler parses the generated class and emits a standalone class plus `initializeMidiSynth()` / `postprocess()` exports.
 
 ## Parameters
 

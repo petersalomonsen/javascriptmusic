@@ -4,13 +4,18 @@
 // Usage: node faust2asc.js <input.dsp> [--name ClassName] [--out output.ts]
 //        node faust2asc.js --bundle <dsp1> <dsp2> ... [--out output.ts]
 //
-// Runs `faust -lang asc` on the input .dsp file, then reshapes the generated
-// AssemblyScript class into a MidiVoice subclass for the synth engine.
+// Runs `faust -lang asc` (via @psalomo/faustwasm — wasm-compiled libfaust with
+// the AssemblyScript backend enabled) on the input .dsp, then reshapes the
+// generated AssemblyScript class into a MidiVoice subclass for the synth engine.
 
-import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+    instantiateFaustModuleFromFile,
+    LibFaust,
+    FaustCompiler,
+} from '@psalomo/faustwasm/dist/esm/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,20 +82,71 @@ if (masteringMode) {
 }
 
 // ---------------------------------------------------------------------------
-// Detect faust binary with AS backend support
+// libfaust-wasm bootstrap + sync compile-to-AS helper
 // ---------------------------------------------------------------------------
 
-function findFaustBinary() {
-    // Check for local build with AS backend first
-    const localBuild = path.resolve(__dirname, '..', '..', 'resources', 'faust', 'build', 'bin', 'faust');
-    if (fs.existsSync(localBuild)) {
-        return localBuild;
+const faustwasmDir = path.dirname(
+    fileURLToPath(import.meta.resolve('@psalomo/faustwasm/package.json'))
+);
+const libfaustJs = path.join(faustwasmDir, 'libfaust-wasm', 'libfaust-wasm.js');
+
+const faustModule = await instantiateFaustModuleFromFile(libfaustJs);
+const libFaust = new LibFaust(faustModule);
+const faustCompiler = new FaustCompiler(libFaust);
+const faustFS = faustModule.FS;
+
+// Mirror the host directory containing inputDsp into the libfaust virtual FS at
+// /work/, so that `library("lib/foo.dsp")` and `import("siblings.lib")`
+// resolve. Re-mounts on every call (overwrites are cheap).
+const mountedDirs = new Set();
+function mountDspDir(hostDir) {
+    if (mountedDirs.has(hostDir)) return;
+    function walk(dir, virtBase) {
+        try { faustFS.mkdir(virtBase); } catch (_) { /* exists */ }
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const hostPath = path.join(dir, entry.name);
+            const virtPath = `${virtBase}/${entry.name}`;
+            if (entry.isDirectory()) {
+                walk(hostPath, virtPath);
+            } else if (/\.(dsp|lib)$/.test(entry.name)) {
+                faustFS.writeFile(virtPath, fs.readFileSync(hostPath));
+            }
+        }
     }
-    // Fall back to system faust
-    return 'faust';
+    walk(hostDir, '/work');
+    mountedDirs.add(hostDir);
 }
 
-const FAUST_BIN = findFaustBinary();
+// Compile a Faust .dsp file to AssemblyScript source via libfaust-wasm.
+// argsTail is the rest of the faust args (e.g. "-cn MyClass" or "-cn MyClass -pn effect").
+// Returns the AS source as a string. Throws on failure.
+function compileFaustToAS(inputDsp, argsTail) {
+    const dspPath = path.resolve(inputDsp);
+    const dspDir = path.dirname(dspPath);
+    const dspBase = path.basename(dspPath);
+
+    mountDspDir(dspDir);
+
+    const dspSource = fs.readFileSync(dspPath, 'utf-8');
+    const outVirt = `/${dspBase}.out.ts`;
+    const args = `${argsTail} -I /work -o ${outVirt}`;
+
+    const ok = faustCompiler.generateAuxFiles(dspBase, dspSource, args);
+    if (!ok) {
+        const err = faustCompiler.getErrorMessage() || '(no error message)';
+        console.error(`Faust compilation failed for ${inputDsp}:\n${err}`);
+        process.exit(1);
+    }
+
+    let asSource = faustFS.readFile(outVirt, { encoding: 'utf8' });
+    // Strip redundant <i32>() casts in for-loop headers (Faust 2.85.3+):
+    // "for (let x: i32 = <i32>(0); x < <i32>(N); x = (x + <i32>(1)))"
+    asSource = asSource.replace(
+        /for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
+        'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))'
+    );
+    return asSource;
+}
 
 // ---------------------------------------------------------------------------
 // Parse UI metadata from getJSON() embedded in AS output
@@ -563,41 +619,15 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     const dspSource = fs.readFileSync(path.resolve(inputDsp), 'utf-8');
     const hasEffect = /^\s*effect\s*=/m.test(dspSource);
 
-    const tmpASFile = `/tmp/faust2as_${clsName}.ts`;
-    const faustCmd = `"${FAUST_BIN}" -lang asc -cn ${clsName} -I /opt/homebrew/share/faust "${path.resolve(inputDsp)}" -o "${tmpASFile}"`;
-    console.log(`Running: ${faustCmd}`);
-    try {
-        execSync(faustCmd, { stdio: 'inherit' });
-    } catch (e) {
-        console.error('Faust compilation failed');
-        process.exit(1);
-    }
-
-    let asSource = fs.readFileSync(tmpASFile, 'utf-8');
-
-    // Strip redundant <i32>() casts in for-loop headers (Faust 2.85.3+)
-    // Only strip in "for (let x: i32 = <i32>(0); x < <i32>(N); x = (x + <i32>(1)))" patterns
-    asSource = asSource.replace(/for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
-        'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))');
+    console.log(`Compiling ${path.basename(inputDsp)} -> ${clsName} (asc)`);
+    const asSource = compileFaustToAS(inputDsp, `-lang asc -cn ${clsName}`);
 
     let effectASSource = null;
-    let tmpEffectASFile = null;
     const effectClassName = clsName + 'Effect';
 
     if (hasEffect) {
-        tmpEffectASFile = `/tmp/faust2as_${effectClassName}.ts`;
-        const effectFaustCmd = `"${FAUST_BIN}" -lang asc -cn ${effectClassName} -pn effect -I /opt/homebrew/share/faust "${path.resolve(inputDsp)}" -o "${tmpEffectASFile}"`;
-        console.log(`Running: ${effectFaustCmd}`);
-        try {
-            execSync(effectFaustCmd, { stdio: 'inherit' });
-        } catch (e) {
-            console.error('Faust effect compilation failed');
-            process.exit(1);
-        }
-        effectASSource = fs.readFileSync(tmpEffectASFile, 'utf-8');
-        // Strip redundant <i32>() casts in for-loop headers (Faust 2.85.3+)
-        effectASSource = effectASSource.replace(/for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
-            'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))');
+        console.log(`Compiling ${path.basename(inputDsp)} effect -> ${effectClassName} (asc)`);
+        effectASSource = compileFaustToAS(inputDsp, `-lang asc -cn ${effectClassName} -pn effect`);
         console.log(`Detected effect declaration — will generate ${clsName}Channel MidiChannel subclass`);
     }
 
@@ -1061,11 +1091,6 @@ function transpileDsp(inputDsp, clsName, options = {}) {
         }
     }
 
-    // Clean up temp files
-    try { fs.unlinkSync(tmpASFile); } catch (e) {}
-    if (tmpEffectASFile) {
-        try { fs.unlinkSync(tmpEffectASFile); } catch (e) {}
-    }
 
     const hasChannelClass = hasEffect || voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0);
 
@@ -1351,22 +1376,8 @@ function assembleBundle(results) {
 // ---------------------------------------------------------------------------
 
 function transpileMastering(inputDsp, clsName) {
-    const dspPath = path.resolve(inputDsp);
-    const dspDir = path.dirname(dspPath);
-
-    const tmpASFile = `/tmp/faust2as_${clsName}.ts`;
-    const faustCmd = `"${FAUST_BIN}" -lang asc -cn ${clsName} -I "${dspDir}" -I /opt/homebrew/share/faust "${dspPath}" -o "${tmpASFile}"`;
-    console.log(`Running: ${faustCmd}`);
-    try {
-        execSync(faustCmd, { stdio: 'inherit' });
-    } catch (e) {
-        console.error('Faust compilation failed');
-        process.exit(1);
-    }
-
-    let asSource = fs.readFileSync(tmpASFile, 'utf-8');
-    asSource = asSource.replace(/for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
-        'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))');
+    console.log(`Compiling ${path.basename(inputDsp)} -> ${clsName} (asc, mastering)`);
+    const asSource = compileFaustToAS(inputDsp, `-lang asc -cn ${clsName}`);
 
     const parsed = parseASSource(asSource, clsName);
     const { numInputs, numOutputs } = extractUIFromJSON(asSource);
@@ -1501,8 +1512,6 @@ function transpileMastering(inputDsp, clsName) {
     out.push(`    ${instanceVar}.process();`);
     out.push('}');
     out.push('');
-
-    try { fs.unlinkSync(tmpASFile); } catch (e) {}
 
     return out;
 }
