@@ -226,6 +226,37 @@ onmessage = async (msg) => {
     callMainInDir(['merge', 'FETCH_HEAD']);
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ id: msg.data.id, dircontents: readdir(), lastHttpStatus: lastHttpRequest.status });
+  } else if (msg.data.command === 'listfiles') {
+    // List files matching an optional prefix (e.g. "faust/"). Returns an
+    // array of paths (strings) relative to the repo root. Walks the working
+    // tree directly via FS so both committed and just-staged files appear.
+    try {
+      ensureChdir(currentRepoDir);
+      const prefix = msg.data.prefix || '';
+      const result = [];
+      function walk(virtBase, relBase) {
+        let entries;
+        try { entries = FS.readdir(virtBase); } catch (e) { return; }
+        for (const entry of entries) {
+          if (entry === '.' || entry === '..' || entry === '.git') continue;
+          const childVirt = virtBase === '.' ? entry : virtBase + '/' + entry;
+          const childRel = relBase ? relBase + '/' + entry : entry;
+          let stat;
+          try { stat = FS.stat(childVirt); } catch (e) { continue; }
+          if (FS.isDir(stat.mode)) {
+            walk(childVirt, childRel);
+          } else {
+            if (!prefix || childRel.indexOf(prefix) === 0) {
+              result.push(childRel);
+            }
+          }
+        }
+      }
+      walk('.', '');
+      postMessage({ id: msg.data.id, files: result });
+    } catch (e) {
+      postMessage({ id: msg.data.id, error: e && e.message ? e.message : String(e) });
+    }
   } else if (msg.data.command === 'readfile') {
     try {
       ensureChdir(currentRepoDir);
