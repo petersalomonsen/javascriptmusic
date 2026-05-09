@@ -17,8 +17,6 @@ import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
 import { isSointuSong, getSointuWasm, getSointuYaml } from './sointu/playsointu.js';
-import { compileFaustDSP } from './faust/faustcompiler.js';
-
 export let songsourceeditor;
 export let synthsourceeditor;
 export let shadersourceeditor;
@@ -134,8 +132,6 @@ export async function initEditor(componentRoot) {
                 if (!gitrepoconfig.synthfilename) {
                     if (synthsource.startsWith('<?xml')) {
                         gitrepoconfig.synthfilename = 'synth.xml';
-                    } else if (synthsource.includes('import("stdfaust')) {
-                        gitrepoconfig.synthfilename = 'synth.dsp';
                     } else {
                         gitrepoconfig.synthfilename = 'synth.ts';
                     }
@@ -199,12 +195,7 @@ export async function initEditor(componentRoot) {
                     await exportWAMAudio(eventlist, synthsource);
                 }
 
-                if (synthsource.includes('import("stdfaust')) {
-                    toggleSpinner(true);
-                    const faustGenerator = await compileFaustDSP(synthsource);
-                    toggleSpinner(false);
-                    return { eventlist: eventlist, faustGenerator: faustGenerator };
-                } else if (!synthSourceIsXML) {
+                if (!synthSourceIsXML) {
                     toggleSpinner(true);
                     const systemSampleRate = new AudioContext().sampleRate;
                     const synthwasm = await compileWebAssemblySynth(synthsource,
@@ -400,7 +391,7 @@ export async function initEditor(componentRoot) {
 
                 if (songmode == SONG_MODE_SOINTU) {
                     synthwasm = await getSointuWasm(song);
-                } else if (!synthsource.includes('import("stdfaust')) {
+                } else {
                     synthwasm = await compileWebAssemblySynth(synthsource,
                         exportProject && songmode === SONG_MODE_WASM ? song : undefined,
                         songmode === SONG_MODE_PROTRACKER ? 55856 :
@@ -493,9 +484,7 @@ export async function initEditor(componentRoot) {
             }
 
             if (song.eventlist) {
-                if (song.faustGenerator) {
-                    await window.replaceFaustNode(song.faustGenerator, song.eventlist);
-                } else if (song.synthsource) {
+                if (song.synthsource) {
                     await wamPostSong(song.eventlist, song.synthsource);
                 } else {
                     updateSong(song.eventlist, componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false);
