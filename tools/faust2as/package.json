@@ -1,0 +1,10 @@
+{
+  "name": "faust2as-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Faust DSP → AssemblyScript MidiVoice transpilers used by examples/",
+  "type": "module",
+  "dependencies": {
+    "@psalomo/faustwasm": "0.16.1-asc.0"
+  }
+}

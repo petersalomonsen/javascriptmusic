@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 // Generates faust-test-sources.js by transpiling example Faust DSP files.
-// Run this before the browser tests: node tools/faust2as/generate-test-sources.js
+//
+// Run this when you want to refresh the embedded test sources after the
+// transpiler changes or upstream Faust examples change:
+//   node tools/faust2as/generate-test-sources.js
+//
+// Pulls the .dsp inputs straight from grame-cncm/faust on github so the
+// script works without a local Faust source tree. Pinned to FAUST_REF
+// (matches resources/faustwasm/.github/workflows/publish.yml).
 
 import { execSync } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,37 +19,66 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '../..');
 
+// Match the Faust commit our libfaust-wasm was built from.
+const FAUST_REF = '938f87ca38f9b86a99058ec1d752396d2d788ae6'; // 2.85.3
+const RAW = `https://raw.githubusercontent.com/grame-cncm/faust/${FAUST_REF}`;
+
+// Each entry transpiles one DSP. `extras` lists sibling files in the same
+// upstream directory that the entry .dsp imports/loads — they're downloaded
+// alongside so faust can resolve `library("...")` / `import("...")` against
+// the local cache directory.
 const dspFiles = [
     {
         name: 'clarinet',
-        dspPath: path.join(rootDir, 'resources/faust/examples/physicalModeling/clarinetMIDI.dsp'),
+        url: `${RAW}/examples/physicalModeling/clarinetMIDI.dsp`,
+        extras: [],
     },
     {
         name: 'dx7',
-        dspPath: path.join(rootDir, 'resources/faust/examples/generator/dx7.dsp'),
+        url: `${RAW}/examples/generator/dx7.dsp`,
+        extras: [],
     },
     {
         name: 'piano1',
-        dspPath: path.join(rootDir, 'resources/faust/examples/physicalModeling/faust-stk/piano1.dsp'),
+        url: `${RAW}/examples/physicalModeling/faust-stk/piano1.dsp`,
+        // imports instruments.lib (stdlib, bundled in libfaust-wasm) — no local siblings
+        extras: [],
     },
 ];
 
+async function fetchToFile(url, dest) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
+    fs.writeFileSync(dest, await res.text());
+}
+
+const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'faust-test-srcs-'));
 const sources = {};
 
-for (const { name, dspPath } of dspFiles) {
-    const tmpOut = path.join(__dirname, `_tmp_${name}.ts`);
-    console.log(`Transpiling ${name}...`);
-    try {
-        execSync(`node ${path.join(__dirname, 'faust2asc.js')} "${dspPath}" --for-editor --out "${tmpOut}"`, {
-            cwd: path.resolve(__dirname, '..'),
+try {
+    for (const { name, url, extras } of dspFiles) {
+        const entryDir = path.join(cacheDir, name);
+        fs.mkdirSync(entryDir, { recursive: true });
+
+        const entryPath = path.join(entryDir, path.basename(new URL(url).pathname));
+        console.log(`Fetching ${name} from ${url}`);
+        await fetchToFile(url, entryPath);
+        for (const extraUrl of extras) {
+            const extraPath = path.join(entryDir, path.basename(new URL(extraUrl).pathname));
+            console.log(`  + ${path.basename(extraPath)}`);
+            await fetchToFile(extraUrl, extraPath);
+        }
+
+        const tmpOut = path.join(entryDir, `${name}.ts`);
+        console.log(`Transpiling ${name}...`);
+        execSync(`node ${path.join(__dirname, 'faust2asc.js')} "${entryPath}" --for-editor --out "${tmpOut}"`, {
+            cwd: __dirname,
             stdio: 'inherit',
         });
         sources[name] = fs.readFileSync(tmpOut, 'utf-8');
-        fs.unlinkSync(tmpOut);
-    } catch (err) {
-        console.error(`Failed to transpile ${name}: ${err.message}`);
-        process.exit(1);
     }
+} finally {
+    fs.rmSync(cacheDir, { recursive: true, force: true });
 }
 
 // Write as an ES module with exported source strings

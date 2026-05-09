@@ -31,23 +31,26 @@ node tools/faust2as/faust2as.js --bundle <dsp1.dsp> [dsp2.dsp ...] [--out output
 ### Examples
 
 ```bash
-# Single instrument (from repo root)
-node tools/faust2as/faust2as.js resources/faust/examples/generator/dx7.dsp
+# Single instrument (replace with the path to your own .dsp)
+node tools/faust2as/faust2as.js path/to/instrument.dsp
 
 # Single instrument with custom output
-node tools/faust2as/faust2as.js resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
+node tools/faust2as/faust2as.js path/to/clarinetMIDI.dsp \
   --out wasmaudioworklet/synth1/assembly/midi/instruments/clarinet.ts
 
-# Bundle: DX7 + Clarinet on MIDI channels 0 and 1
+# Bundle: two instruments on MIDI channels 0 and 1
 node tools/faust2as/faust2as.js --bundle \
-  resources/faust/examples/generator/dx7.dsp \
-  resources/faust/examples/physicalModeling/clarinetMIDI.dsp \
+  path/to/dx7.dsp \
+  path/to/clarinetMIDI.dsp \
   --out /tmp/faust_bundle.ts
 ```
 
+For ready-made inputs see the `examples/` folder (e.g. `examples/dx7/dsp/`) or pull individual files from upstream [grame-cncm/faust/examples](https://github.com/grame-cncm/faust/tree/master-dev/examples).
+
 ## Prerequisites
 
-- **Faust compiler** installed and on `PATH` (`faust --version` to verify)
+- This script (`faust2as.js`, the **C backend**) still calls the system `faust` binary — `brew install faust` (or install from upstream).
+  - For the **ASC backend** sibling (`faust2asc.js`), nothing extra is needed: it pulls the wasm-compiled compiler from npm via `@psalomo/faustwasm`. Run `npm install` once in `tools/faust2as/`.
 - The `.dsp` file must be a MIDI instrument with `freq`, `gain`, and `gate` parameters
 
 ## What It Does

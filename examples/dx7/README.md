@@ -42,7 +42,7 @@ node tools/faust2as/faust2as.js --bundle \
   --out examples/dx7/dx7-synth.ts
 ```
 
-**ASC backend** (`faust2asc.js` — uses `faust -lang asc`):
+**ASC backend** (`faust2asc.js` — uses `faust -lang asc` via [`@psalomo/faustwasm`](https://www.npmjs.com/package/@psalomo/faustwasm); `npm install` once in `tools/faust2as/`):
 
 ```sh
 node tools/faust2as/faust2asc.js --bundle \
