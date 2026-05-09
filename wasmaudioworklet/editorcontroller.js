@@ -7,7 +7,8 @@ import './webaudiomodules/preseteditor.js';
 import { setInstrumentNames, appendToSubtoolbar1 } from './app.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 
-import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener, getConfig } from './wasmgit/wasmgitclient.js';
+import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
+import { transpileDspSource } from './faust/browser-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
@@ -20,7 +21,10 @@ import { isSointuSong, getSointuWasm, getSointuYaml } from './sointu/playsointu.
 export let songsourceeditor;
 export let synthsourceeditor;
 export let shadersourceeditor;
+export let faustsourceeditor;
 let gitrepoconfig = null;
+let currentFaustFilename = null;
+let lastSavedFaustSource = null;
 
 const SONG_MODE_WASM = 'WASM';
 const SONG_MODE_SOINTU = 'sointu';
@@ -75,6 +79,14 @@ export async function initEditor(componentRoot) {
         gutters: ["CodeMirror-lint-markers"]
     });
 
+    faustsourceeditor = CodeMirror(componentRoot.getElementById("faustcodemirror"), {
+        value: "",
+        // No native Faust mode in our CodeMirror 5 build — plain text is fine.
+        mode: "text/plain",
+        theme: "monokai",
+        lineNumbers: true,
+    });
+
     window.toggleEditors = (editorid, checked) => {
         componentRoot.getElementById(editorid).style.display = checked ? 'block' : 'none';
         const editors = componentRoot.querySelectorAll('.editor');
@@ -91,9 +103,153 @@ export async function initEditor(componentRoot) {
     };
 
     toggleEditors('presetsui', false);
+    // Faust editor stays hidden until the toggle or a populated dropdown shows it.
+    toggleEditors('fausteditor', false);
 
     let synthsource;
     let shadersource;
+
+    // ----- Faust editor wiring -----------------------------------------
+
+    const errorMessagesElement = componentRoot.querySelector('#errormessages');
+    const errorMessagesContentElement = errorMessagesElement.querySelector('span');
+    const displayFaustError = (err) => {
+        errorMessagesContentElement.innerText = err;
+        errorMessagesElement.style.display = 'block';
+    };
+
+    const faustFileSelect = componentRoot.getElementById('faustfileselect');
+    const faustNewFilenameInput = componentRoot.getElementById('faustnewfilename');
+    const faustNewFileButton = componentRoot.getElementById('faustnewfilebutton');
+    const faustSaveStatus = componentRoot.getElementById('faustsavestatus');
+
+    const FAUST_DIR = 'faust/';
+    const FAUST_STUB = `import("stdfaust.lib");
+freq = hslider("freq", 440, 20, 20000, 0.01);
+gate = button("gate");
+gain = hslider("gain", 0.5, 0, 1, 0.01);
+process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
+`;
+
+    async function refreshFaustFileList() {
+        if (!gitrepoconfig) return;
+        try {
+            const all = await listfiles(FAUST_DIR);
+            const dspFiles = all.filter(f => f.endsWith('.dsp'));
+            faustFileSelect.innerHTML = '';
+            if (dspFiles.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '(no .dsp files yet)';
+                faustFileSelect.appendChild(opt);
+            } else {
+                for (const f of dspFiles) {
+                    const opt = document.createElement('option');
+                    opt.value = f;
+                    opt.textContent = f.substring(FAUST_DIR.length);
+                    if (f === currentFaustFilename) opt.selected = true;
+                    faustFileSelect.appendChild(opt);
+                }
+                if (!currentFaustFilename || !dspFiles.includes(currentFaustFilename)) {
+                    currentFaustFilename = dspFiles[0];
+                    faustFileSelect.value = currentFaustFilename;
+                    await loadFaustFile(currentFaustFilename);
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to list faust files', e);
+        }
+    }
+
+    async function loadFaustFile(path) {
+        try {
+            const contents = await readfile(path);
+            faustsourceeditor.doc.setValue(contents || '');
+            currentFaustFilename = path;
+            lastSavedFaustSource = contents || '';
+            faustSaveStatus.textContent = '';
+        } catch (e) {
+            console.warn('Failed to read faust file', path, e);
+        }
+    }
+
+    faustFileSelect.addEventListener('change', async () => {
+        if (faustFileSelect.value) {
+            await loadFaustFile(faustFileSelect.value);
+        }
+    });
+
+    faustNewFileButton.addEventListener('click', async () => {
+        const raw = (faustNewFilenameInput.value || '').trim();
+        if (!raw) return;
+        const basename = raw.endsWith('.dsp') ? raw : raw + '.dsp';
+        if (!/^[A-Za-z0-9_\-]+\.dsp$/.test(basename)) {
+            displayFaustError('Faust filename must be alphanumeric (no slashes), e.g. mysynth.dsp');
+            return;
+        }
+        const fullPath = FAUST_DIR + basename;
+        try {
+            await writefileandstage(fullPath, FAUST_STUB);
+            faustNewFilenameInput.value = '';
+            currentFaustFilename = fullPath;
+            await refreshFaustFileList();
+            faustFileSelect.value = fullPath;
+            await loadFaustFile(fullPath);
+            // Show editor if hidden so the user sees the new file.
+            const cb = componentRoot.querySelector('#fausteditortogglecheckbox');
+            if (cb && !cb.checked) {
+                cb.checked = true;
+                toggleEditors('fausteditor', true);
+            }
+        } catch (e) {
+            displayFaustError('Failed to create file: ' + (e && e.message ? e.message : e));
+        }
+    });
+
+    // Save callback used by both the save button and CodeMirror's Cmd-S.
+    async function saveFaustIfChanged() {
+        if (!gitrepoconfig || !currentFaustFilename) return false;
+        const source = faustsourceeditor.doc.getValue();
+        if (source === lastSavedFaustSource) return false;
+        const basename = currentFaustFilename.substring(FAUST_DIR.length);
+        try {
+            faustSaveStatus.textContent = 'Transpiling...';
+            const ts = await transpileDspSource(source, basename);
+            const tsPath = currentFaustFilename.replace(/\.dsp$/, '.ts');
+            await writefileandstage(currentFaustFilename, source);
+            await writefileandstage(tsPath, ts);
+            lastSavedFaustSource = source;
+            faustSaveStatus.textContent = 'Saved ' + basename + ' + ' + tsPath.substring(FAUST_DIR.length);
+            return true;
+        } catch (e) {
+            faustSaveStatus.textContent = '';
+            displayFaustError('Faust transpile failed: ' + (e && e.message ? e.message : e));
+            throw e;
+        }
+    }
+    // Expose so compileAndPostSong (defined below) can call it.
+    window.__saveFaustIfChanged = saveFaustIfChanged;
+
+    // Read every faust/*.ts file from the wasm-git repo and return a basename
+    // -> contents map. The AS compiler worker will inject these as
+    // faust/<name>.ts in its sources map so the user's mix can do
+    // `import { Foo } from '../faust/foo';` from mixes/midi.mix.ts.
+    async function loadFaustSourcesFromRepo() {
+        if (!gitrepoconfig) return {};
+        try {
+            const all = await listfiles(FAUST_DIR);
+            const tsFiles = all.filter(f => f.endsWith('.ts'));
+            const out = {};
+            await Promise.all(tsFiles.map(async (path) => {
+                const basename = path.substring(FAUST_DIR.length);
+                out[basename] = await readfile(path);
+            }));
+            return out;
+        } catch (e) {
+            console.warn('Failed to load faust/*.ts sources from repo', e);
+            return {};
+        }
+    }
 
     componentRoot.getElementById('savesongbutton').onclick = () => compileAndPostSong();
 
@@ -198,10 +354,12 @@ export async function initEditor(componentRoot) {
                 if (!synthSourceIsXML) {
                     toggleSpinner(true);
                     const systemSampleRate = new AudioContext().sampleRate;
+                    const faustSources = await loadFaustSourcesFromRepo();
                     const synthwasm = await compileWebAssemblySynth(synthsource,
                         undefined,
                         systemSampleRate,
-                        false
+                        false,
+                        faustSources
                     );
                     if (synthwasm) {
                         window.WASM_SYNTH_BYTES = synthwasm;
@@ -241,7 +399,8 @@ export async function initEditor(componentRoot) {
                                 synthsource + '\n',
                                 undefined,
                                 exportSampleRate,
-                                false
+                                false,
+                                faustSources
                             );
                             await exportToWav(eventlist, wasmBytes, exportSampleRate);
                         } else if (exportProject === EXPORT_MODE_MIDISYNTH_WASM_LIB) {
@@ -249,7 +408,7 @@ export async function initEditor(componentRoot) {
                                 { eventlist: convertEventListToByteArraySequence(eventlist) },
                                 44100,
                                 exportProject,
-                                true
+                                faustSources
                             );
                             triggerDownload(URL.createObjectURL(new Blob([wasmbytes], { type: "octet/stream" })), 'song.wasm');
                         } else if (
@@ -260,7 +419,7 @@ export async function initEditor(componentRoot) {
                                 multipartsequence,
                                 44100,
                                 EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB,
-                                exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB
+                                faustSources
                             );
                             if (exportProject === EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG) {
                                 const pngdataurl = encodeBufferAsPNG(wasmbytes);
@@ -392,11 +551,13 @@ export async function initEditor(componentRoot) {
                 if (songmode == SONG_MODE_SOINTU) {
                     synthwasm = await getSointuWasm(song);
                 } else {
+                    const faustSources = await loadFaustSourcesFromRepo();
                     synthwasm = await compileWebAssemblySynth(synthsource,
                         exportProject && songmode === SONG_MODE_WASM ? song : undefined,
                         songmode === SONG_MODE_PROTRACKER ? 55856 :
                             new AudioContext().sampleRate,
-                        exportProject
+                        exportProject,
+                        faustSources
                     );
                 }
 
@@ -477,6 +638,16 @@ export async function initEditor(componentRoot) {
 
     async function compileAndPostSong() {
         try {
+            // If the Faust editor has unsaved changes, transpile + write
+            // the .dsp and the generated .ts to the wasm-git repo first.
+            // Errors here are surfaced via #errormessages and abort the save.
+            try {
+                await saveFaustIfChanged();
+            } catch (e) {
+                console.error(e);
+                return;
+            }
+
             const song = await compileSong();
 
             if (song.synthwasm) {
@@ -565,6 +736,10 @@ export async function initEditor(componentRoot) {
         storedsongcode = await readfile(gitrepoconfig.songfilename);
         storedsynthcode = await readfile(gitrepoconfig.synthfilename);
         storedshadercode = await readfile(gitrepoconfig.fragmentshader);
+
+        // Populate the Faust editor's file dropdown from the wasm-git repo
+        // (silent if there's no faust/ folder yet).
+        refreshFaustFileList().catch(e => console.warn('faust list failed', e));
     } else if (pngurlparam) {
         const pngurl = pngurlparam.split('=')[1];
         const obj = JSON.parse(new TextDecoder().decode(await decodeBufferFromPNG(pngurl)));

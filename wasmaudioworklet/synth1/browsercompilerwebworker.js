@@ -129,9 +129,22 @@ onmessage = async function (msg) {
     console.log(JSON.stringify(msg));
     const synthsource = msg.data.synthsource;
     const samplerate = msg.data.samplerate;
+    const faustSources = msg.data.faustSources || {};
     console.log('wait for assemblyscript sources to be loaded');
     await ready;
     console.log('assemblyscript sources loaded');
+
+    // Inject any transpiled faust/*.ts files from the wasm-git repo so the
+    // mix can do `import { Foo } from '../faust/foo';` from mixes/midi.mix.ts.
+    // Wipe any previously-injected faust/ entries first so a deletion in the
+    // repo doesn't keep a stale module compiled in.
+    for (const k of Object.keys(assemblyscriptsynthsources)) {
+        if (k.startsWith('faust/')) delete assemblyscriptsynthsources[k];
+    }
+    for (const [basename, contents] of Object.entries(faustSources)) {
+        const stem = basename.replace(/\.ts$/, '').replace(/\.dsp$/, '');
+        assemblyscriptsynthsources['faust/' + stem + '.ts'] = contents;
+    }
 
     if (synthsource.indexOf('midichannels') > -1) {
         // assume midi synth
