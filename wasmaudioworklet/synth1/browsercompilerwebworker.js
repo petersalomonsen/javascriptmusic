@@ -5,6 +5,7 @@ let index_source = 'index.ts';
 const wasi_main_src = 'wasi_main.ts';
 
 let assemblyscriptsynthsources;
+let lastFaustFingerprint = '';
 
 const EXPORT_MODE_WASM_LIB = 'libmodule';
 const EXPORT_MODE_MIDISYNTH_WASM_LIB = 'midilibmodule';
@@ -129,9 +130,31 @@ onmessage = async function (msg) {
     console.log(JSON.stringify(msg));
     const synthsource = msg.data.synthsource;
     const samplerate = msg.data.samplerate;
+    const faustSources = msg.data.faustSources || {};
     console.log('wait for assemblyscript sources to be loaded');
     await ready;
     console.log('assemblyscript sources loaded');
+
+    // Inject any transpiled faust/**/*.ts files from the wasm-git repo so
+    // the mix can do `import { Foo } from '../faust/<subpath>/<name>';`
+    // from mixes/midi.mix.ts. Keys preserve sub-folders.
+    // Wipe any previously-injected faust/ entries first so a deletion in the
+    // repo doesn't keep a stale module compiled in.
+    for (const k of Object.keys(assemblyscriptsynthsources)) {
+        if (k.startsWith('faust/')) delete assemblyscriptsynthsources[k];
+    }
+    for (const [relPath, contents] of Object.entries(faustSources)) {
+        // relPath is e.g. "elecguitar.ts" or "master_me/dsp/master_me.ts".
+        // Normalize: strip a trailing .dsp or .ts and re-add .ts.
+        const stem = relPath.replace(/\.ts$/, '').replace(/\.dsp$/, '');
+        assemblyscriptsynthsources['faust/' + stem + '.ts'] = contents;
+    }
+    // Fingerprint the injected faust/* sources so we can tell when they
+    // change between requests — the synth-source string is otherwise stable
+    // and would hit the "no changes" early-return below.
+    const faustFingerprint = Object.entries(faustSources)
+        .map(([k, v]) => `${k}:${(v || '').length}:${(v || '').slice(0, 40)}`)
+        .sort().join('|');
 
     if (synthsource.indexOf('midichannels') > -1) {
         // assume midi synth
@@ -172,10 +195,12 @@ onmessage = async function (msg) {
                 error: stderr.toString(),
                 binary: binary
             }, binary ? [binary.buffer] : []);
-        } else if (assemblyscriptsynthsources[mix_source] !== synthsource) {
+        } else if (assemblyscriptsynthsources[mix_source] !== synthsource
+                   || faustFingerprint !== lastFaustFingerprint) {
             assemblyscriptsynthsources['environment.ts'] = `export const SAMPLERATE: f32 = ${samplerate};`
 
             assemblyscriptsynthsources[mix_source] = synthsource;
+            lastFaustFingerprint = faustFingerprint;
             const { stderr, text, binary } = await compileAssemblyScript(assemblyscriptsynthsources,
                 { "runtime": "stub", "optimizeLevel": 0, "shrinkLevel": 0 },
                 index_source);

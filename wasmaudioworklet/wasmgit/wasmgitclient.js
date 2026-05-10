@@ -272,6 +272,14 @@ export async function listSongs() {
     return await getConfig().then(c => c.allsongs);
 }
 
+export async function listfiles(prefix = '') {
+    const result = await callAndWaitForWorker({
+        command: 'listfiles',
+        prefix,
+    });
+    return result.files || [];
+}
+
 export async function changeCurrentSong(songNdx) {
     const config = JSON.parse(await readfile(CONFIG_FILE));
     Object.assign(config, config.allsongs[songNdx]);

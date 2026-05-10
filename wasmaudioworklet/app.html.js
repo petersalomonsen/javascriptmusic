@@ -59,6 +59,10 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
       <input type="checkbox" id="shadereditortogglecheckbox" onclick="toggleEditors('shadereditor', this.checked)" />
       <span>shader</span>
     </label>
+    <label title="faust dsp editor">
+      <input type="checkbox" id="fausteditortogglecheckbox" onclick="toggleEditors('fausteditor', this.checked)" />
+      <span>faust</span>
+    </label>
     <span style="flex-grow: 1"></span>
   </div>
   <div class="editors">
@@ -66,6 +70,17 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
     <div id="assemblyscripteditor" class="editor"></div>
     <div id="presetsui" class="editor" style="display: none"><span>Not available</span></div>
     <div id="shadereditor" class="editor"></div>
+    <div id="fausteditor" class="editor" style="display: none">
+      <div class="fausteditortoolbar" style="display: flex; gap: 4px; padding: 4px; align-items: center; background: #2d2d2d; color: #ddd;">
+        <label style="font-size: 12px;">file:
+          <select id="faustfileselect"></select>
+        </label>
+        <button id="faustnewfilebutton" style="font-size: 12px;">New file…</button>
+        <span style="flex-grow: 1"></span>
+        <span id="faustsavestatus" style="font-size: 12px; color: #aaa;"></span>
+      </div>
+      <div id="faustcodemirror" style="flex-grow: 1; height: calc(100% - 32px);"></div>
+    </div>
   </div>
 
   <div id="errormessages">

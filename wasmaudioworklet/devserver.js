@@ -75,10 +75,14 @@ async function handleStatic(req, res) {
     const ext = extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-    res.writeHead(200, {
-      'Content-Type': contentType,
-      ...CROSS_ORIGIN_HEADERS,
-    });
+    // Mirror the production _headers exemption: /login* must not set COOP,
+    // otherwise the wallet popup's window.opener gets neutered on cross-origin
+    // navigation and Meteor's web wallet throws "User closed the window".
+    const headers = urlPath.startsWith('/login')
+      ? { 'Content-Type': contentType }
+      : { 'Content-Type': contentType, ...CROSS_ORIGIN_HEADERS };
+
+    res.writeHead(200, headers);
     res.end(data);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain' });

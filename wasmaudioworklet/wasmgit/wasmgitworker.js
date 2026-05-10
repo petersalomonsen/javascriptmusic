@@ -108,6 +108,13 @@ onmessage = async (msg) => {
     postMessage({ accessTokenConfigured: true });
   } else if (msg.data.command === 'writefileandstage') {
     ensureChdir(currentRepoDir);
+    // Create parent dirs if any (e.g. faust/foo.dsp needs faust/ first).
+    const segments = msg.data.filename.split('/');
+    let dirAcc = '';
+    for (let i = 0; i < segments.length - 1; i++) {
+      dirAcc += (i === 0 ? '' : '/') + segments[i];
+      try { FS.mkdir(dirAcc); } catch (_) { /* exists */ }
+    }
     // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
     const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
     const data = new TextEncoder().encode(msg.data.contents);
@@ -226,6 +233,41 @@ onmessage = async (msg) => {
     callMainInDir(['merge', 'FETCH_HEAD']);
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ id: msg.data.id, dircontents: readdir(), lastHttpStatus: lastHttpRequest.status });
+  } else if (msg.data.command === 'listfiles') {
+    // List files matching an optional prefix (e.g. "faust/"). Returns an
+    // array of paths (strings) relative to the repo root. Walks the working
+    // tree directly via FS so both committed and just-staged files appear.
+    try {
+      ensureChdir(currentRepoDir);
+      const prefix = msg.data.prefix || '';
+      // Standard Unix mode bitmask — Emscripten's FS exposes `mode` from
+      // FS.stat() but FS.isDir() isn't always available on the helper.
+      const S_IFMT = 0o170000;
+      const S_IFDIR = 0o040000;
+      const result = [];
+      function walk(virtBase, relBase) {
+        let entries;
+        try { entries = FS.readdir(virtBase); } catch (e) { return; }
+        for (const entry of entries) {
+          if (entry === '.' || entry === '..' || entry === '.git') continue;
+          const childVirt = virtBase === '.' ? entry : virtBase + '/' + entry;
+          const childRel = relBase ? relBase + '/' + entry : entry;
+          let stat;
+          try { stat = FS.stat(childVirt); } catch (e) { continue; }
+          if ((stat.mode & S_IFMT) === S_IFDIR) {
+            walk(childVirt, childRel);
+          } else {
+            if (!prefix || childRel.indexOf(prefix) === 0) {
+              result.push(childRel);
+            }
+          }
+        }
+      }
+      walk('.', '');
+      postMessage({ id: msg.data.id, files: result });
+    } catch (e) {
+      postMessage({ id: msg.data.id, error: e && e.message ? e.message : String(e) });
+    }
   } else if (msg.data.command === 'readfile') {
     try {
       ensureChdir(currentRepoDir);
