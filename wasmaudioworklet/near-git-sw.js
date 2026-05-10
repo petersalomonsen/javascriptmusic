@@ -349,21 +349,35 @@ async function handleReceivePack(ctx, body) {
         }));
 
         if (parseResult.deltas && parseResult.deltas.length > 0) {
+            // Multi-pass + chain-aware (same reasoning as the upload-pack and
+            // receive-pack/existing-packs paths).
             const localMap = {};
             for (const obj of newObjects) {
                 const data = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
-                localMap[git_sha1(obj.obj_type, data)] = obj;
+                localMap[git_sha1(obj.obj_type, data)] = { obj_type: obj.obj_type, data };
             }
-            for (const delta of parseResult.deltas) {
-                const base = localMap[delta.base_sha];
-                if (base) {
-                    const baseData = Uint8Array.from(atob(base.data), c => c.charCodeAt(0));
-                    const deltaData = Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0));
-                    const resolved = apply_delta(baseData, deltaData);
-                    const obj = { obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) };
-                    const sha = git_sha1(base.obj_type, resolved);
-                    localMap[sha] = obj;
-                    newObjects.push(obj);
+            const pending = parseResult.deltas.map(d => ({
+                base_sha: d.base_sha,
+                deltaData: Uint8Array.from(atob(d.delta_data), c => c.charCodeAt(0)),
+                chain: (d.chain || []).map(c =>
+                    Uint8Array.from(atob(c), ch => ch.charCodeAt(0))),
+            }));
+            let progress = true;
+            while (progress && pending.length > 0) {
+                progress = false;
+                for (let i = pending.length - 1; i >= 0; i--) {
+                    const delta = pending[i];
+                    const base = localMap[delta.base_sha];
+                    if (!base) continue;
+                    let current = apply_delta(base.data, delta.deltaData);
+                    for (const d of delta.chain) current = apply_delta(current, d);
+                    const sha = git_sha1(base.obj_type, current);
+                    if (!localMap[sha]) {
+                        localMap[sha] = { obj_type: base.obj_type, data: current };
+                        newObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(current) });
+                    }
+                    pending.splice(i, 1);
+                    progress = true;
                 }
             }
         }
@@ -394,6 +408,10 @@ async function handleReceivePack(ctx, body) {
                         pendingDeltas.push({
                             base_sha: delta.base_sha,
                             deltaData: Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0)),
+                            // chain: OFS_DELTAs stacked on top of an external
+                            // REF_DELTA, applied in order after delta_data.
+                            chain: (delta.chain || []).map(c =>
+                                Uint8Array.from(atob(c), ch => ch.charCodeAt(0))),
                         });
                     }
                 }
@@ -405,11 +423,12 @@ async function handleReceivePack(ctx, body) {
                     const delta = pendingDeltas[i];
                     const base = baseMap[delta.base_sha];
                     if (!base) continue;
-                    const resolved = apply_delta(base.data, delta.deltaData);
-                    const sha = git_sha1(base.obj_type, resolved);
+                    let current = apply_delta(base.data, delta.deltaData);
+                    for (const d of delta.chain) current = apply_delta(current, d);
+                    const sha = git_sha1(base.obj_type, current);
                     if (!baseMap[sha]) {
-                        baseMap[sha] = { obj_type: base.obj_type, data: resolved };
-                        baseObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) });
+                        baseMap[sha] = { obj_type: base.obj_type, data: current };
+                        baseObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(current) });
                     }
                     pendingDeltas.splice(i, 1);
                     progress = true;
@@ -492,6 +511,12 @@ async function handleUploadPack(ctx, body) {
     // deltas whose base lives in a later pack, or delta-of-delta chains where
     // an intermediate base only exists after another delta is resolved —
     // libgit2 then complains "cannot resolve ref_delta as ofs_delta base".
+    //
+    // delta.chain (from the rust parser) carries OFS_DELTAs stacked on top of
+    // a foreign REF_DELTA: empty for the simple REF_DELTA case, non-empty
+    // when the same pack had OFS_DELTAs piled on top of an external base.
+    // Apply order: delta_data first (REF_DELTA against base SHA), then each
+    // entry in chain on the running result.
     const allObjects = [];
     const localMap = {};
     const pendingDeltas = [];
@@ -512,6 +537,8 @@ async function handleUploadPack(ctx, body) {
                 pendingDeltas.push({
                     base_sha: delta.base_sha,
                     deltaData: Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0)),
+                    chain: (delta.chain || []).map(c =>
+                        Uint8Array.from(atob(c), ch => ch.charCodeAt(0))),
                 });
             }
         }
@@ -526,11 +553,12 @@ async function handleUploadPack(ctx, body) {
             const delta = pendingDeltas[i];
             const base = localMap[delta.base_sha];
             if (!base) continue;
-            const resolved = apply_delta(base.data, delta.deltaData);
-            const sha = git_sha1(base.obj_type, resolved);
+            let current = apply_delta(base.data, delta.deltaData);
+            for (const d of delta.chain) current = apply_delta(current, d);
+            const sha = git_sha1(base.obj_type, current);
             if (!localMap[sha]) {
-                localMap[sha] = { obj_type: base.obj_type, data: resolved };
-                allObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) });
+                localMap[sha] = { obj_type: base.obj_type, data: current };
+                allObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(current) });
             }
             pendingDeltas.splice(i, 1);
             progress = true;
