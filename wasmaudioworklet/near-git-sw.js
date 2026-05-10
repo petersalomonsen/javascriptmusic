@@ -372,38 +372,53 @@ async function handleReceivePack(ctx, body) {
         const packCount = await nearViewCall(ctx, 'get_pack_count', {});
         if (packCount > 0) {
             const existingPacks = await nearViewCallBorsh(ctx, 'get_packs', 0);
+            // Walk every existing pack: collect bases into baseMap (sha → decoded
+            // bytes + type), queue deltas for multi-pass resolution. Same
+            // reasoning as the upload-pack handler — single-pass would silently
+            // drop deltas whose base lives in a later pack.
             const baseObjects = [];
             const baseMap = {};
+            const pendingDeltas = [];
             for (const packBytes of existingPacks) {
                 const p = JSON.parse(parse_packfile(packBytes));
                 for (const obj of (p.objects || [])) {
                     const data = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
                     const sha = git_sha1(obj.obj_type, data);
                     if (!baseMap[sha]) {
-                        baseMap[sha] = true;
+                        baseMap[sha] = { obj_type: obj.obj_type, data };
                         baseObjects.push(obj);
                     }
                 }
                 if (p.deltas) {
                     for (const delta of p.deltas) {
-                        if (baseMap[delta.base_sha]) {
-                            const base = baseObjects.find(o => {
-                                const d = Uint8Array.from(atob(o.data), c => c.charCodeAt(0));
-                                return git_sha1(o.obj_type, d) === delta.base_sha;
-                            });
-                            if (base) {
-                                const baseData = Uint8Array.from(atob(base.data), c => c.charCodeAt(0));
-                                const deltaData = Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0));
-                                const resolved = apply_delta(baseData, deltaData);
-                                const sha = git_sha1(base.obj_type, resolved);
-                                if (!baseMap[sha]) {
-                                    baseMap[sha] = true;
-                                    baseObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) });
-                                }
-                            }
-                        }
+                        pendingDeltas.push({
+                            base_sha: delta.base_sha,
+                            deltaData: Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0)),
+                        });
                     }
                 }
+            }
+            let progress = true;
+            while (progress && pendingDeltas.length > 0) {
+                progress = false;
+                for (let i = pendingDeltas.length - 1; i >= 0; i--) {
+                    const delta = pendingDeltas[i];
+                    const base = baseMap[delta.base_sha];
+                    if (!base) continue;
+                    const resolved = apply_delta(base.data, delta.deltaData);
+                    const sha = git_sha1(base.obj_type, resolved);
+                    if (!baseMap[sha]) {
+                        baseMap[sha] = { obj_type: base.obj_type, data: resolved };
+                        baseObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) });
+                    }
+                    pendingDeltas.splice(i, 1);
+                    progress = true;
+                }
+            }
+            if (pendingDeltas.length > 0) {
+                const orphans = pendingDeltas.map(d => d.base_sha);
+                console.warn('[near-git-sw] push: unresolved bases',
+                    orphans, '— filtered new-object set may overlap');
             }
 
             const filteredNew = newObjects.filter(obj => {
@@ -472,11 +487,16 @@ async function handleUploadPack(ctx, body) {
 
     const packsResult = await nearViewCallBorsh(ctx, 'get_packs', 0);
 
+    // Walk every pack, collecting all base objects into localMap and every
+    // delta into a pending list. Single-pass resolution would silently drop
+    // deltas whose base lives in a later pack, or delta-of-delta chains where
+    // an intermediate base only exists after another delta is resolved —
+    // libgit2 then complains "cannot resolve ref_delta as ofs_delta base".
     const allObjects = [];
     const localMap = {};
+    const pendingDeltas = [];
     for (const packBytes of packsResult) {
-        const parseJson = parse_packfile(packBytes);
-        const parseResult = JSON.parse(parseJson);
+        const parseResult = JSON.parse(parse_packfile(packBytes));
         if (parseResult.objects) {
             for (const obj of parseResult.objects) {
                 const data = Uint8Array.from(atob(obj.data), c => c.charCodeAt(0));
@@ -489,19 +509,38 @@ async function handleUploadPack(ctx, body) {
         }
         if (parseResult.deltas) {
             for (const delta of parseResult.deltas) {
-                const deltaData = Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0));
-                const base = localMap[delta.base_sha];
-                if (base) {
-                    const resolved = apply_delta(base.data, deltaData);
-                    const obj_type = base.obj_type;
-                    const sha = git_sha1(obj_type, resolved);
-                    if (!localMap[sha]) {
-                        localMap[sha] = { obj_type, data: resolved };
-                        allObjects.push({ obj_type, data: uint8ArrayToBase64(resolved) });
-                    }
-                }
+                pendingDeltas.push({
+                    base_sha: delta.base_sha,
+                    deltaData: Uint8Array.from(atob(delta.delta_data), c => c.charCodeAt(0)),
+                });
             }
         }
+    }
+
+    // Multi-pass: keep resolving deltas whose base is now known, until a pass
+    // adds nothing. Walks back-to-front so splice() doesn't perturb the index.
+    let progress = true;
+    while (progress && pendingDeltas.length > 0) {
+        progress = false;
+        for (let i = pendingDeltas.length - 1; i >= 0; i--) {
+            const delta = pendingDeltas[i];
+            const base = localMap[delta.base_sha];
+            if (!base) continue;
+            const resolved = apply_delta(base.data, delta.deltaData);
+            const sha = git_sha1(base.obj_type, resolved);
+            if (!localMap[sha]) {
+                localMap[sha] = { obj_type: base.obj_type, data: resolved };
+                allObjects.push({ obj_type: base.obj_type, data: uint8ArrayToBase64(resolved) });
+            }
+            pendingDeltas.splice(i, 1);
+            progress = true;
+        }
+    }
+    if (pendingDeltas.length > 0) {
+        const orphans = pendingDeltas.map(d => d.base_sha);
+        console.error('[near-git-sw] upload-pack: unresolved deltas', orphans);
+        return new Response(`unresolved delta bases: ${orphans.join(', ')}`,
+            { status: 500 });
     }
 
     const packData = build_packfile(JSON.stringify(allObjects));
