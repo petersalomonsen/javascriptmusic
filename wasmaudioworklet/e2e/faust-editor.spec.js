@@ -173,11 +173,13 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         await page.evaluate(() => { window.WASM_SYNTH_BYTES = null; });
         await page.locator('#savesongbutton').click();
 
-        // 5. Wait for the transpile-then-compile pipeline to finish
+        // 5. Wait for the transpile-then-compile pipeline to finish.
+        //    The status surfaces the resolved class name so the user knows
+        //    what to import; assert that it's there.
         await page.waitForFunction(() => {
             const status = document.querySelector('app-javascriptmusic').shadowRoot
                 .getElementById('faustsavestatus').textContent || '';
-            return /^Saved phase3saw\.dsp/.test(status);
+            return /^Saved phase3saw\.dsp.*class:\s*Phase3saw/.test(status);
         }, { timeout: 60000 });
 
         // 6. The AS compiler produced a wasm — proves faust/*.ts was
@@ -188,5 +190,23 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         const wasmLength = await page.evaluate(() =>
             window.WASM_SYNTH_BYTES ? window.WASM_SYNTH_BYTES.length : 0);
         expect(wasmLength).toBeGreaterThan(1000);
+
+        // 7. Auto-recompile on Faust-only edit: change *only* the .dsp
+        //    (synth source unchanged) and save again. The worker now
+        //    fingerprints the injected faust sources, so the wasm bytes
+        //    must change between the two compiles.
+        const firstWasmLen = wasmLength;
+        await page.evaluate(() => { window.WASM_SYNTH_BYTES = null; });
+        await setFaustEditorContent(page,
+            FAUST_SOURCE.replace('os.sawtooth(freq)', 'os.square(freq)'));
+        await page.locator('#savesongbutton').click();
+        await page.waitForFunction(() => window.WASM_SYNTH_BYTES != null,
+            { timeout: 60000 });
+        const secondWasmLen = await page.evaluate(() =>
+            window.WASM_SYNTH_BYTES ? window.WASM_SYNTH_BYTES.length : 0);
+        expect(secondWasmLen).toBeGreaterThan(1000);
+        // Different DSP → different generated AS → different wasm size (the
+        // sawtooth and square families compile to different code paths).
+        expect(secondWasmLen).not.toBe(firstWasmLen);
     });
 });

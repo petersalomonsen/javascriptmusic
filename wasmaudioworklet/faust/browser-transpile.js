@@ -74,7 +74,12 @@ function isStereoEffect(asSource) {
 //   libsByPath   — optional map of relative path → file contents for
 //                  sibling .lib / .dsp files used by library()/import().
 //
-// Returns the assembled .ts as a string. Throws on faust compilation error.
+// Returns { ts, className } where:
+//   ts        — the assembled AssemblyScript file as a string
+//   className — the resolved class name (matches what the synth mix needs to
+//               import; the file does `export class <className> ...`)
+//
+// Throws on faust compilation error.
 export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}) {
     toggleSpinner(true);
     try {
@@ -101,7 +106,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
                 clsName,
                 sourceFile: dspBaseName,
             });
-            return lines.join('\n');
+            return { ts: lines.join('\n'), className: clsName };
         }
 
         // Compile effect= section if present in the source.
@@ -130,7 +135,10 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         });
         // Editor-context output uses the mixes/globalimports barrel so the
         // generated file can sit alongside the song's other source.
-        return assembleSingleFile(result, { forEditor: true }).join('\n');
+        return {
+            ts: assembleSingleFile(result, { forEditor: true }).join('\n'),
+            className: clsName,
+        };
     } finally {
         toggleSpinner(false);
     }

@@ -207,19 +207,26 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     });
 
     // Save callback used by both the save button and CodeMirror's Cmd-S.
+    // Returns true when a save+transpile actually happened (so the caller
+    // can decide to also kick off an AS recompile so the new module is
+    // picked up immediately).
     async function saveFaustIfChanged() {
         if (!gitrepoconfig || !currentFaustFilename) return false;
         const source = faustsourceeditor.doc.getValue();
         if (source === lastSavedFaustSource) return false;
         const basename = currentFaustFilename.substring(FAUST_DIR.length);
+        const stem = basename.replace(/\.dsp$/, '');
         try {
             faustSaveStatus.textContent = 'Transpiling...';
-            const ts = await transpileDspSource(source, basename);
+            const { ts, className } = await transpileDspSource(source, basename);
             const tsPath = currentFaustFilename.replace(/\.dsp$/, '.ts');
             await writefileandstage(currentFaustFilename, source);
             await writefileandstage(tsPath, ts);
             lastSavedFaustSource = source;
-            faustSaveStatus.textContent = 'Saved ' + basename + ' + ' + tsPath.substring(FAUST_DIR.length);
+            // Surface the resolved class name so the user knows what to
+            // import in their synth: `import { <className> } from '../faust/<stem>';`
+            faustSaveStatus.textContent =
+                `Saved ${basename} + ${stem}.ts — class: ${className}`;
             return true;
         } catch (e) {
             faustSaveStatus.textContent = '';
