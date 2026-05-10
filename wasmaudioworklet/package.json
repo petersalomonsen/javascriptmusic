@@ -32,6 +32,9 @@
         "near-sandbox": "docker run --rm -p 3030:8080 ghcr.io/petersalomonsen/near-git-storage/sandbox:main",
         "test-faust": "node ../tools/faust2as/generate-test-sources.js && npx playwright test e2e/faust2as-compilation.spec.js"
     },
+    "resolutions": {
+        "playwright": "1.59.1"
+    },
     "devDependencies": {
         "@as-pect/cli": "^8.1.0",
         "@esm-bundle/chai": "^4.3.4-fix.0",
