@@ -70,9 +70,14 @@ function isStereoEffect(asSource) {
 // Public API: transpile a .dsp source string to an assembled .ts file string.
 //
 //   dspSource    — the .dsp source code
-//   dspBaseName  — basename like "master_me.dsp" or "mysynth.dsp"
-//   libsByPath   — optional map of relative path → file contents for
-//                  sibling .lib / .dsp files used by library()/import().
+//   dspBaseName  — basename like "master_me.dsp", "mysynth.dsp", or a
+//                  sub-path like "mysong/dsp/master.dsp" (the part after
+//                  the faust/ folder in wasm-git). Only the LEAF segment
+//                  is used to derive the class name and the temp output
+//                  filename in libfaust's virtual FS.
+//   libsByPath   — optional map of path-relative-to-the-source-file →
+//                  contents for sibling .lib / .dsp files used by
+//                  library() / import().
 //
 // Returns { ts, className } where:
 //   ts        — the assembled AssemblyScript file as a string
@@ -86,12 +91,23 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const { compiler, fs: faustFS } = await getCompiler();
         mountSiblings(faustFS, libsByPath);
 
-        const baseStem = dspBaseName.replace(/\.dsp$/, '');
-        const clsName = toClassName(baseStem);
-        const outVirt = `/${baseStem}.out.ts`;
+        // Derive the class name and faust virtual-FS output path from the
+        // LEAF basename only — slashes in the full sub-path would break
+        // both toClassName() and faust's `-o` (libfaust can't create
+        // intermediate dirs in its virtual FS).
+        const leaf = dspBaseName.split('/').pop();
+        const leafStem = leaf.replace(/\.dsp$/, '');
+        const clsName = toClassName(leafStem);
+        const outVirt = `/${leafStem}.out.ts`;
+        // The transpiled file lands in the wasm-git repo at
+        //   faust/<dspBaseName-without-.dsp>.ts
+        // and gets injected into the AS sources map at the same path.
+        // The number of '..' segments needed for ../mixes/globalimports
+        // and ../environment from there equals 1 + (slashes in dspBaseName).
+        const importDepth = 1 + (dspBaseName.match(/\//g) || []).length;
 
         const ok = compiler.generateAuxFiles(
-            baseStem,
+            leafStem,
             dspSource,
             `-lang asc -cn ${clsName} -I /work -o ${outVirt}`
         );
@@ -105,6 +121,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
                 asSource,
                 clsName,
                 sourceFile: dspBaseName,
+                importDepth,
             });
             return { ts: lines.join('\n'), className: clsName };
         }
@@ -114,9 +131,9 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         let effectAsSource = null;
         if (hasEffect) {
             const effectName = clsName + 'Effect';
-            const effectOut = `/${baseStem}.effect.out.ts`;
+            const effectOut = `/${leafStem}.effect.out.ts`;
             const effOk = compiler.generateAuxFiles(
-                baseStem,
+                leafStem,
                 dspSource,
                 `-lang asc -cn ${effectName} -pn effect -I /work -o ${effectOut}`
             );
@@ -136,7 +153,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         // Editor-context output uses the mixes/globalimports barrel so the
         // generated file can sit alongside the song's other source.
         return {
-            ts: assembleSingleFile(result, { forEditor: true }).join('\n'),
+            ts: assembleSingleFile(result, { forEditor: true, importDepth }).join('\n'),
             className: clsName,
         };
     } finally {

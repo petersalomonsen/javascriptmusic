@@ -1025,7 +1025,7 @@ export function generateNRPNDefaults(lines, ccParams, channelIndex) {
 // Assembly: Single-file mode
 // ---------------------------------------------------------------------------
 
-export function assembleSingleFile(result, { forEditor = false } = {}) {
+export function assembleSingleFile(result, { forEditor = false, importDepth = 1 } = {}) {
     const out = [];
 
     out.push(`// Faust-generated ${result.className}`);
@@ -1033,9 +1033,14 @@ export function assembleSingleFile(result, { forEditor = false } = {}) {
     out.push(`// Source: ${result.sourceFile}`);
     out.push('');
 
+    // forEditor mode: the file lives in faust/<sub-path>/<name>.ts, so the
+    // imports for ../mixes/globalimports etc. need one '../' per directory
+    // segment above the assembly/ root (importDepth = number of segments).
+    // Default importDepth=1 matches the historical placement faust/<name>.ts.
     if (forEditor) {
-        out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
-        out.push("import { SAMPLERATE } from '../environment';");
+        const up = '../'.repeat(importDepth);
+        out.push(`import { notefreq, midichannels, MidiChannel, MidiVoice } from '${up}mixes/globalimports';`);
+        out.push(`import { SAMPLERATE } from '${up}environment';`);
     } else {
         out.push("import { MidiVoice, MidiChannel, midichannels } from '../midisynth';");
         out.push("import { notefreq } from '../../synth/note';");
@@ -1250,7 +1255,7 @@ export function assembleBundle(results, { forEditor = false } = {}) {
 //                only for the // Source: header comment
 //
 // Returns the array of output lines (caller joins with '\n').
-export function transpileMastering({ asSource, clsName, sourceFile }) {
+export function transpileMastering({ asSource, clsName, sourceFile, importDepth = 1 }) {
     const parsed = parseASSource(asSource, clsName);
     const { numInputs, numOutputs } = extractUIFromJSON(asSource);
 
@@ -1272,8 +1277,11 @@ export function transpileMastering({ asSource, clsName, sourceFile }) {
     out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--mastering)`);
     out.push(`// Source: ${sourceFile}`);
     out.push('');
-    out.push("import { outputline, midichannels } from '../mixes/globalimports';");
-    out.push("import { SAMPLERATE } from '../environment';");
+    // importDepth = number of '..' segments above the assembly/ root
+    // (default 1 matches faust/<name>.ts; 3 for faust/sub/dir/<name>.ts).
+    const up = '../'.repeat(importDepth);
+    out.push(`import { outputline, midichannels } from '${up}mixes/globalimports';`);
+    out.push(`import { SAMPLERATE } from '${up}environment';`);
     out.push('');
 
     if (sigResult.waveDataGlobals.length > 0) {

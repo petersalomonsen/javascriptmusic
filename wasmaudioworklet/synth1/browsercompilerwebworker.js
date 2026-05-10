@@ -135,15 +135,18 @@ onmessage = async function (msg) {
     await ready;
     console.log('assemblyscript sources loaded');
 
-    // Inject any transpiled faust/*.ts files from the wasm-git repo so the
-    // mix can do `import { Foo } from '../faust/foo';` from mixes/midi.mix.ts.
+    // Inject any transpiled faust/**/*.ts files from the wasm-git repo so
+    // the mix can do `import { Foo } from '../faust/<subpath>/<name>';`
+    // from mixes/midi.mix.ts. Keys preserve sub-folders.
     // Wipe any previously-injected faust/ entries first so a deletion in the
     // repo doesn't keep a stale module compiled in.
     for (const k of Object.keys(assemblyscriptsynthsources)) {
         if (k.startsWith('faust/')) delete assemblyscriptsynthsources[k];
     }
-    for (const [basename, contents] of Object.entries(faustSources)) {
-        const stem = basename.replace(/\.ts$/, '').replace(/\.dsp$/, '');
+    for (const [relPath, contents] of Object.entries(faustSources)) {
+        // relPath is e.g. "elecguitar.ts" or "master_me/dsp/master_me.ts".
+        // Normalize: strip a trailing .dsp or .ts and re-add .ts.
+        const stem = relPath.replace(/\.ts$/, '').replace(/\.dsp$/, '');
         assemblyscriptsynthsources['faust/' + stem + '.ts'] = contents;
     }
     // Fingerprint the injected faust/* sources so we can tell when they

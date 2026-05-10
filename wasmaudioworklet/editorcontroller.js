@@ -183,8 +183,9 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         const raw = (faustNewFilenameInput.value || '').trim();
         if (!raw) return;
         const basename = raw.endsWith('.dsp') ? raw : raw + '.dsp';
-        if (!/^[A-Za-z0-9_\-]+\.dsp$/.test(basename)) {
-            displayFaustError('Faust filename must be alphanumeric (no slashes), e.g. mysynth.dsp');
+        // Accept sub-folders (segments separated by /), each segment alphanumeric/_/-.
+        if (!/^([A-Za-z0-9_\-]+\/)*[A-Za-z0-9_\-]+\.dsp$/.test(basename)) {
+            displayFaustError('Faust filename must be alphanumeric segments separated by slashes, e.g. mysynth.dsp or mysong/dsp/master.dsp');
             return;
         }
         const fullPath = FAUST_DIR + basename;
@@ -206,6 +207,23 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         }
     });
 
+    // Walk the source file's directory in wasm-git and gather every .dsp/.lib
+    // file *except the source itself* into a map keyed by its path relative
+    // to that directory — so `library("lib/ebur128.dsp")` and
+    // `library("expanders.lib")` resolve via the libfaust virtual FS.
+    async function collectSiblingLibs(sourcePath) {
+        const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/') + 1);
+        const all = await listfiles(sourceDir);
+        const libs = {};
+        await Promise.all(all.map(async (p) => {
+            if (p === sourcePath) return;
+            if (!/\.(dsp|lib)$/.test(p)) return;
+            const relPath = p.substring(sourceDir.length);
+            try { libs[relPath] = await readfile(p); } catch (_) { /* skip */ }
+        }));
+        return libs;
+    }
+
     // Save callback used by both the save button and CodeMirror's Cmd-S.
     // Returns true when a save+transpile actually happened (so the caller
     // can decide to also kick off an AS recompile so the new module is
@@ -218,15 +236,20 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         const stem = basename.replace(/\.dsp$/, '');
         try {
             faustSaveStatus.textContent = 'Transpiling...';
-            const { ts, className } = await transpileDspSource(source, basename);
+            const libs = await collectSiblingLibs(currentFaustFilename);
+            const { ts, className } = await transpileDspSource(source, basename, libs);
             const tsPath = currentFaustFilename.replace(/\.dsp$/, '.ts');
             await writefileandstage(currentFaustFilename, source);
             await writefileandstage(tsPath, ts);
             lastSavedFaustSource = source;
-            // Surface the resolved class name so the user knows what to
-            // import in their synth: `import { <className> } from '../faust/<stem>';`
+            // Surface the ready-to-paste import line — works regardless of
+            // how deep the .dsp lives under faust/.
+            const importPath = '../faust/' + stem;
+            const libsCount = Object.keys(libs).length;
             faustSaveStatus.textContent =
-                `Saved ${basename} + ${stem}.ts — class: ${className}`;
+                `Saved ${basename}` +
+                (libsCount ? ` (+${libsCount} sibling lib${libsCount === 1 ? '' : 's'})` : '') +
+                `  →  import { ${className} } from '${importPath}';`;
             return true;
         } catch (e) {
             faustSaveStatus.textContent = '';
@@ -237,10 +260,12 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     // Expose so compileAndPostSong (defined below) can call it.
     window.__saveFaustIfChanged = saveFaustIfChanged;
 
-    // Read every faust/*.ts file from the wasm-git repo and return a basename
-    // -> contents map. The AS compiler worker will inject these as
-    // faust/<name>.ts in its sources map so the user's mix can do
-    // `import { Foo } from '../faust/foo';` from mixes/midi.mix.ts.
+    // Read every .ts file under faust/ in the wasm-git repo and return a
+    // map keyed by the path relative to faust/ (preserving sub-folders, so
+    // `faust/master_me/dsp/master_me.ts` is keyed as
+    // `master_me/dsp/master_me.ts`). The AS compiler worker injects these
+    // back under `faust/<key>` so the user's mix can do e.g.
+    //   `import { MasterMe } from '../faust/master_me/dsp/master_me';`
     async function loadFaustSourcesFromRepo() {
         if (!gitrepoconfig) return {};
         try {
@@ -248,8 +273,8 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
             const tsFiles = all.filter(f => f.endsWith('.ts'));
             const out = {};
             await Promise.all(tsFiles.map(async (path) => {
-                const basename = path.substring(FAUST_DIR.length);
-                out[basename] = await readfile(path);
+                const relPath = path.substring(FAUST_DIR.length);
+                out[relPath] = await readfile(path);
             }));
             return out;
         } catch (e) {

@@ -174,12 +174,11 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         await page.locator('#savesongbutton').click();
 
         // 5. Wait for the transpile-then-compile pipeline to finish.
-        //    The status surfaces the resolved class name so the user knows
-        //    what to import; assert that it's there.
+        //    The status surfaces a ready-to-paste import line.
         await page.waitForFunction(() => {
             const status = document.querySelector('app-javascriptmusic').shadowRoot
                 .getElementById('faustsavestatus').textContent || '';
-            return /^Saved phase3saw\.dsp.*class:\s*Phase3saw/.test(status);
+            return /import \{ Phase3saw \} from '\.\.\/faust\/phase3saw';/.test(status);
         }, { timeout: 60000 });
 
         // 6. The AS compiler produced a wasm — proves faust/*.ts was
@@ -208,5 +207,61 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         // Different DSP → different generated AS → different wasm size (the
         // sawtooth and square families compile to different code paths).
         expect(secondWasmLen).not.toBe(firstWasmLen);
+    });
+
+    test('sub-folder layout: faust/<dir>/<dir>/main.dsp transpile + import works', async ({ page }) => {
+        // Mirrors the user's vscode-prepared repo shape: a Faust file
+        // nested several directories deep (e.g. faust/mysong/dsp/main.dsp).
+        // Verifies that:
+        //   * "New file" accepts slash-separated paths
+        //   * the worker injects the transpiled .ts under faust/<full-rel-path>.ts
+        //     (preserving sub-folders, not flattening to basename)
+        //   * the resulting wasm compiles when the synth imports via the
+        //     sub-folder path
+        page.on('console', (m) => {
+            if (m.type() === 'error' || m.type() === 'warning') console.log('[browser]', m.type(), m.text());
+        });
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+
+        await page.goto('http://localhost:8080');
+        await setupServiceWorker(page);
+        await pushBaseline(page, repoName, SONG_SOURCE);
+        await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
+        await waitForAppReady(page);
+
+        await page.locator('#fausteditortogglecheckbox').check();
+        await page.locator('#faustnewfilename').fill('mysong/dsp/main');
+        await page.locator('#faustnewfilebutton').click();
+        await page.waitForFunction(() => {
+            const cm = document.querySelector('app-javascriptmusic').shadowRoot
+                .querySelector('#faustcodemirror .CodeMirror');
+            return cm && cm.CodeMirror.getValue().length > 0;
+        }, { timeout: 10000 });
+        await setFaustEditorContent(page, FAUST_SOURCE);
+
+        const synthSrc = `// uses midichannels (route via midi.mix)
+import { initializeMidiSynth, postprocess } from '../faust/mysong/dsp/main';
+export { initializeMidiSynth, postprocess };
+`;
+        await setSynthEditorContent(page, synthSrc);
+        await setSongEditorContent(page, SONG_SOURCE);
+
+        await page.evaluate(() => { window.WASM_SYNTH_BYTES = null; });
+        await page.locator('#savesongbutton').click();
+
+        // Status surfaces the exact import line for the sub-folder path.
+        await page.waitForFunction(() => {
+            const status = document.querySelector('app-javascriptmusic').shadowRoot
+                .getElementById('faustsavestatus').textContent || '';
+            return /import \{ Main \} from '\.\.\/faust\/mysong\/dsp\/main';/.test(status);
+        }, { timeout: 60000 });
+
+        // Wasm produced — proves the worker injected
+        // assemblyscriptsynthsources['faust/mysong/dsp/main.ts'] correctly.
+        await page.waitForFunction(() => window.WASM_SYNTH_BYTES != null,
+            { timeout: 60000 });
+        const wasmLen = await page.evaluate(() =>
+            window.WASM_SYNTH_BYTES ? window.WASM_SYNTH_BYTES.length : 0);
+        expect(wasmLen).toBeGreaterThan(1000);
     });
 });
