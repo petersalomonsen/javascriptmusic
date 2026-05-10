@@ -75,8 +75,7 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
         <label style="font-size: 12px;">file:
           <select id="faustfileselect"></select>
         </label>
-        <input id="faustnewfilename" type="text" placeholder="new file basename (no .dsp)" style="font-size: 12px; padding: 2px 4px;" />
-        <button id="faustnewfilebutton" style="font-size: 12px;">New file</button>
+        <button id="faustnewfilebutton" style="font-size: 12px;">New file…</button>
         <span style="flex-grow: 1"></span>
         <span id="faustsavestatus" style="font-size: 12px; color: #aaa;"></span>
       </div>

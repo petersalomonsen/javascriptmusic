@@ -10,7 +10,7 @@ import { toggleSpinner } from './common/ui/progress-spinner.js';
 import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
-import { modal } from './common/ui/modal.js';
+import { modal, modalPrompt } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
@@ -119,7 +119,6 @@ export async function initEditor(componentRoot) {
     };
 
     const faustFileSelect = componentRoot.getElementById('faustfileselect');
-    const faustNewFilenameInput = componentRoot.getElementById('faustnewfilename');
     const faustNewFileButton = componentRoot.getElementById('faustnewfilebutton');
     const faustSaveStatus = componentRoot.getElementById('faustsavestatus');
 
@@ -180,7 +179,13 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     });
 
     faustNewFileButton.addEventListener('click', async () => {
-        const raw = (faustNewFilenameInput.value || '').trim();
+        const entered = await modalPrompt(
+            'New Faust file',
+            'Basename, with optional sub-folders (e.g. <code>mysynth</code> or <code>mysong/dsp/master</code>). <code>.dsp</code> is added automatically.',
+            ''
+        );
+        if (entered === null) return;
+        const raw = entered.trim();
         if (!raw) return;
         const basename = raw.endsWith('.dsp') ? raw : raw + '.dsp';
         // Accept sub-folders (segments separated by /), each segment alphanumeric/_/-.
@@ -191,7 +196,6 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         const fullPath = FAUST_DIR + basename;
         try {
             await writefileandstage(fullPath, FAUST_STUB);
-            faustNewFilenameInput.value = '';
             currentFaustFilename = fullPath;
             await refreshFaustFileList();
             faustFileSelect.value = fullPath;

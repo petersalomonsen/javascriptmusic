@@ -84,6 +84,16 @@ const getDropdownOptions = (page) => page.evaluate(() => {
     return Array.from(sel.options).map(o => o.textContent);
 });
 
+// Click "New file…" then drive the modalPrompt that pops up: the modal is
+// appended to <html> as a <common-modal> with the input inside its shadow root.
+const newFaustFile = async (page, name) => {
+    await page.locator('#faustnewfilebutton').click();
+    const input = page.locator('common-modal').locator('#modal-prompt-input');
+    await input.waitFor({ state: 'visible' });
+    await input.fill(name);
+    await input.press('Enter');
+};
+
 // --- spec ------------------------------------------------------------------
 
 test.describe('Faust editor — create, transpile, import, compile', () => {
@@ -125,8 +135,7 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
 
         await page.locator('#fausteditortogglecheckbox').check();
 
-        await page.locator('#faustnewfilename').fill('phase3test');
-        await page.locator('#faustnewfilebutton').click();
+        await newFaustFile(page, 'phase3test');
 
         // Editor visible with the seeded template
         await expect(page.locator('#fausteditor')).toBeVisible();
@@ -158,8 +167,7 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
 
         // 1. Create a fresh .dsp via the Faust editor
         await page.locator('#fausteditortogglecheckbox').check();
-        await page.locator('#faustnewfilename').fill('phase3saw');
-        await page.locator('#faustnewfilebutton').click();
+        await newFaustFile(page, 'phase3saw');
         await page.waitForFunction(() => {
             const cm = document.querySelector('app-javascriptmusic').shadowRoot
                 .querySelector('#faustcodemirror .CodeMirror');
@@ -234,8 +242,7 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         await waitForAppReady(page);
 
         await page.locator('#fausteditortogglecheckbox').check();
-        await page.locator('#faustnewfilename').fill('mysong/dsp/main');
-        await page.locator('#faustnewfilebutton').click();
+        await newFaustFile(page, 'mysong/dsp/main');
         await page.waitForFunction(() => {
             const cm = document.querySelector('app-javascriptmusic').shadowRoot
                 .querySelector('#faustcodemirror .CodeMirror');
