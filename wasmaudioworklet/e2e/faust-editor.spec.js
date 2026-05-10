@@ -20,11 +20,15 @@ import {
 const repoName = NEAR_REPO_CONTRACT + '.git';
 
 // A trivial sawtooth voice-synth that maps freq/gain/gate to MIDI notes.
+// The "attack" slider is a regular UI param — it becomes a module-level
+// global with a name prefixed by the .dsp basename, so it doubles as a
+// regression check that the prefix is the LEAF (no slashes from sub-paths).
 const FAUST_SOURCE = `import("stdfaust.lib");
 freq = hslider("freq", 440, 20, 20000, 0.01);
 gate = button("gate");
 gain = hslider("gain", 0.5, 0, 1, 0.01);
-process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate) <: _, _;
+attack = hslider("attack", 0.01, 0.001, 1.0, 0.001);
+process = os.sawtooth(freq) * gain * en.adsr(attack, 0.1, 0.7, 0.2, gate) <: _, _;
 `;
 
 // Mix file referenced from the synth editor. Pulls in the transpiled module

@@ -551,7 +551,11 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
         }
     }
 
-    const globalPrefix = sourceFile.replace(/\.dsp$/, '') + '_';
+    // Use only the leaf basename for the variable-name prefix — sourceFile
+    // can be a sub-path like "dx7/dsp/dx7_alg5_bells.dsp" coming from the
+    // browser editor, and slashes are invalid in AS identifiers.
+    const sourceLeaf = sourceFile.split('/').pop();
+    const globalPrefix = sourceLeaf.replace(/\.dsp$/, '') + '_';
     const globalFields = new Map();
     for (const p of ccParams) {
         globalFields.set(p.field, globalPrefix + p.field);
