@@ -113,6 +113,19 @@ test.describe('NEAR Git Storage - Full E2E', () => {
         await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
         await waitForAppReady(page);
 
+        // Wait for the app to finish loading the baseline into the editor —
+        // waitForAppReady only checks the wasmgit-ui's button is in the DOM, but
+        // editorcontroller.js continues async to readfile(song.js) and then
+        // songsourceeditor.doc.setValue(...). On slow CI that setValue can race
+        // with the test's setEditorContent below: the app's later write
+        // overwrites the test's content, save rewrites the unchanged baseline,
+        // diff is empty, and the button stays "Sync remote".
+        await page.waitForFunction((expected) => {
+            const app = document.querySelector('app-javascriptmusic');
+            const editor = app && app.shadowRoot && app.shadowRoot.querySelector('#editor .CodeMirror');
+            return editor && editor.CodeMirror && editor.CodeMirror.getValue() === expected;
+        }, initialContent, { timeout: 15000 });
+
         // Modify and save
         await setEditorContent(page, testContent);
         await saveButton(page).click();
