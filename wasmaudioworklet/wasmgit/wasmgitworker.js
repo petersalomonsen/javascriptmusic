@@ -108,6 +108,13 @@ onmessage = async (msg) => {
     postMessage({ accessTokenConfigured: true });
   } else if (msg.data.command === 'writefileandstage') {
     ensureChdir(currentRepoDir);
+    // Create parent dirs if any (e.g. faust/foo.dsp needs faust/ first).
+    const segments = msg.data.filename.split('/');
+    let dirAcc = '';
+    for (let i = 0; i < segments.length - 1; i++) {
+      dirAcc += (i === 0 ? '' : '/') + segments[i];
+      try { FS.mkdir(dirAcc); } catch (_) { /* exists */ }
+    }
     // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
     const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
     const data = new TextEncoder().encode(msg.data.contents);
@@ -233,6 +240,10 @@ onmessage = async (msg) => {
     try {
       ensureChdir(currentRepoDir);
       const prefix = msg.data.prefix || '';
+      // Standard Unix mode bitmask — Emscripten's FS exposes `mode` from
+      // FS.stat() but FS.isDir() isn't always available on the helper.
+      const S_IFMT = 0o170000;
+      const S_IFDIR = 0o040000;
       const result = [];
       function walk(virtBase, relBase) {
         let entries;
@@ -243,7 +254,7 @@ onmessage = async (msg) => {
           const childRel = relBase ? relBase + '/' + entry : entry;
           let stat;
           try { stat = FS.stat(childVirt); } catch (e) { continue; }
-          if (FS.isDir(stat.mode)) {
+          if ((stat.mode & S_IFMT) === S_IFDIR) {
             walk(childVirt, childRel);
           } else {
             if (!prefix || childRel.indexOf(prefix) === 0) {
