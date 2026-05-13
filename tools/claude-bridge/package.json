@@ -1,0 +1,17 @@
+{
+  "name": "claude-editor-bridge",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Local relay that bridges the wasmaudioworklet web app editors to Claude Code via WebSocket + MCP.",
+  "bin": {
+    "claude-editor-bridge": "./relay.js"
+  },
+  "scripts": {
+    "start": "node relay.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.18.0"
+  }
+}

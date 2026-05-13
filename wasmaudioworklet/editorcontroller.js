@@ -18,6 +18,7 @@ import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
 import { isSointuSong, getSointuWasm, getSointuYaml } from './sointu/playsointu.js';
+import { claudeBridge } from './claude-bridge-client.js';
 export let songsourceeditor;
 export let synthsourceeditor;
 export let shadersourceeditor;
@@ -85,6 +86,16 @@ export async function initEditor(componentRoot) {
         mode: "text/plain",
         theme: "monokai",
         lineNumbers: true,
+    });
+
+    // v1: only the Faust editor reports to the Claude Code bridge. The
+    // protocol carries editor_type so adding the others later is a one-liner.
+    claudeBridge.start();
+    claudeBridge.registerEditor(faustsourceeditor, {
+        id: 'faust',
+        editor_type: 'faust',
+        language: 'faust',
+        getName: () => currentFaustFilename || '(unsaved faust buffer)',
     });
 
     window.toggleEditors = (editorid, checked) => {
