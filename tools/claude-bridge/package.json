@@ -1,0 +1,16 @@
+{
+  "name": "claude-editor-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local relay that mirrors wasmaudioworklet editor buffers to a working folder. Claude Code edits the files; the relay syncs both directions via WebSocket.",
+  "bin": {
+    "claude-editor-bridge": "./relay.js"
+  },
+  "scripts": {
+    "start": "node relay.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
