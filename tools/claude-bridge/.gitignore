@@ -1,2 +1,15 @@
 work/
 node_modules/
+
+# Symlinks the relay drops in this directory so that `work/<file>.ts`'s
+# `../mixes/...`, `../environment`, `../faust/...` imports resolve in the
+# IDE without putting any runtime sources inside work/ itself.
+environment.ts
+mixes
+synth
+midi
+common
+instruments
+math
+fx
+faust

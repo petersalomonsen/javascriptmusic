@@ -20,7 +20,7 @@
 // events that match are our own work and skipped.
 
 import { WebSocketServer } from 'ws';
-import { writeFile, readFile, mkdir, symlink, copyFile, lstat } from 'node:fs/promises';
+import { writeFile, readFile, mkdir, symlink, lstat } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { dirname, resolve, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,14 +30,15 @@ const WORK_DIR = resolve(__dirname, 'work');
 const STATE_FILE = join(WORK_DIR, '_state.json');
 const WS_PORT = Number(process.env.CLAUDE_BRIDGE_PORT) || 17890;
 
-// Path of the AS runtime on disk (assumed: bridge lives at
-// `tools/claude-bridge/` inside the wasm-music repo).
+// On-disk location of the wasm-music AS runtime. The synth source at
+// `work/<name>.ts` imports things like `../mixes/globalimports`, and TS
+// does NOT consult tsconfig `paths` for relative imports — so to make
+// those resolve we drop a few symlinks one level above `work/` (i.e. into
+// the bridge package directory itself), and the user's file's `..`
+// traversal lands on them. work/ itself stays a clean OPFS mirror.
 const REPO_ROOT = resolve(__dirname, '../..');
-const AS_LIB_ROOT = join(REPO_ROOT, 'wasmaudioworklet/synth1/assembly');
-const AS_MIRROR_ROOT = join(WORK_DIR, 'synth1/assembly');
-// Subtrees/files of the on-disk AS runtime we symlink into the mirror so the
-// IDE can resolve the imports the user's synth source makes.
-const AS_SYMLINKS = [
+const AS_LIB_ROOT = resolve(REPO_ROOT, 'wasmaudioworklet/synth1/assembly');
+const RUNTIME_LINKS = [
     'environment.ts',
     'common',
     'synth',
@@ -45,26 +46,8 @@ const AS_SYMLINKS = [
     'instruments',
     'math',
     'fx',
-    'mixes/globalimports.ts',
+    'mixes',
 ];
-const BUILTINS_SRC = join(__dirname, 'data/assembly-builtins.d.ts');
-const BUILTINS_DST = join(WORK_DIR, 'assembly-builtins.d.ts');
-
-// OPFS path → mirror path inside work/.
-// - Anything under faust/ is placed under synth1/assembly/faust/ so the
-//   user's synth.ts can resolve `../faust/...` relative to its mirror
-//   location.
-// - A top-level .ts file is treated as the synth source and placed in
-//   synth1/assembly/mixes/ alongside the symlinked globalimports.ts.
-// - Everything else (song.js, shader.glsl, README.md, …) stays flat at
-//   work/<path>.
-function opfsToMirrorPath(opfsPath) {
-    if (opfsPath.startsWith('faust/')) return 'synth1/assembly/' + opfsPath;
-    if (!opfsPath.includes('/') && opfsPath.endsWith('.ts')) {
-        return 'synth1/assembly/mixes/' + opfsPath;
-    }
-    return opfsPath;
-}
 
 // Editor cursor/selection per editor id, persisted to _state.json.
 let activeEditor = null;
@@ -77,28 +60,62 @@ const lastWritten = new Map();
 const mirroredFiles = new Map(); // absMirrorPath -> opfsPath
 
 await mkdir(WORK_DIR, { recursive: true });
-await setupAsLayout();
+await setupRuntimeLinks();
+await writeTsconfig();
 
-async function setupAsLayout() {
-    await mkdir(AS_MIRROR_ROOT, { recursive: true });
-    await mkdir(join(AS_MIRROR_ROOT, 'mixes'), { recursive: true });
-    for (const rel of AS_SYMLINKS) {
-        const linkPath = join(AS_MIRROR_ROOT, rel);
+// Drop symlinks for the AS runtime modules at the bridge-package level —
+// one directory above WORK_DIR — so relative imports like
+// `../mixes/globalimports` from `work/<synth>.ts` land on them. Symlinks
+// for things that change (the faust mirror) point back into work/.
+async function setupRuntimeLinks() {
+    for (const rel of RUNTIME_LINKS) {
+        const link = join(__dirname, rel);
         const target = join(AS_LIB_ROOT, rel);
-        await mkdir(dirname(linkPath), { recursive: true });
+        const st = await lstat(link).catch(() => null);
+        if (st) continue; // already in place (symlink, dir, or file) — don't overwrite
         try {
-            const st = await lstat(linkPath).catch(() => null);
-            if (st && st.isSymbolicLink()) continue; // already linked
-            if (st) continue; // file/dir already exists, leave it
-            await symlink(target, linkPath);
+            await symlink(target, link);
         } catch (e) {
             process.stderr.write(`[claude-bridge] symlink ${rel} failed: ${e.message}\n`);
         }
     }
+    // faust/ lives inside work/ as part of the OPFS mirror. Make it
+    // reachable via `..` from work/ files too.
+    const faustLink = join(__dirname, 'faust');
+    const stFaust = await lstat(faustLink).catch(() => null);
+    if (!stFaust) {
+        try {
+            await symlink(join(WORK_DIR, 'faust'), faustLink);
+        } catch (e) {
+            process.stderr.write(`[claude-bridge] faust symlink failed: ${e.message}\n`);
+        }
+    }
+}
+
+// Minimal tsconfig.json so the editor picks up the AS built-in types and
+// uses Node module resolution. No `paths` — TS ignores them for relative
+// imports anyway; the symlinks one level above work/ do the resolution.
+async function writeTsconfig() {
+    const tsconfig = {
+        compilerOptions: {
+            baseUrl: '.',
+            allowJs: true,
+            checkJs: false,
+            noEmit: true,
+            moduleResolution: 'node',
+            target: 'es2020',
+        },
+        include: [
+            '**/*.ts',
+            '**/*.d.ts',
+            '../data/assembly-builtins.d.ts',
+        ],
+        exclude: ['node_modules'],
+    };
     try {
-        await copyFile(BUILTINS_SRC, BUILTINS_DST);
+        await writeFile(join(WORK_DIR, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2));
     } catch (e) {
-        process.stderr.write(`[claude-bridge] could not install assembly-builtins.d.ts: ${e.message}\n`);
+        process.stderr.write(`[claude-bridge] could not write tsconfig.json: ${e.message}\n`);
     }
 }
 
@@ -177,8 +194,8 @@ function isSafeRelPath(p) {
 
 async function writeMirrorFile(opfsPath, content, binary) {
     if (!isSafeRelPath(opfsPath)) throw new Error(`unsafe path: ${opfsPath}`);
-    const mirrorRel = opfsToMirrorPath(opfsPath);
-    const filePath = join(WORK_DIR, mirrorRel);
+    // Mirror at the OPFS path — work/ matches OPFS 1:1.
+    const filePath = join(WORK_DIR, opfsPath);
     await mkdir(dirname(filePath), { recursive: true });
     if (binary) {
         const buf = Buffer.from(content, 'base64');
@@ -208,7 +225,7 @@ async function writeState() {
 watch(WORK_DIR, { recursive: true }, async (_eventType, filename) => {
     if (!filename) return;
     const relPath = filename.split(sep).join('/');
-    if (relPath === '_state.json' || relPath === 'assembly-builtins.d.ts') return;
+    if (relPath === '_state.json' || relPath === 'tsconfig.json') return;
     if (!isSafeRelPath(relPath)) return;
 
     const filePath = join(WORK_DIR, relPath);
