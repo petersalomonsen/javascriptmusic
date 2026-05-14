@@ -110,6 +110,12 @@ async function writeTsconfig() {
             // we want IntelliSense, not a strict TS lint of AS source.
             strict: false,
             skipLibCheck: true,
+            // Preserve symlinks so a file reached through
+            // `tools/claude-bridge/faust/...` (sibling symlink) keeps that
+            // path for its OWN relative imports — otherwise TS resolves
+            // it back to `work/faust/...` and `../../../mixes/...` no
+            // longer points at the on-disk AS runtime.
+            preserveSymlinks: true,
         },
         include: ['**/*.ts', '**/*.d.ts'],
         // Pull in AS's own type declarations for f32 / StaticArray / Mathf
