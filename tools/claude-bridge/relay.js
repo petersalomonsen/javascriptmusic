@@ -92,9 +92,11 @@ async function setupRuntimeLinks() {
     }
 }
 
-// Minimal tsconfig.json so the editor picks up the AS built-in types and
-// uses Node module resolution. No `paths` — TS ignores them for relative
-// imports anyway; the symlinks one level above work/ do the resolution.
+// Minimal tsconfig.json so the editor picks up the AS built-in types
+// (straight from the upstream `assemblyscript` package's declaration
+// file — no hand-maintained shim) and uses Node module resolution. No
+// `paths` — TS ignores them for relative imports; the symlinks one
+// level above work/ do the resolution.
 async function writeTsconfig() {
     const tsconfig = {
         compilerOptions: {
@@ -104,12 +106,16 @@ async function writeTsconfig() {
             noEmit: true,
             moduleResolution: 'node',
             target: 'es2020',
+            // AS allows things TS rejects (boolean<->number casts, etc.);
+            // we want IntelliSense, not a strict TS lint of AS source.
+            strict: false,
+            skipLibCheck: true,
         },
-        include: [
-            '**/*.ts',
-            '**/*.d.ts',
-            '../data/assembly-builtins.d.ts',
-        ],
+        include: ['**/*.ts', '**/*.d.ts'],
+        // Pull in AS's own type declarations for f32 / StaticArray / Mathf
+        // / etc. straight from the engine's installed `assemblyscript`
+        // package.
+        files: ['../../../wasmaudioworklet/node_modules/assemblyscript/std/assembly/index.d.ts'],
         exclude: ['node_modules'],
     };
     try {
