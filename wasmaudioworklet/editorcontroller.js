@@ -88,9 +88,25 @@ export async function initEditor(componentRoot) {
         lineNumbers: true,
     });
 
-    // v1: only the Faust editor reports to the Claude Code bridge. The
-    // protocol carries editor_type so adding the others later is a one-liner.
     claudeBridge.start();
+    claudeBridge.registerEditor(songsourceeditor, {
+        id: 'song',
+        editor_type: 'song',
+        language: 'javascript',
+        getName: () => gitrepoconfig?.songfilename || '(unsaved song buffer)',
+    });
+    claudeBridge.registerEditor(synthsourceeditor, {
+        id: 'synth',
+        editor_type: 'synth',
+        language: 'assemblyscript',
+        getName: () => gitrepoconfig?.synthfilename || '(unsaved synth buffer)',
+    });
+    claudeBridge.registerEditor(shadersourceeditor, {
+        id: 'shader',
+        editor_type: 'shader',
+        language: 'glsl',
+        getName: () => gitrepoconfig?.fragmentshader || '(unsaved shader buffer)',
+    });
     claudeBridge.registerEditor(faustsourceeditor, {
         id: 'faust',
         editor_type: 'faust',

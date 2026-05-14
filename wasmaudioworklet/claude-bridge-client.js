@@ -44,6 +44,24 @@ class ClaudeBridgeClient {
                 this.warned = true;
             }
         });
+        this.ws.addEventListener('message', (ev) => {
+            let msg;
+            try { msg = JSON.parse(ev.data); } catch (_e) { return; }
+            if (msg.type === 'replace_buffer') this._replaceBuffer(msg);
+        });
+    }
+
+    // Replace a specific editor's buffer with `content` (from a Claude edit on
+    // the mirror file). Cursor is preserved when possible.
+    _replaceBuffer(msg) {
+        const entry = this.editors.get(msg.id);
+        if (!entry) return;
+        const cm = entry.cm;
+        const next = msg.content ?? '';
+        if (cm.doc.getValue() === next) return;
+        const sels = cm.doc.listSelections();
+        cm.doc.setValue(next);
+        try { cm.doc.setSelections(sels); } catch (_e) { /* positions may no longer be valid */ }
     }
 
     _scheduleReconnect() {
