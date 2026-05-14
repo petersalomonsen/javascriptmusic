@@ -20,7 +20,7 @@
 // events that match are our own work and skipped.
 
 import { WebSocketServer } from 'ws';
-import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import { writeFile, readFile, mkdir, symlink, lstat } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { dirname, resolve, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,13 +30,100 @@ const WORK_DIR = resolve(__dirname, 'work');
 const STATE_FILE = join(WORK_DIR, '_state.json');
 const WS_PORT = Number(process.env.CLAUDE_BRIDGE_PORT) || 17890;
 
+// On-disk location of the wasm-music AS runtime. The synth source at
+// `work/<name>.ts` imports things like `../mixes/globalimports`, and TS
+// does NOT consult tsconfig `paths` for relative imports — so to make
+// those resolve we drop a few symlinks one level above `work/` (i.e. into
+// the bridge package directory itself), and the user's file's `..`
+// traversal lands on them. work/ itself stays a clean OPFS mirror.
+const REPO_ROOT = resolve(__dirname, '../..');
+const AS_LIB_ROOT = resolve(REPO_ROOT, 'wasmaudioworklet/synth1/assembly');
+const RUNTIME_LINKS = [
+    'environment.ts',
+    'common',
+    'synth',
+    'midi',
+    'instruments',
+    'math',
+    'fx',
+    'mixes',
+];
+
 // Editor cursor/selection per editor id, persisted to _state.json.
 let activeEditor = null;
 const editorMeta = {}; // id -> { path, cursor, selection, language, language }
 // Echo guard: text content (or base64 for binary) we last wrote per absolute path.
 const lastWritten = new Map();
+// Mirror files we've written, mapped back to their OPFS path. Watcher events
+// for paths NOT in this map (e.g. host edits inside the symlinked AS runtime)
+// are ignored — only bridge-owned files round-trip to the browser.
+const mirroredFiles = new Map(); // absMirrorPath -> opfsPath
 
 await mkdir(WORK_DIR, { recursive: true });
+await setupRuntimeLinks();
+await writeTsconfig();
+
+// Drop symlinks for the AS runtime modules at the bridge-package level —
+// one directory above WORK_DIR — so relative imports like
+// `../mixes/globalimports` from `work/<synth>.ts` land on them. Symlinks
+// for things that change (the faust mirror) point back into work/.
+async function setupRuntimeLinks() {
+    for (const rel of RUNTIME_LINKS) {
+        const link = join(__dirname, rel);
+        const target = join(AS_LIB_ROOT, rel);
+        const st = await lstat(link).catch(() => null);
+        if (st) continue; // already in place (symlink, dir, or file) — don't overwrite
+        try {
+            await symlink(target, link);
+        } catch (e) {
+            process.stderr.write(`[claude-bridge] symlink ${rel} failed: ${e.message}\n`);
+        }
+    }
+    // faust/ lives inside work/ as part of the OPFS mirror. Make it
+    // reachable via `..` from work/ files too.
+    const faustLink = join(__dirname, 'faust');
+    const stFaust = await lstat(faustLink).catch(() => null);
+    if (!stFaust) {
+        try {
+            await symlink(join(WORK_DIR, 'faust'), faustLink);
+        } catch (e) {
+            process.stderr.write(`[claude-bridge] faust symlink failed: ${e.message}\n`);
+        }
+    }
+}
+
+// Minimal tsconfig.json so the editor picks up the AS built-in types
+// (straight from the upstream `assemblyscript` package's declaration
+// file — no hand-maintained shim) and uses Node module resolution. No
+// `paths` — TS ignores them for relative imports; the symlinks one
+// level above work/ do the resolution.
+async function writeTsconfig() {
+    const tsconfig = {
+        compilerOptions: {
+            baseUrl: '.',
+            allowJs: true,
+            checkJs: false,
+            noEmit: true,
+            moduleResolution: 'node',
+            target: 'es2020',
+            // AS allows things TS rejects (boolean<->number casts, etc.);
+            // we want IntelliSense, not a strict TS lint of AS source.
+            strict: false,
+            skipLibCheck: true,
+        },
+        include: ['**/*.ts', '**/*.d.ts'],
+        // Pull in AS's own type declarations for f32 / StaticArray / Mathf
+        // / etc. straight from the engine's installed `assemblyscript`
+        // package.
+        files: ['../../../wasmaudioworklet/node_modules/assemblyscript/std/assembly/index.d.ts'],
+        exclude: ['node_modules'],
+    };
+    try {
+        await writeFile(join(WORK_DIR, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2));
+    } catch (e) {
+        process.stderr.write(`[claude-bridge] could not write tsconfig.json: ${e.message}\n`);
+    }
+}
 
 const clients = new Set();
 const wss = new WebSocketServer({ port: WS_PORT });
@@ -111,16 +198,19 @@ function isSafeRelPath(p) {
     return true;
 }
 
-async function writeMirrorFile(relPath, content, binary) {
-    if (!isSafeRelPath(relPath)) throw new Error(`unsafe path: ${relPath}`);
-    const filePath = join(WORK_DIR, relPath);
+async function writeMirrorFile(opfsPath, content, binary) {
+    if (!isSafeRelPath(opfsPath)) throw new Error(`unsafe path: ${opfsPath}`);
+    // Mirror at the OPFS path — work/ matches OPFS 1:1.
+    const filePath = join(WORK_DIR, opfsPath);
     await mkdir(dirname(filePath), { recursive: true });
     if (binary) {
         const buf = Buffer.from(content, 'base64');
         lastWritten.set(filePath, content); // store base64 form for compare
+        mirroredFiles.set(filePath, opfsPath);
         await writeFile(filePath, buf);
     } else {
         lastWritten.set(filePath, content);
+        mirroredFiles.set(filePath, opfsPath);
         await writeFile(filePath, content);
     }
 }
@@ -135,15 +225,19 @@ async function writeState() {
 }
 
 // Recursive watch of WORK_DIR. macOS supports recursive natively; on Linux,
-// fs.watch with recursive is best-effort. The relPath delivered by Node's
-// watcher uses platform separators — normalize to forward slashes.
+// fs.watch with recursive is best-effort. Only paths in `mirroredFiles`
+// round-trip — anything else under work/ (notably the symlinked AS runtime)
+// is host-only and we leave it alone.
 watch(WORK_DIR, { recursive: true }, async (_eventType, filename) => {
     if (!filename) return;
     const relPath = filename.split(sep).join('/');
-    if (relPath === '_state.json' || relPath.startsWith('_state.json')) return;
+    if (relPath === '_state.json' || relPath === 'tsconfig.json') return;
     if (!isSafeRelPath(relPath)) return;
 
     const filePath = join(WORK_DIR, relPath);
+    const opfsPath = mirroredFiles.get(filePath);
+    if (!opfsPath) return; // not a bridge-owned file (e.g. symlinked AS source)
+
     let buf;
     try {
         buf = await readFile(filePath);
@@ -151,11 +245,11 @@ watch(WORK_DIR, { recursive: true }, async (_eventType, filename) => {
         return; // file may have been deleted/replaced mid-event
     }
 
-    const binary = isLikelyBinary(relPath);
+    const binary = isLikelyBinary(opfsPath);
     const encoded = binary ? buf.toString('base64') : buf.toString('utf8');
     if (lastWritten.get(filePath) === encoded) return; // our own write
     lastWritten.set(filePath, encoded);
-    broadcastApplyFile(relPath, encoded, binary);
+    broadcastApplyFile(opfsPath, encoded, binary);
 });
 
 const BINARY_EXTS = new Set([

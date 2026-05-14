@@ -14,10 +14,53 @@ No MCP server, no custom edit ops — Claude Code uses `Read` / `Edit` / `Glob`
 
 ## What gets mirrored
 
-`work/` (gitignored) holds the full OPFS git tree at the paths it has in the
-repo: e.g. `work/song.js`, `work/synth.ts`, `work/shader.glsl`,
-`work/faust/master_me/dsp/master_me.dsp`. Plus `_state.json` with the active
-editor + cursor + selection per editor (song/synth/shader/faust).
+`work/` (gitignored) holds the OPFS git tree at the same paths it has in
+the repo — multi-song layouts with several `*.ts` files at the root, or
+deep subtrees like `faust/master_me/...`, all stay where they belong:
+
+- `work/song.js`, `work/synth.ts`, `work/shader.glsl`, `work/README.md`, …
+- `work/faust/...`
+- `work/_state.json` — active editor + cursor + selection per editor.
+- `work/tsconfig.json` — minimal IDE config (Node module resolution,
+  AS built-in types via `../data/assembly-builtins.d.ts`).
+
+No runtime sources, no symlinks, nothing surprising inside `work/`.
+
+### Making the synth source's imports resolve in the IDE
+
+Files in `work/` import things like `../mixes/globalimports`,
+`../environment`, `../faust/...`. TypeScript resolves relative imports via
+the filesystem (it does *not* consult `tsconfig.paths` for them), so for
+those to resolve the imported files have to actually exist one level
+above `work/`.
+
+The relay drops symlinks at the bridge package directory (sibling of
+`work/`) at boot, pointing at the on-disk wasm-music engine:
+
+| Symlink at `tools/claude-bridge/`   | → target on disk                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `environment.ts`                    | `wasmaudioworklet/synth1/assembly/environment.ts`                         |
+| `mixes`                             | `wasmaudioworklet/synth1/assembly/mixes`                                  |
+| `synth`                             | `wasmaudioworklet/synth1/assembly/synth`                                  |
+| `midi`                              | `wasmaudioworklet/synth1/assembly/midi`                                   |
+| `common`                            | `wasmaudioworklet/synth1/assembly/common`                                 |
+| `instruments`                       | `wasmaudioworklet/synth1/assembly/instruments`                            |
+| `math`                              | `wasmaudioworklet/synth1/assembly/math`                                   |
+| `fx`                                | `wasmaudioworklet/synth1/assembly/fx`                                     |
+| `faust`                             | `work/faust` (so `../faust/...` reaches the OPFS-mirrored Faust files)    |
+
+These are gitignored. Same set of symlinks serves any number of synth files
+sitting at the `work/` root.
+
+`data/assembly-builtins.d.ts` declares `f32`, `StaticArray<T>`, `Mathf`,
+etc. so the TS language server understands AS built-ins; the
+`work/tsconfig.json` references it via `../data/assembly-builtins.d.ts`.
+
+**Caveat**: writes through the runtime symlinks land in the real engine
+source on disk. Don't edit `mixes/`, `synth/`, etc. through them unless you
+mean to modify the engine. Bridge-owned files (the OPFS mirror in `work/`)
+are tracked separately and only those round-trip through `fs.watch` back
+to the browser.
 
 The mirror only populates when the web app is opened with a `?gitrepo=...`
 URL — the OPFS-backed wasm-git client is the source of truth for the tree
