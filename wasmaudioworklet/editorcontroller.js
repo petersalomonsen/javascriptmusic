@@ -91,27 +91,23 @@ export async function initEditor(componentRoot) {
     claudeBridge.start();
     claudeBridge.registerEditor(songsourceeditor, {
         id: 'song',
-        editor_type: 'song',
         language: 'javascript',
-        getName: () => gitrepoconfig?.songfilename || '(unsaved song buffer)',
+        getPath: () => gitrepoconfig?.songfilename || null,
     });
     claudeBridge.registerEditor(synthsourceeditor, {
         id: 'synth',
-        editor_type: 'synth',
         language: 'assemblyscript',
-        getName: () => gitrepoconfig?.synthfilename || '(unsaved synth buffer)',
+        getPath: () => gitrepoconfig?.synthfilename || null,
     });
     claudeBridge.registerEditor(shadersourceeditor, {
         id: 'shader',
-        editor_type: 'shader',
         language: 'glsl',
-        getName: () => gitrepoconfig?.fragmentshader || '(unsaved shader buffer)',
+        getPath: () => gitrepoconfig?.fragmentshader || null,
     });
     claudeBridge.registerEditor(faustsourceeditor, {
         id: 'faust',
-        editor_type: 'faust',
         language: 'faust',
-        getName: () => currentFaustFilename || '(unsaved faust buffer)',
+        getPath: () => currentFaustFilename || null,
     });
 
     window.toggleEditors = (editorid, checked) => {
@@ -767,8 +763,12 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     } else if (gitrepoparam) {
         gitrepoconfig = await initWASMGitClient(gitrepoparam.split('=')[1]);
         appendToSubtoolbar1(document.createElement('wasmgit-ui'));
+        // wasm-git is ready — let the bridge pull the full tree into work/.
+        claudeBridge.attachGitRepo({ listfiles, readfile, writefileandstage });
 
         addRemoteSyncListener(async () => {
+            // After a pull/commit, re-sync the bridge's mirror.
+            claudeBridge.resyncTree().catch((e) => console.warn('bridge resync failed', e));
             try {
                 const newconfig = await getConfig();
                 if (newconfig && newconfig.songfilename) {
