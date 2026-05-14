@@ -14,10 +14,38 @@ No MCP server, no custom edit ops — Claude Code uses `Read` / `Edit` / `Glob`
 
 ## What gets mirrored
 
-`work/` (gitignored) holds the full OPFS git tree at the paths it has in the
-repo: e.g. `work/song.js`, `work/synth.ts`, `work/shader.glsl`,
-`work/faust/master_me/dsp/master_me.dsp`. Plus `_state.json` with the active
-editor + cursor + selection per editor (song/synth/shader/faust).
+`work/` (gitignored) holds the OPFS git tree but laid out to match the
+**AssemblyScript compile-time path structure**, so editor IntelliSense works
+naturally on the mirror files:
+
+- `work/synth1/assembly/mixes/synth.ts` ← the user's synth editor source.
+- `work/synth1/assembly/faust/...` ← the `faust/` subtree from OPFS.
+- `work/song.js`, `work/shader.glsl`, `work/README.md`, …  ← everything else stays flat.
+- `work/_state.json` ← active editor + cursor + selection per editor.
+
+In addition, the relay symlinks the **on-disk AS runtime** from this repo
+into the mirror so the synth source's imports resolve:
+
+| Mirror path                                    | → Symlink target (on disk)                                  |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `synth1/assembly/environment.ts`               | `wasmaudioworklet/synth1/assembly/environment.ts`           |
+| `synth1/assembly/mixes/globalimports.ts`       | `wasmaudioworklet/synth1/assembly/mixes/globalimports.ts`   |
+| `synth1/assembly/common`                       | `wasmaudioworklet/synth1/assembly/common`                   |
+| `synth1/assembly/synth`                        | `wasmaudioworklet/synth1/assembly/synth`                    |
+| `synth1/assembly/midi`                         | `wasmaudioworklet/synth1/assembly/midi`                     |
+| `synth1/assembly/instruments`                  | `wasmaudioworklet/synth1/assembly/instruments`              |
+| `synth1/assembly/math`                         | `wasmaudioworklet/synth1/assembly/math`                     |
+| `synth1/assembly/fx`                           | `wasmaudioworklet/synth1/assembly/fx`                       |
+
+Plus `work/assembly-builtins.d.ts` (copied at boot from `tools/claude-bridge/
+data/`) declares the AS built-ins (`f32`, `StaticArray`, `Mathf`, …) so the
+TS language server stops complaining.
+
+**Caveat on the symlinks**: writes through them go to the real source files
+on disk. Don't edit the symlinked runtime through `work/` unless you mean to
+modify the engine source. Bridge-owned mirror files (the ones the relay
+wrote from browser pushes) are tracked separately and only those round-trip
+through `fs.watch` back to the browser.
 
 The mirror only populates when the web app is opened with a `?gitrepo=...`
 URL — the OPFS-backed wasm-git client is the source of truth for the tree
