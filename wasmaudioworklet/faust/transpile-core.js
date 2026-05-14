@@ -14,7 +14,7 @@
 //   reshapeInstanceClear(...)
 //   reshapeSIGInit(...)
 //   transpileDsp({ asSource, effectAsSource, clsName, sourceFile, options })
-//   transpileMastering({ asSource, clsName, sourceFile })
+//   transpileEffect({ asSource, clsName, sourceFile })
 //   generateNRPNSetParam(lines, ccParams, globalFields)
 //   generateNRPNDefaults(lines, ccParams, channelIndex)
 //   assembleSingleFile(result, { forEditor })
@@ -1341,22 +1341,39 @@ export function assembleBundle(results, { forEditor = false } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Mastering mode: standalone stereo effect on outputline
+// Standalone Effect class: stereo-in/stereo-out, public named params, and a
+// generic `process(left, right): void` that writes to `this.signal`. A
+// default singleton + `postprocess()` hook is also generated so the effect
+// auto-mastering the outputline still works without any caller changes.
 // ---------------------------------------------------------------------------
 
-// transpileMastering({ asSource, clsName, sourceFile })
+// transpileEffect({ asSource, clsName, sourceFile })
 //   asSource   — AS output for a stereo effect (2 in, 2 out)
 //   clsName    — class name for the generated mastering class
 //   sourceFile — basename of the .dsp source (e.g. "master_me.dsp"); used
 //                only for the // Source: header comment
 //
 // Returns the array of output lines (caller joins with '\n').
-export function transpileMastering({ asSource, clsName, sourceFile, importDepth = 1 }) {
+export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1 }) {
     const parsed = parseASSource(asSource, clsName);
-    const { numInputs, numOutputs } = extractUIFromJSON(asSource);
+    const { uiParams, numInputs, numOutputs } = extractUIFromJSON(asSource);
 
     if (numInputs !== 2 || numOutputs !== 2) {
         throw new Error(`Mastering mode requires stereo I/O (2 in, 2 out). Got ${numInputs} in, ${numOutputs} out.`);
+    }
+
+    // Derive a public, AS-friendly name for each UI param (same scheme as
+    // the MIDI-instrument path) and build a `this.<niceName>` substitution
+    // map so the generated process() body references the renamed fields.
+    const takenNames = new Set();
+    const uiByField = new Map();
+    for (const p of uiParams) {
+        p.niceName = deriveNiceName(p, takenNames);
+        uiByField.set(p.field, p);
+    }
+    const paramRefs = new Map();
+    for (const p of uiParams) {
+        paramRefs.set(p.field, `this.${p.niceName}`);
     }
 
     const tablePrefix = '_' + clsName + '_';
@@ -1370,13 +1387,13 @@ export function transpileMastering({ asSource, clsName, sourceFile, importDepth 
 
     const out = [];
     out.push(`// Mastering effect: ${clsName}`);
-    out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--mastering)`);
+    out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--effect)`);
     out.push(`// Source: ${sourceFile}`);
     out.push('');
     // importDepth = number of '..' segments above the assembly/ root
     // (default 1 matches faust/<name>.ts; 3 for faust/sub/dir/<name>.ts).
     const up = '../'.repeat(importDepth);
-    out.push(`import { outputline, midichannels } from '${up}mixes/globalimports';`);
+    out.push(`import { outputline, midichannels, StereoSignal } from '${up}mixes/globalimports';`);
     out.push(`import { SAMPLERATE } from '${up}environment';`);
     out.push('');
 
@@ -1392,15 +1409,25 @@ export function transpileMastering({ asSource, clsName, sourceFile, importDepth 
     }
 
     out.push(`export class ${clsName} {`);
+    // Public output bus — process(left, right) writes here.
+    out.push(`    signal: StereoSignal = new StereoSignal();`);
 
     for (const field of parsed.fields) {
         if (field.name === 'fSampleRate') continue;
+        const ui = uiByField.get(field.name);
         if (field.isArray) {
             const sizeMatch = field.initializer ? field.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/) : null;
             const size = sizeMatch ? sizeMatch[1] : '0';
             out.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
         } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
             out.push(`    private ${field.name}: i32 = 0;`);
+        } else if (ui) {
+            // Public, renamed, documented UI param.
+            const def = parsed.defaults[field.name] != null
+                ? parsed.defaults[field.name]
+                : `<f32>(${ui.init})`;
+            out.push(paramDocComment(ui));
+            out.push(`    ${ui.niceName}: f32 = ${def};`);
         } else if (parsed.defaults[field.name] !== undefined) {
             out.push(`    private ${field.name}: f32 = ${parsed.defaults[field.name]};`);
         } else if (field.initializer) {
@@ -1432,34 +1459,32 @@ export function transpileMastering({ asSource, clsName, sourceFile, importDepth 
     out.push('    }');
     out.push('');
 
-    out.push('    process(): void {');
-    out.push('        const _inL: f32 = outputline.left;');
-    out.push('        const _inR: f32 = outputline.right;');
+    out.push('    process(inL: f32, inR: f32): void {');
     out.push('');
 
     const compute = parseComputeBody(parsed.computeBody);
 
     for (const decl of compute.preLoopDecls) {
-        let line = reshapeASLine(decl, clsName, null, staticFieldMap);
+        let line = reshapeASLine(decl, clsName, paramRefs, staticFieldMap);
         line = line.replace(/^let\s+(fSlow|iSlow)/, 'const $1');
         out.push('        ' + line);
     }
     if (compute.preLoopDecls.length > 0) out.push('');
 
     for (const bodyLine of compute.loopBodyLines) {
-        let line = reshapeASLine(bodyLine, clsName, null, staticFieldMap);
+        let line = reshapeASLine(bodyLine, clsName, paramRefs, staticFieldMap);
 
-        line = line.replace(/input0\[\w+\]/g, '_inL');
-        line = line.replace(/input1\[\w+\]/g, '_inR');
+        line = line.replace(/input0\[\w+\]/g, 'inL');
+        line = line.replace(/input1\[\w+\]/g, 'inR');
 
         const out0Match = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
         if (out0Match) {
-            out.push(`        outputline.left = ${out0Match[1]};`);
+            out.push(`        this.signal.left = ${out0Match[1]};`);
             continue;
         }
         const out1Match = line.match(/^output1\[\w+\]\s*=\s*(.*);$/);
         if (out1Match) {
-            out.push(`        outputline.right = ${out1Match[1]};`);
+            out.push(`        this.signal.right = ${out1Match[1]};`);
             continue;
         }
 
@@ -1469,7 +1494,7 @@ export function transpileMastering({ asSource, clsName, sourceFile, importDepth 
     out.push('');
 
     for (const shiftLine of compute.delayShiftLines) {
-        const line = reshapeASLine(shiftLine, clsName, null, staticFieldMap);
+        const line = reshapeASLine(shiftLine, clsName, paramRefs, staticFieldMap);
         out.push('        ' + line);
     }
 
@@ -1477,6 +1502,11 @@ export function transpileMastering({ asSource, clsName, sourceFile, importDepth 
     out.push('}');
     out.push('');
 
+    // Backwards-compat: keep the synth engine's `initializeMidiSynth` /
+    // `postprocess` hooks pointing at a singleton that mastering-processes
+    // the outputline, so existing songs keep working. Custom signal-routing
+    // callers should instantiate the class themselves and call
+    // `master.process(left, right)` with their own inputs.
     const instanceVar = clsName.charAt(0).toLowerCase() + clsName.slice(1);
     out.push(`const ${instanceVar}: ${clsName} = new ${clsName}();`);
     out.push('');
@@ -1484,7 +1514,9 @@ export function transpileMastering({ asSource, clsName, sourceFile, importDepth 
     out.push('}');
     out.push('');
     out.push('export function postprocess(): void {');
-    out.push(`    ${instanceVar}.process();`);
+    out.push(`    ${instanceVar}.process(outputline.left, outputline.right);`);
+    out.push(`    outputline.left = ${instanceVar}.signal.left;`);
+    out.push(`    outputline.right = ${instanceVar}.signal.right;`);
     out.push('}');
     out.push('');
 

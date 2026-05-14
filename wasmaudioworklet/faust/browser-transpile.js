@@ -1,12 +1,12 @@
 // browser-transpile.js — Faust .dsp → AssemblyScript transpiler for the
 // in-browser editor. Lazy-loads @psalomo/faustwasm from jsDelivr, mounts
 // any sibling .lib/.dsp files into the libfaust virtual FS, runs faust
-// (twice if there's an effect= declaration, or once for stereo
-// mastering), then calls the pure transpile-core to assemble the .ts.
+// (twice if there's an effect= declaration, or once for a standalone
+// stereo effect), then calls the pure transpile-core to assemble the .ts.
 
 import {
     transpileDsp,
-    transpileMastering,
+    transpileEffect,
     assembleSingleFile,
     toClassName,
 } from './transpile-core.js';
@@ -117,7 +117,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const asSource = normalizeASSource(faustFS.readFile(outVirt, { encoding: 'utf8' }));
 
         if (isStereoEffect(asSource)) {
-            const lines = transpileMastering({
+            const lines = transpileEffect({
                 asSource,
                 clsName,
                 sourceFile: dspBaseName,
