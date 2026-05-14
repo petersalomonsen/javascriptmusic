@@ -20,9 +20,9 @@
 // events that match are our own work and skipped.
 
 import { WebSocketServer } from 'ws';
-import { writeFile, readFile, mkdir, symlink, lstat } from 'node:fs/promises';
+import { writeFile, readFile, mkdir, symlink, lstat, readdir, rm } from 'node:fs/promises';
 import { watch } from 'node:fs';
-import { dirname, resolve, join, sep } from 'node:path';
+import { dirname, resolve, join, sep, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -110,6 +110,12 @@ async function writeTsconfig() {
             // we want IntelliSense, not a strict TS lint of AS source.
             strict: false,
             skipLibCheck: true,
+            // Preserve symlinks so a file reached through
+            // `tools/claude-bridge/faust/...` (sibling symlink) keeps that
+            // path for its OWN relative imports — otherwise TS resolves
+            // it back to `work/faust/...` and `../../../mixes/...` no
+            // longer points at the on-disk AS runtime.
+            preserveSymlinks: true,
         },
         include: ['**/*.ts', '**/*.d.ts'],
         // Pull in AS's own type declarations for f32 / StaticArray / Mathf
@@ -166,6 +172,13 @@ wss.on('connection', (ws) => {
 
 async function handleTreeDump(msg) {
     if (!Array.isArray(msg.files)) return;
+    // Clear any OPFS-managed leftover before laying down the fresh snapshot,
+    // so work/ always matches what the browser actually has in OPFS — no
+    // stale files from previous sessions / other songs.
+    const cleared = await clearOpfsContents();
+    if (cleared > 0) {
+        process.stderr.write(`[claude-bridge] tree_dump: cleared ${cleared} stale entry/entries\n`);
+    }
     let written = 0;
     for (const f of msg.files) {
         if (!isSafeRelPath(f.path)) continue;
@@ -177,6 +190,40 @@ async function handleTreeDump(msg) {
         }
     }
     process.stderr.write(`[claude-bridge] tree_dump: wrote ${written}/${msg.files.length} file(s)\n`);
+}
+
+// Paths in work/ that the bridge considers OPFS-managed (i.e. round-trip
+// to the browser). Bridge-private files like _state.json, tsconfig.json
+// — plus anything under synth1/assembly/ if a stray host-side write
+// somehow lands there — stay out.
+function isOpfsManagedPath(relPath) {
+    if (relPath === '_state.json' || relPath === 'tsconfig.json') return false;
+    if (relPath.startsWith('synth1/assembly/') || relPath === 'synth1/assembly') return false;
+    return true;
+}
+
+// Remove every OPFS-managed file/dir under work/ so a fresh tree_dump
+// produces a 1:1 mirror. Bridge-private files (tsconfig.json,
+// _state.json) and the (currently empty) `synth1/assembly/` path stay.
+async function clearOpfsContents() {
+    let removed = 0;
+    let entries;
+    try { entries = await readdir(WORK_DIR, { withFileTypes: true }); } catch (_e) { return 0; }
+    for (const entry of entries) {
+        const relPath = entry.name;
+        if (!isOpfsManagedPath(relPath)) continue;
+        const full = join(WORK_DIR, entry.name);
+        try {
+            await rm(full, { recursive: true, force: true });
+            removed++;
+        } catch (e) {
+            process.stderr.write(`[claude-bridge] could not remove ${relPath}: ${e.message}\n`);
+        }
+    }
+    // Tracking state is invalidated by the wipe.
+    mirroredFiles.clear();
+    lastWritten.clear();
+    return removed;
 }
 
 function handleEditorState(msg) {
@@ -225,18 +272,24 @@ async function writeState() {
 }
 
 // Recursive watch of WORK_DIR. macOS supports recursive natively; on Linux,
-// fs.watch with recursive is best-effort. Only paths in `mirroredFiles`
-// round-trip — anything else under work/ (notably the symlinked AS runtime)
-// is host-only and we leave it alone.
+// fs.watch with recursive is best-effort. Files already tracked in
+// `mirroredFiles` round-trip back to the browser; new files dropped into
+// the OPFS namespace by the host (e.g. a new `.dsp` in `work/faust/...`)
+// are adopted and broadcast too. Anything outside the OPFS namespace
+// (private bridge files, synth1/assembly/* if anything slips in) is
+// ignored.
 watch(WORK_DIR, { recursive: true }, async (_eventType, filename) => {
     if (!filename) return;
     const relPath = filename.split(sep).join('/');
-    if (relPath === '_state.json' || relPath === 'tsconfig.json') return;
     if (!isSafeRelPath(relPath)) return;
+    if (!isOpfsManagedPath(relPath)) return;
 
     const filePath = join(WORK_DIR, relPath);
-    const opfsPath = mirroredFiles.get(filePath);
-    if (!opfsPath) return; // not a bridge-owned file (e.g. symlinked AS source)
+    let opfsPath = mirroredFiles.get(filePath);
+    if (!opfsPath) {
+        // New host-side file — adopt it under its mirror path.
+        opfsPath = relPath;
+    }
 
     let buf;
     try {
@@ -249,6 +302,7 @@ watch(WORK_DIR, { recursive: true }, async (_eventType, filename) => {
     const encoded = binary ? buf.toString('base64') : buf.toString('utf8');
     if (lastWritten.get(filePath) === encoded) return; // our own write
     lastWritten.set(filePath, encoded);
+    mirroredFiles.set(filePath, opfsPath);
     broadcastApplyFile(opfsPath, encoded, binary);
 });
 

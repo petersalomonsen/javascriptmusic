@@ -23,7 +23,7 @@ import {
 import {
     toClassName,
     transpileDsp as transpileDspPure,
-    transpileMastering as transpileMasteringPure,
+    transpileEffect as transpileEffectPure,
     assembleSingleFile,
     assembleBundle,
 } from '../../wasmaudioworklet/faust/transpile-core.js';
@@ -42,13 +42,13 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     console.log(`  --name      Class name for the generated MidiVoice (default: derived from filename)`);
     console.log(`  --out       Output .ts file path`);
     console.log(`  --bundle    Transpile multiple DSPs into a single bundle with initializeMidiSynth()`);
-    console.log(`  --mastering Generate a global stereo effect wired into postprocess() on outputline`);
+    console.log(`  --effect    Generate a standalone Effect class (stereo in/out) with a default singleton wired into postprocess() on outputline`);
     process.exit(0);
 }
 
 const bundleMode = args.includes('--bundle');
 const forEditor = args.includes('--for-editor');
-const masteringMode = args.includes('--mastering');
+const effectMode = args.includes('--effect');
 let outputPath = null;
 let className = null;
 const dspFiles = [];
@@ -56,7 +56,7 @@ const dspFiles = [];
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--bundle') continue;
     if (args[i] === '--for-editor') continue;
-    if (args[i] === '--mastering') continue;
+    if (args[i] === '--effect') continue;
     if (args[i] === '--name' && args[i + 1]) { className = args[++i]; continue; }
     if (args[i] === '--out' && args[i + 1]) { outputPath = args[++i]; continue; }
     dspFiles.push(args[i]);
@@ -67,7 +67,7 @@ if (dspFiles.length === 0) {
     process.exit(1);
 }
 
-if (masteringMode) {
+if (effectMode) {
     if (!className) {
         className = toClassName(path.basename(dspFiles[0], '.dsp'));
     }
@@ -196,10 +196,10 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     return result;
 }
 
-function transpileMastering(inputDsp, clsName) {
-    console.log(`Compiling ${path.basename(inputDsp)} -> ${clsName} (asc, mastering)`);
+function transpileEffect(inputDsp, clsName) {
+    console.log(`Compiling ${path.basename(inputDsp)} -> ${clsName} (asc, effect)`);
     const asSource = compileFaustToAS(inputDsp, `-lang asc -cn ${clsName}`);
-    return transpileMasteringPure({
+    return transpileEffectPure({
         asSource,
         clsName,
         sourceFile: path.basename(inputDsp),
@@ -211,8 +211,8 @@ function transpileMastering(inputDsp, clsName) {
 // ---------------------------------------------------------------------------
 
 let output;
-if (masteringMode) {
-    output = transpileMastering(dspFiles[0], className);
+if (effectMode) {
+    output = transpileEffect(dspFiles[0], className);
 } else if (bundleMode) {
     const results = dspFiles.map(dsp => {
         const base = path.basename(dsp, '.dsp');
