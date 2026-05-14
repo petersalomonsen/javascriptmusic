@@ -88,7 +88,11 @@ export async function initEditor(componentRoot) {
         lineNumbers: true,
     });
 
-    claudeBridge.start();
+    // Register editors with the bridge so it can route apply_file messages.
+    // The WS connection itself is only opened once a git repo is loaded
+    // (see the gitrepoparam branch below) — otherwise there's nothing to
+    // sync and the constant reconnect attempts add noise (and time, in
+    // Firefox enough to blow the WTR timeout).
     claudeBridge.registerEditor(songsourceeditor, {
         id: 'song',
         language: 'javascript',
@@ -763,7 +767,8 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     } else if (gitrepoparam) {
         gitrepoconfig = await initWASMGitClient(gitrepoparam.split('=')[1]);
         appendToSubtoolbar1(document.createElement('wasmgit-ui'));
-        // wasm-git is ready — let the bridge pull the full tree into work/.
+        // wasm-git is ready — connect the bridge and pull the full tree.
+        claudeBridge.start();
         claudeBridge.attachGitRepo({ listfiles, readfile, writefileandstage });
 
         addRemoteSyncListener(async () => {
