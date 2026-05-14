@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OPFS export</title>
+  <style>
+    html, body { margin: 0; padding: 16px; font-family: ui-monospace, monospace; background: #111; color: #eee; }
+    button { font: inherit; padding: 8px 16px; background: #2a2a2a; color: #eee; border: 1px solid #444; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #333; }
+    #status { margin-top: 16px; white-space: pre-wrap; line-height: 1.4; }
+    #tree { margin-top: 12px; font-size: 12px; color: #999; max-height: 50vh; overflow: auto; border: 1px solid #2a2a2a; padding: 8px; border-radius: 4px; display: none; }
+    .err { color: #ff7373; }
+    .ok { color: #6cff6c; }
+  </style>
+</head>
+<body>
+  <h2>OPFS export</h2>
+  <p>Walks the Origin Private File System on this origin and downloads everything as a zip. Useful for inspecting the wasm-git repo state (the <code>.git</code> directory with all packs) outside the browser.</p>
+  <button id="export">Export OPFS → zip</button>
+  <button id="inspect">List contents only</button>
+  <div id="status"></div>
+  <pre id="tree"></pre>
+
+  <script type="module">
+    import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+
+    const status = document.getElementById('status');
+    const tree = document.getElementById('tree');
+    const setStatus = (s, cls = '') => { status.className = cls; status.textContent = s; };
+
+    async function walk(dir, prefix, onFile, onDir) {
+        for await (const [name, handle] of dir.entries()) {
+            const path = prefix + name;
+            if (handle.kind === 'directory') {
+                onDir?.(path);
+                await walk(handle, path + '/', onFile, onDir);
+            } else {
+                const file = await handle.getFile();
+                await onFile(path, file);
+            }
+        }
+    }
+
+    async function getRoot() {
+        if (!navigator.storage || !navigator.storage.getDirectory) {
+            throw new Error('navigator.storage.getDirectory not supported in this browser.');
+        }
+        return await navigator.storage.getDirectory();
+    }
+
+    document.getElementById('inspect').addEventListener('click', async () => {
+        tree.style.display = 'block';
+        tree.textContent = '';
+        try {
+            setStatus('Walking OPFS…');
+            const root = await getRoot();
+            let fileCount = 0;
+            let totalBytes = 0;
+            await walk(root, '', (path, file) => {
+                tree.textContent += `${path}\t${file.size}\n`;
+                fileCount++;
+                totalBytes += file.size;
+            }, (path) => {
+                tree.textContent += `${path}/\n`;
+            });
+            setStatus(`Done. ${fileCount} file(s), ${(totalBytes / 1024).toFixed(1)} KiB total.`, 'ok');
+        } catch (e) {
+            setStatus('Failed: ' + e.message, 'err');
+            console.error(e);
+        }
+    });
+
+    document.getElementById('export').addEventListener('click', async () => {
+        tree.style.display = 'block';
+        tree.textContent = '';
+        try {
+            setStatus('Walking OPFS and zipping…');
+            const root = await getRoot();
+            const zip = new JSZip();
+            let fileCount = 0;
+            let totalBytes = 0;
+            await walk(root, '', async (path, file) => {
+                const buf = await file.arrayBuffer();
+                zip.file(path, buf);
+                tree.textContent += `+ ${path}\t${file.size}\n`;
+                fileCount++;
+                totalBytes += file.size;
+            });
+            setStatus(`Generating zip… (${fileCount} files, ${(totalBytes / 1024).toFixed(1)} KiB)`);
+            const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `opfs-${location.hostname}-${Date.now()}.zip`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+
+            setStatus(`Downloaded ${a.download} — ${fileCount} files, ${(totalBytes / 1024).toFixed(1)} KiB uncompressed.`, 'ok');
+        } catch (e) {
+            setStatus('Failed: ' + e.message, 'err');
+            console.error(e);
+        }
+    });
+  </script>
+</body>
+</html>
