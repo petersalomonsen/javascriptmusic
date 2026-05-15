@@ -295,6 +295,27 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
 
     process(inputs, outputs, parameters) {
       this._processCallsTotal++;
+      // TEMPORARY: detect render-quantum gaps that exceed ~1.5 quanta.
+      // currentTime advances at wall-clock rate; process() should fire
+      // every RENDER_QUANTUM_FRAMES / sampleRate seconds. A larger gap
+      // means the audio thread missed at least one quantum → audible
+      // glitch. We post each gap to the main thread for correlation
+      // with click-save timing.
+      const expectedQuantumSec = RENDER_QUANTUM_FRAMES / sampleRate;
+      if (this._lastProcessTime !== undefined) {
+        const gap = currentTime - this._lastProcessTime;
+        if (gap > expectedQuantumSec * 1.5) {
+          this.port.postMessage({
+            _processGap: {
+              gapMs: +((gap * 1000).toFixed(2)),
+              expectedMs: +((expectedQuantumSec * 1000).toFixed(2)),
+              missedQuanta: Math.round(gap / expectedQuantumSec) - 1,
+              atCurrentTime: +(currentTime.toFixed(4)),
+            },
+          });
+        }
+      }
+      this._lastProcessTime = currentTime;
       const output = outputs[0];
 
       if (this.wasmInstance) {

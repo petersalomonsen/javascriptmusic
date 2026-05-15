@@ -87,7 +87,18 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
             msg.pendingSequencedata = sequencedata;
             msg.pendingToggleSongPlay = toggleSongPlay;
         }
+        // TEMPORARY: log around postMessage so we can correlate audio
+        // thread gap timing with main-thread send/ack timing.
+        const tBeforePost = performance.now();
+        const ctBeforePost = audioworkletnode.context.currentTime;
+        const seqLen = sequencedata ? sequencedata.length : 0;
+        console.log(`[updateSynth] posting bundled msg: wasmBytes=${synthwasm.byteLength} seqEvents=${seqLen} ` +
+            `ctx.currentTime=${ctBeforePost.toFixed(4)}s perf=${tBeforePost.toFixed(0)}ms`);
         await workerMessageHandler.callAndGetResult(msg, (m) => m.pendingWasmReady);
+        console.log(`[updateSynth] ack received: ` +
+            `ctx.currentTime=${audioworkletnode.context.currentTime.toFixed(4)}s ` +
+            `perf=${performance.now().toFixed(0)}ms ` +
+            `wallElapsed=${(performance.now() - tBeforePost).toFixed(0)}ms`);
         if (sequencedata !== undefined) {
             setPaused(!toggleSongPlay);
             visualizeSong(sequencedata);
@@ -136,6 +147,12 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
                 `process()-during-instantiate: expected=${t.expectedProcessCallsDuringInstantiate} ` +
                 `actual=${t.actualProcessCallsDuringInstantiate} ` +
                 `missed=${t.missedDuringInstantiate}`);
+        }
+        // TEMPORARY: continuous render-quantum gap monitor.
+        if (e.data._processGap) {
+            const g = e.data._processGap;
+            console.log(`[process-gap] gap=${g.gapMs}ms (expected ~${g.expectedMs}ms) ` +
+                `missedQuanta=${g.missedQuanta} atCtx.currentTime=${g.atCurrentTime}s`);
         }
     });
 
