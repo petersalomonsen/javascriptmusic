@@ -43,7 +43,8 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0)
         audioworkletnode.context.suspend();
         await workerMessageHandler.callAndGetResult({
             wasm: synthwasm,
-            audio: await Promise.all(addedAudio)
+            audio: await Promise.all(addedAudio),
+            bpm: bpm,
         }, (msg) => msg.wasmloaded);
         audioworkletnode.context.resume();
     } else {
@@ -80,7 +81,8 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         wasm: wasm_synth_bytes,
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay,
-        audio: await Promise.all(addedAudio)
+        audio: await Promise.all(addedAudio),
+        bpm: bpm,
     }, (msg) => msg.wasmloaded);
     toggleSpinner(false);
 

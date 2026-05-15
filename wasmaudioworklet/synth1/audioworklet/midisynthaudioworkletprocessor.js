@@ -20,6 +20,11 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       this.pendingQuantizeN = 0;
       this.pendingBpm = 0;
       this.lastBeat = -1; // for edge-detecting beat crossings
+      // BPM of whatever wasm/sequencedata is *currently audible*. Beat math
+      // in tryQuantizedSwap uses this — not pendingBpm — so deciding when
+      // to swap aligns with what the listener hears, regardless of whether
+      // the user changed BPM in the song they're swapping in.
+      this.playingBpm = 0;
 
       this.port.onmessage = async (msg) => {
         if (msg.data.wasm) {
@@ -36,6 +41,7 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
             this.loadAudioIntoWasm(wasmInstance, msg.data.audio);
           }
           this.wasmInstance = wasmInstance;
+          this.playingBpm = msg.data.bpm || this.playingBpm;
           this.port.postMessage({ wasmloaded: true });
         }
 
@@ -71,6 +77,7 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           } else {
             this.allNotesOff();
             AudioWorkletGlobalScope.midisequencer.setSequenceData(msg.data.sequencedata);
+            this.playingBpm = msg.data.bpm || this.playingBpm;
           }
         }
 
@@ -153,9 +160,14 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         this.lastBeat = -1;
         return;
       }
-      if (this.pendingQuantizeN <= 0 || this.pendingBpm <= 0) return;
+      // Beat math runs against the *currently playing* bpm, not pendingBpm.
+      // If the user switched to a song with a different BPM, pendingBpm
+      // is the new song's BPM but the listener is still hearing the old
+      // one — using it here would land the swap on the wrong audible beat.
+      const beatBpm = this.playingBpm || this.pendingBpm;
+      if (this.pendingQuantizeN <= 0 || beatBpm <= 0) return;
 
-      const framesPerBeat = sampleRate * 60 / this.pendingBpm;
+      const framesPerBeat = sampleRate * 60 / beatBpm;
       const currentBeat = Math.floor(
         AudioWorkletGlobalScope.midisequencer.currentFrame / framesPerBeat
       );
@@ -193,6 +205,9 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           this.allNotesOff();
         }
       }
+      // The swap is now audible. From this point on, beat math must use
+      // the bpm of the song that just took over.
+      if (this.pendingBpm > 0) this.playingBpm = this.pendingBpm;
       this.pendingInstance = null;
       this.pendingAudio = null;
       this.pendingSequencedata = null;
