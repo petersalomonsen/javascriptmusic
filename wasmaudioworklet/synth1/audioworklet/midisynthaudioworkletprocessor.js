@@ -42,22 +42,23 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           }
           this.wasmInstance = wasmInstance;
           this.playingBpm = msg.data.bpm || this.playingBpm;
+          this._installTracingReceiver();
           this.port.postMessage({ wasmloaded: true });
         }
 
-        if (msg.data.pendingWasmModule) {
-          // Caller pre-compiled the bytes to a Module on the main thread
-          // (see updateSynth). `new WebAssembly.Instance` is synchronous
-          // but only does linking + memory setup, no parse/JIT, so the
-          // audio thread can absorb it inside a single render quantum.
-          // Going through WebAssembly.instantiate(bytes) here instead would
-          // sync-compile on the render thread and audibly glitch on save.
-          const instance = new WebAssembly.Instance(msg.data.pendingWasmModule, {
+        if (msg.data.pendingWasmBytes) {
+          // Caller could not transfer a pre-compiled WebAssembly.Module —
+          // Chromium's AudioWorklet structured-clone silently drops Module
+          // values, so we receive raw bytes and compile here. The compile
+          // and the subsequent `await WebAssembly.instantiate` go through
+          // the async (off-thread) path, which avoids the audible glitch
+          // a synchronous `new WebAssembly.Module(bytes)` would cause.
+          const instance = (await WebAssembly.instantiate(msg.data.pendingWasmBytes, {
             environment: { SAMPLERATE: sampleRate },
             env: {
               abort: () => console.log('webassembly synth abort, should not happen')
             }
-          }).exports;
+          })).instance.exports;
           if (msg.data.audio) {
             this.loadAudioIntoWasm(instance, msg.data.audio);
           }
@@ -146,6 +147,21 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       }
     }
 
+    _installTracingReceiver() {
+      // Wraps wasm.shortmessage so the test (or any main-thread listener)
+      // can observe noteons posted to whichever wasm is *currently* active.
+      // Cheap on the audio thread: one cmp + occasional postMessage on noteon.
+      const send = this.wasmInstance.shortmessage;
+      const port = this.port;
+      AudioWorkletGlobalScope.midisequencer.addMidiReceiver((a, b, c) => {
+        if ((a & 0xf0) === 0x90 && c > 0) {
+          const ct = AudioWorkletGlobalScope.midisequencer.currentFrame / sampleRate * 1000;
+          port.postMessage({ _trace_noteon: { note: b, vel: c, ct } });
+        }
+        send(a, b, c);
+      });
+    }
+
     loadAudioIntoWasm(instance, audioArray) {
       const insert = (buf) => {
         const data = new Float32Array(buf);
@@ -195,15 +211,27 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       if (currentBeat === this.lastBeat) return;
       this.lastBeat = currentBeat;
       if (currentBeat % this.pendingQuantizeN !== 0) return;
+      this.port.postMessage({
+        quantizedSwapApplied: true,
+        beat: currentBeat,
+        ct: AudioWorkletGlobalScope.midisequencer.currentFrame / sampleRate * 1000,
+        bpm: this.pendingBpm,
+      });
 
       // Atomic swap. allNotesOff on the *old* instance before replacing it.
       if (this.pendingInstance) {
         this.allNotesOff();
         this.wasmInstance = this.pendingInstance;
-        AudioWorkletGlobalScope.midisequencer.addMidiReceiver(this.wasmInstance.shortmessage);
+        this._installTracingReceiver();
       }
       if (this.pendingSequencedata) {
         if (!this.pendingInstance) this.allNotesOff();
+        // Reset the sequencer's clock to 0 so the new song plays from its
+        // beat 0 at the swap moment, regardless of where the old song's
+        // event grid was. Otherwise a swap at currentTime T leaves the new
+        // song waiting for its next event at time > T — at 120 BPM that's
+        // up to 500 ms of silence after the swap fires.
+        AudioWorkletGlobalScope.midisequencer.currentFrame = 0;
         AudioWorkletGlobalScope.midisequencer.setSequenceData(this.pendingSequencedata);
       }
       if (this.pendingToggleSongPlay != null) {

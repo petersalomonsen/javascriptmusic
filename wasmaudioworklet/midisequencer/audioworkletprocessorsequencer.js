@@ -28,9 +28,17 @@ export function AudioWorkletProcessorSequencerModule() {
       }    
       // update sequence
       if (this.sequence.length > 0 && sequencedata.length > 0) {
-        // Replace while playing
+        // Replace while playing. We want sequenceIndex to point at the
+        // first event that is *due to fire on this render quantum or
+        // later*. The quantum length in ms is the slop we have to
+        // tolerate, otherwise events at currentTime-ε get skipped — when
+        // a quantized swap fires at the first quantum past beat N
+        // (currentTime ≈ N*60000/bpm + ~2.9ms), the new song's event
+        // sitting exactly at the beat boundary is one quantum behind
+        // currentTime and would be silently dropped.
         const currentTime = (this.currentFrame / sampleRate) * 1000;
-        this.sequenceIndex = sequencedata.findIndex(evt => evt.time >= currentTime);
+        const quantumMs = 128 / sampleRate * 1000;
+        this.sequenceIndex = sequencedata.findIndex(evt => evt.time > currentTime - quantumMs);
         if (this.sequenceIndex == -1) {
           this.sequenceIndex = 0;
         }

@@ -61,9 +61,14 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
         // goes off-thread on the main thread, whereas WebAssembly.instantiate
         // inside an audio worklet falls back to synchronous compile and
         // blows the render-quantum deadline → audible glitch on save.
-        const pendingWasmModule = await WebAssembly.compile(synthwasm);
+        // Send raw bytes — Chromium's AudioWorklet structured-clone silently
+        // drops WebAssembly.Module values, so a pre-compiled Module would
+        // never arrive at the worklet on Chromium. The worklet does an
+        // `await WebAssembly.instantiate(bytes, ...)`, which takes the
+        // async (off-thread) compile path and avoids the audible glitch
+        // a synchronous `new WebAssembly.Module(bytes)` would cause.
         const msg = {
-            pendingWasmModule,
+            pendingWasmBytes: synthwasm,
             audio: await Promise.all(addedAudio),
             quantizeN: quantizeN,
             bpm: bpm,
