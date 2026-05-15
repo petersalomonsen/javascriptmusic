@@ -15,11 +15,6 @@ import { bpm } from '../../midisequencer/pattern.js';
 export let audioworkletnode;
 
 let workerMessageHandler;
-// Browsers differ in whether AudioWorkletNode.port can receive
-// WebAssembly.Module via structured clone. Firefox: yes. Chromium:
-// silently drops the message (whole message, not just the field). We
-// probe once at startup and route subsequent saves accordingly.
-let moduleTransferWorks = false;
 // Tracks the bpm of the song currently producing audio, kept in sync
 // with the worklet's `playingBpm` so the beat indicator stays correct
 // after song switches. Initialized to the imported `bpm` binding (the
@@ -75,22 +70,19 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
         // the beat indicator switches with it.
         if (bpm) activePlayingBpm = bpm;
     } else {
-        // Compile on the main thread (off-thread, doesn't block the audio
-        // thread) when the engine supports Module structured-clone over
-        // AudioWorkletNode.port. Otherwise send raw bytes and have the
-        // worklet do an `await WebAssembly.instantiate(bytes, ...)`, which
-        // still glitches because Chromium's audio thread runs the compile
-        // synchronously — we just don't have a better option there.
+        // Send raw bytes; the worklet does `await WebAssembly.instantiate`
+        // inside its onmessage handler. We considered pre-compiling to a
+        // Module on the main thread and transferring it, but Module
+        // structured-clone over AudioWorkletNode.port doesn't reliably
+        // work across browsers (Chromium silently dropped the whole
+        // message in our testing). One uniform path is simpler than
+        // branching on engine capability.
         const msg = {
+            pendingWasmBytes: synthwasm,
             audio: await Promise.all(addedAudio),
             quantizeN: quantizeN,
             bpm: bpm,
         };
-        if (moduleTransferWorks) {
-            msg.pendingWasmModule = await WebAssembly.compile(synthwasm);
-        } else {
-            msg.pendingWasmBytes = synthwasm;
-        }
         if (sequencedata !== undefined) {
             msg.pendingSequencedata = sequencedata;
             msg.pendingToggleSongPlay = toggleSongPlay;
@@ -100,26 +92,6 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
             setPaused(!toggleSongPlay);
             visualizeSong(sequencedata);
         }
-    }
-}
-
-// Probe whether the engine can structure-clone a WebAssembly.Module onto
-// AudioWorkletNode.port. Firefox can; Chromium silently drops the entire
-// containing message. We send a tiny Module and time out if the ack
-// doesn't come back within a render-quantum or two.
-async function probeModuleTransfer(wmh, bytes) {
-    try {
-        const probeModule = await WebAssembly.compile(bytes);
-        const result = await Promise.race([
-            wmh.callAndGetResult(
-                { _probeModule: probeModule },
-                (m) => m._probeAck !== undefined,
-            ),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 500)),
-        ]);
-        return result._probeAck === true;
-    } catch (e) {
-        return false;
     }
 }
 
@@ -156,9 +128,6 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         }
     });
 
-    if (!(context instanceof (OfflineAudioContext))) {
-        moduleTransferWorks = await probeModuleTransfer(wmh, wasm_synth_bytes);
-    }
     toggleSpinner(false);
 
     if (!(context instanceof (OfflineAudioContext))) {
