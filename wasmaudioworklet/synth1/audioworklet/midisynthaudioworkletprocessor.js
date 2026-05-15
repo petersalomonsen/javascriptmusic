@@ -32,10 +32,6 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       // the user changed BPM in the song they're swapping in.
       this.playingBpm = 0;
 
-      // TEMPORARY: counts every process() call so the swap-receive
-      // handler can detect missed render quanta during instantiate.
-      this._processCallsTotal = 0;
-
       this.port.onmessage = async (msg) => {
         if (msg.data.wasm) {
           this.wasmInstancePromise = WebAssembly.instantiate(msg.data.wasm, {
@@ -57,71 +53,34 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         }
 
         if (msg.data.pendingWasmBytes) {
-          // TEMPORARY: ping back immediately so the main thread can measure
-          // the wall-clock time from postMessage to onmessage-entry. That
-          // window is when structured-clone *deserialization* runs on the
-          // audio thread, blocking process() — and we suspect cloning 7347
-          // small {time, message: [...]} event objects is the bottleneck.
-          this.port.postMessage({ _onMessageEntered: true });
-
           // Single path: await WebAssembly.instantiate on the bytes inside
-          // the worklet. Module structured-clone over AudioWorkletNode.port
-          // doesn't reliably work across browsers, so we keep one uniform
-          // implementation instead of branching on engine capability.
-          //
-          // TEMPORARY: timing instrumentation. `currentTime` here is the
-          // audio context's clock — it advances at wall-clock rate even
-          // when the audio thread is blocked, so subtracting it across
-          // steps tells us how much wall-clock time each step consumed.
-          // We also count process() calls before/after to detect render
-          // quanta that got skipped (i.e. underruns / glitch). Posts a
-          // diagnostic message to the main thread, doesn't affect audio.
-          const tStart = currentTime;
-          const processCallsAtStart = this._processCallsTotal;
-          const compileResult = await WebAssembly.instantiate(msg.data.pendingWasmBytes, {
+          // the worklet. We pre-compile on the main thread when we can —
+          // see updateSynth — but Module structured-clone across
+          // AudioWorkletNode.port is broken in current Chromium (silently
+          // drops the message), so we send raw bytes and pay an audible
+          // glitch on save while the audio thread does the compile.
+          const instance = (await WebAssembly.instantiate(msg.data.pendingWasmBytes, {
             environment: { SAMPLERATE: sampleRate },
             env: {
               abort: () => console.log('webassembly synth abort, should not happen'),
             },
-          });
-          const tAfterInstantiate = currentTime;
-          const processCallsAfterInstantiate = this._processCallsTotal;
-          const instance = compileResult.instance.exports;
+          })).instance.exports;
           if (msg.data.audio) {
             this.loadAudioIntoWasm(instance, msg.data.audio);
           }
-          const tAfterLoadAudio = currentTime;
           this.pendingInstance = instance;
           this.pendingQuantizeN = msg.data.quantizeN || 1;
           this.pendingBpm = msg.data.bpm || this.pendingBpm;
+          // Bundled save: stash sequencedata + toggleSongPlay atomically
+          // with the new wasm so a beat boundary firing between the wasm
+          // ack and a separate sequencedata message can't swap a half-
+          // applied save (new synth, old song).
           if (msg.data.pendingSequencedata !== undefined) {
             this.pendingSequencedata = msg.data.pendingSequencedata;
           }
           if (msg.data.pendingToggleSongPlay !== undefined) {
             this.pendingToggleSongPlay = msg.data.pendingToggleSongPlay;
           }
-          const tAfterStash = currentTime;
-          const processCallsAtEnd = this._processCallsTotal;
-          // Expected process() calls during instantiate, given elapsed
-          // wall-clock time. If actual < expected, the audio thread was
-          // blocked and we underran.
-          const elapsedDuringInstantiate = tAfterInstantiate - tStart;
-          const expectedProcessCalls = Math.floor(elapsedDuringInstantiate * sampleRate / RENDER_QUANTUM_FRAMES);
-          const actualProcessCalls = processCallsAfterInstantiate - processCallsAtStart;
-          this.port.postMessage({
-            _swapTiming: {
-              wasmBytes: msg.data.pendingWasmBytes.byteLength,
-              audioItems: msg.data.audio ? msg.data.audio.length : 0,
-              instantiateMs: +(elapsedDuringInstantiate * 1000).toFixed(2),
-              loadAudioMs: +((tAfterLoadAudio - tAfterInstantiate) * 1000).toFixed(2),
-              stashMs: +((tAfterStash - tAfterLoadAudio) * 1000).toFixed(2),
-              totalMs: +((tAfterStash - tStart) * 1000).toFixed(2),
-              expectedProcessCallsDuringInstantiate: expectedProcessCalls,
-              actualProcessCallsDuringInstantiate: actualProcessCalls,
-              missedDuringInstantiate: Math.max(0, expectedProcessCalls - actualProcessCalls),
-              processCallsTotalAtEnd: processCallsAtEnd,
-            },
-          });
           this.port.postMessage({ pendingWasmReady: true });
         }
 
@@ -301,28 +260,6 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
     }
 
     process(inputs, outputs, parameters) {
-      this._processCallsTotal++;
-      // TEMPORARY: detect render-quantum gaps that exceed ~1.5 quanta.
-      // currentTime advances at wall-clock rate; process() should fire
-      // every RENDER_QUANTUM_FRAMES / sampleRate seconds. A larger gap
-      // means the audio thread missed at least one quantum → audible
-      // glitch. We post each gap to the main thread for correlation
-      // with click-save timing.
-      const expectedQuantumSec = RENDER_QUANTUM_FRAMES / sampleRate;
-      if (this._lastProcessTime !== undefined) {
-        const gap = currentTime - this._lastProcessTime;
-        if (gap > expectedQuantumSec * 1.5) {
-          this.port.postMessage({
-            _processGap: {
-              gapMs: +((gap * 1000).toFixed(2)),
-              expectedMs: +((expectedQuantumSec * 1000).toFixed(2)),
-              missedQuanta: Math.round(gap / expectedQuantumSec) - 1,
-              atCurrentTime: +(currentTime.toFixed(4)),
-            },
-          });
-        }
-      }
-      this._lastProcessTime = currentTime;
       const output = outputs[0];
 
       if (this.wasmInstance) {

@@ -26,10 +26,6 @@ function getActivePlayingBpm() {
     return activePlayingBpm || bpm;
 }
 
-// TEMPORARY: filled in by the audio worklet's onmessage-entry ping; used
-// to measure clone+delivery time for glitch diagnosis.
-let _onMessageEnteredTime = null;
-
 export function onmidi(data) {
     audioworkletnode.port.postMessage({
         midishortmsg: data
@@ -78,9 +74,10 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
         // inside its onmessage handler. We considered pre-compiling to a
         // Module on the main thread and transferring it, but Module
         // structured-clone over AudioWorkletNode.port doesn't reliably
-        // work across browsers (Chromium silently dropped the whole
-        // message in our testing). One uniform path is simpler than
-        // branching on engine capability.
+        // work across browsers — Chromium silently drops every Module
+        // message. The trade-off is a short audible glitch on save when
+        // the in-worklet wasm compile blocks the audio thread.
+        // See issue #129 for the diagnostic write-up and possible fixes.
         const msg = {
             pendingWasmBytes: synthwasm,
             audio: await Promise.all(addedAudio),
@@ -91,28 +88,7 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
             msg.pendingSequencedata = sequencedata;
             msg.pendingToggleSongPlay = toggleSongPlay;
         }
-        // TEMPORARY: log around postMessage so we can correlate audio
-        // thread gap timing with main-thread send/ack timing.
-        const tBeforePost = performance.now();
-        const ctBeforePost = audioworkletnode.context.currentTime;
-        const seqLen = sequencedata ? sequencedata.length : 0;
-        // Capture the moment the worklet's onmessage handler enters; the
-        // worklet posts an `_onMessageEntered: true` ping for this. The
-        // wall-clock delta from `tBeforePost` to that ping = structured-
-        // clone deserialization on the audio thread.
-        _onMessageEnteredTime = null;
-        console.log(`[updateSynth] posting bundled msg: wasmBytes=${synthwasm.byteLength} seqEvents=${seqLen} ` +
-            `ctx.currentTime=${ctBeforePost.toFixed(4)}s perf=${tBeforePost.toFixed(0)}ms`);
         await workerMessageHandler.callAndGetResult(msg, (m) => m.pendingWasmReady);
-        const tAfterAck = performance.now();
-        const cloneMs = _onMessageEnteredTime !== null
-            ? (_onMessageEnteredTime - tBeforePost).toFixed(0)
-            : '??';
-        console.log(`[updateSynth] ack received: ` +
-            `ctx.currentTime=${audioworkletnode.context.currentTime.toFixed(4)}s ` +
-            `perf=${tAfterAck.toFixed(0)}ms ` +
-            `wallElapsed=${(tAfterAck - tBeforePost).toFixed(0)}ms ` +
-            `(of which clone+delivery=${cloneMs}ms)`);
         if (sequencedata !== undefined) {
             setPaused(!toggleSongPlay);
             visualizeSong(sequencedata);
@@ -148,29 +124,8 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
     // song-and-tempo switch. Adding via addEventListener doesn't conflict
     // with the WorkerMessageHandler's onmessage handler.
     awn.port.addEventListener('message', (e) => {
-        if (!e.data) return;
-        if (e.data.quantizedSwapApplied && e.data.bpm) {
+        if (e.data && e.data.quantizedSwapApplied && e.data.bpm) {
             activePlayingBpm = e.data.bpm;
-        }
-        // TEMPORARY: log per-save swap-receive timing for glitch diagnosis.
-        if (e.data._swapTiming) {
-            const t = e.data._swapTiming;
-            console.log(`[swap-timing] wasmBytes=${t.wasmBytes} audio=${t.audioItems} ` +
-                `instantiate=${t.instantiateMs}ms loadAudio=${t.loadAudioMs}ms ` +
-                `stash=${t.stashMs}ms total=${t.totalMs}ms ` +
-                `process()-during-instantiate: expected=${t.expectedProcessCallsDuringInstantiate} ` +
-                `actual=${t.actualProcessCallsDuringInstantiate} ` +
-                `missed=${t.missedDuringInstantiate}`);
-        }
-        // TEMPORARY: capture the moment the audio thread entered onmessage.
-        if (e.data._onMessageEntered) {
-            _onMessageEnteredTime = performance.now();
-        }
-        // TEMPORARY: continuous render-quantum gap monitor.
-        if (e.data._processGap) {
-            const g = e.data._processGap;
-            console.log(`[process-gap] gap=${g.gapMs}ms (expected ~${g.expectedMs}ms) ` +
-                `missedQuanta=${g.missedQuanta} atCtx.currentTime=${g.atCurrentTime}s`);
         }
     });
 
