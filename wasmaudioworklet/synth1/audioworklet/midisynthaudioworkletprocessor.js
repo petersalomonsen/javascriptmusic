@@ -39,17 +39,19 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           this.port.postMessage({ wasmloaded: true });
         }
 
-        if (msg.data.pendingWasm) {
-          // Instantiate in the pending slot; do not swap yet. The
-          // process() loop fires the swap at the next beat boundary
-          // divisible by quantizeN. Late-arriving saves replace the
-          // pending entries (last-save-wins).
-          const instance = (await WebAssembly.instantiate(msg.data.pendingWasm, {
+        if (msg.data.pendingWasmModule) {
+          // Caller pre-compiled the bytes to a Module on the main thread
+          // (see updateSynth). `new WebAssembly.Instance` is synchronous
+          // but only does linking + memory setup, no parse/JIT, so the
+          // audio thread can absorb it inside a single render quantum.
+          // Going through WebAssembly.instantiate(bytes) here instead would
+          // sync-compile on the render thread and audibly glitch on save.
+          const instance = new WebAssembly.Instance(msg.data.pendingWasmModule, {
             environment: { SAMPLERATE: sampleRate },
             env: {
               abort: () => console.log('webassembly synth abort, should not happen')
             }
-          })).instance.exports;
+          }).exports;
           if (msg.data.audio) {
             this.loadAudioIntoWasm(instance, msg.data.audio);
           }

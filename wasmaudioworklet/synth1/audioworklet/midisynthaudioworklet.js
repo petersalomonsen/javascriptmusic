@@ -47,8 +47,14 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0)
         }, (msg) => msg.wasmloaded);
         audioworkletnode.context.resume();
     } else {
+        // Pre-compile on the main thread so the audio-thread side only does
+        // linking + memory setup, not parse/JIT. WebAssembly.compile(bytes)
+        // goes off-thread on the main thread, whereas WebAssembly.instantiate
+        // inside an audio worklet falls back to synchronous compile and
+        // blows the render-quantum deadline → audible glitch on save.
+        const pendingWasmModule = await WebAssembly.compile(synthwasm);
         await workerMessageHandler.callAndGetResult({
-            pendingWasm: synthwasm,
+            pendingWasmModule,
             audio: await Promise.all(addedAudio),
             quantizeN: quantizeN,
             bpm: bpm,
