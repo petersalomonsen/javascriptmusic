@@ -15,6 +15,21 @@ import { bpm } from '../../midisequencer/pattern.js';
 export let audioworkletnode;
 
 let workerMessageHandler;
+// Browsers differ in whether AudioWorkletNode.port can receive
+// WebAssembly.Module via structured clone. Firefox: yes. Chromium:
+// silently drops the message (whole message, not just the field). We
+// probe once at startup and route subsequent saves accordingly.
+let moduleTransferWorks = false;
+// Tracks the bpm of the song currently producing audio, kept in sync
+// with the worklet's `playingBpm` so the beat indicator stays correct
+// after song switches. Initialized to the imported `bpm` binding (the
+// first song's BPM) and updated whenever the worklet announces a swap
+// (or whenever an N=0 immediate replace bakes a new bpm into the live
+// instance).
+let activePlayingBpm = 0;
+function getActivePlayingBpm() {
+    return activePlayingBpm || bpm;
+}
 
 export function onmidi(data) {
     audioworkletnode.port.postMessage({
@@ -55,24 +70,27 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
             bpm: bpm,
         }, (msg) => msg.wasmloaded);
         audioworkletnode.context.resume();
+        // N=0 path is immediate — the worklet's playingBpm has just been
+        // updated to the new song's bpm. Mirror that on the main thread so
+        // the beat indicator switches with it.
+        if (bpm) activePlayingBpm = bpm;
     } else {
-        // Pre-compile on the main thread so the audio-thread side only does
-        // linking + memory setup, not parse/JIT. WebAssembly.compile(bytes)
-        // goes off-thread on the main thread, whereas WebAssembly.instantiate
-        // inside an audio worklet falls back to synchronous compile and
-        // blows the render-quantum deadline → audible glitch on save.
-        // Send raw bytes — Chromium's AudioWorklet structured-clone silently
-        // drops WebAssembly.Module values, so a pre-compiled Module would
-        // never arrive at the worklet on Chromium. The worklet does an
-        // `await WebAssembly.instantiate(bytes, ...)`, which takes the
-        // async (off-thread) compile path and avoids the audible glitch
-        // a synchronous `new WebAssembly.Module(bytes)` would cause.
+        // Compile on the main thread (off-thread, doesn't block the audio
+        // thread) when the engine supports Module structured-clone over
+        // AudioWorkletNode.port. Otherwise send raw bytes and have the
+        // worklet do an `await WebAssembly.instantiate(bytes, ...)`, which
+        // still glitches because Chromium's audio thread runs the compile
+        // synchronously — we just don't have a better option there.
         const msg = {
-            pendingWasmBytes: synthwasm,
             audio: await Promise.all(addedAudio),
             quantizeN: quantizeN,
             bpm: bpm,
         };
+        if (moduleTransferWorks) {
+            msg.pendingWasmModule = await WebAssembly.compile(synthwasm);
+        } else {
+            msg.pendingWasmBytes = synthwasm;
+        }
         if (sequencedata !== undefined) {
             msg.pendingSequencedata = sequencedata;
             msg.pendingToggleSongPlay = toggleSongPlay;
@@ -82,6 +100,26 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
             setPaused(!toggleSongPlay);
             visualizeSong(sequencedata);
         }
+    }
+}
+
+// Probe whether the engine can structure-clone a WebAssembly.Module onto
+// AudioWorkletNode.port. Firefox can; Chromium silently drops the entire
+// containing message. We send a tiny Module and time out if the ack
+// doesn't come back within a render-quantum or two.
+async function probeModuleTransfer(wmh, bytes) {
+    try {
+        const probeModule = await WebAssembly.compile(bytes);
+        const result = await Promise.race([
+            wmh.callAndGetResult(
+                { _probeModule: probeModule },
+                (m) => m._probeAck !== undefined,
+            ),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('probe timeout')), 500)),
+        ]);
+        return result._probeAck === true;
+    } catch (e) {
+        return false;
     }
 }
 
@@ -106,6 +144,21 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         audio: await Promise.all(addedAudio),
         bpm: bpm,
     }, (msg) => msg.wasmloaded);
+    activePlayingBpm = bpm;
+
+    // Update activePlayingBpm whenever the worklet reports a quantized
+    // swap, so the beat indicator follows the audible tempo after a
+    // song-and-tempo switch. Adding via addEventListener doesn't conflict
+    // with the WorkerMessageHandler's onmessage handler.
+    awn.port.addEventListener('message', (e) => {
+        if (e.data && e.data.quantizedSwapApplied && e.data.bpm) {
+            activePlayingBpm = e.data.bpm;
+        }
+    });
+
+    if (!(context instanceof (OfflineAudioContext))) {
+        moduleTransferWorks = await probeModuleTransfer(wmh, wasm_synth_bytes);
+    }
     toggleSpinner(false);
 
     if (!(context instanceof (OfflineAudioContext))) {
@@ -113,7 +166,7 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         attachSeek((time) => awn.port.postMessage({ seek: time }),
             getCurrentTime,
             sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0,
-            bpm);
+            getActivePlayingBpm);
     }
     awn.connect(context.destination);
     if (!(context instanceof (OfflineAudioContext))) {

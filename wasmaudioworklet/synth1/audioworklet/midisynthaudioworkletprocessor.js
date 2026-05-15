@@ -27,6 +27,18 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       this.playingBpm = 0;
 
       this.port.onmessage = async (msg) => {
+        if (msg.data._probeModule !== undefined) {
+          // Capability probe from the main thread: does this engine
+          // structure-clone a WebAssembly.Module across the
+          // AudioWorkletNode.port? Firefox: yes. Chromium: silently drops
+          // the message — in which case this handler never even runs, and
+          // the main thread sees a timeout. Either way the main thread
+          // routes future saves accordingly.
+          this.port.postMessage({
+            _probeAck: msg.data._probeModule instanceof WebAssembly.Module,
+          });
+          return;
+        }
         if (msg.data.wasm) {
           this.wasmInstancePromise = WebAssembly.instantiate(msg.data.wasm, {
             environment: { SAMPLERATE: msg.data.samplerate },
@@ -46,19 +58,23 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           this.port.postMessage({ wasmloaded: true });
         }
 
-        if (msg.data.pendingWasmBytes) {
-          // Caller could not transfer a pre-compiled WebAssembly.Module —
-          // Chromium's AudioWorklet structured-clone silently drops Module
-          // values, so we receive raw bytes and compile here. The compile
-          // and the subsequent `await WebAssembly.instantiate` go through
-          // the async (off-thread) path, which avoids the audible glitch
-          // a synchronous `new WebAssembly.Module(bytes)` would cause.
-          const instance = (await WebAssembly.instantiate(msg.data.pendingWasmBytes, {
+        if (msg.data.pendingWasmModule || msg.data.pendingWasmBytes) {
+          // Engines where main-thread Module transfer works (Firefox) send
+          // a pre-compiled Module here — `new WebAssembly.Instance` is
+          // synchronous but only links imports, no parse/JIT, so the audio
+          // thread absorbs it inside one render quantum. Engines that
+          // silently drop Module (Chromium) fall back to raw bytes; we
+          // await the async instantiate (a glitch is still possible on
+          // those engines, but there's no cheaper alternative).
+          const imports = {
             environment: { SAMPLERATE: sampleRate },
             env: {
-              abort: () => console.log('webassembly synth abort, should not happen')
-            }
-          })).instance.exports;
+              abort: () => console.log('webassembly synth abort, should not happen'),
+            },
+          };
+          const instance = msg.data.pendingWasmModule
+            ? new WebAssembly.Instance(msg.data.pendingWasmModule, imports).exports
+            : (await WebAssembly.instantiate(msg.data.pendingWasmBytes, imports)).instance.exports;
           if (msg.data.audio) {
             this.loadAudioIntoWasm(instance, msg.data.audio);
           }

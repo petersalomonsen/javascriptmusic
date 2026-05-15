@@ -231,5 +231,21 @@ describe('quantized save', function () {
         }
         assert.isAtMost(g6Notes[0].ct, 50,
             `first g6 should fire essentially at swap (post-reset ct ≈ 0), fired at ct=${g6Notes[0].ct.toFixed(0)}`);
+
+        // Beat indicator should follow the currently-playing tempo across
+        // swaps. After both swaps the indicator's bpm reference must read
+        // 120 (the current playing bpm), so displayedBeat == ct * 120/60000.
+        // The bug it guards against: attachSeek captures bpm in a closure
+        // at startup, so without dynamic-bpm support the indicator would
+        // still read at 100 BPM (the first song's tempo).
+        await new Promise(r => setTimeout(r, 500));
+        const ctAtCheck = await getCurrentTime();
+        const timespanText = appElement.querySelector('#timespan').innerText;
+        const beatMatch = timespanText.match(/\(([\d.]+)\)/);
+        assert.isNotNull(beatMatch, `expected beat counter in timespan, got "${timespanText}"`);
+        const displayedBeat = parseFloat(beatMatch[1]);
+        const expectedBeat120 = ctAtCheck * 120 / 60000;
+        assert.closeTo(displayedBeat, expectedBeat120, 0.5,
+            `beat indicator should reflect 120 BPM (got ${displayedBeat}, expected ~${expectedBeat120.toFixed(2)} at ct=${ctAtCheck.toFixed(0)})`);
     });
 });
