@@ -143,17 +143,31 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
     }
 
     tryQuantizedSwap() {
-      // No pending state → nothing to do.
+      // No pending state → nothing to do. Reset lastBeat so the next save
+      // starts fresh (otherwise a stale lastBeat from a previous swap can
+      // make the first cross-check after the next save fire immediately).
       const hasPending = this.pendingInstance
         || this.pendingSequencedata
         || this.pendingToggleSongPlay != null;
-      if (!hasPending) return;
+      if (!hasPending) {
+        this.lastBeat = -1;
+        return;
+      }
       if (this.pendingQuantizeN <= 0 || this.pendingBpm <= 0) return;
 
       const framesPerBeat = sampleRate * 60 / this.pendingBpm;
       const currentBeat = Math.floor(
         AudioWorkletGlobalScope.midisequencer.currentFrame / framesPerBeat
       );
+      // First check after a save lands here. Anchor lastBeat to the beat
+      // the save fell inside so we never swap *within* that beat — we only
+      // swap once we've crossed into a new beat that satisfies the
+      // quantize. Without this, saving anywhere inside an N-aligned beat
+      // would fire the swap on the very next process call (~3 ms later).
+      if (this.lastBeat === -1) {
+        this.lastBeat = currentBeat;
+        return;
+      }
       // Edge-detect beat crossings. `!==` (not `>`) so wrap-around when the
       // song loops back to frame 0 still triggers.
       if (currentBeat === this.lastBeat) return;
