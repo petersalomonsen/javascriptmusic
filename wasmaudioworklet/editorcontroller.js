@@ -721,24 +721,39 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
             const quantizeSelect = componentRoot.getElementById('saveQuantizeSelect');
             const quantizeN = quantizeSelect ? parseInt(quantizeSelect.value, 10) || 0 : 0;
             const songBpm = midiBpm || 0;
+            const toggleSongPlayChecked = componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false;
 
-            if (song.synthwasm) {
+            // For N>0 with both new wasm and new sequencedata, bundle them
+            // into a single worklet message so the pending state lands
+            // atomically. Two separate messages would race: the wasm-only
+            // ack takes 50–300 ms, during which a beat boundary could fire
+            // a swap with the new synth but the old song — exactly the
+            // "had to press save twice" symptom.
+            const useBundledSave = quantizeN > 0 && song.synthwasm && song.eventlist && !song.synthsource;
+
+            if (useBundledSave) {
+                await updateSynth(
+                    song.synthwasm, addedAudio, quantizeN, songBpm,
+                    song.eventlist, toggleSongPlayChecked,
+                );
+                webassemblySynthUpdated = false;
+            } else if (song.synthwasm) {
                 await updateSynth(song.synthwasm, addedAudio, quantizeN, songBpm);
             }
 
-            if (song.eventlist) {
+            if (!useBundledSave && song.eventlist) {
                 if (song.synthsource) {
                     await wamPostSong(song.eventlist, song.synthsource);
                 } else {
                     updateSong(
                         song.eventlist,
-                        componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false,
+                        toggleSongPlayChecked,
                         quantizeN,
                         songBpm,
                     );
                     webassemblySynthUpdated = false;
                 }
-            } else if (window.audioworkletnode) {
+            } else if (!useBundledSave && !song.eventlist && window.audioworkletnode) {
                 audioworkletnode.port.postMessage({
                     song: song,
                     samplerate: window.audioworkletnode.context.sampleRate,

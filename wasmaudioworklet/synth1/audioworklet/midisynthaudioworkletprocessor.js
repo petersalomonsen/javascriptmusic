@@ -64,6 +64,16 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           this.pendingInstance = instance;
           this.pendingQuantizeN = msg.data.quantizeN || 1;
           this.pendingBpm = msg.data.bpm || this.pendingBpm;
+          // Bundled save: stash sequencedata + toggleSongPlay atomically
+          // with the new wasm, so a beat-boundary that fires between the
+          // wasm-ack and a separate sequencedata message can't swap a
+          // half-applied save (new synth, old song).
+          if (msg.data.pendingSequencedata !== undefined) {
+            this.pendingSequencedata = msg.data.pendingSequencedata;
+          }
+          if (msg.data.pendingToggleSongPlay !== undefined) {
+            this.pendingToggleSongPlay = msg.data.pendingToggleSongPlay;
+          }
           this.port.postMessage({ pendingWasmReady: true });
         }
 

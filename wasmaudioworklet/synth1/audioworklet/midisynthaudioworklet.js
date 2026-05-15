@@ -33,12 +33,20 @@ export async function updateSong(sequencedata, toggleSongPlay, quantizeN = 0, bp
     visualizeSong(sequencedata);
 }
 
-export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0) {
+export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0, sequencedata, toggleSongPlay) {
     // quantizeN === 0 keeps the legacy suspend/instantiate/resume cycle —
     // a brief audible pause but the wasm is guaranteed live before the
     // function returns. quantizeN > 0 stashes the new wasm in the
     // worklet's pending slot without suspending; the worklet swaps it
     // in atomically at the next beat where `currentBeat % quantizeN == 0`.
+    //
+    // When N>0 we also accept the new sequencedata + toggleSongPlay in the
+    // SAME message, so all three pending fields land atomically. Splitting
+    // them across two messages opens a race: the wasm-only ack takes
+    // 50–300 ms, during which a beat boundary can fire a swap that only
+    // includes the new wasm but not the new sequencedata, leaving the
+    // listener hearing the old song's notes through the new synth — which
+    // looks like "the song didn't replace, I had to save again".
     if (quantizeN === 0) {
         audioworkletnode.context.suspend();
         await workerMessageHandler.callAndGetResult({
@@ -54,12 +62,21 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0)
         // inside an audio worklet falls back to synchronous compile and
         // blows the render-quantum deadline → audible glitch on save.
         const pendingWasmModule = await WebAssembly.compile(synthwasm);
-        await workerMessageHandler.callAndGetResult({
+        const msg = {
             pendingWasmModule,
             audio: await Promise.all(addedAudio),
             quantizeN: quantizeN,
             bpm: bpm,
-        }, (msg) => msg.pendingWasmReady);
+        };
+        if (sequencedata !== undefined) {
+            msg.pendingSequencedata = sequencedata;
+            msg.pendingToggleSongPlay = toggleSongPlay;
+        }
+        await workerMessageHandler.callAndGetResult(msg, (m) => m.pendingWasmReady);
+        if (sequencedata !== undefined) {
+            setPaused(!toggleSongPlay);
+            visualizeSong(sequencedata);
+        }
     }
 }
 
