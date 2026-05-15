@@ -57,6 +57,13 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         }
 
         if (msg.data.pendingWasmBytes) {
+          // TEMPORARY: ping back immediately so the main thread can measure
+          // the wall-clock time from postMessage to onmessage-entry. That
+          // window is when structured-clone *deserialization* runs on the
+          // audio thread, blocking process() — and we suspect cloning 7347
+          // small {time, message: [...]} event objects is the bottleneck.
+          this.port.postMessage({ _onMessageEntered: true });
+
           // Single path: await WebAssembly.instantiate on the bytes inside
           // the worklet. Module structured-clone over AudioWorkletNode.port
           // doesn't reliably work across browsers, so we keep one uniform

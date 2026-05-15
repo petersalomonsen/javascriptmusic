@@ -26,6 +26,10 @@ function getActivePlayingBpm() {
     return activePlayingBpm || bpm;
 }
 
+// TEMPORARY: filled in by the audio worklet's onmessage-entry ping; used
+// to measure clone+delivery time for glitch diagnosis.
+let _onMessageEnteredTime = null;
+
 export function onmidi(data) {
     audioworkletnode.port.postMessage({
         midishortmsg: data
@@ -92,13 +96,23 @@ export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0,
         const tBeforePost = performance.now();
         const ctBeforePost = audioworkletnode.context.currentTime;
         const seqLen = sequencedata ? sequencedata.length : 0;
+        // Capture the moment the worklet's onmessage handler enters; the
+        // worklet posts an `_onMessageEntered: true` ping for this. The
+        // wall-clock delta from `tBeforePost` to that ping = structured-
+        // clone deserialization on the audio thread.
+        _onMessageEnteredTime = null;
         console.log(`[updateSynth] posting bundled msg: wasmBytes=${synthwasm.byteLength} seqEvents=${seqLen} ` +
             `ctx.currentTime=${ctBeforePost.toFixed(4)}s perf=${tBeforePost.toFixed(0)}ms`);
         await workerMessageHandler.callAndGetResult(msg, (m) => m.pendingWasmReady);
+        const tAfterAck = performance.now();
+        const cloneMs = _onMessageEnteredTime !== null
+            ? (_onMessageEnteredTime - tBeforePost).toFixed(0)
+            : '??';
         console.log(`[updateSynth] ack received: ` +
             `ctx.currentTime=${audioworkletnode.context.currentTime.toFixed(4)}s ` +
-            `perf=${performance.now().toFixed(0)}ms ` +
-            `wallElapsed=${(performance.now() - tBeforePost).toFixed(0)}ms`);
+            `perf=${tAfterAck.toFixed(0)}ms ` +
+            `wallElapsed=${(tAfterAck - tBeforePost).toFixed(0)}ms ` +
+            `(of which clone+delivery=${cloneMs}ms)`);
         if (sequencedata !== undefined) {
             setPaused(!toggleSongPlay);
             visualizeSong(sequencedata);
@@ -147,6 +161,10 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
                 `process()-during-instantiate: expected=${t.expectedProcessCallsDuringInstantiate} ` +
                 `actual=${t.actualProcessCallsDuringInstantiate} ` +
                 `missed=${t.missedDuringInstantiate}`);
+        }
+        // TEMPORARY: capture the moment the audio thread entered onmessage.
+        if (e.data._onMessageEntered) {
+            _onMessageEnteredTime = performance.now();
         }
         // TEMPORARY: continuous render-quantum gap monitor.
         if (e.data._processGap) {
