@@ -123,8 +123,19 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
     // song-and-tempo switch. Adding via addEventListener doesn't conflict
     // with the WorkerMessageHandler's onmessage handler.
     awn.port.addEventListener('message', (e) => {
-        if (e.data && e.data.quantizedSwapApplied && e.data.bpm) {
+        if (!e.data) return;
+        if (e.data.quantizedSwapApplied && e.data.bpm) {
             activePlayingBpm = e.data.bpm;
+        }
+        // TEMPORARY: log per-save swap-receive timing for glitch diagnosis.
+        if (e.data._swapTiming) {
+            const t = e.data._swapTiming;
+            console.log(`[swap-timing] wasmBytes=${t.wasmBytes} audio=${t.audioItems} ` +
+                `instantiate=${t.instantiateMs}ms loadAudio=${t.loadAudioMs}ms ` +
+                `stash=${t.stashMs}ms total=${t.totalMs}ms ` +
+                `process()-during-instantiate: expected=${t.expectedProcessCallsDuringInstantiate} ` +
+                `actual=${t.actualProcessCallsDuringInstantiate} ` +
+                `missed=${t.missedDuringInstantiate}`);
         }
     });
 
