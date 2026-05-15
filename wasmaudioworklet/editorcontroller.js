@@ -12,6 +12,7 @@ import { transpileDspSource } from './faust/browser-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal, modalPrompt } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { bpm as midiBpm } from './midisequencer/pattern.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
 import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
@@ -713,15 +714,28 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
 
             const song = await compileSong();
 
+            // Quantize the wasm + sequencedata swap to the next beat
+            // divisible by N. N=0 means "Now" — legacy immediate swap with
+            // a brief audible suspend/resume; N>0 stashes in the worklet
+            // and swaps live at the bar boundary. Sticky across saves.
+            const quantizeSelect = componentRoot.getElementById('saveQuantizeSelect');
+            const quantizeN = quantizeSelect ? parseInt(quantizeSelect.value, 10) || 0 : 0;
+            const songBpm = midiBpm || 0;
+
             if (song.synthwasm) {
-                await updateSynth(song.synthwasm, addedAudio);
+                await updateSynth(song.synthwasm, addedAudio, quantizeN, songBpm);
             }
 
             if (song.eventlist) {
                 if (song.synthsource) {
                     await wamPostSong(song.eventlist, song.synthsource);
                 } else {
-                    updateSong(song.eventlist, componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false);
+                    updateSong(
+                        song.eventlist,
+                        componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false,
+                        quantizeN,
+                        songBpm,
+                    );
                     webassemblySynthUpdated = false;
                 }
             } else if (window.audioworkletnode) {
@@ -730,7 +744,9 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                     samplerate: window.audioworkletnode.context.sampleRate,
                     toggleSongPlay: componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false,
                     livewasmreplace: webassemblySynthUpdated,
-                    wasm: webassemblySynthUpdated ? window.WASM_SYNTH_BYTES : undefined
+                    wasm: webassemblySynthUpdated ? window.WASM_SYNTH_BYTES : undefined,
+                    quantizeN: quantizeN,
+                    bpm: songBpm,
                 });
                 webassemblySynthUpdated = false;
             }

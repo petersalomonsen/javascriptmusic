@@ -22,22 +22,38 @@ export function onmidi(data) {
     });
 }
 
-export async function updateSong(sequencedata, toggleSongPlay) {
+export async function updateSong(sequencedata, toggleSongPlay, quantizeN = 0, bpm = 0) {
     audioworkletnode.port.postMessage({
         sequencedata: sequencedata,
-        toggleSongPlay: toggleSongPlay
+        toggleSongPlay: toggleSongPlay,
+        quantizeN: quantizeN,
+        bpm: bpm,
     });
     setPaused(!toggleSongPlay);
     visualizeSong(sequencedata);
 }
 
-export async function updateSynth(synthwasm, addedAudio) {
-    audioworkletnode.context.suspend();
-    await workerMessageHandler.callAndGetResult({
-        wasm: synthwasm,
-        audio: await Promise.all(addedAudio)
-    }, (msg) => msg.wasmloaded);
-    audioworkletnode.context.resume();
+export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0) {
+    // quantizeN === 0 keeps the legacy suspend/instantiate/resume cycle —
+    // a brief audible pause but the wasm is guaranteed live before the
+    // function returns. quantizeN > 0 stashes the new wasm in the
+    // worklet's pending slot without suspending; the worklet swaps it
+    // in atomically at the next beat where `currentBeat % quantizeN == 0`.
+    if (quantizeN === 0) {
+        audioworkletnode.context.suspend();
+        await workerMessageHandler.callAndGetResult({
+            wasm: synthwasm,
+            audio: await Promise.all(addedAudio)
+        }, (msg) => msg.wasmloaded);
+        audioworkletnode.context.resume();
+    } else {
+        await workerMessageHandler.callAndGetResult({
+            pendingWasm: synthwasm,
+            audio: await Promise.all(addedAudio),
+            quantizeN: quantizeN,
+            bpm: bpm,
+        }, (msg) => msg.pendingWasmReady);
+    }
 }
 
 async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {

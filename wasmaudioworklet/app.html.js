@@ -8,6 +8,20 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
     <button id="startaudiobutton" onclick="startaudio()" disabled title="start synth">&#x25B6;</button>
     <button id="stopaudiobutton" onclick="stopaudio()" title="stop synth" style="display: none">&#9724;</button>
     <button id="savesongbutton" disabled title="save song (clears recorded data)">&#x1f4be;</button>
+    <label title="quantize live wasm + song replacement: take effect at the next beat whose number is divisible by N (Now = immediate)">
+      <select id="saveQuantizeSelect" style="font-size: 12px;">
+        <option value="0">Now</option>
+        <option value="1">1 beat</option>
+        <option value="2">2 beats</option>
+        <option value="3">3 beats</option>
+        <option value="4">4 beats</option>
+        <option value="6">6 beats</option>
+        <option value="8">8 beats</option>
+        <option value="12">12 beats</option>
+        <option value="16">16 beats</option>
+        <option value="32">32 beats</option>
+      </select>
+    </label>
     <button onclick="insertRecording()" title="insert recording at cursor" style="height: 31px">&#128203;</button>
 
     <label>
