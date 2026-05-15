@@ -1,4 +1,8 @@
 export function AudioWorkletProcessorSequencerModule() {
+  // AudioWorklet render quantum size. Fixed at 128 in the original spec
+  // and remains the default in `AudioContext({renderQuantumSize})`; we
+  // pull it into a constant so the assumption is named in one place.
+  const RENDER_QUANTUM_FRAMES = 128;
   const SEQ_MSG_LOOP = -1;
   const SEQ_MSG_START_RECORDING = -2;
   const SEQ_MSG_STOP_RECORDING = -3;
@@ -37,7 +41,7 @@ export function AudioWorkletProcessorSequencerModule() {
         // sitting exactly at the beat boundary is one quantum behind
         // currentTime and would be silently dropped.
         const currentTime = (this.currentFrame / sampleRate) * 1000;
-        const quantumMs = 128 / sampleRate * 1000;
+        const quantumMs = RENDER_QUANTUM_FRAMES / sampleRate * 1000;
         this.sequenceIndex = sequencedata.findIndex(evt => evt.time > currentTime - quantumMs);
         if (this.sequenceIndex == -1) {
           this.sequenceIndex = 0;
@@ -135,7 +139,7 @@ export function AudioWorkletProcessorSequencerModule() {
           this.midireceiver(message[0], message[1], message[2]);
         }
       }
-      this.currentFrame += 128;
+      this.currentFrame += RENDER_QUANTUM_FRAMES;
     }
   }
 

@@ -1,5 +1,11 @@
 export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
-  const SAMPLE_FRAMES = 128;
+  // AudioWorklet render quantum size. Fixed at 128 in the original spec
+  // and remains the default in `AudioContext({renderQuantumSize})`; we
+  // pull it into a constant so the assumption is named in one place. Note
+  // that the wasm synth's sample buffer is also sized to this — if the
+  // engine ever ships a non-128 quantum, the AssemblyScript synth would
+  // need a matching change.
+  const RENDER_QUANTUM_FRAMES = 128;
   class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor {
 
     constructor() {
@@ -280,10 +286,10 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         this.wasmInstance.fillSampleBuffer();
         output[0].set(new Float32Array(this.wasmInstance.memory.buffer,
           this.wasmInstance.samplebuffer,
-          SAMPLE_FRAMES));
+          RENDER_QUANTUM_FRAMES));
         output[1].set(new Float32Array(this.wasmInstance.memory.buffer,
-          this.wasmInstance.samplebuffer + (SAMPLE_FRAMES * 4),
-          SAMPLE_FRAMES));
+          this.wasmInstance.samplebuffer + (RENDER_QUANTUM_FRAMES * 4),
+          RENDER_QUANTUM_FRAMES));
       }
 
       return this.processorActive;
