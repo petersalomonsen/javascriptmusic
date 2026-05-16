@@ -15,15 +15,12 @@ import { bpm } from '../../midisequencer/pattern.js';
 export let audioworkletnode;
 
 let workerMessageHandler;
-// The GainNode currently driving destination. Each save with quantize > 0
-// creates a fresh AudioWorkletNode with its own GainNode; sample-accurate
-// crossfade between gains lets the new node take over without an
-// in-worklet wasm compile blocking the audio thread.
-let activeGainNode;
-
 // Tracks the bpm of the song currently producing audio, kept in sync
 // with the worklet's `playingBpm` so the beat indicator stays correct
-// after song switches.
+// after song switches. Initialized to the imported `bpm` binding (the
+// first song's BPM) and updated whenever the worklet announces a swap
+// (or whenever an N=0 immediate replace bakes a new bpm into the live
+// instance).
 let activePlayingBpm = 0;
 function getActivePlayingBpm() {
     return activePlayingBpm || bpm;
@@ -39,149 +36,64 @@ export async function updateSong(sequencedata, toggleSongPlay, quantizeN = 0, bp
     audioworkletnode.port.postMessage({
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay,
+        quantizeN: quantizeN,
+        bpm: bpm,
     });
-    if (bpm) activePlayingBpm = bpm;
     setPaused(!toggleSongPlay);
     visualizeSong(sequencedata);
 }
 
-export async function updateSynth(synthwasm, addedAudioInput, quantizeN = 0, songBpm = 0, sequencedata, toggleSongPlay) {
+export async function updateSynth(synthwasm, addedAudio, quantizeN = 0, bpm = 0, sequencedata, toggleSongPlay) {
+    // quantizeN === 0 keeps the legacy suspend/instantiate/resume cycle —
+    // a brief audible pause but the wasm is guaranteed live before the
+    // function returns. quantizeN > 0 stashes the new wasm in the
+    // worklet's pending slot without suspending; the worklet swaps it
+    // in atomically at the next beat where `currentBeat % quantizeN == 0`.
+    //
+    // When N>0 we also accept the new sequencedata + toggleSongPlay in the
+    // SAME message, so all three pending fields land atomically. Splitting
+    // them across two messages opens a race: the wasm-only ack takes
+    // 50–300 ms, during which a beat boundary can fire a swap that only
+    // includes the new wasm but not the new sequencedata, leaving the
+    // listener hearing the old song's notes through the new synth — which
+    // looks like "the song didn't replace, I had to save again".
     if (quantizeN === 0) {
-        // Legacy immediate replace: suspend, reload wasm into the existing
-        // node, resume. Brief audible suspend/resume click but the wasm is
-        // guaranteed live before the function returns.
         audioworkletnode.context.suspend();
         await workerMessageHandler.callAndGetResult({
             wasm: synthwasm,
-            audio: await Promise.all(addedAudioInput),
-            bpm: songBpm,
+            audio: await Promise.all(addedAudio),
+            bpm: bpm,
         }, (msg) => msg.wasmloaded);
         audioworkletnode.context.resume();
-        if (songBpm) activePlayingBpm = songBpm;
-        return;
-    }
-
-    // Quantized save with synth change. Compile on the main thread (V8's
-    // off-thread compile worker pool — doesn't block anything) and create
-    // a brand-new AudioWorkletNode with the Module passed in via
-    // processorOptions. Module structured-clones via processorOptions even
-    // on Chrome (chromium issue 40855462 only breaks port postMessage), so
-    // the new processor's constructor can synchronously instantiate the
-    // Module — microseconds, no audio glitch — and wait silently until the
-    // quantize-aligned beat. Then a sample-accurate gain crossfade hands
-    // off audio output from the old node to the new one.
-    const ctx = audioworkletnode.context;
-    const playingBpm = getActivePlayingBpm();
-    const swapAtCtxTime = computeNextQuantizeBoundary(ctx.currentTime, playingBpm, quantizeN);
-
-    const wasmModule = await WebAssembly.compile(synthwasm);
-    const audio = await Promise.all(addedAudioInput);
-
-    const newNode = new AudioWorkletNode(ctx, 'asc-midisynth-audio-worklet-processor', {
-        outputChannelCount: [2],
-        processorOptions: {
-            wasmModule,
-            audio,
-            sequencedata,
-            toggleSongPlay,
-            bpm: songBpm,
-            swapAtCtxTime,
-        },
-    });
-    newNode.port.start();
-
-    const newGain = ctx.createGain();
-    newGain.gain.value = 0;
-    newNode.connect(newGain).connect(ctx.destination);
-
-    // Wire the new node's bpm-tracking + tracing forwarding so the beat
-    // indicator and the test continue to receive events after the swap.
-    attachWorkletForwarders(newNode);
-
-    // Sample-accurate handoff at swapAtCtxTime.
-    const oldGain = activeGainNode;
-    const oldNode = audioworkletnode;
-    if (oldGain) {
-        oldGain.gain.setValueAtTime(oldGain.gain.value, swapAtCtxTime);
-        oldGain.gain.setValueAtTime(0, swapAtCtxTime);
-    }
-    newGain.gain.setValueAtTime(0, swapAtCtxTime);
-    newGain.gain.setValueAtTime(1, swapAtCtxTime);
-
-    // Tell the old node to freeze its sequencer at the swap moment so
-    // it doesn't keep firing trace noteons (or wasm voice updates) while
-    // we wait for cleanup. The audio is silenced by the gain crossfade,
-    // but the JS-level event stream needs to stop too.
-    if (oldNode && oldNode !== newNode) {
-        try { oldNode.port.postMessage({ stopAtCtxTime: swapAtCtxTime }); } catch (e) {}
-    }
-
-    // Dispose the old node a little after the swap so the audio graph
-    // finishes processing the crossfade quantum first. 200 ms is plenty.
-    const cleanupDelayMs = Math.max(0, (swapAtCtxTime - ctx.currentTime) * 1000) + 200;
-    setTimeout(() => {
-        try {
-            oldNode.port.postMessage({ terminate: true });
-        } catch (e) { /* port may already be closed */ }
-        try { oldNode.disconnect(); } catch (e) {}
-        if (oldGain) try { oldGain.disconnect(); } catch (e) {}
-    }, cleanupDelayMs);
-
-    audioworkletnode = newNode;
-    workerMessageHandler = new WorkerMessageHandler(newNode.port);
-    activeGainNode = newGain;
-    if (songBpm) activePlayingBpm = songBpm;
-    if (sequencedata !== undefined) {
-        setPaused(!toggleSongPlay);
-        visualizeSong(sequencedata);
-    }
-}
-
-// Returns the next ctx.currentTime value that lines up with a beat
-// divisible by quantizeN at the given bpm. Uses a `currentTime - epoch`
-// reference so we don't drift across saves: the epoch is captured at
-// startaudio (`audioStartCtxTime`) so beat 0 == audioStartCtxTime.
-let audioStartCtxTime = 0;
-function computeNextQuantizeBoundary(nowCtxTime, beatBpm, quantizeN) {
-    if (!beatBpm || beatBpm <= 0) beatBpm = 110;
-    const elapsedSec = nowCtxTime - audioStartCtxTime;
-    const elapsedBeats = elapsedSec * beatBpm / 60;
-    // Add a tiny epsilon so saving exactly on a boundary still waits for
-    // the next one (otherwise the swap would fire ~immediately).
-    const nextAlignedBeat = Math.ceil((elapsedBeats + 0.001) / quantizeN) * quantizeN;
-    return audioStartCtxTime + nextAlignedBeat * 60 / beatBpm;
-}
-
-function attachWorkletForwarders(node) {
-    // Each save creates a new AudioWorkletNode (so its constructor can
-    // receive a pre-compiled wasm Module via processorOptions —
-    // chromium#40855462 prevents Modules from arriving via port.postMessage).
-    // That means subscribers on a specific node's port miss events fired
-    // by later nodes. Re-broadcast through a stable target (`window`) so
-    // listeners (beat indicator, tests) don't have to rebind on every save.
-    node.port.addEventListener('message', (e) => {
-        if (!e.data) return;
-        if (e.data.quantizedSwapApplied) {
-            if (e.data.bpm) activePlayingBpm = e.data.bpm;
-            // Reset the beat-0 reference to this swap's audio-context time
-            // so the next quantized save measures its own bpm-elapsed beats
-            // from when *this* song started, not from the original audio
-            // start. Otherwise, after a tempo change, the elapsed-beats
-            // count grows at the new bpm but is anchored to the wrong
-            // moment, and the next quantize boundary lands too late.
-            if (typeof e.data.ct === 'number') {
-                audioStartCtxTime = e.data.ct / 1000;
-            }
+        // N=0 path is immediate — the worklet's playingBpm has just been
+        // updated to the new song's bpm. Mirror that on the main thread so
+        // the beat indicator switches with it.
+        if (bpm) activePlayingBpm = bpm;
+    } else {
+        // Send raw bytes; the worklet does `await WebAssembly.instantiate`
+        // inside its onmessage handler. We considered pre-compiling to a
+        // Module on the main thread and transferring it, but Module
+        // structured-clone over AudioWorkletNode.port doesn't reliably
+        // work across browsers — Chromium silently drops every Module
+        // message. The trade-off is a short audible glitch on save when
+        // the in-worklet wasm compile blocks the audio thread.
+        // See issue #129 for the diagnostic write-up and possible fixes.
+        const msg = {
+            pendingWasmBytes: synthwasm,
+            audio: await Promise.all(addedAudio),
+            quantizeN: quantizeN,
+            bpm: bpm,
+        };
+        if (sequencedata !== undefined) {
+            msg.pendingSequencedata = sequencedata;
+            msg.pendingToggleSongPlay = toggleSongPlay;
         }
-        if (typeof window !== 'undefined') {
-            if (e.data.quantizedSwapApplied) {
-                window.dispatchEvent(new CustomEvent('worklet:swap', { detail: e.data }));
-            }
-            if (e.data._trace_noteon) {
-                window.dispatchEvent(new CustomEvent('worklet:noteon', { detail: e.data._trace_noteon }));
-            }
+        await workerMessageHandler.callAndGetResult(msg, (m) => m.pendingWasmReady);
+        if (sequencedata !== undefined) {
+            setPaused(!toggleSongPlay);
+            visualizeSong(sequencedata);
         }
-    });
+    }
 }
 
 async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
@@ -206,29 +118,31 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         bpm: bpm,
     }, (msg) => msg.wasmloaded);
     activePlayingBpm = bpm;
-    audioStartCtxTime = context.currentTime;
 
-    attachWorkletForwarders(awn);
+    // Update activePlayingBpm whenever the worklet reports a quantized
+    // swap, so the beat indicator follows the audible tempo after a
+    // song-and-tempo switch. Adding via addEventListener doesn't conflict
+    // with the WorkerMessageHandler's onmessage handler.
+    awn.port.addEventListener('message', (e) => {
+        if (e.data && e.data.quantizedSwapApplied && e.data.bpm) {
+            activePlayingBpm = e.data.bpm;
+        }
+    });
 
     toggleSpinner(false);
 
     if (!(context instanceof (OfflineAudioContext))) {
         setGetCurrentTimeFunction(getCurrentTime);
-        attachSeek((time) => audioworkletnode.port.postMessage({ seek: time }),
+        attachSeek((time) => awn.port.postMessage({ seek: time }),
             getCurrentTime,
             sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0,
             getActivePlayingBpm);
     }
-
-    // Insert a per-node GainNode so we can swap it out by crossfading on a
-    // future quantized save. Keep gain at 1 for the playing path.
-    const gain = context.createGain();
-    gain.gain.value = 1;
-    awn.connect(gain).connect(context.destination);
+    awn.connect(context.destination);
     if (!(context instanceof (OfflineAudioContext))) {
         context.resume();
     }
-    return { audioworkletnode: awn, workerMessageHandler: wmh, gainNode: gain };
+    return { audioworkletnode: awn, workerMessageHandler: wmh };
 }
 
 export async function createAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
@@ -236,7 +150,6 @@ export async function createAudioWorklet(context, wasm_synth_bytes, sequencedata
 
     audioworkletnode = audioWorkletObjects.audioworkletnode;
     workerMessageHandler = audioWorkletObjects.workerMessageHandler;
-    activeGainNode = audioWorkletObjects.gainNode;
 
     setPaused(!toggleSongPlay);
     visualizeSong(sequencedata);
