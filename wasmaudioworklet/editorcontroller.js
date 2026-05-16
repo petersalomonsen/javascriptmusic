@@ -700,6 +700,33 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         return song;
     }
 
+    // compileAndPostSong handles the Save button. It compiles whichever
+    // song shape the current editor produces and routes the result to the
+    // matching audio worklet processor. compileSong() can return three
+    // shapes — they're easy to confuse so they're documented here:
+    //
+    //   1. MIDI synth (AssemblyScript) — `{ eventlist, synthwasm }`
+    //      The user's synth.ts is compiled to wasm; the song JS produces
+    //      a flat list of midi events. Played by `midisynthaudioworklet-
+    //      processor.js`. Supports the quantize dropdown (deferred swap
+    //      at next beat divisible by N) — both wasm and eventlist updates.
+    //
+    //   2. MIDI synth (WAM / XML preset) — `{ eventlist, synthsource }`
+    //      Synth source is an XML preset for a Web Audio Module (WAM).
+    //      Same midi eventlist semantics as (1), but the synth lives in
+    //      a WAM host instead of our own AS-generated wasm. Played via
+    //      `wamPostSong(eventlist, synthsource)`. No quantize support.
+    //
+    //   3. Pattern-based synth — bare `song` object, no `eventlist`
+    //      Used by the legacy wasm-music engine, the mod player, and
+    //      sointu. The wasm binary itself reads `instrumentPatternLists`
+    //      / `patterns` and renders the song; we don't pre-flatten to
+    //      midi events. Posted as `{ song, samplerate, ... }` directly
+    //      to whichever pattern-aware processor is loaded. No quantize
+    //      support.
+    //
+    // The branching below dispatches to the right path based on which
+    // fields are present on `song`.
     async function compileAndPostSong() {
         try {
             // If the Faust editor has unsaved changes, transpile + write
@@ -723,12 +750,16 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
             const songBpm = midiBpm || 0;
             const toggleSongPlayChecked = componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false;
 
-            // For N>0 with both new wasm and new sequencedata, bundle them
-            // into a single worklet message so the pending state lands
-            // atomically. Two separate messages would race: the wasm-only
-            // ack takes 50–300 ms, during which a beat boundary could fire
-            // a swap with the new synth but the old song — exactly the
-            // "had to press save twice" symptom.
+            // Only the shape-(1) AS-midi-synth path supports quantized
+            // bundled saves. When N>0 and there's both new wasm and new
+            // sequencedata, bundle them into a single worklet message so
+            // pending state lands atomically. Two separate messages would
+            // race: the wasm-only ack takes 50–300 ms, during which a
+            // beat boundary could fire a swap with the new synth but the
+            // old song — the original "had to press save twice" symptom.
+            // Shape (2) (`synthsource` / WAM) and shape (3) (no eventlist /
+            // pattern-based) take the legacy paths below; quantize is a
+            // no-op for them.
             const useBundledSave = quantizeN > 0 && song.synthwasm && song.eventlist && !song.synthsource;
 
             if (useBundledSave) {
