@@ -6,6 +6,7 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
   // engine ever ships a non-128 quantum, the AssemblyScript synth would
   // need a matching change.
   const RENDER_QUANTUM_FRAMES = 128;
+
   class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor {
 
     constructor() {
@@ -20,12 +21,21 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       // satisfies `currentBeat % quantizeN == 0`. Last-save-wins —
       // saving again before the trigger replaces the pending entries.
       this.pendingInstance = null;
-      this.pendingAudio = null;
       this.pendingSequencedata = null;
       this.pendingToggleSongPlay = null;
       this.pendingQuantizeN = 0;
       this.pendingBpm = 0;
       this.lastBeat = -1; // for edge-detecting beat crossings
+      // Deferred-instantiate state. The save click only stashes bytes;
+      // WebAssembly.instantiate is kicked off at the beat boundary
+      // inside tryQuantizedSwap. The audio thread blocks there for the
+      // compile, so the glitch happens at the (musically-aligned) swap
+      // moment rather than at the click — the lesser of two evils, since
+      // pre-compiling on click also blocks while the *currently*-playing
+      // wasm is rendering.
+      this.pendingWasmBytesDeferred = null;
+      this.pendingAudioDeferred = null;
+      this.swapInstantiateInFlight = false;
       // BPM of whatever wasm/sequencedata is *currently audible*. Beat math
       // in tryQuantizedSwap uses this — not pendingBpm — so deciding when
       // to swap aligns with what the listener hears, regardless of whether
@@ -53,28 +63,14 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         }
 
         if (msg.data.pendingWasmBytes) {
-          // Single path: await WebAssembly.instantiate on the bytes inside
-          // the worklet. We pre-compile on the main thread when we can —
-          // see updateSynth — but Module structured-clone across
-          // AudioWorkletNode.port is broken in current Chromium (silently
-          // drops the message), so we send raw bytes and pay an audible
-          // glitch on save while the audio thread does the compile.
-          const instance = (await WebAssembly.instantiate(msg.data.pendingWasmBytes, {
-            environment: { SAMPLERATE: sampleRate },
-            env: {
-              abort: () => console.log('webassembly synth abort, should not happen'),
-            },
-          })).instance.exports;
-          if (msg.data.audio) {
-            this.loadAudioIntoWasm(instance, msg.data.audio);
-          }
-          this.pendingInstance = instance;
+          // Stash only — instantiate is deferred to the swap moment in
+          // tryQuantizedSwap. Save click stays glitch-free; the audible
+          // pause moves to the beat boundary where the listener at least
+          // expects something to change.
+          this.pendingWasmBytesDeferred = msg.data.pendingWasmBytes;
+          this.pendingAudioDeferred = msg.data.audio;
           this.pendingQuantizeN = msg.data.quantizeN || 1;
           this.pendingBpm = msg.data.bpm || this.pendingBpm;
-          // Bundled save: stash sequencedata + toggleSongPlay atomically
-          // with the new wasm so a beat boundary firing between the wasm
-          // ack and a separate sequencedata message can't swap a half-
-          // applied save (new synth, old song).
           if (msg.data.pendingSequencedata !== undefined) {
             this.pendingSequencedata = msg.data.pendingSequencedata;
           }
@@ -186,12 +182,25 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       // starts fresh (otherwise a stale lastBeat from a previous swap can
       // make the first cross-check after the next save fire immediately).
       const hasPending = this.pendingInstance
+        || this.pendingWasmBytesDeferred
         || this.pendingSequencedata
         || this.pendingToggleSongPlay != null;
       if (!hasPending) {
         this.lastBeat = -1;
+        this.swapInstantiateInFlight = false;
         return;
       }
+
+      // Mid-instantiate: we kicked off WebAssembly.instantiate on a
+      // previous process() call and are waiting for the .then to populate
+      // pendingInstance. Don't re-trigger; just see if it landed.
+      if (this.swapInstantiateInFlight) {
+        if (this.pendingInstance) {
+          this._applySwap();
+        }
+        return;
+      }
+
       // Beat math runs against the *currently playing* bpm, not pendingBpm.
       // If the user switched to a song with a different BPM, pendingBpm
       // is the new song's BPM but the listener is still hearing the old
@@ -217,9 +226,43 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       if (currentBeat === this.lastBeat) return;
       this.lastBeat = currentBeat;
       if (currentBeat % this.pendingQuantizeN !== 0) return;
+
+      // Beat boundary hit. If we have deferred bytes that haven't been
+      // instantiated yet, kick off the compile NOW (audio thread blocks
+      // here). Otherwise (sequencedata-only swap), proceed directly.
+      if (this.pendingWasmBytesDeferred && !this.pendingInstance) {
+        this.swapInstantiateInFlight = true;
+        const bytes = this.pendingWasmBytesDeferred;
+        const audio = this.pendingAudioDeferred;
+        this.pendingWasmBytesDeferred = null;
+        this.pendingAudioDeferred = null;
+        WebAssembly.instantiate(bytes, {
+          environment: { SAMPLERATE: sampleRate },
+          env: {
+            abort: () => console.log('webassembly synth abort, should not happen'),
+          },
+        }).then((result) => {
+          const instance = result.instance.exports;
+          if (audio) {
+            this.loadAudioIntoWasm(instance, audio);
+          }
+          this.pendingInstance = instance;
+          // Next process() call sees pendingInstance + swapInstantiateInFlight
+          // and calls _applySwap.
+        }).catch((err) => {
+          console.log('wasm instantiate error:', err);
+          this.swapInstantiateInFlight = false;
+        });
+        return;
+      }
+
+      this._applySwap();
+    }
+
+    _applySwap() {
       this.port.postMessage({
         quantizedSwapApplied: true,
-        beat: currentBeat,
+        beat: this.lastBeat,
         ct: AudioWorkletGlobalScope.midisequencer.currentFrame / sampleRate * 1000,
         bpm: this.pendingBpm,
       });
@@ -253,10 +296,12 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       // the bpm of the song that just took over.
       if (this.pendingBpm > 0) this.playingBpm = this.pendingBpm;
       this.pendingInstance = null;
-      this.pendingAudio = null;
+      this.pendingWasmBytesDeferred = null;
+      this.pendingAudioDeferred = null;
       this.pendingSequencedata = null;
       this.pendingToggleSongPlay = null;
       this.pendingQuantizeN = 0;
+      this.swapInstantiateInFlight = false;
     }
 
     process(inputs, outputs, parameters) {
