@@ -208,6 +208,55 @@ Stops recording MIDI input.
 
 ---
 
+## Cross-Window Sync Functions
+
+Coordinate playback across multiple browser windows of the app via a shared
+`BroadcastChannel('concert-sync')`. Useful for splitting a live set across
+tabs (each tab has its own AudioContext / audio thread, so wasm compiles
+on save don't glitch the other tab's audio).
+
+Only available on the midi-synth path. Manually clicking the play
+checkbox or seeking the playhead clears any pending wait — a matching
+broadcast is the only thing that auto-resumes.
+
+### `broadcastSend(name)`
+Emits a named signal at the current song position. Other windows
+listening on the same channel can respond. Same-window listeners do not
+receive their own sends.
+
+**Parameters:**
+- `name` (string): Identifier for the signal
+
+**Example:**
+```javascript
+// Played in window A — the very last thing the song does is hand off
+// to whatever song is waiting on 'next-up'.
+await createTrack(0).steps(4, [c4,,,, e4,,,, g4,,,, c5,,,,]);
+broadcastSend('next-up');
+```
+
+### `broadcastWait(name)`
+Parks the sequencer at this point until a matching `broadcastSend(name)`
+arrives. While parked, the play checkbox is unchecked and the song
+clock is frozen. Signals that arrived *before* the wait engaged are
+ignored — only fresh post-wait signals resume playback.
+
+**Parameters:**
+- `name` (string): Identifier of the signal to wait for
+
+**Example:**
+```javascript
+// In window B — won't play anything until window A (or any other
+// listener) emits 'next-up'.
+setBPM(120);
+broadcastWait('next-up');
+await createTrack(0).steps(4, [
+    c5, , , ,
+]);
+```
+
+---
+
 ## Song Structure Functions
 
 ### `definePartStart(partName)`
