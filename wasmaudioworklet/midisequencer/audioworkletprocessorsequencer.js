@@ -110,7 +110,14 @@ export function AudioWorkletProcessorSequencerModule() {
         this.sequence[this.sequenceIndex].time < currentTime) {
 
         let loop = false;
-        while (this.sequence[this.sequenceIndex].message[0] < 0 &&
+        // Meta-event cases (recording markers, broadcast send) advance
+        // sequenceIndex from within the switch, so the inner while must
+        // re-check bounds — otherwise reading `.message[0]` on `undefined`
+        // throws and the exception escapes process(), which Chromium
+        // takes as a signal to stop calling the processor.
+        while (this.sequenceIndex < this.sequence.length &&
+            this.sequence[this.sequenceIndex] &&
+            this.sequence[this.sequenceIndex].message[0] < 0 &&
             this.sequence[this.sequenceIndex].time <= currentTime) {
           switch (this.sequence[this.sequenceIndex].message[0]) {
             case SEQ_MSG_LOOP:
@@ -146,6 +153,14 @@ export function AudioWorkletProcessorSequencerModule() {
         if (loop) {
           this.sequenceIndex = 0;
           this.currentFrame = 0;
+          break;
+        }
+
+        // The inner meta loop above can push sequenceIndex past the end
+        // (a broadcast-send / recording marker at the end of the song).
+        // If it did, there's no midi event to fire; the outer loop's
+        // next iteration will re-check the bounds and exit cleanly.
+        if (this.sequenceIndex >= this.sequence.length || !this.sequence[this.sequenceIndex]) {
           break;
         }
 
