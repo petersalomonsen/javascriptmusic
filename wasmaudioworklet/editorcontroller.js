@@ -753,13 +753,13 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
             // Only the shape-(1) AS-midi-synth path supports quantized
             // bundled saves. When N>0 and there's both new wasm and new
             // sequencedata, bundle them into a single worklet message so
-            // pending state lands atomically. Two separate messages would
-            // race: the wasm-only ack takes 50–300 ms, during which a
-            // beat boundary could fire a swap with the new synth but the
-            // old song — the original "had to press save twice" symptom.
-            // Shape (2) (`synthsource` / WAM) and shape (3) (no eventlist /
-            // pattern-based) take the legacy paths below; quantize is a
-            // no-op for them.
+            // the pending state lands atomically. If we instead split it
+            // across two messages, the wasm-only ack window (50–300 ms)
+            // can overlap a beat boundary, and the worklet would fire
+            // the deferred swap with the new wasm but the old sequence
+            // still in place. Shape (2) (`synthsource` / WAM) and shape
+            // (3) (no eventlist / pattern-based) take the legacy paths
+            // below; quantize is a no-op for them.
             const useBundledSave = quantizeN > 0 && song.synthwasm && song.eventlist && !song.synthsource;
 
             if (useBundledSave) {
