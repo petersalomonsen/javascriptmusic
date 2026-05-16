@@ -2,11 +2,22 @@ export function AudioWorkletProcessorSequencerModule() {
   const SEQ_MSG_LOOP = -1;
   const SEQ_MSG_START_RECORDING = -2;
   const SEQ_MSG_STOP_RECORDING = -3;
+  const SEQ_MSG_BROADCAST_SEND = -4;
+  const SEQ_MSG_BROADCAST_WAIT = -5;
 
   class MidiSequencer {
     constructor() {
       this.sequence = [];
       this.recorded = {};
+      // Name the wait is parked on. Set when onprocess encounters a
+      // SEQ_MSG_BROADCAST_WAIT event; while non-null, onprocess no-ops so
+      // currentFrame freezes. Cleared when a matching broadcast arrives
+      // (the processor's port handler clears it).
+      this.waitingForSignal = null;
+      // Called by onprocess when a SEQ_MSG_BROADCAST_SEND event fires.
+      // The processor wires this to a port.postMessage so the main thread
+      // can emit on a BroadcastChannel.
+      this.broadcastSender = null;
     }
 
     clearRecording() {
@@ -14,6 +25,9 @@ export function AudioWorkletProcessorSequencerModule() {
     }
 
     setSequenceData(sequencedata) {
+      // A new sequence's wait events haven't been encountered yet, so any
+      // pending wait from the old sequence is stale.
+      this.waitingForSignal = null;
       if (sequencedata.length > 0) {
         // clear recorded data
         this.clearRecording();
@@ -70,6 +84,9 @@ export function AudioWorkletProcessorSequencerModule() {
     }
 
     setCurrentTime(time) {
+      // Explicit seek clears any pending broadcast wait — the user moved
+      // the playhead deliberately, so playback should resume from there.
+      this.waitingForSignal = null;
       this.currentFrame = sampleRate * time / 1000;
       let sequenceIndex = 0;
       while (sequenceIndex < this.sequence.length &&
@@ -81,6 +98,11 @@ export function AudioWorkletProcessorSequencerModule() {
     }
 
     onprocess() {
+      // Parked on a broadcast wait — freeze the clock and skip event
+      // processing entirely. Cleared externally when the matching signal
+      // arrives.
+      if (this.waitingForSignal) return;
+
       let currentTime = this.getCurrentTime();
 
       while (this.sequenceIndex < this.sequence.length &&
@@ -103,6 +125,19 @@ export function AudioWorkletProcessorSequencerModule() {
               this.recordingActive = false;
               this.sequenceIndex++;
               break;
+            case SEQ_MSG_BROADCAST_SEND:
+              if (this.broadcastSender) {
+                this.broadcastSender(this.sequence[this.sequenceIndex].name);
+              }
+              this.sequenceIndex++;
+              break;
+            case SEQ_MSG_BROADCAST_WAIT:
+              // Advance past the wait so resume doesn't re-trigger it,
+              // then return immediately. currentFrame stays put — the
+              // song clock holds until the signal arrives.
+              this.waitingForSignal = this.sequence[this.sequenceIndex].name;
+              this.sequenceIndex++;
+              return;
           }
           if (loop) {
             break;

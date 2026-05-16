@@ -1,5 +1,5 @@
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
-import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi, setBroadcastUiHandlers } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer } from './visualizer/defaultvisualizer.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
 import { attachSeek, detachSeek } from './app.js';
@@ -14,6 +14,21 @@ export function initAudioWorkletNode(componentRoot) {
     let audioworkletnode;
     let onmidi = () => { };
     let playing = false;
+
+    // Mirror auto-pause / auto-resume from the worklet (on broadcastWait
+    // / matching signal arrival) into the play checkbox + visualizer
+    // state. Don't post toggleSongPlay back — the worklet has already
+    // flipped its own playMidiSequence, so an echo would loop.
+    setBroadcastUiHandlers(
+        () => {
+            componentRoot.getElementById('toggleSongPlayCheckbox').checked = false;
+            setPaused(true);
+        },
+        () => {
+            componentRoot.getElementById('toggleSongPlayCheckbox').checked = true;
+            setPaused(false);
+        }
+    );
 
     const sessionSampleRate = sessionStorage.getItem('samplerate');
     const context = sessionSampleRate ?
