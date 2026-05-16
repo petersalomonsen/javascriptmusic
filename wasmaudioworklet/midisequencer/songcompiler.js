@@ -1,6 +1,6 @@
 import { resetTick, setBPM, nextTick, currentTime, waitForBeat } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunctionKeys } from './trackerpattern.js';
-import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING } from './sequenceconstants.js';
+import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT } from './sequenceconstants.js';
 import { setVideoSchedule } from '../visualizer/videoscheduler.js';
 
 let songmessages = [];
@@ -58,6 +58,28 @@ function stopVideo(name) {
     addedVideo[name].schedule[addedVideo[name].schedule.length - 1].stopTime = currentTime();
 }
 
+// Emit a named signal on the BroadcastChannel at the current song time.
+// Used together with broadcastWait in another window (or another song) to
+// coordinate playback across windows.
+function broadcastSend(name) {
+    songmessages.push({
+        time: currentTime(),
+        message: [SEQ_MSG_BROADCAST_SEND],
+        name,
+    });
+}
+
+// Park the sequencer at this point until a matching broadcastSend arrives.
+// Stale signals received before the wait engages are ignored. Manually
+// clicking the play checkbox also bypasses the wait.
+function broadcastWait(name) {
+    songmessages.push({
+        time: currentTime(),
+        message: [SEQ_MSG_BROADCAST_WAIT],
+        name,
+    });
+}
+
 const noteFunctions = createNoteFunctions();
 const songargs = {
     'output': output,
@@ -87,6 +109,8 @@ const songargs = {
     'stopRecording': stopRecording,
     'startVideo': startVideo,
     'stopVideo': stopVideo,
+    'broadcastSend': broadcastSend,
+    'broadcastWait': broadcastWait,
     'definePartStart': (partName) => songParts[partName] = { startTime: currentTime() },
     'definePartEnd': (partName) => songParts[partName].endTime = currentTime(),
     'mute': (channel) => muted[channel] = true,

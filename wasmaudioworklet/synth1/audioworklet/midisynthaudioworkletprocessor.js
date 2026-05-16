@@ -7,6 +7,12 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       this.processorActive = true;
       this.playMidiSequence = true;
       AudioWorkletGlobalScope.midisequencer.currentFrame = 0;
+      // Sequencer fires this from inside onprocess when a SEQ_MSG_BROADCAST_SEND
+      // event is hit. Wire it to a port message so the main thread can
+      // forward to its BroadcastChannel.
+      AudioWorkletGlobalScope.midisequencer.broadcastSender = (name) => {
+        this.port.postMessage({ broadcastSend: name });
+      };
 
       this.port.onmessage = async (msg) => {
         if (msg.data.wasm) {
@@ -49,6 +55,22 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           this.playMidiSequence = msg.data.toggleSongPlay;
           if (msg.data.toggleSongPlay === false) {
             this.allNotesOff();
+          }
+          // Manual play overrides a pending broadcast wait — the user
+          // explicitly asked for playback to resume, bypass the signal.
+          if (msg.data.toggleSongPlay === true) {
+            AudioWorkletGlobalScope.midisequencer.waitingForSignal = null;
+          }
+        }
+
+        if (msg.data.broadcastReceived !== undefined) {
+          // Only unblock if we're actually parked on this exact name —
+          // stale signals from before the wait engaged are ignored.
+          const seq = AudioWorkletGlobalScope.midisequencer;
+          if (seq.waitingForSignal === msg.data.broadcastReceived) {
+            seq.waitingForSignal = null;
+            this.playMidiSequence = true;
+            this.port.postMessage({ broadcastResumed: msg.data.broadcastReceived });
           }
         }
 
@@ -102,7 +124,16 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
 
       if (this.wasmInstance) {
         if (this.playMidiSequence) {
-          AudioWorkletGlobalScope.midisequencer.onprocess();
+          const seq = AudioWorkletGlobalScope.midisequencer;
+          const wasWaiting = seq.waitingForSignal;
+          seq.onprocess();
+          // Newly hit a wait this tick — flip playback off so the UI can
+          // reflect the pause, and silence any held notes.
+          if (!wasWaiting && seq.waitingForSignal) {
+            this.playMidiSequence = false;
+            this.allNotesOff();
+            this.port.postMessage({ broadcastWaiting: seq.waitingForSignal });
+          }
         }
         this.wasmInstance.fillSampleBuffer();
         output[0].set(new Float32Array(this.wasmInstance.memory.buffer,

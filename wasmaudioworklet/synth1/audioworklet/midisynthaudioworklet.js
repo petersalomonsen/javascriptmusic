@@ -16,6 +16,18 @@ export let audioworkletnode;
 
 let workerMessageHandler;
 
+// Handlers the host can register to react to broadcast wait/resume events
+// emitted by the worklet. Registered before startaudio runs, so the port
+// listener attached inside connectAudioWorklet can dispatch immediately
+// (otherwise the broadcastWaiting message at song start can fire before
+// the host has a chance to attach its own listener).
+let broadcastWaitingHandler = null;
+let broadcastResumedHandler = null;
+export function setBroadcastUiHandlers(onWaiting, onResumed) {
+    broadcastWaitingHandler = onWaiting;
+    broadcastResumedHandler = onResumed;
+}
+
 export function onmidi(data) {
     audioworkletnode.port.postMessage({
         midishortmsg: data
@@ -49,6 +61,35 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         outputChannelCount: [2]
     });
     awn.port.start();
+
+    // BroadcastChannel coordinates broadcastSend/broadcastWait events
+    // across windows so e.g. one song can hold on a `waitForSignal`
+    // until another window emits the matching name. Skip in offline
+    // rendering — no other window is listening, and offline render uses
+    // a fresh worklet per export.
+    // The port listener for *all* broadcast traffic (channel-out, UI-in)
+    // is attached here, before wasm is sent — by the time the worklet
+    // hits its first wait it may already be the very first onprocess()
+    // tick, so a listener attached later (e.g. after createAudioWorklet
+    // returns) would miss the message.
+    if (!(context instanceof (OfflineAudioContext))) {
+        const channel = new BroadcastChannel('concert-sync');
+        channel.onmessage = (e) => {
+            if (e.data && typeof e.data.name === 'string') {
+                awn.port.postMessage({ broadcastReceived: e.data.name });
+            }
+        };
+        awn.port.addEventListener('message', (e) => {
+            if (!e.data) return;
+            if (typeof e.data.broadcastSend === 'string') {
+                channel.postMessage({ name: e.data.broadcastSend });
+            } else if (typeof e.data.broadcastWaiting === 'string' && broadcastWaitingHandler) {
+                broadcastWaitingHandler(e.data.broadcastWaiting);
+            } else if (typeof e.data.broadcastResumed === 'string' && broadcastResumedHandler) {
+                broadcastResumedHandler(e.data.broadcastResumed);
+            }
+        });
+    }
 
     const wmh = new WorkerMessageHandler(awn.port);
 
