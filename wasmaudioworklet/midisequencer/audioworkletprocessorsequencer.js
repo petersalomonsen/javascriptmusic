@@ -143,5 +143,12 @@ export function AudioWorkletProcessorSequencerModule() {
     }
   }
 
+  // Backward-compat singleton for older consumers (pianorolldemo,
+  // infinitemusic, exportwav). New code in the synth processor creates a
+  // per-instance sequencer via `MidiSequencerClass` so multiple coexisting
+  // AudioWorkletNodes can have independent sequencer state — needed for
+  // the create-new-node-per-save handoff approach that works around
+  // Chromium issue 40855462.
   AudioWorkletGlobalScope.midisequencer = new MidiSequencer();
+  AudioWorkletGlobalScope.MidiSequencerClass = MidiSequencer;
 }

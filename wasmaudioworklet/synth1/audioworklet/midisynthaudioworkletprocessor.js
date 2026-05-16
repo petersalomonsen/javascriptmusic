@@ -6,43 +6,56 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
   // engine ever ships a non-128 quantum, the AssemblyScript synth would
   // need a matching change.
   const RENDER_QUANTUM_FRAMES = 128;
+
   class AssemblyScriptMidiSynthAudioWorkletProcessor extends AudioWorkletProcessor {
 
-    constructor() {
+    constructor(options) {
       super();
       this.processorActive = true;
       this.playMidiSequence = true;
-      AudioWorkletGlobalScope.midisequencer.currentFrame = 0;
-
-      // Quantized-save state. When a save arrives with quantizeN > 0,
-      // the new wasm / sequencedata land here and the swap happens at
-      // the start of the next process() frame whose `currentBeat`
-      // satisfies `currentBeat % quantizeN == 0`. Last-save-wins —
-      // saving again before the trigger replaces the pending entries.
-      this.pendingInstance = null;
-      this.pendingAudio = null;
-      this.pendingSequencedata = null;
-      this.pendingToggleSongPlay = null;
-      this.pendingQuantizeN = 0;
-      this.pendingBpm = 0;
-      this.lastBeat = -1; // for edge-detecting beat crossings
-      // BPM of whatever wasm/sequencedata is *currently audible*. Beat math
-      // in tryQuantizedSwap uses this — not pendingBpm — so deciding when
-      // to swap aligns with what the listener hears, regardless of whether
-      // the user changed BPM in the song they're swapping in.
+      // Each processor owns its own sequencer instance (rather than
+      // sharing AudioWorkletGlobalScope.midisequencer). Lets multiple
+      // AudioWorkletNodes coexist briefly during a quantized save handoff
+      // without their sequencer state stomping on each other.
+      this.sequencer = new AudioWorkletGlobalScope.MidiSequencerClass();
+      this.sequencer.currentFrame = 0;
       this.playingBpm = 0;
+      // When > 0, this processor stays silent (and doesn't advance its
+      // sequencer) until ctx.currentTime reaches this value. Used for
+      // the per-save-new-node handoff: the new node is created in advance,
+      // pre-loads its wasm, but only starts producing audio at the
+      // quantize-aligned beat. ctx-time-aligned with a GainNode crossfade
+      // for sample-accurate handoff.
+      this.swapAtCtxTime = 0;
+      this._swapAnnounced = false;
+      // Symmetric to swapAtCtxTime but for the *outgoing* node: when the
+      // newer node takes over, we tell this node to freeze (stop
+      // advancing its sequencer / firing noteons) so it doesn't keep
+      // emitting trace events to the main thread until cleanup.
+      this.stopAtCtxTime = Infinity;
+
+      const opts = (options && options.processorOptions) || {};
+      // New-style construction: wasm Module + sequencedata baked into
+      // processorOptions. Module structured-clones via processorOptions
+      // even on Chrome (chromium issue 40855462 only affects port
+      // postMessage), so we get the Module to the worklet without the
+      // audible compile-on-audio-thread glitch the bytes path causes.
+      if (opts.wasmModule) {
+        this._initFromProcessorOptions(opts);
+      }
 
       this.port.onmessage = async (msg) => {
+        // Legacy 'wasm' bytes message — kept so existing call sites that
+        // don't yet use processorOptions (e.g. exportToWav, pianorolldemo)
+        // keep working. Synchronously instantiates on the audio thread.
         if (msg.data.wasm) {
-          this.wasmInstancePromise = WebAssembly.instantiate(msg.data.wasm, {
-            environment: { SAMPLERATE: msg.data.samplerate },
+          const wasmInstance = (await WebAssembly.instantiate(msg.data.wasm, {
+            environment: { SAMPLERATE: msg.data.samplerate || sampleRate },
             env: {
               abort: () => console.log('webassembly synth abort, should not happen')
             }
-          });
-
-          const wasmInstance = (await this.wasmInstancePromise).instance.exports;
-          AudioWorkletGlobalScope.midisequencer.addMidiReceiver(wasmInstance.shortmessage);
+          })).instance.exports;
+          this.sequencer.addMidiReceiver(wasmInstance.shortmessage);
           if (msg.data.audio) {
             this.loadAudioIntoWasm(wasmInstance, msg.data.audio);
           }
@@ -52,55 +65,18 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           this.port.postMessage({ wasmloaded: true });
         }
 
-        if (msg.data.pendingWasmBytes) {
-          // Single path: await WebAssembly.instantiate on the bytes inside
-          // the worklet. We pre-compile on the main thread when we can —
-          // see updateSynth — but Module structured-clone across
-          // AudioWorkletNode.port is broken in current Chromium (silently
-          // drops the message), so we send raw bytes and pay an audible
-          // glitch on save while the audio thread does the compile.
-          const instance = (await WebAssembly.instantiate(msg.data.pendingWasmBytes, {
-            environment: { SAMPLERATE: sampleRate },
-            env: {
-              abort: () => console.log('webassembly synth abort, should not happen'),
-            },
-          })).instance.exports;
-          if (msg.data.audio) {
-            this.loadAudioIntoWasm(instance, msg.data.audio);
-          }
-          this.pendingInstance = instance;
-          this.pendingQuantizeN = msg.data.quantizeN || 1;
-          this.pendingBpm = msg.data.bpm || this.pendingBpm;
-          // Bundled save: stash sequencedata + toggleSongPlay atomically
-          // with the new wasm so a beat boundary firing between the wasm
-          // ack and a separate sequencedata message can't swap a half-
-          // applied save (new synth, old song).
-          if (msg.data.pendingSequencedata !== undefined) {
-            this.pendingSequencedata = msg.data.pendingSequencedata;
-          }
-          if (msg.data.pendingToggleSongPlay !== undefined) {
-            this.pendingToggleSongPlay = msg.data.pendingToggleSongPlay;
-          }
-          this.port.postMessage({ pendingWasmReady: true });
-        }
-
         if (msg.data.sequencedata) {
-          if (msg.data.quantizeN && msg.data.quantizeN > 0) {
-            // Defer the new sequence until the bar boundary too.
-            this.pendingSequencedata = msg.data.sequencedata;
-            this.pendingToggleSongPlay = msg.data.toggleSongPlay;
-            this.pendingQuantizeN = msg.data.quantizeN;
-            this.pendingBpm = msg.data.bpm || this.pendingBpm;
-          } else {
-            this.allNotesOff();
-            AudioWorkletGlobalScope.midisequencer.setSequenceData(msg.data.sequencedata);
-            this.playingBpm = msg.data.bpm || this.playingBpm;
-          }
+          // Plain immediate setSequenceData. quantized-save now creates a
+          // new AudioWorkletNode rather than deferring inside an existing
+          // one, so this branch only handles the N=0 / non-quantized path.
+          this.allNotesOff();
+          this.sequencer.setSequenceData(msg.data.sequencedata);
+          this.playingBpm = msg.data.bpm || this.playingBpm;
         }
 
-        if (msg.data.toggleSongPlay !== undefined && !(msg.data.quantizeN && msg.data.quantizeN > 0)) {
+        if (msg.data.toggleSongPlay !== undefined) {
           if (!this.playMidiSequence && msg.data.toggleSongPlay) {
-            AudioWorkletGlobalScope.midisequencer.clearRecording();
+            this.sequencer.clearRecording();
           }
           this.playMidiSequence = msg.data.toggleSongPlay;
           if (msg.data.toggleSongPlay === false) {
@@ -109,29 +85,35 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         }
 
         if (msg.data.midishortmsg) {
-          (await this.wasmInstancePromise).instance.exports.shortmessage(
-            msg.data.midishortmsg[0],
-            msg.data.midishortmsg[1],
-            msg.data.midishortmsg[2]
-          );
-          AudioWorkletGlobalScope.midisequencer.onmidi(msg.data.midishortmsg);
+          if (this.wasmInstance) {
+            this.wasmInstance.shortmessage(
+              msg.data.midishortmsg[0],
+              msg.data.midishortmsg[1],
+              msg.data.midishortmsg[2]
+            );
+          }
+          this.sequencer.onmidi(msg.data.midishortmsg);
         }
 
         if (msg.data.recorded) {
-          this.port.postMessage({ 'recorded': AudioWorkletGlobalScope.midisequencer.getRecorded() });
+          this.port.postMessage({ 'recorded': this.sequencer.getRecorded() });
         }
 
         if (msg.data.currentTime) {
           this.port.postMessage({
             currentTime:
               this.processorActive ?
-                AudioWorkletGlobalScope.midisequencer.getCurrentTime() : null
+                this.sequencer.getCurrentTime() : null
           });
         }
 
         if (msg.data.seek !== undefined) {
           this.allNotesOff();
-          AudioWorkletGlobalScope.midisequencer.setCurrentTime(msg.data.seek);
+          this.sequencer.setCurrentTime(msg.data.seek);
+        }
+
+        if (msg.data.stopAtCtxTime !== undefined) {
+          this.stopAtCtxTime = msg.data.stopAtCtxTime;
         }
 
         if (msg.data.terminate) {
@@ -140,6 +122,35 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         }
       };
       this.port.start();
+    }
+
+    _initFromProcessorOptions(opts) {
+      // Synchronous instantiate from a pre-compiled Module is just the
+      // linking step — microseconds, not the ~85 ms a parse+compile of
+      // bytes would take. Cheap enough to do on the audio thread.
+      this.wasmInstance = new WebAssembly.Instance(opts.wasmModule, {
+        environment: { SAMPLERATE: sampleRate },
+        env: {
+          abort: () => console.log('webassembly synth abort, should not happen'),
+        },
+      }).exports;
+      if (opts.audio) {
+        this.loadAudioIntoWasm(this.wasmInstance, opts.audio);
+      }
+      if (opts.sequencedata) {
+        this.sequencer.setSequenceData(opts.sequencedata);
+      }
+      this.sequencer.addMidiReceiver(this.wasmInstance.shortmessage);
+      this._installTracingReceiver();
+      if (opts.toggleSongPlay !== undefined) {
+        this.playMidiSequence = opts.toggleSongPlay;
+      }
+      if (opts.bpm) {
+        this.playingBpm = opts.bpm;
+      }
+      if (typeof opts.swapAtCtxTime === 'number') {
+        this.swapAtCtxTime = opts.swapAtCtxTime;
+      }
     }
 
     allNotesOff() {
@@ -155,13 +166,14 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
 
     _installTracingReceiver() {
       // Wraps wasm.shortmessage so the test (or any main-thread listener)
-      // can observe noteons posted to whichever wasm is *currently* active.
+      // can observe noteons posted to whichever wasm is currently active.
       // Cheap on the audio thread: one cmp + occasional postMessage on noteon.
       const send = this.wasmInstance.shortmessage;
       const port = this.port;
-      AudioWorkletGlobalScope.midisequencer.addMidiReceiver((a, b, c) => {
+      const sequencer = this.sequencer;
+      this.sequencer.addMidiReceiver((a, b, c) => {
         if ((a & 0xf0) === 0x90 && c > 0) {
-          const ct = AudioWorkletGlobalScope.midisequencer.currentFrame / sampleRate * 1000;
+          const ct = sequencer.currentFrame / sampleRate * 1000;
           port.postMessage({ _trace_noteon: { note: b, vel: c, ct } });
         }
         send(a, b, c);
@@ -181,100 +193,46 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       });
     }
 
-    tryQuantizedSwap() {
-      // No pending state → nothing to do. Reset lastBeat so the next save
-      // starts fresh (otherwise a stale lastBeat from a previous swap can
-      // make the first cross-check after the next save fire immediately).
-      const hasPending = this.pendingInstance
-        || this.pendingSequencedata
-        || this.pendingToggleSongPlay != null;
-      if (!hasPending) {
-        this.lastBeat = -1;
-        return;
-      }
-      // Beat math runs against the *currently playing* bpm, not pendingBpm.
-      // If the user switched to a song with a different BPM, pendingBpm
-      // is the new song's BPM but the listener is still hearing the old
-      // one — using it here would land the swap on the wrong audible beat.
-      const beatBpm = this.playingBpm || this.pendingBpm;
-      if (this.pendingQuantizeN <= 0 || beatBpm <= 0) return;
-
-      const framesPerBeat = sampleRate * 60 / beatBpm;
-      const currentBeat = Math.floor(
-        AudioWorkletGlobalScope.midisequencer.currentFrame / framesPerBeat
-      );
-      // First check after a save lands here. Anchor lastBeat to the beat
-      // the save fell inside so we never swap *within* that beat — we only
-      // swap once we've crossed into a new beat that satisfies the
-      // quantize. Without this, saving anywhere inside an N-aligned beat
-      // would fire the swap on the very next process call (~3 ms later).
-      if (this.lastBeat === -1) {
-        this.lastBeat = currentBeat;
-        return;
-      }
-      // Edge-detect beat crossings. `!==` (not `>`) so wrap-around when the
-      // song loops back to frame 0 still triggers.
-      if (currentBeat === this.lastBeat) return;
-      this.lastBeat = currentBeat;
-      if (currentBeat % this.pendingQuantizeN !== 0) return;
-      this.port.postMessage({
-        quantizedSwapApplied: true,
-        beat: currentBeat,
-        ct: AudioWorkletGlobalScope.midisequencer.currentFrame / sampleRate * 1000,
-        bpm: this.pendingBpm,
-      });
-
-      // Atomic swap. allNotesOff on the *old* instance before replacing it.
-      if (this.pendingInstance) {
-        this.allNotesOff();
-        this.wasmInstance = this.pendingInstance;
-        this._installTracingReceiver();
-      }
-      if (this.pendingSequencedata) {
-        if (!this.pendingInstance) this.allNotesOff();
-        // Reset the sequencer's clock to 0 so the new song plays from its
-        // beat 0 at the swap moment, regardless of where the old song's
-        // event grid was. Otherwise a swap at currentTime T leaves the new
-        // song waiting for its next event at time > T — at 120 BPM that's
-        // up to 500 ms of silence after the swap fires.
-        AudioWorkletGlobalScope.midisequencer.currentFrame = 0;
-        AudioWorkletGlobalScope.midisequencer.setSequenceData(this.pendingSequencedata);
-      }
-      if (this.pendingToggleSongPlay != null) {
-        if (!this.playMidiSequence && this.pendingToggleSongPlay) {
-          AudioWorkletGlobalScope.midisequencer.clearRecording();
-        }
-        this.playMidiSequence = this.pendingToggleSongPlay;
-        if (this.pendingToggleSongPlay === false) {
-          this.allNotesOff();
-        }
-      }
-      // The swap is now audible. From this point on, beat math must use
-      // the bpm of the song that just took over.
-      if (this.pendingBpm > 0) this.playingBpm = this.pendingBpm;
-      this.pendingInstance = null;
-      this.pendingAudio = null;
-      this.pendingSequencedata = null;
-      this.pendingToggleSongPlay = null;
-      this.pendingQuantizeN = 0;
-    }
-
     process(inputs, outputs, parameters) {
       const output = outputs[0];
 
-      if (this.wasmInstance) {
-        this.tryQuantizedSwap();
-        if (this.playMidiSequence) {
-          AudioWorkletGlobalScope.midisequencer.onprocess();
-        }
-        this.wasmInstance.fillSampleBuffer();
-        output[0].set(new Float32Array(this.wasmInstance.memory.buffer,
-          this.wasmInstance.samplebuffer,
-          RENDER_QUANTUM_FRAMES));
-        output[1].set(new Float32Array(this.wasmInstance.memory.buffer,
-          this.wasmInstance.samplebuffer + (RENDER_QUANTUM_FRAMES * 4),
-          RENDER_QUANTUM_FRAMES));
+      if (!this.wasmInstance) {
+        return this.processorActive;
       }
+
+      // Pre-swap silent prelude. Don't advance the sequencer — we want
+      // the first audible quantum to be the new song's beat 0, not
+      // beat (swapDelaySeconds * bpm / 60).
+      if (this.swapAtCtxTime > 0 && currentTime < this.swapAtCtxTime) {
+        return this.processorActive;
+      }
+      // Post-stop freeze. The newer node has taken over; stay silent and
+      // don't fire any more sequencer events while we wait for cleanup.
+      if (currentTime >= this.stopAtCtxTime) {
+        return this.processorActive;
+      }
+
+      // First quantum at or past the swap moment. Tell the main thread
+      // so the beat indicator can pick up the new bpm.
+      if (this.swapAtCtxTime > 0 && !this._swapAnnounced) {
+        this._swapAnnounced = true;
+        this.port.postMessage({
+          quantizedSwapApplied: true,
+          ct: currentTime * 1000,
+          bpm: this.playingBpm,
+        });
+      }
+
+      if (this.playMidiSequence) {
+        this.sequencer.onprocess();
+      }
+      this.wasmInstance.fillSampleBuffer();
+      output[0].set(new Float32Array(this.wasmInstance.memory.buffer,
+        this.wasmInstance.samplebuffer,
+        RENDER_QUANTUM_FRAMES));
+      output[1].set(new Float32Array(this.wasmInstance.memory.buffer,
+        this.wasmInstance.samplebuffer + (RENDER_QUANTUM_FRAMES * 4),
+        RENDER_QUANTUM_FRAMES));
 
       return this.processorActive;
     }
