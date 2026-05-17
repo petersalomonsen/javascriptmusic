@@ -56,6 +56,14 @@ async function visualizeSongCallback() {
         return;
     }
 
+    // visualizeEventIndex is module state and lastPostedSong can be
+    // swapped to a shorter eventlist between scheduling and firing this
+    // callback (a save while the visualizer is mid-iteration). Clamp
+    // before any indexed access — otherwise eventlist[OOB].time throws.
+    if (visualizeEventIndex >= eventlist.length) {
+        visualizeEventIndex = 0;
+    }
+
     if (currentTime < eventlist[visualizeEventIndex].time) {
         visualizeEventIndex = 0;
     }
