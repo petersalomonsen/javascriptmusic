@@ -801,9 +801,47 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                 }
             } catch (e) { }
         });
-        storedsongcode = await readfile(gitrepoconfig.songfilename);
-        storedsynthcode = await readfile(gitrepoconfig.synthfilename);
-        storedshadercode = await readfile(gitrepoconfig.fragmentshader);
+        // Load the active song/synth/shader, falling back to the first
+        // allsongs entry if the active selection points at a missing
+        // file (e.g. a stale `changeCurrentSong` write to the config
+        // before the matching files were pulled). Without this, a stale
+        // selection hangs the boot indefinitely behind the spinner.
+        const loadActiveSongFiles = async (cfg) => ({
+            songcode: cfg.songfilename ? await readfile(cfg.songfilename) : null,
+            synthcode: cfg.synthfilename ? await readfile(cfg.synthfilename) : null,
+            shadercode: cfg.fragmentshader ? await readfile(cfg.fragmentshader) : null,
+        });
+        try {
+            const loaded = await loadActiveSongFiles(gitrepoconfig);
+            storedsongcode = loaded.songcode;
+            storedsynthcode = loaded.synthcode;
+            storedshadercode = loaded.shadercode;
+        } catch (e) {
+            console.warn(`Failed to load active song "${gitrepoconfig.songfilename}" / synth "${gitrepoconfig.synthfilename}":`, e.message);
+            const candidates = (gitrepoconfig.allsongs || []).filter(s =>
+                s.songfilename !== gitrepoconfig.songfilename ||
+                s.synthfilename !== gitrepoconfig.synthfilename
+            );
+            let recovered = false;
+            for (const candidate of candidates) {
+                try {
+                    const fallback = { ...gitrepoconfig, ...candidate };
+                    const loaded = await loadActiveSongFiles(fallback);
+                    storedsongcode = loaded.songcode;
+                    storedsynthcode = loaded.synthcode;
+                    storedshadercode = loaded.shadercode;
+                    gitrepoconfig = fallback;
+                    console.warn(`Fell back to "${candidate.name}" (${candidate.songfilename})`);
+                    recovered = true;
+                    break;
+                } catch (e2) { /* try the next one */ }
+            }
+            if (!recovered) {
+                // Last resort: surface the failure but don't kill the boot —
+                // empty editors are fine; the user can pull / sync / switch.
+                alert(`Could not load any song from the repo (active was "${gitrepoconfig.songfilename}"). ${e.message}\n\nThe editor will start empty. Try Sync / switch songs from the toolbar once the app loads.`);
+            }
+        }
 
         // Populate the Faust editor's file dropdown from the wasm-git repo
         // (silent if there's no faust/ folder yet).
