@@ -28,6 +28,22 @@ export async function modalYesNo(title, question) {
     </p>`);
 }
 
+// Drop-in replacement for window.alert() that uses the in-app modal so
+// the message renders inside the app shell (and doesn't get blocked by
+// browser auto-dismiss heuristics or cross-tab focus rules).
+export async function modalAlert(title, message) {
+    const safeTitle = String(title).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const safeMessage = String(message)
+        .replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+        .replace(/\n/g, '<br>');
+    return modal(`
+    <h3>${safeTitle}</h3>
+    <p>${safeMessage}</p>
+    <p>
+        <button onclick="getRootNode().result(true)">OK</button>
+    </p>`);
+}
+
 export async function modalOkCancel(title, info, cancelText, okText) {
     return modal(`
     <h3>${title}</h3>

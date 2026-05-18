@@ -3,6 +3,7 @@ import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer, setCurrentTimeSeconds as setVisualizerCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { initEditor } from './editorcontroller.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
+import { modalAlert } from './common/ui/modal.js';
 import apphtml from './app.html.js';
 
 let componentRoot;
@@ -24,7 +25,17 @@ customElements.define('app-javascriptmusic',
       this.shadowRoot.getElementById('copyrighttoyear').innerHTML = new Date().getFullYear();
       initAudioWorkletNode(this.shadowRoot);
       await initVisualizer(this.shadowRoot);
-      await initEditor(this.shadowRoot);
+      try {
+        await initEditor(this.shadowRoot);
+      } catch (e) {
+        // Surface boot failures (stale gitrepo config, OPFS lock, NEAR
+        // unreachable, etc.) instead of leaving the spinner up forever.
+        console.error('initEditor failed:', e);
+        toggleSpinner(false);
+        await modalAlert('App failed to initialize',
+          (e && e.message ? e.message : String(e)) +
+          '\n\nThe spinner is cleared but the editor may not be fully usable. See the console for details.');
+      }
       enablePlayAndSaveButtons();
 
       appReadyPromises.forEach(p => p());

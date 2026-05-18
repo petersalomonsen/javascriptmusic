@@ -124,10 +124,24 @@ export async function clone() {
     return await awaitDirContents();
 }
 
-async function awaitDirContents() {
-    return await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.dircontents !== undefined ? resolve(msg.data.dircontents) : true)
-    );
+async function awaitDirContents(timeoutMs = 30000) {
+    // Worker can fail silently (clone error, OPFS lock, etc.) and never
+    // post a dircontents reply, which would otherwise hang the boot
+    // spinner forever. Reject after timeoutMs so the caller can surface
+    // the failure instead of blocking the UI.
+    return await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`wasm-git worker did not respond with dircontents within ${timeoutMs}ms`));
+        }, timeoutMs);
+        workerMessageListeners.push((msg) => {
+            if (msg.data.dircontents !== undefined) {
+                clearTimeout(timer);
+                resolve(msg.data.dircontents);
+            } else {
+                return true;
+            }
+        });
+    });
 }
 export async function synclocal() {
     worker.postMessage({
@@ -181,22 +195,27 @@ export async function commitAndSyncRemote(commitmessage) {
     return dircontents;
 }
 
-export async function readfile(filename) {
+export async function readfile(filename, timeoutMs = 10000) {
     worker.postMessage({
         command: 'readfile',
         filename: filename
     });
-    return await new Promise((resolve, reject) =>
+    return await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`readfile(${filename}) timed out after ${timeoutMs}ms — worker not responding`));
+        }, timeoutMs);
         workerMessageListeners.push((msg) => {
             if (msg.data.filename === filename) {
+                clearTimeout(timer);
                 resolve(msg.data.filecontents);
             } else if (msg.data.error && !msg.data.id) {
+                clearTimeout(timer);
                 reject(new Error(msg.data.error));
             } else {
                 return true;
             }
-        })
-    );
+        });
+    });
 }
 
 export async function diff() {
