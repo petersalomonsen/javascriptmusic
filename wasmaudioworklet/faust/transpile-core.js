@@ -610,14 +610,39 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const channelClassName = clsName + 'Channel';
     const hasChannelClass = hasEffect || ccParams.length > 0;
 
-    // Reference expressions used inside the transpiled DSP body for each
-    // param. Voice DSP code runs in the voice class and reaches the channel
-    // via `this.typedChannel`; effect DSP code runs in the channel class
-    // itself, so it uses plain `this.<name>`.
-    const voiceParamRefs = new Map();
-    const effectParamRefs = new Map();
+    // Storage strategy for voice-mode UI params: each param lives as a
+    // module-level `let <globalName>: f32` and the voice's per-sample
+    // process body reads it directly. The matching channel class still
+    // exposes the param as a `get`/`set` accessor named `<niceName>` so
+    // `synth.ts` can write `channel.feedback = 6.0` — but that setter
+    // writes through to the module global, so all voices see the new
+    // value with no `this.typedChannel.X` double-deref in the hot loop.
+    //
+    // Why module globals: at AS optimizeLevel 0 (the wasmaudioworklet
+    // live-compile setting) reading `this.typedChannel.feedback` doesn't
+    // inline — every access is two memory loads (typedChannel pointer,
+    // then field). Per-sample × dozens of params × dozens of voices is
+    // enough to choke real-time audio on a busy CPU. A statically-known
+    // global address is one load and the optimizer can keep it in a
+    // register. See faust2as.js (the C backend) which has used this
+    // pattern since the start.
+    //
+    // Caveat: all instances of `<className>Channel` share the same
+    // module globals, so a song with two instances of the same channel
+    // class would see them interfere. In practice MidiSynth uses one
+    // channel instance per algorithm per song, so this is fine.
+    //
+    // Effect-mode DSP runs inside the channel class itself, so its
+    // params still live as plain `this.<name>` fields (one instance,
+    // no hot-loop indirection).
+    const globalNamePrefix = '_' + clsName + '_';
+    const paramGlobals = new Map();              // niceName -> module-global name
+    const voiceParamRefs = new Map();            // Faust field name -> reference in voice body
+    const effectParamRefs = new Map();           // Faust field name -> reference in effect body
     for (const p of ccParams) {
-        voiceParamRefs.set(p.field, `this.typedChannel.${p.niceName}`);
+        const globalName = globalNamePrefix + p.niceName;
+        paramGlobals.set(p.niceName, globalName);
+        voiceParamRefs.set(p.field, globalName);
         effectParamRefs.set(p.field, `this.${p.niceName}`);
     }
     // Aliased as `globalFields` for compatibility with reshapeASLine.
@@ -655,19 +680,12 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     }
     voiceClass.push('    private silentSamples: i32 = 0;');
     voiceClass.push('    private releaseSamples: i32 = 0;');
-    if (hasChannelClass) {
-        // Typed back-reference so nextframe() can read per-instance UI params
-        // off the channel without a virtual call. Zero-cost reinterpret cast.
-        voiceClass.push(`    typedChannel!: ${channelClassName};`);
-    }
     voiceClass.push('');
 
-    // Constructor
+    // Constructor — UI params live in module globals (see paramGlobals
+    // above), so the voice doesn't keep a typed reference to the channel.
     voiceClass.push('    constructor(channel: MidiChannel) {');
     voiceClass.push('        super(channel);');
-    if (hasChannelClass) {
-        voiceClass.push(`        this.typedChannel = changetype<${channelClassName}>(changetype<usize>(channel));`);
-    }
     if (parsed.sigClasses.length > 0) {
         voiceClass.push(`        ${voiceSigPrefix}_initSIG0Tables();`);
     }
@@ -787,10 +805,16 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     voiceClass.push('    }');
     voiceClass.push('}');
 
-    // Module-level globals for UI params are gone — each param now lives as
-    // a public field on the channel class. `voiceGlobals` stays as an empty
-    // array to keep the return-shape stable for assembly.
+    // Module-level storage for each UI param (see comment in Step 4).
+    // Voice DSP body reads these directly. The channel class's
+    // `<niceName>` accessor (emitted in Step 8) mirrors them so user code
+    // can still do `channel.feedback = 6.0`.
     const voiceGlobals = [];
+    for (const p of ccParams) {
+        const def = parsed.defaults[p.field] != null ? parsed.defaults[p.field] : `<f32>(${p.init})`;
+        voiceGlobals.push(`${paramDocComment(p)}`);
+        voiceGlobals.push(`let ${paramGlobals.get(p.niceName)}: f32 = ${def};`);
+    }
 
     // === Step 7: Generate effect code sections ===
 
@@ -1014,13 +1038,15 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
     if (!hasEffect && (voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0))) {
         voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
-        // Public, per-instance UI param fields. Each carries a doc comment
-        // with init/min/max/step + CC or NRPN address so editor hover serves
-        // as the missing Faust UI.
+        // Each UI param is exposed as a get/set accessor that mirrors the
+        // module-level storage emitted above. Lets user code in synth.ts
+        // keep the typed-field ergonomics (`channel.feedback = 6.0`) while
+        // the per-sample voice path reads the global directly.
         for (const p of ccParams) {
-            const def = parsed.defaults[p.field] != null ? parsed.defaults[p.field] : `<f32>(${p.init})`;
+            const g = paramGlobals.get(p.niceName);
             voiceChannelClass.push(paramDocComment(p));
-            voiceChannelClass.push(`    ${p.niceName}: f32 = ${def};`);
+            voiceChannelClass.push(`    get ${p.niceName}(): f32 { return ${g}; }`);
+            voiceChannelClass.push(`    set ${p.niceName}(value: f32) { ${g} = value; }`);
         }
         voiceChannelClass.push('');
         if (useNRPN) {
@@ -1038,7 +1064,10 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
             voiceChannelClass.push('        }');
             voiceChannelClass.push('    }');
             voiceChannelClass.push('');
-            generateNRPNSetParam(voiceChannelClass, ccParams);
+            // NRPN handler writes directly into the module globals — same
+            // storage the voice body reads from — so the existing
+            // controlchange(99/98/6) path stays a no-allocation pass-through.
+            generateNRPNSetParam(voiceChannelClass, ccParams, paramGlobals);
         } else {
             voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
             voiceChannelClass.push('        super.controlchange(controller, value);');
@@ -1048,7 +1077,7 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
                 const minStr = p.min === 0 ? '' : `${p.min} + `;
                 const rangeStr = range === 1 ? '' : ` * ${range}`;
                 voiceChannelClass.push(`            case ${p.cc}:`);
-                voiceChannelClass.push(`                this.${p.niceName} = ${minStr}<f32>value / 127.0${rangeStr};`);
+                voiceChannelClass.push(`                ${paramGlobals.get(p.niceName)} = ${minStr}<f32>value / 127.0${rangeStr};`);
                 voiceChannelClass.push('                break;');
             }
             voiceChannelClass.push('        }');
@@ -1089,7 +1118,13 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
 // NRPN helpers
 // ---------------------------------------------------------------------------
 
-export function generateNRPNSetParam(lines, ccParams) {
+// When `globalNames` is provided (Map of niceName → module-global name),
+// the generated `_setParam` writes through to the globals — same pattern
+// the legacy C-backend transpiler uses. Voice-mode passes this map so the
+// per-sample DSP body can read the globals directly. Effect mode omits it,
+// in which case the assignment targets `this.<niceName>` on the channel
+// (effect params live as per-instance fields).
+export function generateNRPNSetParam(lines, ccParams, globalNames = null) {
     lines.push('    private _setParam(param: u16, value: u8): void {');
     lines.push('        switch (param) {');
     for (const p of ccParams) {
@@ -1097,7 +1132,8 @@ export function generateNRPNSetParam(lines, ccParams) {
         const range = p.max - p.min;
         const minStr = p.min === 0 ? '' : `${p.min} + `;
         const rangeStr = range === 1 ? '' : ` * ${range}`;
-        lines.push(`            case ${p.nrpn}: this.${p.niceName} = ${minStr}<f32>value / 127.0${rangeStr}; break;`);
+        const lhs = globalNames ? globalNames.get(p.niceName) : `this.${p.niceName}`;
+        lines.push(`            case ${p.nrpn}: ${lhs} = ${minStr}<f32>value / 127.0${rangeStr}; break;`);
     }
     lines.push('        }');
     lines.push('    }');
