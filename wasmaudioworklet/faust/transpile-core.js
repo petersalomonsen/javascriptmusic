@@ -1038,15 +1038,30 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
     if (!hasEffect && (voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0))) {
         voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
-        // Each UI param is exposed as a get/set accessor that mirrors the
-        // module-level storage emitted above. Lets user code in synth.ts
-        // keep the typed-field ergonomics (`channel.feedback = 6.0`) while
-        // the per-sample voice path reads the global directly.
+        // Each UI param is exposed as a pair of `@inline` plain methods
+        // (`getFeedback()` / `setFeedback(v)`) that mirror the
+        // module-level storage emitted above. User code in synth.ts
+        // reads / writes patches with `channel.setFeedback(6.0)` while
+        // the per-sample voice path reads the underlying global
+        // directly.
+        //
+        // Why plain methods, not `get`/`set` accessor syntax: at AS
+        // optimizeLevel 0 (wasmaudioworklet's live-compile default), AS
+        // honors `@inline` on plain methods but NOT on accessor
+        // getters/setters — every `channel.feedback = X` call ends up
+        // emitting the setter as a real wasm function and pulls in the
+        // matching getter and a fan-out of sibling-class accessors.
+        // For a 144-param synth like DX7 across 7 algorithm channels
+        // that's ~2000 extra wasm functions and a per-sample indirection
+        // hit big enough to choke real-time playback. The plain `@inline
+        // setX` is folded into a single global-store at the call site —
+        // same hot-path code as if user code wrote the global directly.
         for (const p of ccParams) {
             const g = paramGlobals.get(p.niceName);
+            const cap = p.niceName.charAt(0).toUpperCase() + p.niceName.slice(1);
             voiceChannelClass.push(paramDocComment(p));
-            voiceChannelClass.push(`    get ${p.niceName}(): f32 { return ${g}; }`);
-            voiceChannelClass.push(`    set ${p.niceName}(value: f32) { ${g} = value; }`);
+            voiceChannelClass.push(`    @inline get${cap}(): f32 { return ${g}; }`);
+            voiceChannelClass.push(`    @inline set${cap}(value: f32): void { ${g} = value; }`);
         }
         voiceChannelClass.push('');
         if (useNRPN) {
