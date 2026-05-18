@@ -3,6 +3,7 @@ import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer, setCurrentTimeSeconds as setVisualizerCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { initEditor } from './editorcontroller.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
+import { modalAlert } from './common/ui/modal.js';
 import apphtml from './app.html.js';
 
 let componentRoot;
@@ -31,9 +32,9 @@ customElements.define('app-javascriptmusic',
         // unreachable, etc.) instead of leaving the spinner up forever.
         console.error('initEditor failed:', e);
         toggleSpinner(false);
-        alert('App failed to initialize: ' + (e && e.message ? e.message : e) +
-          '\n\nThe spinner is cleared but the editor may not be fully usable. ' +
-          'See the console for details.');
+        await modalAlert('App failed to initialize',
+          (e && e.message ? e.message : String(e)) +
+          '\n\nThe spinner is cleared but the editor may not be fully usable. See the console for details.');
       }
       enablePlayAndSaveButtons();
 

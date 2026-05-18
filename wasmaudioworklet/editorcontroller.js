@@ -10,7 +10,7 @@ import { toggleSpinner } from './common/ui/progress-spinner.js';
 import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
-import { modal, modalPrompt } from './common/ui/modal.js';
+import { modal, modalPrompt, modalAlert } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
@@ -839,7 +839,9 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
             if (!recovered) {
                 // Last resort: surface the failure but don't kill the boot —
                 // empty editors are fine; the user can pull / sync / switch.
-                alert(`Could not load any song from the repo (active was "${gitrepoconfig.songfilename}"). ${e.message}\n\nThe editor will start empty. Try Sync / switch songs from the toolbar once the app loads.`);
+                await modalAlert('Could not load any song from the repo',
+                    `Active was "${gitrepoconfig.songfilename}". ${e.message}\n\n` +
+                    `The editor will start empty. Try Sync / switch songs from the toolbar once the app loads.`);
             }
         }
 
