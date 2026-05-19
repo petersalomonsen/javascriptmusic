@@ -1,0 +1,427 @@
+<!--
+IFC 2026 talk — slide proposal.
+
+Slides are separated by `---` so the file is readable as plain markdown
+and also drops cleanly into Marp / Reveal.js if we pick one of those for
+the actual deck. Each slide is a markdown section; speaker notes live in
+an HTML comment block (`<!-- speaker notes: ... -->`) so they don't
+render but stay close to the slide they belong to.
+
+Source of truth for the content here:
+  - The submitted abstract (~/Downloads/PeterSalomonsen (2).pdf)
+  - Top-level README.md (origin chain, 4klang quote)
+  - wasmaudioworklet/README.md (architecture details)
+  - ifc2026-plan.md §1.1 (the "what / why" framing we agreed on)
+
+Nothing is invented — every concrete claim traces back to one of these.
+The talk targets ~30 min total: ~17 min framing/explanation + ~10 min
+live demo + ~3 min Q&A.
+-->
+
+# IFC 2026 — Slide proposal
+
+Title: *Converting Faust to AssemblyScript for WebAssembly Music*
+
+Author: Peter Salomonsen
+
+Target length: ~30 min (27 content + 3 Q&A)
+
+Slide count: 16
+
+---
+
+## Slide 1 — Title
+
+**Converting Faust to AssemblyScript for WebAssembly Music**
+
+Peter Salomonsen
+petersalomonsen.com · github.com/petersalomonsen/javascriptmusic
+
+IFC 2026 · Université Côte d'Azur
+
+<!--
+Speaker notes:
+  - 20-30s. Hello, name, what we're going to do for the next half hour.
+  - Mention the demo at the end so they know to expect sound.
+-->
+
+---
+
+## Slide 2 — What is WebAssembly Music?
+
+> Browser-based live-coding environment for music.
+> JavaScript sequences. AssemblyScript synthesizers. Compiled to
+> WebAssembly *in the browser* on every save.
+
+- One wasm module → multi-timbral MIDI synth with voice allocation
+- Sample-by-sample processing
+- AudioWorklet for low-latency playback
+- Synth wasm modules typically <16 KB
+
+→ insert `wasmaudioworklet/overview.svg` here as the architecture
+diagram.
+
+<!--
+Speaker notes:
+  - Spend most of this slide on the diagram. The single-wasm-module
+    point is the key one for the Faust integration story later.
+  - Resist the urge to demo here — the demo block is at slide 15.
+-->
+
+---
+
+## Slide 3 — Why does it exist?
+
+The origin chain (from the project's own README):
+
+1. **NodeJS + MIDI** controlling ZynAddSubFX. Songs as JS files. Worked,
+   but the synth was a black box.
+2. **4klang** — compact synth from the 64K demoscene tradition.
+   > *"finally inspired me to attempt writing a synth in WebAssembly
+   > running entirely in the browser."*
+   > — `README.md`
+3. **WebAssembly synth in the browser, written in AssemblyScript.**
+   First commits July 2018. AudioWorklet integration Nov 2018.
+
+<!--
+Speaker notes:
+  - Read the README quote out loud — it's the actual origin statement
+    and grounds everything that follows.
+  - 4klang and the demoscene reference is for taste-setting (tiny
+    binaries, code-as-sound). Don't dwell if the audience isn't with
+    you on it.
+-->
+
+---
+
+## Slide 4 — Why AssemblyScript?
+
+Fast in-browser compile is the deciding factor.
+
+| Alternative                | Why not                                           |
+| -------------------------- | ------------------------------------------------- |
+| Rust + wasm-pack           | Toolchain compile time too slow for "edit → hear" |
+| Emscripten + C             | Same                                              |
+| Hand-written WAT           | No abstraction; tedious                           |
+| **AssemblyScript**         | Compiles in *milliseconds*, runs as a Worker      |
+
+TypeScript-like syntax, but doesn't hide the wasm — class layout, raw
+memory, predictable codegen all still in your hands.
+
+> Without ms-scale compile, the rest of the project's save-and-hear
+> feedback loop doesn't work.
+
+<!--
+Speaker notes:
+  - This is the load-bearing engineering decision. Spend ~45s on it.
+  - If asked: "but isn't Rust faster at runtime?" — yes, marginally,
+    but irrelevant if you can't iterate. Live coding > peak perf.
+-->
+
+---
+
+## Slide 5 — Where Faust fits
+
+Faust = widely adopted DSP language; mature instrument libraries
+(physical models, FM synths, mastering chains).
+
+**This talk:** make Faust instruments available *inside* WebAssembly
+Music — not as separate AudioWorklet nodes, but as part of the
+existing multi-timbral synth engine.
+
+|                         | Faust IDE / `faustwasm` runtime         | WebAssembly Music + transpiler                        |
+| ----------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| Where Faust runs        | Its own AudioWorklet node per DSP        | Same wasm module as the rest of the synth             |
+| Voice management        | Faust's own polyphonic runtime           | Existing `MidiVoice` / `MidiChannel` infrastructure   |
+| Binary size             | ~3 MB Faust compiler runtime per session | Faust DSP compiled into the <100 KB synth module      |
+| Integration             | Faust DSP is an isolated effect node     | Faust DSP is a `MidiVoice` subclass; shares routing   |
+
+<!--
+Speaker notes:
+  - Be respectful about Faust IDE / faustwasm — they're great tools
+    with different goals. Position as "a different choice for a
+    different use case," not "we do it better."
+  - Source-to-source is the architectural commitment that follows
+    from the single-wasm-module design.
+-->
+
+---
+
+## Slide 6 — Two transpiler paths
+
+Both emit the same shape. Different starting languages.
+
+| | `faust2as.js` (the abstract) | `faust2asc.js` (post-abstract) |
+| --- | --- | --- |
+| Faust output stage | `faust -lang c` | `faust -lang asc` (via `@psalomo/faustwasm`) |
+| Where it runs | Node CLI, offline | Node CLI **and in the browser** |
+| Live-coding workflow | Save .dsp → re-run CLI → reload | Save .dsp in the editor → DSP recompiles and hot-swaps |
+
+→ **Both** produce typed AssemblyScript channel classes with public
+UI-param fields, CC/NRPN auto-mapping, doc comments. Indistinguishable
+to the user once compiled.
+
+<!--
+Speaker notes:
+  - Flag that the ASC backend is the new piece since the abstract was
+    submitted. Audience members who read the abstract may expect only
+    the C-backend story; introduce the second path here.
+-->
+
+---
+
+## Slide 7 — faust2as · the C-backend path
+
+The story from the abstract.
+
+```
+faust -lang c your_dsp.dsp  →  C source
+                              ↓  faust2as.js parses & reshapes
+                              ↓
+                              AssemblyScript class extending MidiVoice
+```
+
+Transpiler responsibilities:
+
+- Type conversions (`(float)x` → `<f32>x`, `int` → `i32`)
+- Field access (`dsp->fHslider0` → `this.fHslider0`)
+- C math intrinsics (`fminf` → `Mathf.min`, `expf` → `Mathf.exp`, …)
+- Wave tables, static array declarations
+- UI metadata harvested from `ui_interface->declare(...)` calls
+
+→ Output compiles through the same in-browser AS pipeline as
+hand-written instruments.
+
+<!--
+Speaker notes:
+  - One concrete code-side-by-side here would help — pick a 5-line
+    snippet (e.g. a single Faust slider becoming a `this.feedback`
+    read) for the slide background.
+-->
+
+---
+
+## Slide 8 — UI param mapping (auto)
+
+What you get without writing any glue code:
+
+- **CC mapping**: Faust UI params auto-assigned to sequential MIDI CC
+  numbers, skipping reserved ones (7 volume, 10 pan, 64 sustain, …).
+- **NRPN fallback**: when an instrument has more than 116 controllable
+  params, auto-switch to NRPN encoding (CC 99 / 98 / 6).
+  - DX7 example: 139 params per algorithm → NRPN required.
+- **Typed channel fields**: every param becomes a `f32` field on the
+  channel class with a doc comment carrying its init/min/max/step. The
+  editor's hover docs serve as the missing Faust UI.
+
+```ts
+/** Feedback [init: 0, min: 0, max: 7, step: 1] · NRPN 0 */
+get feedback(): f32 { return _dx7_alg5_feedback; }
+set feedback(value: f32) { _dx7_alg5_feedback = value; }
+```
+
+<!--
+Speaker notes:
+  - The DX7 is the marquee example. Mention that the abstract
+    specifically called this out — NRPN auto-fallback because the
+    DX7 won't fit in CC.
+-->
+
+---
+
+## Slide 9 — faust2asc · the in-browser path
+
+What changed since the abstract was submitted.
+
+```
+your_dsp.dsp  →  faust -lang asc (via @psalomo/faustwasm)
+              ↓     (runs in the browser, no host install)
+              ↓  transpile-core.js parses & restructures
+              ↓
+              AssemblyScript class extending MidiVoice
+              ↓
+              same in-browser AS compile as before → wasm
+```
+
+The whole loop now closes **inside the browser**. Edit a `.dsp` in the
+editor, hit save, the DSP gets re-transpiled and hot-swapped into the
+running synth — no Node CLI, no separate build step.
+
+<!--
+Speaker notes:
+  - The `@psalomo/faustwasm` fork bundles the Faust compiler itself
+    as wasm (~3 MB one-time download). After that, transpilation is
+    pure browser work.
+  - Live-coding workflow loop time: from save → hear is ~1-2 seconds
+    typical, ~3-5s with heavy DSPs like master_me.
+-->
+
+---
+
+## Slide 10 — Convergence: the same end-state
+
+Both paths emit the same AS class shape. Same convergent format means:
+
+- The compiled wasm is identical (modulo Faust backend differences)
+- UI param fields are public + typed → editor hover docs work for both
+- `transpileEffect` standalone-effect path shared between both (used
+  for stereo-in/stereo-out DSPs like reverbs, mastering chains)
+- One shared helper module (`transpile-core.js`) → consistent doc-comment
+  format, name derivation, NRPN mapping, etc.
+
+The C-backend path remains useful for offline batch transpiles
+(e.g. building a fixed instrument library to ship with a project).
+The ASC-backend path is what makes the live-coding workflow possible.
+
+<!--
+Speaker notes:
+  - This is the "what we got for free" slide. Keep it short — the
+    audience just needs to see the picture, not the details.
+-->
+
+---
+
+## Slide 11 — Cost: how we keep it cheap
+
+Faust DSPs are big — master_me alone has ~700 internal state fields,
+hundreds of per-sample reads. At AS's `-O0` (live-compile default),
+every `this.fRec5` is a function call to an accessor wasm function.
+That overhead can choke real-time playback for heavy DSPs.
+
+**Mitigation:** the in-browser worker takes `optimizeLevel: 1` (and
+makes it user-toggleable via a toolbar checkbox). At -O1, AS inlines
+the accessors and hoists invariant property reads out of hot loops.
+Compile time goes from ~80 ms to ~600 ms — still interactive.
+
+The user picks the trade-off per session: fast-compile for rapid
+iteration, optimized for heavy-DSP playback.
+
+<!--
+Speaker notes:
+  - Optional slide — drop if running long. Useful for the audience
+    that asks "OK but does it scale?".
+  - One sentence summary: bigger DSPs need -O1; the toggle is in the
+    toolbar.
+-->
+
+---
+
+## Slide 12 — Effects, not just instruments
+
+Faust files with stereo I/O and no notes (mastering chains, reverbs)
+go through `transpileEffect`:
+
+- Same `transpile-core.js` pipeline
+- Output is a class with `process(left: f32, right: f32): void`
+- Singleton instance wired into the synth's `postprocess()` automatically
+- UI params still exposed as typed fields → tweak from `synth.ts`
+
+Examples in the repo: **master_me** (full mastering chain) and a small
+custom **live_master** (compressor + brickwall limiter, ~80 lines).
+Per the trade-off mentioned earlier, the heavy chain goes in offline
+export; the light one runs in the live audio thread.
+
+<!--
+Speaker notes:
+  - Mention master_me explicitly — it's a well-known Faust example
+    and people will recognize it.
+-->
+
+---
+
+## Slide 13 — What this lets you do
+
+In one wasm module, simultaneously:
+
+- Hand-written AS instruments (sine voices, samples)
+- Faust DX7 (FM synthesis, NRPN-driven patches)
+- Faust physical-model instruments (clarinet, electric guitar)
+- Faust mastering effect on the output bus
+
+All controlled by one JS sequencer. All compile in ~1 s on save. The
+typical compiled synth wasm with several Faust instruments is under
+500 KB.
+
+Live-edit any of the above — the DSP source, the patches, the song —
+and hear it on the next save.
+
+<!--
+Speaker notes:
+  - This is the payoff slide. Pause here, let it sink in, then go to
+    the demo.
+-->
+
+---
+
+## Slide 14 — Demo
+
+→ Live coding session at the laptop.
+
+(See `ifc2026-plan.md` §1.5 for the demo sequence: empty editor →
+Faust sine + envelope → typed channel fields → DX7 algorithm with
+NRPN auto-mapping → master_me / live_master as a postprocess → hot-edit
+the .dsp mid-song.)
+
+Fallback: pre-recorded screencast of the same sequence, ready to play
+if audio routing misbehaves.
+
+<!--
+Speaker notes:
+  - ~10 min. If pressed for time, cut the master_me step.
+  - Always have headphones plugged into the laptop's headphone jack
+    as a fallback monitor.
+-->
+
+---
+
+## Slide 15 — What's next
+
+- Multi-window concert orchestration (BroadcastChannel handoff between
+  tabs, already wired)
+- More mature Faust DSP library curation (currently per-project)
+- Possible: shipping a "Faust transpiler" Cloudflare Pages function so
+  one-off transpiles can happen without the editor
+
+Out of scope for this talk: the AS optimization-level investigation
+that led to the in-toolbar `-O1` toggle. Happy to discuss in Q&A.
+
+<!--
+Speaker notes:
+  - Trim to whichever items feel actually likely in the next 6 months.
+  - Q&A handoff is the next slide.
+-->
+
+---
+
+## Slide 16 — Thanks
+
+**Thanks.** Q&A.
+
+- Code: [github.com/petersalomonsen/javascriptmusic](https://github.com/petersalomonsen/javascriptmusic)
+- Hosted app: [petersalomonsen.com/webassemblymusic/livecodev2/](https://petersalomonsen.com/webassemblymusic/livecodev2/)
+- Demo videos: [bit.ly/wasm-music-demos](https://www.youtube.com/watch?v=C8j_ieOm4vE&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7)
+- Book: *Building and Deploying WebAssembly Apps* — BPB Publications, 2025
+- Previously presented at WebAssembly Summit 2020, NEARCON 2021, WAC 2025
+
+References (per the abstract): Letz/Orlarey/Fober WAC 2017;
+`grame-cncm/faustwasm`; `faustide.grame.fr`; WebAssembly Music
+[doi:10.5281/zenodo.6772287](https://doi.org/10.5281/zenodo.6772287).
+
+<!--
+Speaker notes:
+  - Keep this up while taking questions. The links are the most useful
+    audience-takeaway artifact of the whole talk.
+-->
+
+---
+
+## Open decisions before the deck is final
+
+- **Slide tool**: Reveal.js (live-codable from this repo), Marp (just
+  markdown), Keynote, Quarto? Plan §1.6 leans Reveal-in-this-repo.
+- **One concrete code side-by-side slide** (Faust source ↔ transpiled
+  AS) — would strengthen slide 7 or slide 8, but adds visual density.
+- **Slide 11 (the -O0/-O1 cost slide)** is optional. Drop it if the
+  talk runs over.
+- **What to cut if running short**: slide 15 (what's next) and the
+  optional cost slide are the natural trims.
