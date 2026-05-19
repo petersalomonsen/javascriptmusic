@@ -37,6 +37,13 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
       <span>visualizer</span>
     </label>
 
+    &nbsp;
+
+    <label title="optimize AssemblyScript on save (slower compile, faster wasm — needed for heavy DSPs like master_me)">
+      <input id="toggleOptimizeAsCheckbox" type="checkbox" />
+      <span>Optimize AssemblyScript</span>
+    </label>
+
     <div style="flex-grow: 1"></div>
     <button id="exportbutton" onclick="compileSong(true)" title="Export">&#x21E9;</button>
   </div>
