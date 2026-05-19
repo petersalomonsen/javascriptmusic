@@ -201,18 +201,18 @@ onmessage = async function (msg) {
 
             assemblyscriptsynthsources[mix_source] = synthsource;
             lastFaustFingerprint = faustFingerprint;
-            // optimizeLevel: 1 (not 0). At -O0, AS emits per-private-field
-            // get/set accessor wasm functions and routes every `this.X`
-            // read through them — for DSPs like master_me with hundreds of
-            // internal state variables, that's ~1400 extra wasm functions
-            // and per-sample function-call overhead big enough to choke
-            // real-time playback. -O1 inlines the accessors and hoists
-            // invariant property loads out of hot loops, fixing it.
-            // Compile time goes from ~80ms to ~600ms for typical songs
-            // and ~200ms→~1700ms for a heavy 7-channel DX7 set — still
-            // interactive for live-coding.
+            // optimizeLevel from the "Optimize AssemblyScript" toolbar
+            // checkbox (via localStorage, forwarded by the main thread).
+            // Default 1. -O0 makes the compile blazing fast (~80ms) but
+            // produces 2-4× larger wasm because AS emits per-private-field
+            // get/set accessor functions and routes every `this.X` read
+            // through them — fine for light DSPs, but heavy ones like
+            // master_me end up choking real-time playback. -O1 inlines
+            // the accessors and hoists invariant property loads out of
+            // hot loops; compile takes 0.5-1.7s but the wasm is honest.
+            const liveOpt = typeof msg.data.optimizeLevel === 'number' ? msg.data.optimizeLevel : 1;
             const { stderr, text, binary } = await compileAssemblyScript(assemblyscriptsynthsources,
-                { "runtime": "stub", "optimizeLevel": 1, "shrinkLevel": 0 },
+                { "runtime": "stub", "optimizeLevel": liveOpt, "shrinkLevel": 0 },
                 index_source);
 
             postMessage({

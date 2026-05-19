@@ -198,6 +198,23 @@ export function initAudioWorkletNode(componentRoot) {
         }
     };
 
+    // Wire the "Optimize AssemblyScript" checkbox. Persists to localStorage
+    // so the choice survives reloads. The worker reads the same key on
+    // every compile, so the checkbox effectively toggles -O0 (fast compile,
+    // bloated wasm) vs -O1 (slower compile, hot loops inlined — needed for
+    // heavy DSPs like master_me).
+    const optimizeAsCheckbox = componentRoot.getElementById('toggleOptimizeAsCheckbox');
+    if (optimizeAsCheckbox) {
+        const stored = localStorage.getItem('asOptimizeLevel');
+        // Default to 1 (current production setting). Treat any truthy non-zero
+        // value as "optimize on".
+        const initialLevel = stored !== null ? Number(stored) : 1;
+        optimizeAsCheckbox.checked = initialLevel >= 1;
+        optimizeAsCheckbox.addEventListener('change', () => {
+            localStorage.setItem('asOptimizeLevel', optimizeAsCheckbox.checked ? '1' : '0');
+        });
+    }
+
     window.toggleVisualizer = (status) => {
         if (status) {
             setUseDefaultVisualizer(true);

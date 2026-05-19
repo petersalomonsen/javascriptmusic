@@ -28,11 +28,19 @@ export async function compileWebAssemblySynth(synthsource, song, samplerate, exp
                     resolve(null);
                 }
             };
+            // Pick up the live-compile optimize level from localStorage so
+            // the "Optimize AssemblyScript" toolbar checkbox can flip
+            // between fast-compile (-O0) and small-wasm (-O1) without an
+            // app reload. Export compiles ignore this and always use -O3.
+            const storedOpt = typeof localStorage !== 'undefined'
+                ? localStorage.getItem('asOptimizeLevel') : null;
+            const optimizeLevel = storedOpt !== null ? Number(storedOpt) : 1;
             worker.postMessage({
                 synthsource: synthsource,
                 samplerate: samplerate,
                 song: song,
                 exportmode: exportmode,
+                optimizeLevel,
                 // Map of basename -> .ts contents for transpiled faust sources
                 // from wasm-git's faust/ folder. Injected as faust/<name>.ts
                 // into the AS sources map so the user's mix can do
