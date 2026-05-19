@@ -610,39 +610,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const channelClassName = clsName + 'Channel';
     const hasChannelClass = hasEffect || ccParams.length > 0;
 
-    // Storage strategy for voice-mode UI params: each param lives as a
-    // module-level `let <globalName>: f32` and the voice's per-sample
-    // process body reads it directly. The matching channel class still
-    // exposes the param as a `get`/`set` accessor named `<niceName>` so
-    // `synth.ts` can write `channel.feedback = 6.0` — but that setter
-    // writes through to the module global, so all voices see the new
-    // value with no `this.typedChannel.X` double-deref in the hot loop.
-    //
-    // Why module globals: at AS optimizeLevel 0 (the wasmaudioworklet
-    // live-compile setting) reading `this.typedChannel.feedback` doesn't
-    // inline — every access is two memory loads (typedChannel pointer,
-    // then field). Per-sample × dozens of params × dozens of voices is
-    // enough to choke real-time audio on a busy CPU. A statically-known
-    // global address is one load and the optimizer can keep it in a
-    // register. See faust2as.js (the C backend) which has used this
-    // pattern since the start.
-    //
-    // Caveat: all instances of `<className>Channel` share the same
-    // module globals, so a song with two instances of the same channel
-    // class would see them interfere. In practice MidiSynth uses one
-    // channel instance per algorithm per song, so this is fine.
-    //
-    // Effect-mode DSP runs inside the channel class itself, so its
-    // params still live as plain `this.<name>` fields (one instance,
-    // no hot-loop indirection).
-    const globalNamePrefix = '_' + clsName + '_';
-    const paramGlobals = new Map();              // niceName -> module-global name
-    const voiceParamRefs = new Map();            // Faust field name -> reference in voice body
-    const effectParamRefs = new Map();           // Faust field name -> reference in effect body
+    // Reference expressions used inside the transpiled DSP body for each
+    // param. Voice DSP code runs in the voice class and reaches the channel
+    // via `this.typedChannel`; effect DSP code runs in the channel class
+    // itself, so it uses plain `this.<name>`.
+    const voiceParamRefs = new Map();
+    const effectParamRefs = new Map();
     for (const p of ccParams) {
-        const globalName = globalNamePrefix + p.niceName;
-        paramGlobals.set(p.niceName, globalName);
-        voiceParamRefs.set(p.field, globalName);
+        voiceParamRefs.set(p.field, `this.typedChannel.${p.niceName}`);
         effectParamRefs.set(p.field, `this.${p.niceName}`);
     }
     // Aliased as `globalFields` for compatibility with reshapeASLine.
@@ -680,12 +655,19 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     }
     voiceClass.push('    private silentSamples: i32 = 0;');
     voiceClass.push('    private releaseSamples: i32 = 0;');
+    if (hasChannelClass) {
+        // Typed back-reference so nextframe() can read per-instance UI params
+        // off the channel without a virtual call. Zero-cost reinterpret cast.
+        voiceClass.push(`    typedChannel!: ${channelClassName};`);
+    }
     voiceClass.push('');
 
-    // Constructor — UI params live in module globals (see paramGlobals
-    // above), so the voice doesn't keep a typed reference to the channel.
+    // Constructor
     voiceClass.push('    constructor(channel: MidiChannel) {');
     voiceClass.push('        super(channel);');
+    if (hasChannelClass) {
+        voiceClass.push(`        this.typedChannel = changetype<${channelClassName}>(changetype<usize>(channel));`);
+    }
     if (parsed.sigClasses.length > 0) {
         voiceClass.push(`        ${voiceSigPrefix}_initSIG0Tables();`);
     }
@@ -805,16 +787,10 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     voiceClass.push('    }');
     voiceClass.push('}');
 
-    // Module-level storage for each UI param (see comment in Step 4).
-    // Voice DSP body reads these directly. The channel class's
-    // `<niceName>` accessor (emitted in Step 8) mirrors them so user code
-    // can still do `channel.feedback = 6.0`.
+    // Module-level globals for UI params are gone — each param now lives as
+    // a public field on the channel class. `voiceGlobals` stays as an empty
+    // array to keep the return-shape stable for assembly.
     const voiceGlobals = [];
-    for (const p of ccParams) {
-        const def = parsed.defaults[p.field] != null ? parsed.defaults[p.field] : `<f32>(${p.init})`;
-        voiceGlobals.push(`${paramDocComment(p)}`);
-        voiceGlobals.push(`let ${paramGlobals.get(p.niceName)}: f32 = ${def};`);
-    }
 
     // === Step 7: Generate effect code sections ===
 
@@ -1038,30 +1014,13 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
     if (!hasEffect && (voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0))) {
         voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
-        // Each UI param is exposed as a pair of `@inline` plain methods
-        // (`getFeedback()` / `setFeedback(v)`) that mirror the
-        // module-level storage emitted above. User code in synth.ts
-        // reads / writes patches with `channel.setFeedback(6.0)` while
-        // the per-sample voice path reads the underlying global
-        // directly.
-        //
-        // Why plain methods, not `get`/`set` accessor syntax: at AS
-        // optimizeLevel 0 (wasmaudioworklet's live-compile default), AS
-        // honors `@inline` on plain methods but NOT on accessor
-        // getters/setters — every `channel.feedback = X` call ends up
-        // emitting the setter as a real wasm function and pulls in the
-        // matching getter and a fan-out of sibling-class accessors.
-        // For a 144-param synth like DX7 across 7 algorithm channels
-        // that's ~2000 extra wasm functions and a per-sample indirection
-        // hit big enough to choke real-time playback. The plain `@inline
-        // setX` is folded into a single global-store at the call site —
-        // same hot-path code as if user code wrote the global directly.
+        // Public, per-instance UI param fields. Each carries a doc comment
+        // with init/min/max/step + CC or NRPN address so editor hover serves
+        // as the missing Faust UI.
         for (const p of ccParams) {
-            const g = paramGlobals.get(p.niceName);
-            const cap = p.niceName.charAt(0).toUpperCase() + p.niceName.slice(1);
+            const def = parsed.defaults[p.field] != null ? parsed.defaults[p.field] : `<f32>(${p.init})`;
             voiceChannelClass.push(paramDocComment(p));
-            voiceChannelClass.push(`    @inline get${cap}(): f32 { return ${g}; }`);
-            voiceChannelClass.push(`    @inline set${cap}(value: f32): void { ${g} = value; }`);
+            voiceChannelClass.push(`    ${p.niceName}: f32 = ${def};`);
         }
         voiceChannelClass.push('');
         if (useNRPN) {
@@ -1079,10 +1038,7 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
             voiceChannelClass.push('        }');
             voiceChannelClass.push('    }');
             voiceChannelClass.push('');
-            // NRPN handler writes directly into the module globals — same
-            // storage the voice body reads from — so the existing
-            // controlchange(99/98/6) path stays a no-allocation pass-through.
-            generateNRPNSetParam(voiceChannelClass, ccParams, paramGlobals);
+            generateNRPNSetParam(voiceChannelClass, ccParams);
         } else {
             voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
             voiceChannelClass.push('        super.controlchange(controller, value);');
@@ -1092,7 +1048,7 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
                 const minStr = p.min === 0 ? '' : `${p.min} + `;
                 const rangeStr = range === 1 ? '' : ` * ${range}`;
                 voiceChannelClass.push(`            case ${p.cc}:`);
-                voiceChannelClass.push(`                ${paramGlobals.get(p.niceName)} = ${minStr}<f32>value / 127.0${rangeStr};`);
+                voiceChannelClass.push(`                this.${p.niceName} = ${minStr}<f32>value / 127.0${rangeStr};`);
                 voiceChannelClass.push('                break;');
             }
             voiceChannelClass.push('        }');
@@ -1133,13 +1089,7 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
 // NRPN helpers
 // ---------------------------------------------------------------------------
 
-// When `globalNames` is provided (Map of niceName → module-global name),
-// the generated `_setParam` writes through to the globals — same pattern
-// the legacy C-backend transpiler uses. Voice-mode passes this map so the
-// per-sample DSP body can read the globals directly. Effect mode omits it,
-// in which case the assignment targets `this.<niceName>` on the channel
-// (effect params live as per-instance fields).
-export function generateNRPNSetParam(lines, ccParams, globalNames = null) {
+export function generateNRPNSetParam(lines, ccParams) {
     lines.push('    private _setParam(param: u16, value: u8): void {');
     lines.push('        switch (param) {');
     for (const p of ccParams) {
@@ -1147,8 +1097,7 @@ export function generateNRPNSetParam(lines, ccParams, globalNames = null) {
         const range = p.max - p.min;
         const minStr = p.min === 0 ? '' : `${p.min} + `;
         const rangeStr = range === 1 ? '' : ` * ${range}`;
-        const lhs = globalNames ? globalNames.get(p.niceName) : `this.${p.niceName}`;
-        lines.push(`            case ${p.nrpn}: ${lhs} = ${minStr}<f32>value / 127.0${rangeStr}; break;`);
+        lines.push(`            case ${p.nrpn}: this.${p.niceName} = ${minStr}<f32>value / 127.0${rangeStr}; break;`);
     }
     lines.push('        }');
     lines.push('    }');

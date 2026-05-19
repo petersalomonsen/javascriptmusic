@@ -201,8 +201,18 @@ onmessage = async function (msg) {
 
             assemblyscriptsynthsources[mix_source] = synthsource;
             lastFaustFingerprint = faustFingerprint;
+            // optimizeLevel: 1 (not 0). At -O0, AS emits per-private-field
+            // get/set accessor wasm functions and routes every `this.X`
+            // read through them — for DSPs like master_me with hundreds of
+            // internal state variables, that's ~1400 extra wasm functions
+            // and per-sample function-call overhead big enough to choke
+            // real-time playback. -O1 inlines the accessors and hoists
+            // invariant property loads out of hot loops, fixing it.
+            // Compile time goes from ~80ms to ~600ms for typical songs
+            // and ~200ms→~1700ms for a heavy 7-channel DX7 set — still
+            // interactive for live-coding.
             const { stderr, text, binary } = await compileAssemblyScript(assemblyscriptsynthsources,
-                { "runtime": "stub", "optimizeLevel": 0, "shrinkLevel": 0 },
+                { "runtime": "stub", "optimizeLevel": 1, "shrinkLevel": 0 },
                 index_source);
 
             postMessage({

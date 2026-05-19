@@ -87,32 +87,12 @@ const drums = getArg('--drum', DEFAULT_DRUM).split(',').map(s => {
 function readChannelMap(tsPath) {
     const src = fs.readFileSync(tsPath, 'utf8');
     const map = {};
-    // Capture field/global declarations. Doc-comment shape is consistent
-    // (`/** Feedback [init: 0, ...] · NRPN 0 */`) but the line after it
-    // can be one of three forms depending on transpiler vintage:
-    //
-    //   `<niceName>: f32 = ...;`                   (typed channel field)
-    //   `let _<ClassName>_<niceName>: f32 = ...;`  (module-level global)
-    //   `@inline get<Cap>(): f32 { return _<ClassName>_<niceName>; }`
-    //
-    // We capture `niceName` from whichever form we see. The init value
-    // comes from the doc comment.
-    const fieldRe = new RegExp(
-        '/\\*\\* ([^\\[]+)\\[init: (-?[0-9.e+\\-]+),[^\\*]*· NRPN (\\d+) \\*/' +
-            '\\s*\\n\\s*' +
-            '(?:' +
-              '(\\w+):\\s*f32' +              // capture[4]: typed-field name
-              '|' +
-              'let\\s+_\\w+_(\\w+):\\s*f32' + // capture[5]: global → niceName
-              '|' +
-              '@inline\\s+(?:get|set)\\w+\\([^)]*\\)[^{]*\\{\\s*(?:return\\s+)?_\\w+_(\\w+)' + // capture[6]
-            ')',
-        'g'
-    );
+    // Capture field declarations: doc comment with init + NRPN, then the
+    // typed `<niceName>: f32` field on the next line.
+    const fieldRe = /\/\*\* ([^\[]+)\[init: (-?[0-9.e+\-]+),[^\*]*· NRPN (\d+) \*\/\s*\n\s*(\w+):\s*f32/g;
     let m;
     while ((m = fieldRe.exec(src))) {
-        const niceName = m[4] ?? m[5] ?? m[6];
-        map[+m[3]] = { name: niceName, init: parseFloat(m[2]), scaleExpr: null };
+        map[+m[3]] = { name: m[4], init: parseFloat(m[2]), scaleExpr: null };
     }
     // Scaling lives in `private _setParam(param: u16, value: u8)` — not
     // the outer controlchange switch (which handles CC 99/98/6 and would
@@ -120,17 +100,12 @@ function readChannelMap(tsPath) {
     const setParamStart = src.indexOf('private _setParam(');
     if (setParamStart < 0) throw new Error(`no _setParam in ${tsPath}`);
     const setParamRegion = src.slice(setParamStart);
-    // Two LHS shapes:
-    //   case N: this.<niceName> = EXPR;          (effect mode, fields on channel)
-    //   case N: _<ClassName>_<niceName> = EXPR;  (voice mode, module global)
-    // Both forms map back to the same `niceName` via either capture group.
-    const caseRe = /case (\d+): (?:this\.(\w+)|_\w+_(\w+)) = ([^;]+); break;/g;
+    const caseRe = /case (\d+): this\.(\w+) = ([^;]+); break;/g;
     while ((m = caseRe.exec(setParamRegion))) {
         const nrpn = +m[1];
-        const name = m[2] ?? m[3];
-        const expr = m[4].replace(/<f32>/g, '');
+        const expr = m[3].replace(/<f32>/g, '');
         if (map[nrpn]) {
-            if (map[nrpn].name !== name) throw new Error(`NRPN ${nrpn}: field name mismatch ${map[nrpn].name} vs ${name}`);
+            if (map[nrpn].name !== m[2]) throw new Error(`NRPN ${nrpn}: field name mismatch ${map[nrpn].name} vs ${m[2]}`);
             map[nrpn].scaleExpr = expr;
         }
     }
@@ -183,13 +158,7 @@ function emitBlock(spec) {
         if (!slot || !slot.scaleExpr) continue;
         const scaled = evalScale(slot.scaleExpr, srcNrpns[idx]);
         if (Math.abs(scaled - slot.init) < EPS) continue;
-        // Emit as a plain @inline setter method call (`channel.setFeedback(v)`),
-        // not field assignment (`channel.feedback = v`). AS's @inline directive
-        // takes effect on plain methods at optimizeLevel 0 but not on accessor
-        // get/set; using field-assignment syntax would inflate the wasm by
-        // hundreds of materialized accessor functions and choke real-time audio.
-        const cap = slot.name.charAt(0).toUpperCase() + slot.name.slice(1);
-        console.log(`    ${spec.name}.set${cap}(<f32>${fmt(scaled)});`);
+        console.log(`    ${spec.name}.${slot.name} = <f32>${fmt(scaled)};`);
         n++;
     }
     console.log(`    // (${n} non-default params)`);
