@@ -13,6 +13,26 @@ void main() {
 let exporting = false;
 let canvas;
 
+// Parallel smoothed view of getTargetNoteStates() for shaders that want
+// gradual transitions instead of the raw on/off-with-velocity signal.
+// Fast attack, slow release — kept frame-rate-independent enough for 60Hz
+// rAF and the fixed 30fps export loop.
+const smoothedNoteStates = new Float32Array(128).fill(-1);
+const SMOOTH_RELEASE_PER_FRAME = 0.04; // ~25 frames to fall fully → ~0.4s at 60fps
+function computeSmoothedNoteStates() {
+    const raw = getTargetNoteStates();
+    for (let i = 0; i < 128; i++) {
+        const r = raw[i];
+        const s = smoothedNoteStates[i];
+        if (r >= s) {
+            smoothedNoteStates[i] = r; // attack: snap to target
+        } else {
+            smoothedNoteStates[i] = Math.max(r, s - SMOOTH_RELEASE_PER_FRAME);
+        }
+    }
+    return smoothedNoteStates;
+}
+
 function initTexture(gl) {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -47,7 +67,70 @@ function updateTexture(gl, texture, video) {
     const internalFormat = gl.RGBA;
     const srcFormat = gl.RGBA;
     const srcType = gl.UNSIGNED_BYTE;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, video);
+}
+
+// Crossfade duration when the active video changes (image-to-image swap).
+// Videos keep their per-frame texture updates and don't transition.
+const TRANSITION_DURATION_SECONDS = 1.5;
+
+// Per-program state for the active/previous textures and the transition.
+// Ping-pong: textures[0] is "current" (bound to TEXTURE0/uSampler),
+// textures[1] is "previous" (bound to TEXTURE1/uSamplerPrev). On switch
+// we swap the array and upload the new image into textures[0]; the array
+// element formerly at [0] becomes [1] and keeps its prior image.
+function createMediaState(gl) {
+    return {
+        textures: [initTexture(gl), initTexture(gl)],
+        lastActiveVideo: null,
+        transitionStart: -1,
+    };
+}
+
+function updateMediaStateAndGetMix(gl, state, currentTimeSeconds) {
+    const currentVideo = getActiveVideo(currentTimeSeconds * 1000);
+    const isImage = currentVideo && currentVideo.tagName === 'IMG';
+
+    if (currentVideo !== state.lastActiveVideo) {
+        // Swap so textures[0] becomes the slot we'll write the new image to,
+        // textures[1] holds whatever was previously displayed.
+        state.textures.reverse();
+        if (currentVideo) {
+            updateTexture(gl, state.textures[0], currentVideo);
+        }
+        // Only crossfade between two real frames — null → image (first show)
+        // snaps in.
+        if (state.lastActiveVideo !== null && currentVideo !== null) {
+            state.transitionStart = currentTimeSeconds;
+        }
+        state.lastActiveVideo = currentVideo;
+    } else if (currentVideo && !isImage) {
+        // Video frame advances each tick; image content is static.
+        updateTexture(gl, state.textures[0], currentVideo);
+    }
+
+    let mix = 1.0;
+    if (state.transitionStart >= 0) {
+        const t = (currentTimeSeconds - state.transitionStart) / TRANSITION_DURATION_SECONDS;
+        if (t >= 1) {
+            state.transitionStart = -1;
+            mix = 1.0;
+        } else {
+            mix = t;
+        }
+    }
+    return mix;
+}
+
+function bindMediaTextures(gl, state, samplerLoc, samplerPrevLoc, mixLoc, mix) {
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, state.textures[0]);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, state.textures[1]);
+    if (samplerLoc) gl.uniform1i(samplerLoc, 0);
+    if (samplerPrevLoc) gl.uniform1i(samplerPrevLoc, 1);
+    if (mixLoc) gl.uniform1f(mixLoc, mix);
 }
 
 function configureGLContext(source) {
@@ -57,7 +140,7 @@ function configureGLContext(source) {
     glContext.clearColor(0.0, 0.0, 0.0, 1.0);
     glContext.clear(glContext.COLOR_BUFFER_BIT);
 
-    const texture = initTexture(glContext);
+    const mediaState = createMediaState(glContext);
 
     const vertexShader = glContext.createShader(glContext.VERTEX_SHADER);
     glContext.shaderSource(vertexShader, vertexShaderSrc);
@@ -109,6 +192,18 @@ function configureGLContext(source) {
     glContext.uniform1f(timeUniformLocation, 0.0);
     const targetNoteStatesUniformLocation = glContext.getUniformLocation(program, "targetNoteStates");
     glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
+    // Null when the shader doesn't declare smoothedNoteStates — uniform1fv
+    // is a no-op against a null location.
+    const smoothedNoteStatesUniformLocation = glContext.getUniformLocation(program, "smoothedNoteStates");
+    glContext.uniform1fv(smoothedNoteStatesUniformLocation, computeSmoothedNoteStates());
+
+    // uSampler / uSamplerPrev / uMix — null if the shader doesn't declare them
+    // (single-sampler shaders just see uSampler bound to TEXTURE0 as before).
+    const samplerUniformLocation = glContext.getUniformLocation(program, "uSampler");
+    const samplerPrevUniformLocation = glContext.getUniformLocation(program, "uSamplerPrev");
+    const mixUniformLocation = glContext.getUniformLocation(program, "uMix");
+    bindMediaTextures(glContext, mediaState,
+        samplerUniformLocation, samplerPrevUniformLocation, mixUniformLocation, 1.0);
 
     const positionLocation = glContext.getAttribLocation(program, "a_position");
     glContext.enableVertexAttribArray(positionLocation);
@@ -121,7 +216,11 @@ function configureGLContext(source) {
         glContext,
         timeUniformLocation,
         targetNoteStatesUniformLocation,
-        texture
+        smoothedNoteStatesUniformLocation,
+        samplerUniformLocation,
+        samplerPrevUniformLocation,
+        mixUniformLocation,
+        mediaState,
     };
 }
 
@@ -143,7 +242,11 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
         glContext,
         timeUniformLocation,
         targetNoteStatesUniformLocation,
-        texture
+        smoothedNoteStatesUniformLocation,
+        samplerUniformLocation,
+        samplerPrevUniformLocation,
+        mixUniformLocation,
+        mediaState,
     } = configureGLContext(source);
 
     const render = () => {
@@ -155,13 +258,13 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
         }
         const currentTimeSeconds = customGetTimeSeconds ? customGetTimeSeconds() : getCurrentTimeSeconds();
 
-        const currentVideo = getActiveVideo(currentTimeSeconds * 1000);
-        if (currentVideo) {
-            updateTexture(glContext, texture, currentVideo);
-        }
+        const mix = updateMediaStateAndGetMix(glContext, mediaState, currentTimeSeconds);
+        bindMediaTextures(glContext, mediaState,
+            samplerUniformLocation, samplerPrevUniformLocation, mixUniformLocation, mix);
 
         glContext.uniform1f(timeUniformLocation, currentTimeSeconds);
         glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
+        glContext.uniform1fv(smoothedNoteStatesUniformLocation, computeSmoothedNoteStates());
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
 
         window.requestAnimationFrame(render);
@@ -201,7 +304,11 @@ export async function exportVideo(source, eventlist) {
         glContext,
         timeUniformLocation,
         targetNoteStatesUniformLocation,
-        texture
+        smoothedNoteStatesUniformLocation,
+        samplerUniformLocation,
+        samplerPrevUniformLocation,
+        mixUniformLocation,
+        mediaState,
     } = configureGLContext(source);
 
     const framerate = 30;
@@ -236,14 +343,15 @@ export async function exportVideo(source, eventlist) {
         await new Promise(r => requestAnimationFrame(r));
 
         const currentTimeMillis = await currentTimeMillisFunc();
+        const currentTimeSeconds = currentTimeMillis / 1000;
 
-        const currentVideo = getActiveVideo(currentTimeMillis);
-        if (currentVideo) {
-            updateTexture(glContext, texture, currentVideo);
-        }
+        const mix = updateMediaStateAndGetMix(glContext, mediaState, currentTimeSeconds);
+        bindMediaTextures(glContext, mediaState,
+            samplerUniformLocation, samplerPrevUniformLocation, mixUniformLocation, mix);
 
-        glContext.uniform1f(timeUniformLocation, currentTimeMillis / 1000);
+        glContext.uniform1f(timeUniformLocation, currentTimeSeconds);
         glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
+        glContext.uniform1fv(smoothedNoteStatesUniformLocation, computeSmoothedNoteStates());
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
 
         const frame = new VideoFrame(canvas, { timestamp: currentTimeMillis * 1000 });
