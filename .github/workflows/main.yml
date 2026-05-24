@@ -100,7 +100,7 @@ jobs:
       - name: Run Playwright tests
         run: |
           cd wasmaudioworklet
-          npx playwright test ./e2e/near-git.spec.js
+          npx playwright test ./e2e/near-git.spec.js ./e2e/commit-stages-unstaged.spec.js
       - name: Stop sandbox
         if: always()
         run: docker rm -f near-git-sandbox || true
