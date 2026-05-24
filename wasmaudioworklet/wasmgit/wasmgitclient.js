@@ -259,9 +259,12 @@ export function updateCommitAndSyncButtonState(changes) {
 }
 
 // Pass a string for text files or a Uint8Array (or ArrayBuffer) for binary files.
-// The worker writes the bytes verbatim and then runs `git add`, which is a
-// silent no-op for paths matched by the repo's .gitignore.
-export async function writefileandstage(filename, contents) {
+// The worker writes the bytes verbatim and (by default) runs `git add`, which
+// is a silent no-op for paths matched by the repo's .gitignore.
+// Pass `{ stage: false }` to skip the auto-stage — used by the claude-bridge
+// so bridge-side edits show up as unstaged changes that "Discard changes"
+// can roll back via `git reset --hard HEAD`.
+export async function writefileandstage(filename, contents, { stage = true } = {}) {
     const isBinary = contents instanceof Uint8Array || contents instanceof ArrayBuffer;
     const payload = isBinary && contents instanceof ArrayBuffer ? new Uint8Array(contents) : contents;
     worker.postMessage({
@@ -269,7 +272,21 @@ export async function writefileandstage(filename, contents) {
         filename: filename,
         contents: payload,
         binary: isBinary,
+        stage,
     });
+    const result = await new Promise((resolve) =>
+        workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges !== undefined ? resolve(msg.data) : true)
+    );
+    updateCommitAndSyncButtonState(result.repoHasChanges);
+    return result.dircontents;
+}
+
+// Remove a file from OPFS. Idempotent — silent if the file doesn't exist.
+// The deletion is left unstaged; `git add -A` at commit time picks it up,
+// and "Discard changes" (git reset --hard HEAD) can restore the file. Used
+// by the claude-bridge for host→OPFS delete propagation.
+export async function unlinkfile(filename) {
+    worker.postMessage({ command: 'unlinkfile', filename });
     const result = await new Promise((resolve) =>
         workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges !== undefined ? resolve(msg.data) : true)
     );

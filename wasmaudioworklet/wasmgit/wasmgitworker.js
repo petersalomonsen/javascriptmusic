@@ -89,11 +89,13 @@ onmessage = async (msg) => {
     } catch (e) {
 
     }
-    if (stdout.indexOf('Changes to be committed:') > -1) {
-      return true;
-    } else {
-      return false;
-    }
+    // Stage-on-commit means unstaged edits + untracked files also count as
+    // pending changes. Only ignored files (matched by .gitignore) stay
+    // invisible here, which is the right behavior for bridge-synced
+    // binaries we don't want to commit.
+    return stdout.indexOf('Changes to be committed:') > -1
+      || stdout.indexOf('Changes not staged for commit:') > -1
+      || stdout.indexOf('Untracked files:') > -1;
   }
 
   function readdir() {
@@ -136,12 +138,28 @@ onmessage = async (msg) => {
       const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
       FS.write(fd, data, 0, data.length, 0);
       FS.close(fd);
-      // `git add` is a no-op for paths matched by .gitignore — that's how we
-      // keep bridge-synced binaries (images, samples) out of the actual git
-      // history.
-      callMainInDir(['add', '--verbose', msg.data.filename]);
+      // Caller can opt out of immediate staging (the bridge does), so that
+      // bridge-side edits show up as unstaged working-tree changes and the
+      // "Discard changes" button can roll them back via `git reset --hard`.
+      // Editor saves still stage immediately so the Commit & Sync indicator
+      // surfaces the change.
+      if (msg.data.stage !== false) {
+        callMainInDir(['add', '--verbose', msg.data.filename]);
+      }
       console.log(currentRepoDir, 'persisted via OPFS');
     }
+    postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
+  } else if (msg.data.command === 'unlinkfile') {
+    // Just remove from the working tree; don't touch the index. That leaves
+    // tracked deletions as unstaged "deleted" entries, so "Discard changes"
+    // (git reset --hard HEAD) can restore them. The actual `git rm` is
+    // handled at commit time by `git add -A`. Idempotent — missing file is
+    // treated as success so bridge-initiated deletes don't fail on retry.
+    ensureChdir(currentRepoDir);
+    try {
+      FS.unlink(msg.data.filename);
+      console.log(currentRepoDir, 'unlinked via OPFS', msg.data.filename);
+    } catch (_) { /* already gone */ }
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
   } else if (msg.data.command === 'dir') {
     postMessage({ id: msg.data.id, dircontents: readdir() });
@@ -151,7 +169,11 @@ onmessage = async (msg) => {
     if (repoHasChanges()) {
       callMainInDir(['config', 'user.name', username]);
       callMainInDir(['config', 'user.email', useremail]);
-
+      // Stage everything (new files, modifications, deletions). Respects
+      // .gitignore so bridge-synced binaries stay out. This is the single
+      // point where bridge-side and editor-side edits both get staged
+      // before the commit.
+      callMainInDir(['add', '-A']);
       callMainInDir(['commit', '-m', msg.data.commitmessage]);
     }
 

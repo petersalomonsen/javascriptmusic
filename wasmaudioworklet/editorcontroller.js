@@ -7,7 +7,7 @@ import './webaudiomodules/preseteditor.js';
 import { setInstrumentNames, appendToSubtoolbar1 } from './app.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 
-import { readfile, writefileandstage, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
+import { readfile, writefileandstage, unlinkfile, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal, modalPrompt, modalAlert } from './common/ui/modal.js';
@@ -765,11 +765,16 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
 
         console.log(`loaded from gist ${gistid}: ${songfilename}`);
     } else if (gitrepoparam) {
-        gitrepoconfig = await initWASMGitClient(gitrepoparam.split('=')[1]);
+        const repoName = gitrepoparam.split('=')[1];
+        gitrepoconfig = await initWASMGitClient(repoName);
         appendToSubtoolbar1(document.createElement('wasmgit-ui'));
         // wasm-git is ready — connect the bridge and pull the full tree.
+        // Repo identity lets the relay isolate this tab into its own
+        // work/<origin>/<repo>/ subdir, so multiple tabs on different
+        // repos/origins don't fight over a shared mirror.
         claudeBridge.start();
-        claudeBridge.attachGitRepo({ listfiles, readfile, writefileandstage });
+        claudeBridge.setRepoIdentity({ origin: location.host, repoName });
+        claudeBridge.attachGitRepo({ listfiles, readfile, writefileandstage, unlinkfile });
 
         addRemoteSyncListener(async () => {
             // After a pull/commit, re-sync the bridge's mirror.
