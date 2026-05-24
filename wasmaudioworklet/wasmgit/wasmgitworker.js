@@ -153,8 +153,9 @@ onmessage = async (msg) => {
     // Just remove from the working tree; don't touch the index. That leaves
     // tracked deletions as unstaged "deleted" entries, so "Discard changes"
     // (git reset --hard HEAD) can restore them. The actual `git rm` is
-    // handled at commit time by `git add -A`. Idempotent — missing file is
-    // treated as success so bridge-initiated deletes don't fail on retry.
+    // handled at commit time by `git add -u .` in the commitpullpush
+    // handler below. Idempotent — missing file is treated as success so
+    // bridge-initiated deletes don't fail on retry.
     ensureChdir(currentRepoDir);
     try {
       FS.unlink(msg.data.filename);
@@ -169,11 +170,13 @@ onmessage = async (msg) => {
     if (repoHasChanges()) {
       callMainInDir(['config', 'user.name', username]);
       callMainInDir(['config', 'user.email', useremail]);
-      // Stage everything (new files, modifications, deletions). Respects
-      // .gitignore so bridge-synced binaries stay out. This is the single
-      // point where bridge-side and editor-side edits both get staged
-      // before the commit.
-      callMainInDir(['add', '-A']);
+      // Stage everything (new files, modifications, deletions). The
+      // wasm-git lg2 CLI doesn't accept `-A`; do it in two passes
+      // instead — `add .` covers new + modified, `add -u .` records
+      // deletions of tracked files. Both respect .gitignore so
+      // bridge-synced binaries stay out.
+      callMainInDir(['add', '.']);
+      callMainInDir(['add', '-u', '.']);
       callMainInDir(['commit', '-m', msg.data.commitmessage]);
     }
 
