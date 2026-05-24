@@ -452,16 +452,26 @@ export function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
     }
 
     for (const sigClass of parsed.sigClasses) {
-        // Extract fields from SIG class (initializer is optional)
-        const sigFieldRegex = /^\s+(\w+):\s*(f32|i32)(\[\])?\s*(?:=\s*([^;]+))?;/gm;
+        // Extract fields from SIG class. libfaust's ASC backend emits two
+        // shapes:
+        //   • scalar:   "name: i32;" or "name: f32 = 1.0;"
+        //   • array:    "name: StaticArray<i32> = new StaticArray<i32>(N);"
+        //               or the legacy "name: i32[] = …;" form
+        // Both forms have to land as locals in _initSIG0Tables(); without
+        // the StaticArray branch the array helpers were referenced but
+        // never declared (TS2304).
+        const sigFieldRegex = /^\s+(\w+):\s*(?:StaticArray<(f32|i32)>|(f32|i32)(\[\])?)\s*(?:=\s*([^;]+))?;/gm;
         let m;
         while ((m = sigFieldRegex.exec(sigClass.body)) !== null) {
             const fieldName = m[1];
-            const type = m[2];
-            const isArray = !!m[3];
-            const init = m[4] ? m[4].trim() : null;
+            const staticArrayInner = m[2]; // set when type is StaticArray<T>
+            const scalarType = m[3];       // set when type is f32|i32 (with optional [])
+            const legacyArray = !!m[4];
+            const init = m[5] ? m[5].trim() : null;
             if (fieldName === 'fSampleRate') continue;
 
+            const type = staticArrayInner || scalarType;
+            const isArray = !!staticArrayInner || legacyArray;
             const localName = `sig0_${fieldName}`;
             if (isArray && init) {
                 const sizeMatch = init.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/);
