@@ -4,9 +4,11 @@ import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_
 import { setVideoSchedule } from '../visualizer/videoscheduler.js';
 
 // Map a URL to one suitable for assignment to <img>/<video>.src.
-// Repo-relative paths (no protocol, no leading slash) are read from OPFS via
-// the wasmgit client and exposed as blob URLs so they can be loaded by the
-// browser. Absolute and data: URLs are passed through unchanged.
+// Repo-relative paths (no protocol, no leading slash) are read via the host-
+// registered OPFS reader (see `setOpfsBinaryReader` below) and exposed as
+// blob URLs so the browser can load them. Absolute and data: URLs pass
+// through unchanged. The reader is injected rather than imported directly
+// so the embeddable songcompiler bundle doesn't drag in the wasm-git client.
 const MIME_BY_EXT = {
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
     gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
@@ -21,11 +23,17 @@ function isRepoRelative(url) {
         && !url.startsWith('/')
         && !url.startsWith('//');
 }
+let _opfsBinaryReader = null;
+// Host registers an OPFS reader: `(path) => Promise<Uint8Array>`. The
+// editor wires this up to wasm-git's readfile; the embeddable bundle
+// leaves it null and falls through to literal URLs.
+export function setOpfsBinaryReader(reader) {
+    _opfsBinaryReader = reader;
+}
 async function resolveMediaUrl(url) {
-    if (!isRepoRelative(url)) return url;
+    if (!isRepoRelative(url) || !_opfsBinaryReader) return url;
     try {
-        const { readfile } = await import('../wasmgit/wasmgitclient.js');
-        const bytes = await readfile(url, 10000, { binary: true });
+        const bytes = await _opfsBinaryReader(url);
         if (!bytes) return url;
         const ext = url.split('.').pop().toLowerCase();
         const type = MIME_BY_EXT[ext] || 'application/octet-stream';

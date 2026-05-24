@@ -1,5 +1,5 @@
 import { loadScript, loadCSS } from './common/scriptloader.js';
-import { addedAudio, compileSong as compileMidiSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts, instrumentNames as midiInstrumentNames } from './midisequencer/songcompiler.js';
+import { addedAudio, compileSong as compileMidiSong, convertEventListToByteArraySequence, createMultipatternSequence, getSongParts, instrumentNames as midiInstrumentNames, setOpfsBinaryReader } from './midisequencer/songcompiler.js';
 import { insertMidiRecording } from './midisequencer/editorfunctions.js';
 import { postSong as wamPostSong, exportWAMAudio } from './webaudiomodules/wammanager.js';
 import { insertRecording as insertRecording4klang } from './4klangsequencer/editorfunctions.js';
@@ -775,6 +775,10 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         claudeBridge.start();
         claudeBridge.setRepoIdentity({ origin: location.host, repoName });
         claudeBridge.attachGitRepo({ listfiles, readfile, writefileandstage, unlinkfile });
+        // Let the song compiler resolve `addImage('foo.png')` etc. against
+        // OPFS without itself importing the wasm-git client — the embeddable
+        // songcompiler bundle stays free of bridge/wasm-git dependencies.
+        setOpfsBinaryReader((path) => readfile(path, 10000, { binary: true }));
 
         addRemoteSyncListener(async () => {
             // After a pull/commit, re-sync the bridge's mirror.
