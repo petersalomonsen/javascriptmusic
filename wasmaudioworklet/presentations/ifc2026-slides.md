@@ -1,38 +1,4 @@
-<!--
-IFC 2026 talk — slide proposal.
-
-Slides are separated by `---` so the file is readable as plain markdown
-and also drops cleanly into Marp / Reveal.js if we pick one of those for
-the actual deck. Each slide is a markdown section; speaker notes live in
-an HTML comment block (`<!-- speaker notes: ... -->`) so they don't
-render but stay close to the slide they belong to.
-
-Source of truth for the content here:
-  - The submitted abstract (~/Downloads/PeterSalomonsen (2).pdf)
-  - Top-level README.md (origin chain, 4klang quote)
-  - wasmaudioworklet/README.md (architecture details)
-  - ifc2026-plan.md §1.1 (the "what / why" framing we agreed on)
-
-Nothing is invented — every concrete claim traces back to one of these.
-The talk targets ~30 min total: ~17 min framing/explanation + ~10 min
-live demo + ~3 min Q&A.
--->
-
-# IFC 2026 — Slide proposal
-
-Title: *Converting Faust to AssemblyScript for WebAssembly Music*
-
-Author: Peter Salomonsen
-
-Target length: ~30 min (27 content + 3 Q&A)
-
-Slide count: 16
-
----
-
-## Slide 1 — Title
-
-**Converting Faust to AssemblyScript for WebAssembly Music**
+# Converting Faust to AssemblyScript for WebAssembly Music
 
 Peter Salomonsen
 petersalomonsen.com · github.com/petersalomonsen/javascriptmusic
@@ -56,16 +22,53 @@ Speaker notes:
 - One wasm module → multi-timbral MIDI synth with voice allocation
 - Sample-by-sample processing
 - AudioWorklet for low-latency playback
-- Synth wasm modules typically <16 KB
-
-→ insert `wasmaudioworklet/overview.svg` here as the architecture
-diagram.
+- Synth wasm modules: kilobytes, not megabytes
 
 <!--
 Speaker notes:
-  - Spend most of this slide on the diagram. The single-wasm-module
-    point is the key one for the Faust integration story later.
+  - Set up the architecture diagram on the next slide. The single-wasm-
+    module point is the key one for the Faust integration story later.
   - Resist the urge to demo here — the demo block is at slide 15.
+-->
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph Editor[Browser editor]
+    SONG["Song.js"]
+    SYNTH["Synth.ts"]
+    FAUST["Faust .dsp"]
+  end
+
+  F2A[["faust2as<br/>transpiler"]]
+  ASC[["AssemblyScript<br/>compiler"]]
+
+  subgraph Runtime[AudioWorklet]
+    SEQ["Sequencer"]
+    WASM["Wasm synth<br/>(kilobytes)"]
+  end
+
+  AUDIO(["Audio output"])
+
+  FAUST --> F2A
+  F2A -.->|transpiled .ts| ASC
+  SYNTH --> ASC
+  SONG -.->|pattern data| SEQ
+  ASC -.->|compiled .wasm| WASM
+  SEQ --> WASM
+  WASM --> AUDIO
+```
+
+<!--
+Speaker notes:
+  - Walk through the diagram left-to-right, top-to-bottom: three editable
+    source files → two compile paths converging on the wasm synth →
+    AudioWorklet runtime → audio.
+  - The Faust → faust2as → AS-compiler arrow is the talk's thesis;
+    everything later expands on it.
 -->
 
 ---
@@ -76,10 +79,9 @@ The origin chain (from the project's own README):
 
 1. **NodeJS + MIDI** controlling ZynAddSubFX. Songs as JS files. Worked,
    but the synth was a black box.
-2. **4klang** — compact synth from the 64K demoscene tradition.
+2. **4klang** — compact synth from the 64K demoscene tradition, which
    > *"finally inspired me to attempt writing a synth in WebAssembly
    > running entirely in the browser."*
-   > — `README.md`
 3. **WebAssembly synth in the browser, written in AssemblyScript.**
    First commits July 2018. AudioWorklet integration Nov 2018.
 

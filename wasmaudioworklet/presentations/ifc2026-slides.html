@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IFC 2026 — Converting Faust to AssemblyScript for WebAssembly Music</title>
+
+  <!-- Reveal.js core + a dark theme. Pinned to a specific version so the
+       deck renders the same on every machine. Swap "black" for "white",
+       "league", "moon", "night" etc. to taste. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/monokai.min.css">
+
+  <style>
+    /* Lefty-aligned bullet lists read better than centered ones for code-heavy
+       slides; the Reveal default tries to center everything. */
+    .reveal .slides section { text-align: left; }
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+    .reveal pre code { max-height: 70vh; }
+    /* Tighter base scale than the Reveal default (42px) so denser slides
+       (bullet-heavy / code) don't overflow. Auto-fit still scales to viewport. */
+    .reveal { font-size: 28px; }
+    .reveal h1 { font-size: 2.2em; }
+    .reveal h2 { font-size: 1.6em; }
+    .reveal h3 { font-size: 1.25em; }
+    .reveal pre { font-size: 0.7em; line-height: 1.3; }
+    .reveal ul, .reveal ol { margin-left: 1em; }
+    .reveal li + li { margin-top: 0.2em; }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <!--
+        Markdown is fetched and pre-transformed in the script below so that
+        ```mermaid blocks become raw <div class="mermaid"> nodes instead of
+        going through Reveal's syntax-highlighter (which would otherwise
+        bake hljs spans into the mermaid parser's input and break it).
+        `data-separator` then splits the result on stand-alone `---` lines.
+      -->
+      <section data-markdown
+               data-separator="^\r?\n---\r?\n">
+        <script type="text/template" id="slides-markdown"></script>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/markdown/markdown.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+    });
+
+    // Fetch the .md ourselves so we can rewrite ```mermaid fences into raw
+    // <div class="mermaid"> nodes before Reveal's markdown plugin runs.
+    // Otherwise RevealHighlight syntax-highlights those code blocks and the
+    // resulting hljs spans contaminate mermaid's parser input.
+    const mdText = await fetch('ifc2026-slides.md').then(r => r.text());
+    const transformed = mdText.replace(
+      /```mermaid\r?\n([\s\S]*?)\r?\n```/g,
+      (_, src) => {
+        // CommonMark's raw-HTML block (the <div>) ends at the first blank
+        // line — after which marked parses the rest as markdown again and
+        // wraps lines in <p>, corrupting the mermaid source. Drop blank
+        // lines (mermaid is fine without them) so the whole block stays raw.
+        const compact = src.split(/\r?\n/).filter(l => l.trim() !== '').join('\n');
+        return `<div class="mermaid">\n${compact}\n</div>`;
+      }
+    );
+    document.getElementById('slides-markdown').textContent = transformed;
+
+    await Reveal.initialize({
+      hash: true,            // URL hash → /#/3 navigation, easier to deep-link
+      slideNumber: 'c/t',    // "3 / 16" indicator bottom-right
+      controls: true,
+      progress: true,
+      transition: 'fade',
+      plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
+    });
+
+    await mermaid.run({ querySelector: '.mermaid' });
+  </script>
+</body>
+</html>
