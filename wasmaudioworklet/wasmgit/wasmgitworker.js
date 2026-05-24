@@ -182,6 +182,10 @@ onmessage = async (msg) => {
         // Create symlink workaround for WASMFS getcwd() bug
         try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
         ensureChdir(currentRepoDir);
+        // WASMFS+OPFS has no real Unix mode bits — every file stat's as
+        // 0o755, so git would otherwise flag every file as a mode change
+        // (100644 → 100755) on every diff. Idempotent re-set is fine.
+        try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
         postMessage({ dircontents: readdir() });
         console.log(currentRepoDir, 'restored from OPFS');
       } else {
@@ -235,6 +239,10 @@ onmessage = async (msg) => {
     // Create symlink workaround for WASMFS getcwd() bug
     try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
     ensureChdir(currentRepoDir);
+    // WASMFS+OPFS reports 0o755 for everything (no real mode bits), so
+    // git would surface a 100644 → 100755 mode change for every file
+    // without this.
+    try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
 
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ dircontents: readdir() });
