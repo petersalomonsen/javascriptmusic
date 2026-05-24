@@ -20,7 +20,7 @@
 // events that match are our own work and skipped.
 
 import { WebSocketServer } from 'ws';
-import { writeFile, readFile, mkdir, symlink, lstat, readdir, rm } from 'node:fs/promises';
+import { writeFile, readFile, mkdir, symlink, lstat } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { dirname, resolve, join, sep, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -172,24 +172,22 @@ wss.on('connection', (ws) => {
 
 async function handleTreeDump(msg) {
     if (!Array.isArray(msg.files)) return;
-    // Clear any OPFS-managed leftover before laying down the fresh snapshot,
-    // so work/ always matches what the browser actually has in OPFS — no
-    // stale files from previous sessions / other songs.
-    const cleared = await clearOpfsContents();
-    if (cleared > 0) {
-        process.stderr.write(`[claude-bridge] tree_dump: cleared ${cleared} stale entry/entries\n`);
-    }
+    // Upsert only — don't wipe. Files added to work/ from the host side
+    // (gitignored binaries, user notes, etc.) would otherwise vanish on the
+    // next tree_dump if OPFS doesn't have them. Trade-off: stale files from
+    // an earlier song/repo stick around until manually removed.
     let written = 0;
+    let unchanged = 0;
     for (const f of msg.files) {
         if (!isSafeRelPath(f.path)) continue;
         try {
-            await writeMirrorFile(f.path, f.content, !!f.binary);
-            written++;
+            const wrote = await writeMirrorFile(f.path, f.content, !!f.binary);
+            if (wrote) written++; else unchanged++;
         } catch (e) {
             process.stderr.write(`[claude-bridge] tree_dump: skipped ${f.path}: ${e.message}\n`);
         }
     }
-    process.stderr.write(`[claude-bridge] tree_dump: wrote ${written}/${msg.files.length} file(s)\n`);
+    process.stderr.write(`[claude-bridge] tree_dump: wrote ${written}, unchanged ${unchanged}, of ${msg.files.length}\n`);
 }
 
 // Paths in work/ that the bridge considers OPFS-managed (i.e. round-trip
@@ -200,30 +198,6 @@ function isOpfsManagedPath(relPath) {
     if (relPath === '_state.json' || relPath === 'tsconfig.json') return false;
     if (relPath.startsWith('synth1/assembly/') || relPath === 'synth1/assembly') return false;
     return true;
-}
-
-// Remove every OPFS-managed file/dir under work/ so a fresh tree_dump
-// produces a 1:1 mirror. Bridge-private files (tsconfig.json,
-// _state.json) and the (currently empty) `synth1/assembly/` path stay.
-async function clearOpfsContents() {
-    let removed = 0;
-    let entries;
-    try { entries = await readdir(WORK_DIR, { withFileTypes: true }); } catch (_e) { return 0; }
-    for (const entry of entries) {
-        const relPath = entry.name;
-        if (!isOpfsManagedPath(relPath)) continue;
-        const full = join(WORK_DIR, entry.name);
-        try {
-            await rm(full, { recursive: true, force: true });
-            removed++;
-        } catch (e) {
-            process.stderr.write(`[claude-bridge] could not remove ${relPath}: ${e.message}\n`);
-        }
-    }
-    // Tracking state is invalidated by the wipe.
-    mirroredFiles.clear();
-    lastWritten.clear();
-    return removed;
 }
 
 function handleEditorState(msg) {
@@ -247,19 +221,22 @@ function isSafeRelPath(p) {
 
 async function writeMirrorFile(opfsPath, content, binary) {
     if (!isSafeRelPath(opfsPath)) throw new Error(`unsafe path: ${opfsPath}`);
-    // Mirror at the OPFS path — work/ matches OPFS 1:1.
     const filePath = join(WORK_DIR, opfsPath);
-    await mkdir(dirname(filePath), { recursive: true });
-    if (binary) {
-        const buf = Buffer.from(content, 'base64');
-        lastWritten.set(filePath, content); // store base64 form for compare
-        mirroredFiles.set(filePath, opfsPath);
-        await writeFile(filePath, buf);
-    } else {
+    // Skip identical re-writes so we don't touch mode/mtime — otherwise
+    // wasm-git shows spurious "modified" entries in git status.
+    const existing = await readFile(filePath).catch(() => null);
+    const existingEncoded = existing
+        ? (binary ? existing.toString('base64') : existing.toString('utf8'))
+        : null;
+    mirroredFiles.set(filePath, opfsPath);
+    if (existingEncoded === content) {
         lastWritten.set(filePath, content);
-        mirroredFiles.set(filePath, opfsPath);
-        await writeFile(filePath, content);
+        return false;
     }
+    await mkdir(dirname(filePath), { recursive: true });
+    lastWritten.set(filePath, content);
+    await writeFile(filePath, binary ? Buffer.from(content, 'base64') : content);
+    return true;
 }
 
 async function writeState() {

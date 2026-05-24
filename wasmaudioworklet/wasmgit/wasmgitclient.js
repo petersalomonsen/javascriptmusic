@@ -208,10 +208,11 @@ export async function readfile(filename, timeoutMs = 10000, { binary = false } =
         workerMessageListeners.push((msg) => {
             if (msg.data.filename === filename) {
                 clearTimeout(timer);
-                resolve(msg.data.filecontents);
-            } else if (msg.data.error && !msg.data.id) {
-                clearTimeout(timer);
-                reject(new Error(msg.data.error));
+                if (msg.data.error) {
+                    reject(new Error(msg.data.error));
+                } else {
+                    resolve(msg.data.filecontents);
+                }
             } else {
                 return true;
             }

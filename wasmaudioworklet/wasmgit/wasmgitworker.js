@@ -115,18 +115,33 @@ onmessage = async (msg) => {
       dirAcc += (i === 0 ? '' : '/') + segments[i];
       try { FS.mkdir(dirAcc); } catch (_) { /* exists */ }
     }
-    // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
-    const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
-    // Binary writes pass a Uint8Array straight through; text writes get encoded.
     const data = msg.data.binary
       ? (msg.data.contents instanceof Uint8Array ? msg.data.contents : new Uint8Array(msg.data.contents))
       : new TextEncoder().encode(msg.data.contents);
-    FS.write(fd, data, 0, data.length, 0);
-    FS.close(fd);
-    // `git add` is a no-op for paths matched by .gitignore — that's how we keep
-    // bridge-synced binaries (images, samples) out of the actual git history.
-    callMainInDir(['add', '--verbose', msg.data.filename]);
-    console.log(currentRepoDir, 'persisted via OPFS');
+    // Skip identical re-writes so we don't touch mode/mtime — otherwise the
+    // bridge bouncing a same-content file back into OPFS would surface as a
+    // bogus "modified" entry in git status.
+    let identical = false;
+    try {
+      const existing = FS.readFile(msg.data.filename);
+      if (existing.length === data.length) {
+        identical = true;
+        for (let i = 0; i < data.length; i++) {
+          if (existing[i] !== data[i]) { identical = false; break; }
+        }
+      }
+    } catch (_) { /* new file */ }
+    if (!identical) {
+      // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
+      const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
+      FS.write(fd, data, 0, data.length, 0);
+      FS.close(fd);
+      // `git add` is a no-op for paths matched by .gitignore — that's how we
+      // keep bridge-synced binaries (images, samples) out of the actual git
+      // history.
+      callMainInDir(['add', '--verbose', msg.data.filename]);
+      console.log(currentRepoDir, 'persisted via OPFS');
+    }
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
   } else if (msg.data.command === 'dir') {
     postMessage({ id: msg.data.id, dircontents: readdir() });
@@ -282,7 +297,10 @@ onmessage = async (msg) => {
         filecontents: FS.readFile(msg.data.filename, options)
       });
     } catch (e) {
-      postMessage({ 'error': JSON.stringify(e) });
+      // Echo the filename so the client-side readfile listener only rejects
+      // the matching call. Without it, concurrent readfile() Promise.all
+      // chains would all reject on any single ENOENT.
+      postMessage({ filename: msg.data.filename, error: JSON.stringify(e) });
     }
   } else if (msg.data.command === 'log') {
     callAndCaptureOutput(['log']);
