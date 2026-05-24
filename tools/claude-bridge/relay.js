@@ -44,7 +44,6 @@
 
 import { WebSocketServer } from 'ws';
 import { writeFile, readFile, mkdir, symlink, lstat, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { watch } from 'node:fs';
 import { dirname, resolve, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -129,29 +128,40 @@ async function setupSubdirScaffolding(absSubdir) {
     }
 
     const tsconfigPath = join(absSubdir, 'tsconfig.json');
-    if (!existsSync(tsconfigPath)) {
-        // Relative path back to wasmaudioworklet/node_modules from work/<o>/<r>/
-        // is four levels up: ../../../../wasmaudioworklet/node_modules/...
-        const tsconfig = {
-            compilerOptions: {
-                baseUrl: '.',
-                allowJs: true,
-                checkJs: false,
-                noEmit: true,
-                moduleResolution: 'node',
-                target: 'es2020',
-                strict: false,
-                skipLibCheck: true,
-                preserveSymlinks: true,
-            },
-            include: ['**/*.ts', '**/*.d.ts'],
-            files: [
-                '../../../../wasmaudioworklet/node_modules/assemblyscript/std/assembly/index.d.ts',
-            ],
-            exclude: ['node_modules'],
-        };
+    // Absolute path to the AS std declarations — `f32`, `StaticArray<T>`,
+    // `Mathf`, etc. The previous relative form was off by one
+    // (`../../../..` landed in `tools/`, missing the repo root), so the
+    // IDE saw none of the AS built-ins and lit every file up with errors.
+    // work/ is gitignored so absolute paths don't hurt portability.
+    const asTypesPath = resolve(REPO_ROOT, 'wasmaudioworklet/node_modules/assemblyscript/std/assembly/index.d.ts');
+    const tsconfig = {
+        compilerOptions: {
+            baseUrl: '.',
+            allowJs: true,
+            checkJs: false,
+            noEmit: true,
+            moduleResolution: 'node',
+            target: 'es2020',
+            strict: false,
+            skipLibCheck: true,
+            // Preserve symlinks so files reached via the per-subdir
+            // mixes/synth/etc. symlinks keep that path for THEIR own
+            // imports — otherwise TS resolves through to the real engine
+            // tree and `../mixes/…` from those files no longer lines up.
+            preserveSymlinks: true,
+        },
+        include: ['**/*.ts', '**/*.d.ts'],
+        files: [asTypesPath],
+        exclude: ['node_modules'],
+    };
+    const desired = JSON.stringify(tsconfig, null, 2);
+    // Idempotent overwrite — fixes drift if a previous bridge version
+    // wrote a stale/incorrect path.
+    let existing = null;
+    try { existing = await readFile(tsconfigPath, 'utf8'); } catch (_) {}
+    if (existing !== desired) {
         try {
-            await writeFile(tsconfigPath, JSON.stringify(tsconfig, null, 2));
+            await writeFile(tsconfigPath, desired);
         } catch (e) {
             process.stderr.write(`[claude-bridge] tsconfig write failed in ${absSubdir}: ${e.message}\n`);
         }
