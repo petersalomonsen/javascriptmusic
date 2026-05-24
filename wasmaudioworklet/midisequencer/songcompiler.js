@@ -3,6 +3,39 @@ import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunc
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT } from './sequenceconstants.js';
 import { setVideoSchedule } from '../visualizer/videoscheduler.js';
 
+// Map a URL to one suitable for assignment to <img>/<video>.src.
+// Repo-relative paths (no protocol, no leading slash) are read from OPFS via
+// the wasmgit client and exposed as blob URLs so they can be loaded by the
+// browser. Absolute and data: URLs are passed through unchanged.
+const MIME_BY_EXT = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+    gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+    mp4: 'video/mp4', webm: 'video/webm',
+    wav: 'audio/wav', mp3: 'audio/mpeg', flac: 'audio/flac',
+    ogg: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac',
+};
+function isRepoRelative(url) {
+    return typeof url === 'string'
+        && url.length > 0
+        && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url) // no scheme
+        && !url.startsWith('/')
+        && !url.startsWith('//');
+}
+async function resolveMediaUrl(url) {
+    if (!isRepoRelative(url)) return url;
+    try {
+        const { readfile } = await import('../wasmgit/wasmgitclient.js');
+        const bytes = await readfile(url, 10000, { binary: true });
+        if (!bytes) return url;
+        const ext = url.split('.').pop().toLowerCase();
+        const type = MIME_BY_EXT[ext] || 'application/octet-stream';
+        return URL.createObjectURL(new Blob([bytes], { type }));
+    } catch (e) {
+        console.warn(`Could not resolve repo-relative media url '${url}' via OPFS, falling back to literal:`, e.message);
+        return url;
+    }
+}
+
 let songmessages = [];
 export let instrumentNames = [];
 
@@ -121,7 +154,7 @@ const songargs = {
             addedAudio.push(new Promise(async (resolve, reject) => {
                 const audioObj = { url: url };
                 try {
-                    const buf = await fetch(url)
+                    const buf = await fetch(await resolveMediaUrl(url))
                         .then(response => response.arrayBuffer())
                         .then(buffer => new AudioContext().decodeAudioData(buffer));
 
@@ -139,18 +172,21 @@ const songargs = {
         if (!addedVideo[name]) {
             const videoElement = document.createElement('video');
             videoElement.crossOrigin = 'anonymous';
-            videoElement.src = url;
             videoElement.autoplay = false;
             videoElement.muted = true;
+            // Register the entry before awaiting so sync startVideo() calls
+            // later in the song can find { schedule: [] } even if the OPFS
+            // blob-URL resolve hasn't settled yet.
             addedVideo[name] = { videoElement, schedule: [] };
+            videoElement.src = await resolveMediaUrl(url);
         }
     },
     'addImage': async (name, url, cache = true) => {
         if (!cache || !addedVideo[name]) {
             const imageElement = new Image();
             imageElement.crossOrigin = 'anonymous';
-            imageElement.src = url;
             addedVideo[name] = { imageElement, schedule: [] };
+            imageElement.src = await resolveMediaUrl(url);
         }
     },
     'note': (noteNumber, duration, velocity, offset) =>

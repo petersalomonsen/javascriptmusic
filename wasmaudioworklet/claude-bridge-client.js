@@ -128,13 +128,14 @@ class ClaudeBridgeClient {
             try {
                 const binary = isLikelyBinary(path);
                 if (binary) {
-                    // wasm-git readfile returns strings; skip binaries until we
-                    // have a clean way to pull raw bytes from OPFS.
-                    continue;
+                    const bytes = await this.git.readfile(path, undefined, { binary: true });
+                    if (!(bytes instanceof Uint8Array)) continue;
+                    files.push({ path, content: bytesToBase64(bytes), binary: true });
+                } else {
+                    const content = await this.git.readfile(path);
+                    if (typeof content !== 'string') continue;
+                    files.push({ path, content, binary: false });
                 }
-                const content = await this.git.readfile(path);
-                if (typeof content !== 'string') continue;
-                files.push({ path, content, binary: false });
             } catch (e) {
                 console.warn('[claude-bridge] tree_dump skip', path, e?.message || e);
             }
@@ -202,14 +203,16 @@ class ClaudeBridgeClient {
     async _applyFile(msg) {
         const path = msg.path;
         if (!path) return;
-        // Update OPFS via wasm-git (text only for now).
-        if (this.git && !msg.binary) {
+        if (this.git) {
             try {
-                await this.git.writefileandstage(path, msg.content);
+                const payload = msg.binary ? base64ToBytes(msg.content) : msg.content;
+                await this.git.writefileandstage(path, payload);
             } catch (e) {
                 console.warn('[claude-bridge] writefileandstage failed', path, e?.message || e);
             }
         }
+        // Binary files don't surface in editors; nothing more to do.
+        if (msg.binary) return;
         // Refresh any editor currently showing this path.
         for (const [id, entry] of this.editors) {
             const editorPath = typeof entry.getPath === 'function' ? entry.getPath() : entry.getPath;
@@ -223,6 +226,22 @@ class ClaudeBridgeClient {
             this._lastSentForEditor.set(id, { path, content: msg.content });
         }
     }
+}
+
+function bytesToBase64(bytes) {
+    let s = '';
+    const chunk = 0x8000; // avoid call-stack blow-up on large files
+    for (let i = 0; i < bytes.length; i += chunk) {
+        s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(s);
+}
+
+function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
 }
 
 export const claudeBridge = new ClaudeBridgeClient();

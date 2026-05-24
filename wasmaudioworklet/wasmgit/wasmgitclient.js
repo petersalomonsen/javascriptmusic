@@ -195,10 +195,11 @@ export async function commitAndSyncRemote(commitmessage) {
     return dircontents;
 }
 
-export async function readfile(filename, timeoutMs = 10000) {
+export async function readfile(filename, timeoutMs = 10000, { binary = false } = {}) {
     worker.postMessage({
         command: 'readfile',
-        filename: filename
+        filename: filename,
+        binary
     });
     return await new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -256,11 +257,17 @@ export function updateCommitAndSyncButtonState(changes) {
     }
 }
 
+// Pass a string for text files or a Uint8Array (or ArrayBuffer) for binary files.
+// The worker writes the bytes verbatim and then runs `git add`, which is a
+// silent no-op for paths matched by the repo's .gitignore.
 export async function writefileandstage(filename, contents) {
+    const isBinary = contents instanceof Uint8Array || contents instanceof ArrayBuffer;
+    const payload = isBinary && contents instanceof ArrayBuffer ? new Uint8Array(contents) : contents;
     worker.postMessage({
         command: 'writefileandstage',
         filename: filename,
-        contents: contents
+        contents: payload,
+        binary: isBinary,
     });
     const result = await new Promise((resolve) =>
         workerMessageListeners.push((msg) => msg.data.dircontents && msg.data.repoHasChanges !== undefined ? resolve(msg.data) : true)

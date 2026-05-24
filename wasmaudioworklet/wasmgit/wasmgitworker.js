@@ -117,9 +117,14 @@ onmessage = async (msg) => {
     }
     // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
     const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
-    const data = new TextEncoder().encode(msg.data.contents);
+    // Binary writes pass a Uint8Array straight through; text writes get encoded.
+    const data = msg.data.binary
+      ? (msg.data.contents instanceof Uint8Array ? msg.data.contents : new Uint8Array(msg.data.contents))
+      : new TextEncoder().encode(msg.data.contents);
     FS.write(fd, data, 0, data.length, 0);
     FS.close(fd);
+    // `git add` is a no-op for paths matched by .gitignore — that's how we keep
+    // bridge-synced binaries (images, samples) out of the actual git history.
     callMainInDir(['add', '--verbose', msg.data.filename]);
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
@@ -271,9 +276,10 @@ onmessage = async (msg) => {
   } else if (msg.data.command === 'readfile') {
     try {
       ensureChdir(currentRepoDir);
+      const options = msg.data.binary ? undefined : { encoding: 'utf8' };
       postMessage({
         filename: msg.data.filename,
-        filecontents: FS.readFile(msg.data.filename, { encoding: 'utf8' })
+        filecontents: FS.readFile(msg.data.filename, options)
       });
     } catch (e) {
       postMessage({ 'error': JSON.stringify(e) });
