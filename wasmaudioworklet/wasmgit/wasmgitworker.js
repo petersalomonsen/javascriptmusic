@@ -89,11 +89,13 @@ onmessage = async (msg) => {
     } catch (e) {
 
     }
-    if (stdout.indexOf('Changes to be committed:') > -1) {
-      return true;
-    } else {
-      return false;
-    }
+    // Stage-on-commit means unstaged edits + untracked files also count as
+    // pending changes. Only ignored files (matched by .gitignore) stay
+    // invisible here, which is the right behavior for bridge-synced
+    // binaries we don't want to commit.
+    return stdout.indexOf('Changes to be committed:') > -1
+      || stdout.indexOf('Changes not staged for commit:') > -1
+      || stdout.indexOf('Untracked files:') > -1;
   }
 
   function readdir() {
@@ -115,13 +117,49 @@ onmessage = async (msg) => {
       dirAcc += (i === 0 ? '' : '/') + segments[i];
       try { FS.mkdir(dirAcc); } catch (_) { /* exists */ }
     }
-    // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
-    const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
-    const data = new TextEncoder().encode(msg.data.contents);
-    FS.write(fd, data, 0, data.length, 0);
-    FS.close(fd);
-    callMainInDir(['add', '--verbose', msg.data.filename]);
-    console.log(currentRepoDir, 'persisted via OPFS');
+    const data = msg.data.binary
+      ? (msg.data.contents instanceof Uint8Array ? msg.data.contents : new Uint8Array(msg.data.contents))
+      : new TextEncoder().encode(msg.data.contents);
+    // Skip identical re-writes so we don't touch mode/mtime — otherwise the
+    // bridge bouncing a same-content file back into OPFS would surface as a
+    // bogus "modified" entry in git status.
+    let identical = false;
+    try {
+      const existing = FS.readFile(msg.data.filename);
+      if (existing.length === data.length) {
+        identical = true;
+        for (let i = 0; i < data.length; i++) {
+          if (existing[i] !== data[i]) { identical = false; break; }
+        }
+      }
+    } catch (_) { /* new file */ }
+    if (!identical) {
+      // WASMFS+OPFS does not truncate on writeFile — open with O_TRUNC, write, close
+      const fd = FS.open(msg.data.filename, 577); // O_WRONLY | O_CREAT | O_TRUNC
+      FS.write(fd, data, 0, data.length, 0);
+      FS.close(fd);
+      // Caller can opt out of immediate staging (the bridge does), so that
+      // bridge-side edits show up as unstaged working-tree changes and the
+      // "Discard changes" button can roll them back via `git reset --hard`.
+      // Editor saves still stage immediately so the Commit & Sync indicator
+      // surfaces the change.
+      if (msg.data.stage !== false) {
+        callMainInDir(['add', '--verbose', msg.data.filename]);
+      }
+      console.log(currentRepoDir, 'persisted via OPFS');
+    }
+    postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
+  } else if (msg.data.command === 'unlinkfile') {
+    // Just remove from the working tree; don't touch the index. That leaves
+    // tracked deletions as unstaged "deleted" entries, so "Discard changes"
+    // (git reset --hard HEAD) can restore them. The actual `git rm` is
+    // handled at commit time by `git add -A`. Idempotent — missing file is
+    // treated as success so bridge-initiated deletes don't fail on retry.
+    ensureChdir(currentRepoDir);
+    try {
+      FS.unlink(msg.data.filename);
+      console.log(currentRepoDir, 'unlinked via OPFS', msg.data.filename);
+    } catch (_) { /* already gone */ }
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
   } else if (msg.data.command === 'dir') {
     postMessage({ id: msg.data.id, dircontents: readdir() });
@@ -131,7 +169,11 @@ onmessage = async (msg) => {
     if (repoHasChanges()) {
       callMainInDir(['config', 'user.name', username]);
       callMainInDir(['config', 'user.email', useremail]);
-
+      // Stage everything (new files, modifications, deletions). Respects
+      // .gitignore so bridge-synced binaries stay out. This is the single
+      // point where bridge-side and editor-side edits both get staged
+      // before the commit.
+      callMainInDir(['add', '-A']);
       callMainInDir(['commit', '-m', msg.data.commitmessage]);
     }
 
@@ -162,6 +204,10 @@ onmessage = async (msg) => {
         // Create symlink workaround for WASMFS getcwd() bug
         try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
         ensureChdir(currentRepoDir);
+        // WASMFS+OPFS has no real Unix mode bits — every file stat's as
+        // 0o755, so git would otherwise flag every file as a mode change
+        // (100644 → 100755) on every diff. Idempotent re-set is fine.
+        try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
         postMessage({ dircontents: readdir() });
         console.log(currentRepoDir, 'restored from OPFS');
       } else {
@@ -215,6 +261,10 @@ onmessage = async (msg) => {
     // Create symlink workaround for WASMFS getcwd() bug
     try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
     ensureChdir(currentRepoDir);
+    // WASMFS+OPFS reports 0o755 for everything (no real mode bits), so
+    // git would surface a 100644 → 100755 mode change for every file
+    // without this.
+    try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
 
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ dircontents: readdir() });
@@ -271,12 +321,16 @@ onmessage = async (msg) => {
   } else if (msg.data.command === 'readfile') {
     try {
       ensureChdir(currentRepoDir);
+      const options = msg.data.binary ? undefined : { encoding: 'utf8' };
       postMessage({
         filename: msg.data.filename,
-        filecontents: FS.readFile(msg.data.filename, { encoding: 'utf8' })
+        filecontents: FS.readFile(msg.data.filename, options)
       });
     } catch (e) {
-      postMessage({ 'error': JSON.stringify(e) });
+      // Echo the filename so the client-side readfile listener only rejects
+      // the matching call. Without it, concurrent readfile() Promise.all
+      // chains would all reject on any single ENOENT.
+      postMessage({ filename: msg.data.filename, error: JSON.stringify(e) });
     }
   } else if (msg.data.command === 'log') {
     callAndCaptureOutput(['log']);

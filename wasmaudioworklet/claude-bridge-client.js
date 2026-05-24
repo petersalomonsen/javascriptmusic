@@ -32,8 +32,12 @@ class ClaudeBridgeClient {
         this.reconnectTimer = null;
         this.warned = false;
         this.url = `ws://localhost:${DEFAULT_PORT}`;
-        this.git = null; // { listfiles, readfile, writefileandstage }
+        this.git = null; // { listfiles, readfile, writefileandstage, unlinkfile }
         this.treeSynced = false;
+        // Repo identity: origin (host:port) + repoName (OPFS repo dir name).
+        // The relay uses these to isolate this tab into work/<origin>/<repo>/
+        // so other tabs (different repos / origins) don't share state.
+        this.identity = null; // { origin, repoName }
     }
 
     start() {
@@ -41,8 +45,15 @@ class ClaudeBridgeClient {
         this._connect();
     }
 
-    attachGitRepo({ listfiles, readfile, writefileandstage }) {
-        this.git = { listfiles, readfile, writefileandstage };
+    setRepoIdentity({ origin, repoName }) {
+        this.identity = { origin, repoName };
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this._sendHello();
+        }
+    }
+
+    attachGitRepo({ listfiles, readfile, writefileandstage, unlinkfile }) {
+        this.git = { listfiles, readfile, writefileandstage, unlinkfile };
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this._sendTreeDump().catch((e) => console.warn('[claude-bridge] tree_dump failed', e));
         }
@@ -85,6 +96,9 @@ class ClaudeBridgeClient {
         this.ws.addEventListener('open', () => {
             this.warned = false;
             this.treeSynced = false;
+            // Identify the repo first; relay needs to know the subdir before
+            // any tree_dump / file_changed arrives.
+            this._sendHello();
             if (this.git) {
                 this._sendTreeDump().catch((e) => console.warn('[claude-bridge] tree_dump failed', e));
             }
@@ -106,7 +120,11 @@ class ClaudeBridgeClient {
         this.ws.addEventListener('message', (ev) => {
             let msg;
             try { msg = JSON.parse(ev.data); } catch (_e) { return; }
-            if (msg.type === 'apply_file') this._applyFile(msg).catch((e) => console.warn('[claude-bridge] apply_file failed', e));
+            if (msg.type === 'apply_file') {
+                this._applyFile(msg).catch((e) => console.warn('[claude-bridge] apply_file failed', e));
+            } else if (msg.type === 'apply_delete') {
+                this._applyDelete(msg).catch((e) => console.warn('[claude-bridge] apply_delete failed', e));
+            }
         });
     }
 
@@ -116,6 +134,18 @@ class ClaudeBridgeClient {
             this.reconnectTimer = null;
             this._connect();
         }, RECONNECT_MS);
+    }
+
+    _sendHello() {
+        if (!this.identity) return;
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        try {
+            this.ws.send(JSON.stringify({
+                type: 'hello',
+                origin: this.identity.origin,
+                repoName: this.identity.repoName,
+            }));
+        } catch (_e) { /* close handler will reconnect */ }
     }
 
     async _sendTreeDump() {
@@ -128,13 +158,14 @@ class ClaudeBridgeClient {
             try {
                 const binary = isLikelyBinary(path);
                 if (binary) {
-                    // wasm-git readfile returns strings; skip binaries until we
-                    // have a clean way to pull raw bytes from OPFS.
-                    continue;
+                    const bytes = await this.git.readfile(path, undefined, { binary: true });
+                    if (!(bytes instanceof Uint8Array)) continue;
+                    files.push({ path, content: bytesToBase64(bytes), binary: true });
+                } else {
+                    const content = await this.git.readfile(path);
+                    if (typeof content !== 'string') continue;
+                    files.push({ path, content, binary: false });
                 }
-                const content = await this.git.readfile(path);
-                if (typeof content !== 'string') continue;
-                files.push({ path, content, binary: false });
             } catch (e) {
                 console.warn('[claude-bridge] tree_dump skip', path, e?.message || e);
             }
@@ -197,19 +228,35 @@ class ClaudeBridgeClient {
         } catch (_e) { /* ditto */ }
     }
 
+    // A mirror file was deleted on the host — propagate to OPFS.
+    async _applyDelete(msg) {
+        const path = msg.path;
+        if (!path || !this.git || typeof this.git.unlinkfile !== 'function') return;
+        try {
+            await this.git.unlinkfile(path);
+            console.info(`[claude-bridge] applied delete ${path}`);
+        } catch (e) {
+            console.warn('[claude-bridge] unlinkfile failed', path, e?.message || e);
+        }
+    }
+
     // A mirror file changed in work/ — write it back into OPFS and, if any
     // open editor is showing that path, refresh its buffer.
     async _applyFile(msg) {
         const path = msg.path;
         if (!path) return;
-        // Update OPFS via wasm-git (text only for now).
-        if (this.git && !msg.binary) {
+        if (this.git) {
             try {
-                await this.git.writefileandstage(path, msg.content);
+                const payload = msg.binary ? base64ToBytes(msg.content) : msg.content;
+                // Bridge writes stay unstaged so "Discard changes" can roll
+                // them back — staging happens in bulk at commit time.
+                await this.git.writefileandstage(path, payload, { stage: false });
             } catch (e) {
                 console.warn('[claude-bridge] writefileandstage failed', path, e?.message || e);
             }
         }
+        // Binary files don't surface in editors; nothing more to do.
+        if (msg.binary) return;
         // Refresh any editor currently showing this path.
         for (const [id, entry] of this.editors) {
             const editorPath = typeof entry.getPath === 'function' ? entry.getPath() : entry.getPath;
@@ -223,6 +270,22 @@ class ClaudeBridgeClient {
             this._lastSentForEditor.set(id, { path, content: msg.content });
         }
     }
+}
+
+function bytesToBase64(bytes) {
+    let s = '';
+    const chunk = 0x8000; // avoid call-stack blow-up on large files
+    for (let i = 0; i < bytes.length; i += chunk) {
+        s += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(s);
+}
+
+function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
 }
 
 export const claudeBridge = new ClaudeBridgeClient();
