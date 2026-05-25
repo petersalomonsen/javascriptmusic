@@ -100,7 +100,12 @@ jobs:
       - name: Run Playwright tests
         run: |
           cd wasmaudioworklet
-          npx playwright test ./e2e/near-git.spec.js ./e2e/commit-stages-unstaged.spec.js
+          # Run every e2e spec. The NEAR sandbox is up so specs that need
+          # it (near-git, commit-stages-unstaged, faust-editor) use it;
+          # the rest just talk to the dev server. `--workers=1` because
+          # the sandbox-using specs share a single NEAR_REPO_CONTRACT and
+          # running them in parallel causes pushBaseline conflicts.
+          npx playwright test --workers=1
       - name: Stop sandbox
         if: always()
         run: docker rm -f near-git-sandbox || true

@@ -101,7 +101,12 @@ function setEditorContent(page, content) {
 
 test.describe('claude-editor-bridge OPFS tree sync', () => {
     const repoName = NEAR_REPO_CONTRACT + '.git';
-    const songPath = join(WORK_DIR, 'song.js');
+    // Bridge isolates each tab into work/<origin>/<repoName>/... (origin's
+    // ':' sanitized to '_'). page.goto serves the app on localhost:8080, and
+    // the client passes the ?gitrepo=<NEAR_REPO_CONTRACT> value through as
+    // its repoName, so the mirror for this test lives at:
+    const subdir = join(WORK_DIR, 'localhost_8080', NEAR_REPO_CONTRACT);
+    const songPath = join(subdir, 'song.js');
 
     test.beforeAll(async () => {
         await killExistingRelay();

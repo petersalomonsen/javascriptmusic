@@ -1,21 +1,20 @@
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
 
 // Focused repro: call browser-transpile.js's transpileDspSource() directly
-// in the page context, with the user-reported saxophony.dsp as input.
-// No wasm-git / NEAR / service-worker setup — we want to isolate libfaust-wasm
+// in the page context, with the upstream saxophony.dsp as input. No
+// wasm-git / NEAR / service-worker setup — we want to isolate libfaust-wasm
 // behavior from the rest of the editor pipeline.
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SAXOPHONY_DSP_PATH = resolve(
-    __dirname,
-    '../../tools/claude-bridge/work/localhost_8080/ifc2026-concert.gitfactory.testnet/faust/physicalmodeling/faust-stk/saxophony.dsp'
-);
-const SAXOPHONY_DSP = readFileSync(SAXOPHONY_DSP_PATH, 'utf-8');
-
+// Source from upstream Faust so the test runs in any checkout (CI, fresh
+// clone, etc.) without depending on a local wasm-git work directory. Pinned
+// to a specific commit so the .dsp can't drift under us.
+const SAXOPHONY_DSP_URL =
+    'https://raw.githubusercontent.com/grame-cncm/faust/master-dev/examples/physicalModeling/faust-stk/saxophony.dsp';
 test('saxophony.dsp transpiles in the browser via libfaust-wasm', async ({ page }) => {
+    const res = await fetch(SAXOPHONY_DSP_URL);
+    if (!res.ok) throw new Error(`failed to fetch saxophony.dsp: ${res.status}`);
+    const SAXOPHONY_DSP = await res.text();
+
     const consoleMessages = [];
     page.on('console', (m) => consoleMessages.push(`[${m.type()}] ${m.text()}`));
     page.on('pageerror', (e) => consoleMessages.push(`[pageerror] ${e.message}`));
