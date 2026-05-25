@@ -97,14 +97,20 @@ jobs:
             curl -s http://localhost:3030/near-info | grep -q contractId && echo "Sandbox ready" && break
             sleep 2
           done
+      - name: Install tools dependencies
+        run: |
+          # tools/faust2as/ — needed for the faust source generator below
+          #   (depends on @psalomo/faustwasm)
+          # tools/claude-bridge/ — needed by claude-bridge.spec.js, which
+          #   spawns the local relay (depends on ws)
+          (cd tools/faust2as && npm install --no-audit --no-fund)
+          (cd tools/claude-bridge && npm install --no-audit --no-fund)
       - name: Generate faust test sources
         run: |
           # faust2as-compilation.spec.js loads faust-test-sources.js, which
           # is generated from upstream Faust examples via the ASC backend.
           # No system faust install needed — the generator drives
-          # @psalomo/faustwasm via node, but that package lives in
-          # tools/faust2as/node_modules, not wasmaudioworklet's.
-          (cd tools/faust2as && npm install --no-audit --no-fund)
+          # @psalomo/faustwasm via node.
           node tools/faust2as/generate-test-sources.js
       - name: Run Playwright tests
         run: |
