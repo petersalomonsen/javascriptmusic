@@ -28,12 +28,6 @@ let accessToken = 'ANONYMOUS';
 let username = 'ANONYMOUS';
 let useremail = 'anonymous';
 let lastHttpRequest;
-// Working-tree changes from the bridge entry points that haven't been
-// staged yet. commitpullpush drains this set before `git commit` so the
-// unstaged writes/unlinks land in the commit. We can't use `git add -A`
-// (or `add .` / `add -u .`) here — lg2's `add` only accepts pathspecs,
-// not those switches — so we replay each path explicitly.
-const pendingPaths = new Set();
 XMLHttpRequest.prototype._open = XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
   this._open(method, url, async, user, password);
@@ -151,12 +145,12 @@ onmessage = async (msg) => {
       // surfaces the change.
       if (msg.data.stage !== false) {
         callMainInDir(['add', '--verbose', msg.data.filename]);
-      } else {
-        // Bridge-side write: don't auto-stage so "Discard changes"
-        // (git reset --hard HEAD) can roll it back. Record the path so
-        // commitpullpush can stage it at commit time.
-        pendingPaths.add(msg.data.filename);
       }
+      // When stage === false (bridge writes), we leave the working-tree
+      // change unstaged so "Discard changes" (git reset --hard HEAD) can
+      // roll it back. commitpullpush stages everything via `add .` +
+      // `add --update .` at commit time, so the file still lands in
+      // the commit.
       console.log(currentRepoDir, 'persisted via OPFS');
     }
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
@@ -170,10 +164,9 @@ onmessage = async (msg) => {
     ensureChdir(currentRepoDir);
     try {
       FS.unlink(msg.data.filename);
-      // Defer the index update to commit time. libgit2's `add <path>`
-      // (called from commitpullpush) records the deletion when the
-      // pathspec matches a path no longer in the working tree.
-      pendingPaths.add(msg.data.filename);
+      // The index update is deferred to commit time. commitpullpush
+      // calls `add --update .`, which records the deletion since the
+      // path no longer exists in the working tree.
       console.log(currentRepoDir, 'unlinked via OPFS', msg.data.filename);
     } catch (_) { /* already gone */ }
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
@@ -185,19 +178,20 @@ onmessage = async (msg) => {
     if (repoHasChanges()) {
       callMainInDir(['config', 'user.name', username]);
       callMainInDir(['config', 'user.email', useremail]);
-      // Stage pending bridge-side writes/unlinks. lg2's `add` only takes
-      // pathspecs (no `-A`, and this build also rejects `-u`), so we
-      // replay each recorded path via `add <path>`. libgit2's
-      // git_index_add_all (lg2_add's underlying call) records deletions
-      // when the pathspec matches a path no longer in the working tree,
-      // so one `add <path>` per entry covers writes, modifications, and
-      // deletions alike. Limitation: only changes that went through this
-      // worker's bridge entrypoints are tracked here; an OPFS modified
-      // from any other code path wouldn't be picked up.
-      for (const p of pendingPaths) {
-        try { callMainInDir(['add', p]); } catch (_) {}
-      }
-      pendingPaths.clear();
+      // Stage everything dirty in the working tree. lg2's `add` mirrors
+      // libgit2's example add.c which only accepts the LONG-form flags
+      // (--verbose / --dry-run / --update), not the short ones (-v/-n/-u)
+      // — and there's no -A/--all at all. So we drive both halves of
+      // `git add -A` manually:
+      //   `add .`           → git_index_add_all on pathspec "." → new +
+      //                        modified untracked-yet files
+      //   `add --update .`  → git_index_update_all on pathspec "." →
+      //                        modifications + deletions of tracked
+      // Both pass through .gitignore so bridge-synced binaries stay out.
+      // Reading from the working tree this way means we also catch
+      // changes from other OPFS writers, not just our own bridge calls.
+      callMainInDir(['add', '.']);
+      callMainInDir(['add', '--update', '.']);
       callMainInDir(['commit', '-m', msg.data.commitmessage]);
     }
 
