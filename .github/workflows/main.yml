@@ -102,7 +102,9 @@ jobs:
           # faust2as-compilation.spec.js loads faust-test-sources.js, which
           # is generated from upstream Faust examples via the ASC backend.
           # No system faust install needed — the generator drives
-          # @psalomo/faustwasm via node.
+          # @psalomo/faustwasm via node, but that package lives in
+          # tools/faust2as/node_modules, not wasmaudioworklet's.
+          (cd tools/faust2as && npm install --no-audit --no-fund)
           node tools/faust2as/generate-test-sources.js
       - name: Run Playwright tests
         run: |
