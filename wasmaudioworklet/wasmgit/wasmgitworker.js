@@ -146,6 +146,11 @@ onmessage = async (msg) => {
       if (msg.data.stage !== false) {
         callMainInDir(['add', '--verbose', msg.data.filename]);
       }
+      // When stage === false (bridge writes), we leave the working-tree
+      // change unstaged so "Discard changes" (git reset --hard HEAD) can
+      // roll it back. commitpullpush stages everything via `add .` +
+      // `add --update .` at commit time, so the file still lands in
+      // the commit.
       console.log(currentRepoDir, 'persisted via OPFS');
     }
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
@@ -153,11 +158,15 @@ onmessage = async (msg) => {
     // Just remove from the working tree; don't touch the index. That leaves
     // tracked deletions as unstaged "deleted" entries, so "Discard changes"
     // (git reset --hard HEAD) can restore them. The actual `git rm` is
-    // handled at commit time by `git add -A`. Idempotent — missing file is
-    // treated as success so bridge-initiated deletes don't fail on retry.
+    // handled at commit time by `git add -u .` in the commitpullpush
+    // handler below. Idempotent — missing file is treated as success so
+    // bridge-initiated deletes don't fail on retry.
     ensureChdir(currentRepoDir);
     try {
       FS.unlink(msg.data.filename);
+      // The index update is deferred to commit time. commitpullpush
+      // calls `add --update .`, which records the deletion since the
+      // path no longer exists in the working tree.
       console.log(currentRepoDir, 'unlinked via OPFS', msg.data.filename);
     } catch (_) { /* already gone */ }
     postMessage({ dircontents: readdir(), repoHasChanges: repoHasChanges() });
@@ -169,11 +178,20 @@ onmessage = async (msg) => {
     if (repoHasChanges()) {
       callMainInDir(['config', 'user.name', username]);
       callMainInDir(['config', 'user.email', useremail]);
-      // Stage everything (new files, modifications, deletions). Respects
-      // .gitignore so bridge-synced binaries stay out. This is the single
-      // point where bridge-side and editor-side edits both get staged
-      // before the commit.
-      callMainInDir(['add', '-A']);
+      // Stage everything dirty in the working tree. lg2's `add` mirrors
+      // libgit2's example add.c which only accepts the LONG-form flags
+      // (--verbose / --dry-run / --update), not the short ones (-v/-n/-u)
+      // — and there's no -A/--all at all. So we drive both halves of
+      // `git add -A` manually:
+      //   `add .`           → git_index_add_all on pathspec "." → new +
+      //                        modified untracked-yet files
+      //   `add --update .`  → git_index_update_all on pathspec "." →
+      //                        modifications + deletions of tracked
+      // Both pass through .gitignore so bridge-synced binaries stay out.
+      // Reading from the working tree this way means we also catch
+      // changes from other OPFS writers, not just our own bridge calls.
+      callMainInDir(['add', '.']);
+      callMainInDir(['add', '--update', '.']);
       callMainInDir(['commit', '-m', msg.data.commitmessage]);
     }
 
