@@ -114,6 +114,16 @@ export async function initEditor(componentRoot) {
         getPath: () => currentFaustFilename || null,
     });
 
+    // CodeMirror computes its layout from its container's measured size, so
+    // any cm constructed while display:none stays blank after setValue until
+    // refresh() runs once the container has a real size.
+    const cmByEditor = {
+        editor: () => songsourceeditor,
+        assemblyscripteditor: () => synthsourceeditor,
+        shadereditor: () => shadersourceeditor,
+        fausteditor: () => faustsourceeditor,
+    };
+
     window.toggleEditors = (editorid, checked) => {
         componentRoot.getElementById(editorid).style.display = checked ? 'block' : 'none';
         const editors = componentRoot.querySelectorAll('.editor');
@@ -127,6 +137,14 @@ export async function initEditor(componentRoot) {
         visibleEditors.forEach(editor =>
             editor.style.width = Math.round((1 / visibleEditors.length) * 100) + '%'
         );
+        if (checked) {
+            const cm = cmByEditor[editorid]?.();
+            if (cm) {
+                // Defer to after the browser has applied the display:block —
+                // refresh() reads the now-visible container's measured size.
+                requestAnimationFrame(() => cm.refresh());
+            }
+        }
     };
 
     toggleEditors('presetsui', false);
