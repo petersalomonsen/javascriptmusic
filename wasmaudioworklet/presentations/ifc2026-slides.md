@@ -378,18 +378,34 @@ Speaker notes:
 
 ## Slide 15 — What's next
 
-- Multi-window concert orchestration (BroadcastChannel handoff between
-  tabs, already wired)
-- More mature Faust DSP library curation (currently per-project)
-- Possible: shipping a "Faust transpiler" Cloudflare Pages function so
-  one-off transpiles can happen without the editor
+Faust ↔ WebAssembly Music as a two-way street:
+
+- **Maturing the Faust + AS coexistence.** Mixing hand-written AS
+  instruments and transpiled Faust DSPs in one module works today
+  (you just saw it) — next is hardening it: more of the Faust library
+  transpiling cleanly, more instruments and effects combined per song,
+  fewer rough edges on arbitrary `.dsp` input.
+- **What WebAssembly Music adds on top of Faust.** A multi-timbral
+  MIDI synth engine — voice allocation, `MidiVoice` / `MidiChannel`
+  routing, CC/NRPN auto-mapping. The ability to combine Faust DSPs
+  with synths written directly in AssemblyScript in one module. And
+  driving it all from JavaScript code or a MIDI sequencer — including
+  real MIDI hardware.
 
 Out of scope for this talk: the AS optimization-level investigation
 that led to the in-toolbar `-O1` toggle. Happy to discuss in Q&A.
 
 <!--
 Speaker notes:
-  - Trim to whichever items feel actually likely in the next 6 months.
+  - This is the room's audience — lead with the second bullet. Framing
+    it as "what this project adds on top of Faust" is the part that
+    resonates at a Faust conference.
+  - The three additions to call out: (1) the multi-timbral MIDI synth
+    engine, (2) mixing Faust DSPs with hand-written AS synths in one
+    module, (3) JS-code or MIDI-sequencer control, including MIDI
+    hardware.
+  - Don't oversell bullet 1 as new; slides 5 and 13 already showed the
+    Faust+AS mix working. It's "deepen," not "build."
   - Q&A handoff is the next slide.
 -->
 
