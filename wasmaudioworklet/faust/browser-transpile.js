@@ -87,6 +87,13 @@ function isStereoEffect(asSource) {
 // Throws on faust compilation error.
 export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}) {
     toggleSpinner(true);
+    // Force a real paint between attach and the (often microtask-only,
+    // when the compiler is cached) work. A single RAF fires *before* the
+    // paint, so by the time the promise resolves the microtask drain has
+    // already removed the spinner — the user sees nothing. Double-RAF
+    // guarantees one full render step commits a layout + paint while the
+    // spinner is in the DOM.
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     try {
         const { compiler, fs: faustFS } = await getCompiler();
         mountSiblings(faustFS, libsByPath);
