@@ -271,14 +271,26 @@ Both paths emit the same AS class shape. Same convergent format means:
 - One shared helper module (`transpile-core.js`) → consistent doc-comment
   format, name derivation, NRPN mapping, etc.
 
-The C-backend path remains useful for offline batch transpiles
-(e.g. building a fixed instrument library to ship with a project).
-The ASC-backend path is what makes the live-coding workflow possible.
+Only the C transpiler can handle DSPs that pull in C headers via
+`ffunction` (e.g. the STK **piano**). The ASC path is what makes the
+live-coding workflow possible.
 
 <!--
 Speaker notes:
   - This is the "what we got for free" slide. Keep it short — the
     audience just needs to see the picture, not the details.
+  - Chronology matters here: when the abstract was submitted there was
+    NO asc backend in Faust — the C transpiler was the whole approach.
+    The asc backend was added to Faust shortly after (right after my
+    LinkedIn post about the C transpiler). So frame the C path as the
+    original contribution that still has unique reach, NOT as legacy
+    superseded by asc.
+  - The piano line is worth landing for a Faust crowd: the STK piano's
+    tuning/decay/strike tables come from piano.h via ffunction. The C
+    backend reads that header and regenerates the tables as AS lookup
+    arrays; the asc backend would emit calls to C functions that don't
+    exist in the wasm target. Most instruments (piano1.dsp included)
+    now go through asc fine, but this is the case that keeps C alive.
 -->
 
 ---
