@@ -380,7 +380,7 @@ the .dsp mid-song.)
 the minimal demo repo and open `faust/simplesynth.dsp` in the Faust
 editor next to its transpiled AssemblyScript.
 
-`webassemblymusic.pages.dev/?gitrepo=ifc2026-faust2as.gitfactory.testnet`
+[webassemblymusic.pages.dev/?gitrepo=ifc2026-faust2as.gitfactory.testnet](https://webassemblymusic.pages.dev/?gitrepo=ifc2026-faust2as.gitfactory.testnet)
 
 Fallback: pre-recorded screencast of the same sequence, ready to play
 if audio routing misbehaves.
