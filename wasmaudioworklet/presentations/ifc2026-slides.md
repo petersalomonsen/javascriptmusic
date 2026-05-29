@@ -376,6 +376,12 @@ Faust sine + envelope → typed channel fields → DX7 algorithm with
 NRPN auto-mapping → master_me / live_master as a postprocess → hot-edit
 the .dsp mid-song.)
 
+**Code side-by-side** — instead of a static slide, show it live: load
+the minimal demo repo and open `faust/simplesynth.dsp` in the Faust
+editor next to its transpiled AssemblyScript.
+
+`webassemblymusic.pages.dev/?gitrepo=ifc2026-faust2as.gitfactory.testnet`
+
 Fallback: pre-recorded screencast of the same sequence, ready to play
 if audio routing misbehaves.
 
@@ -384,6 +390,11 @@ Speaker notes:
   - ~10 min. If pressed for time, cut the master_me step.
   - Always have headphones plugged into the laptop's headphone jack
     as a fallback monitor.
+  - The simplesynth repo is 3 files (faust/simplesynth.dsp, synth.ts,
+    song.js). On a fresh load, transpile the .dsp ONCE in the Faust
+    editor to generate faust/simplesynth.ts before compiling — do this
+    before going on stage. Must be the pages.dev host (OPFS); the
+    petersalomonsen.com build can't load ?gitrepo=.
 -->
 
 ---
@@ -428,7 +439,7 @@ Speaker notes:
 **Thanks.** Q&A.
 
 - Code: [github.com/petersalomonsen/javascriptmusic](https://github.com/petersalomonsen/javascriptmusic)
-- Hosted app: [petersalomonsen.com/webassemblymusic/livecodev2/](https://petersalomonsen.com/webassemblymusic/livecodev2/)
+- Hosted app: [webassemblymusic.pages.dev](https://webassemblymusic.pages.dev/)
 - Demo videos: [bit.ly/wasm-music-demos](https://www.youtube.com/watch?v=C8j_ieOm4vE&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7)
 - Book: *Building and Deploying WebAssembly Apps* — BPB Publications, 2025
 - Previously presented at WebAssembly Summit 2020, NEARCON 2021, WAC 2025
@@ -447,10 +458,15 @@ Speaker notes:
 
 ## Open decisions before the deck is final
 
-- **Slide tool**: Reveal.js (live-codable from this repo), Marp (just
-  markdown), Keynote, Quarto? Plan §1.6 leans Reveal-in-this-repo.
-- **One concrete code side-by-side slide** (Faust source ↔ transpiled
-  AS) — would strengthen slide 7 or slide 8, but adds visual density.
+- ~~**Slide tool**~~ → **resolved**: Reveal.js, live-codable from this
+  repo (`ifc2026-slides.html`).
+- ~~**One concrete code side-by-side slide**~~ → **resolved**: shown
+  live in the app instead of a static slide — slide 14 loads the
+  `ifc2026-faust2as.gitfactory.testnet` demo repo and opens
+  `faust/simplesynth.dsp` beside its transpiled AS.
+
+Delivery contingencies (cut if over time, not deck blockers):
+
 - **Slide 11 (the -O0/-O1 cost slide)** is optional. Drop it if the
   talk runs over.
 - **What to cut if running short**: slide 15 (what's next) and the
