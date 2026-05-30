@@ -24,11 +24,14 @@ Speaker notes:
 - AudioWorklet for low-latency playback
 - Synth wasm modules: kilobytes, not megabytes
 
+**▶ Demo** — the running app: play a song, tour the editors.
+
 <!--
 Speaker notes:
   - Set up the architecture diagram on the next slide. The single-wasm-
     module point is the key one for the Faust integration story later.
-  - Resist the urge to demo here — the demo block is at slide 15.
+  - Quick app tour here — keep it short; the deep live-coding demo is
+    slide 14.
 -->
 
 ---
@@ -135,6 +138,8 @@ Music — not as separate AudioWorklet nodes, but as voices in one
 > *Multi-timbral* = many instruments at once, one per MIDI channel
 > (piano + bass + drums together).
 
+**▶ Demo** — the app: a multi-timbral Faust song in one module.
+
 <!--
 Speaker notes:
   - Be respectful about Faust IDE / faustwasm — they're great tools
@@ -219,6 +224,8 @@ Transpiler responsibilities:
 → Output compiles through the same in-browser AS pipeline as
 hand-written instruments.
 
+**▶ Demo** — the C backend: `faust2as.js` on a `.dsp` at the CLI.
+
 <!--
 Speaker notes:
   - One concrete code-side-by-side here would help — pick a 5-line
@@ -246,6 +253,9 @@ What you get without writing any glue code:
 get feedback(): f32 { return _dx7_alg5_feedback; }
 set feedback(value: f32) { _dx7_alg5_feedback = value; }
 ```
+
+**▶ Demo** — IntelliSense on the typed fields in VS Code (Claude bridge);
+then export the wasm and play it in the standalone player.
 
 <!--
 Speaker notes:
@@ -363,6 +373,8 @@ Examples in the repo: **master_me** (full mastering chain) and a small
 custom **live_master** (compressor + brickwall limiter, ~80 lines).
 Per the trade-off mentioned earlier, the heavy chain goes in offline
 export; the light one runs in the live audio thread.
+
+**▶ Demo** — add an effect on the output bus, hear it change.
 
 <!--
 Speaker notes:
