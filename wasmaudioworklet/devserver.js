@@ -26,6 +26,7 @@ const MIME_TYPES = {
   '.dsp': 'text/plain',
   '.txt': 'text/plain',
   '.map': 'application/json',
+  '.md': 'text/markdown',
 };
 
 const CROSS_ORIGIN_HEADERS = {
