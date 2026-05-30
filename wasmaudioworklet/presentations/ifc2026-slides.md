@@ -221,10 +221,9 @@ Transpiler responsibilities:
 - Wave tables, static array declarations
 - UI metadata harvested from `ui_interface->declare(...)` calls
 
-→ Output compiles through the same in-browser AS pipeline as
-hand-written instruments.
+→ Compiles through the same in-browser AS pipeline as hand-written code.
 
-**▶ Demo** — the C backend: `faust2as.js` on a `.dsp` at the CLI.
+**▶ Demo** — `faust2as.js` on a `.dsp` at the CLI.
 
 <!--
 Speaker notes:
