@@ -131,9 +131,24 @@ Faust = widely adopted DSP language; mature instrument libraries
 Music — not as separate AudioWorklet nodes, but as voices in one
 **multi-timbral** synth engine, compiled into a single wasm module.
 
-> **Polyphonic** = many notes of *one* instrument at once.
-> **Multi-timbral** = many *different* instruments at once, one per MIDI
-> channel — e.g. piano, bass and drums playing together.
+> *Polyphonic* = many notes, one instrument.
+> *Multi-timbral* = many instruments at once, one per MIDI channel
+> (piano + bass + drums together).
+
+<!--
+Speaker notes:
+  - Be respectful about Faust IDE / faustwasm — they're great tools
+    with different goals. Position as "a different choice for a
+    different use case," not "we do it better."
+  - Multi-timbral: define polyphony first (many notes, one sound), then
+    multi-timbral (many sounds at once, one per channel). The DX7 demo
+    has e-piano/bass/strings/drums on channels 0–4 simultaneously.
+  - The comparison table is on the next slide.
+-->
+
+---
+
+## Slide 5b — faustwasm runtime vs. WebAssembly Music
 
 |                  | Faust IDE / `faustwasm` runtime               | WebAssembly Music + transpiler                          |
 | ---------------- | --------------------------------------------- | ------------------------------------------------------- |
@@ -144,17 +159,11 @@ Music — not as separate AudioWorklet nodes, but as voices in one
 
 <!--
 Speaker notes:
-  - Be respectful about Faust IDE / faustwasm — they're great tools
-    with different goals. Position as "a different choice for a
-    different use case," not "we do it better."
   - faustwasm DOES manage voices — its poly node has a real voice pool
     with stealing. What it does NOT do: route MIDI channel to different
     instruments (keyOn's channel arg is "not used for now"), or put
     several instruments in one module. So the value WAW adds is
     multi-timbral routing + one shared module, not "voice management".
-  - Multi-timbral: define polyphony first (many notes, one sound), then
-    multi-timbral (many sounds at once, one per channel). The DX7 demo
-    has e-piano/bass/strings/drums on channels 0–4 simultaneously.
   - DAW plugin: the EXPORTED .wasm (the same midisynth binary) loads in
     a JUCE/WasmEdge plugin via the same exports the AudioWorklet uses
     (shortmessage / fillSampleBufferWithNumSamples / samplebuffer). One
