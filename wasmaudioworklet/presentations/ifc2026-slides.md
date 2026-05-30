@@ -439,9 +439,6 @@ Faust ↔ WebAssembly Music as a two-way street:
   driving it all from JavaScript code or a MIDI sequencer — including
   real MIDI hardware.
 
-Out of scope for this talk: the AS optimization-level investigation
-that led to the in-toolbar `-O1` toggle. Happy to discuss in Q&A.
-
 <!--
 Speaker notes:
   - This is the room's audience — lead with the second bullet. Framing
