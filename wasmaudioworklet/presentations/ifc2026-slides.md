@@ -322,14 +322,14 @@ Speaker notes:
 
 ## Slide 11 — Does it scale? The optimize toggle
 
-Heavy DSPs (e.g. master_me, ~700 state fields) can choke at the fast
-`-O0` live-compile default.
+Heavy DSPs (e.g. master_me, hundreds of state fields) can choke at the
+fast `-O0` live-compile default.
 
 → One **"Optimize AssemblyScript"** checkbox flips to `-O1`.
 
 | | `-O0` | `-O1` |
 | --- | --- | --- |
-| Compile | ~80 ms | ~600 ms |
+| Compile (master_me) | ~150 ms | ~800 ms |
 | Use for | rapid iteration | heavy-DSP playback |
 
 <!--
@@ -342,6 +342,9 @@ Speaker notes:
   - I can demo this live: toggle the checkbox on master_me and show the
     compile-time / playback difference. The toggle persists in
     localStorage (asOptimizeLevel).
+  - Numbers are measured (asc 0.28.9, master_me mix): -O0 ~150 ms /
+    178 KB, -O1 ~800 ms / 138 KB. Heavier mixes scale up (the full DX7
+    demo: ~0.3 s / ~1.4 s). Machine-dependent; quote as "order of".
 -->
 
 ---
