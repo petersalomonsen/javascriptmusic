@@ -400,23 +400,18 @@ Speaker notes:
 
 → Live coding session at the laptop.
 
-(See `ifc2026-plan.md` §1.5 for the demo sequence: empty editor →
-Faust sine + envelope → typed channel fields → DX7 algorithm with
-NRPN auto-mapping → master_me / live_master as a postprocess → hot-edit
-the .dsp mid-song.)
-
 **Code side-by-side** — instead of a static slide, show it live: load
 the minimal demo repo and open `faust/simplesynth.dsp` in the Faust
 editor next to its transpiled AssemblyScript.
 
 [webassemblymusic.pages.dev/?gitrepo=ifc2026-faust2as.gitfactory.testnet](https://webassemblymusic.pages.dev/?gitrepo=ifc2026-faust2as.gitfactory.testnet)
 
-Fallback: pre-recorded screencast of the same sequence, ready to play
-if audio routing misbehaves.
-
 <!--
 Speaker notes:
   - ~10 min. If pressed for time, cut the master_me step.
+  - Demo sequence: empty editor → Faust sine + envelope → typed channel
+    fields → DX7 algorithm with NRPN auto-mapping → master_me /
+    live_master as a postprocess → hot-edit the .dsp mid-song.
   - Always have headphones plugged into the laptop's headphone jack
     as a fallback monitor.
   - The simplesynth repo is 3 files (faust/simplesynth.dsp, synth.ts,
