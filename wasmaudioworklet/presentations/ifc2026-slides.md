@@ -322,8 +322,8 @@ Speaker notes:
 
 ## Slide 11 — Does it scale? The optimize toggle
 
-Heavy DSPs (e.g. master_me, hundreds of state fields) can choke at the
-fast `-O0` live-compile default.
+Heavy DSPs (e.g. master_me, ~700 state fields) can choke at the fast
+`-O0` live-compile default.
 
 → One **"Optimize AssemblyScript"** checkbox flips to `-O1`.
 
