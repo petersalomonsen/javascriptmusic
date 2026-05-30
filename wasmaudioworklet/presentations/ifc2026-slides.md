@@ -320,27 +320,28 @@ Speaker notes:
 
 ---
 
-## Slide 11 — Cost: how we keep it cheap
+## Slide 11 — Does it scale? The optimize toggle
 
-Faust DSPs are big — master_me alone has ~700 internal state fields,
-hundreds of per-sample reads. At AS's `-O0` (live-compile default),
-every `this.fRec5` is a function call to an accessor wasm function.
-That overhead can choke real-time playback for heavy DSPs.
+Heavy DSPs (e.g. master_me, ~700 state fields) can choke at the fast
+`-O0` live-compile default.
 
-**Mitigation:** the in-browser worker takes `optimizeLevel: 1` (and
-makes it user-toggleable via a toolbar checkbox). At -O1, AS inlines
-the accessors and hoists invariant property reads out of hot loops.
-Compile time goes from ~80 ms to ~600 ms — still interactive.
+→ One **"Optimize AssemblyScript"** checkbox flips to `-O1`.
 
-The user picks the trade-off per session: fast-compile for rapid
-iteration, optimized for heavy-DSP playback.
+| | `-O0` | `-O1` |
+| --- | --- | --- |
+| Compile | ~80 ms | ~600 ms |
+| Use for | rapid iteration | heavy-DSP playback |
 
 <!--
 Speaker notes:
-  - Optional slide — drop if running long. Useful for the audience
-    that asks "OK but does it scale?".
-  - One sentence summary: bigger DSPs need -O1; the toggle is in the
-    toolbar.
+  - Optional slide — drop if running long. The audience question this
+    answers is "OK but does it scale?".
+  - Why -O0 is slow for big DSPs: each `this.fRec5` is an accessor
+    wasm-function call; -O1 inlines those and hoists invariant reads
+    out of the hot loop. Both still interactive.
+  - I can demo this live: toggle the checkbox on master_me and show the
+    compile-time / playback difference. The toggle persists in
+    localStorage (asOptimizeLevel).
 -->
 
 ---
