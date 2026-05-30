@@ -24,6 +24,7 @@ https://petersalomonsen.com/webassemblymusic/livecodev2/?gist=a74d2d036b3ecaa01a
 # Documentation
 
 - [JavaScript Sequence API Documentation](midisequencer/SEQUENCE_API.md) - Complete reference for writing JavaScript music sequences
+- [Animating images & text in a song](ANIMATIONS.md) - Frame-by-frame animation, text overlays, letterboxing and fades in the visualizer
 - [Hosting a song project in a NEAR-backed git repo](wasmgit/README.md) - Create your own `?gitrepo=` repo and push a project to it (on-chain git storage)
 
 # Build / Run / Export to WAW
