@@ -55,7 +55,7 @@ Browse to http://localhost:5000
 
 from the [synth1](synth1) folder.
 
-the [synth1/index.js](synth1/index.js) script will output audio to `stdout`, so you may pipe it into e.g. [SoX]([sox](http://sox.sourceforge.net/)) like this:
+the [synth1/index.js](synth1/index.js) script will output audio to `stdout`, so you may pipe it into e.g. [SoX](http://sox.sourceforge.net/) like this:
 
 `node index.js | sox -S -t raw -b 32 -e float -r 44100 -c 2 - out.wav`
 
