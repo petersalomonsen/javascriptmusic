@@ -15,7 +15,7 @@ https://petersalomonsen.com/webassemblymusic/livecodev2/?gist=5b795090ead4f192e7
 Demo videos:
 https://www.youtube.com/watch?v=C8j_ieOm4vE&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7
 
-Sources are in the [wasmaudioworklet](wasmaudioworklet) folder.
+Sources are in the [wasmaudioworklet](wasmaudioworklet) folder. See the [documentation guides](wasmaudioworklet/docs/README.md) for writing songs, animating visuals, and hosting projects.
 
 There are also more resources like articles and earlier versions at https://petersalomonsen.com
 
