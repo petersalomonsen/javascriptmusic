@@ -9,13 +9,20 @@ This project demonstrates writing music in Javascript. In the beginning I used N
 
 This is a live-coding environment for music running entirely in the browser, synthesizing music in webassembly using [AssemblyScript](https://docs.assemblyscript.org/).
 
-You can test it yourself here (remove the `gist` url parameter if you want a clean project ):
+You can test it yourself at the hosted app:
+https://webassemblymusic.pages.dev/
+
+The two repos used for the IFC 2026 talk load directly via the `?gitrepo=` parameter:
+- https://webassemblymusic.pages.dev/?gitrepo=ifc2026-concert.gitfactory.testnet
+- https://webassemblymusic.pages.dev/?gitrepo=ifc2026-faust2as.gitfactory.testnet
+
+An older version is hosted at petersalomonsen.com (load a gist with the `gist` url parameter, or remove it for a clean project):
 https://petersalomonsen.com/webassemblymusic/livecodev2/?gist=5b795090ead4f192e7f5ee5dcdd17392
 
 Demo videos:
 https://www.youtube.com/watch?v=C8j_ieOm4vE&list=PLv5wm4YuO4IxRDu1k8fSBVuUlULA8CRa7
 
-Sources are in the [wasmaudioworklet](wasmaudioworklet) folder.
+Sources are in the [wasmaudioworklet](wasmaudioworklet) folder. See the [documentation guides](wasmaudioworklet/docs/README.md) for writing songs, animating visuals, and hosting projects.
 
 There are also more resources like articles and earlier versions at https://petersalomonsen.com
 
