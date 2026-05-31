@@ -21,12 +21,12 @@ project; the code in this folder (`wasmgit/`) is the browser client.
 ## How it works
 
 - `?gitrepo=<name>.gitfactory.testnet` is resolved to `<origin>/near-repo/<name>.git`
-  ([`wasmgitclient.js`](wasmgitclient.js)).
+  ([`wasmgitclient.js`](../wasmgit/wasmgitclient.js)).
 - A service worker (from `near-git-storage`) intercepts those git HTTP requests
   and translates them into NEAR RPC calls — there is no server. Transaction
   signing happens in the browser; the private key never leaves the client.
 - wasm-git clones the repo into OPFS and the editor loads the song/synth/shader
-  from it. The in-app **commit / pull / push** UI ([`wasmgitui.html`](wasmgitui.html))
+  from it. The in-app **commit / pull / push** UI ([`wasmgitui.html`](../wasmgit/wasmgitui.html))
   writes changes back to the chain.
 
 ## 1. Create the repo contract
