@@ -10,7 +10,8 @@ Yamaha DX7 synthesizer running as a transpiled AssemblyScript instrument via the
 | `dx7-synth-asc-backend.ts` | Generated synth bundle using ASC backend transpiler |
 | `dx7-sequence.js` | Example sequence with E.Piano, Bass, Strings, Bells, and Drum Kit patches |
 | `dsp/` | Faust DSP source files for each algorithm variant |
-| `parse-rom.js` | Utility to convert DX7 SysEx ROM files to NRPN patch data |
+| `parse-rom.js` | Utility to convert DX7 SysEx ROM (`.syx`) files to NRPN patch data |
+| `sequence-to-patches.js` | Utility to convert an NRPN sequence into typed-field assignments for the modular per-algorithm `.ts` files (see "Porting a ROM patch into a modular channel" below) |
 
 ## How it works
 
@@ -22,9 +23,10 @@ The DX7 Faust implementation uses 6 FM operators with configurable routing (algo
 - `dx7_alg5_hat.dsp` — Algorithm 5 (JunkHat, separate globals)
 - `dx7_alg16.dsp` — Algorithm 16 (Bass)
 - `dx7_alg17.dsp` — Algorithm 17 (Beefkick)
+- `dx7_alg18.dsp` — Algorithm 18 (Syn-Lead)
 - `dx7_alg21.dsp` — Algorithm 21 (MildSnare)
 
-The `faust2as` transpiler compiles these into a single bundle with independent voice classes and NRPN parameter control (138 parameters per algorithm, addressed via MIDI CC 99/98/6).
+The `faust2as` transpiler compiles these into a single bundle with independent voice classes and NRPN parameter control (144 parameters per algorithm, addressed via MIDI CC 99/98/6).
 
 ## Regenerating the synth bundle
 
@@ -64,6 +66,8 @@ After regenerating, the last three DSPs (alg17, alg21, alg5\_hat) are placed on 
 
 The `parse-rom.js` utility converts standard DX7 SysEx bulk dump files (`.syx`, 4104 bytes, 32 voices) into the NRPN format used by `dx7-sequence.js`.
 
+Factory ROM cartridges (`ROM1A.syx` … `ROM4B.syx`) are freely distributed — e.g. [WouterVanNifterick/DX7](https://github.com/WouterVanNifterick/DX7) (`ROM1A.SYX`). Download one to follow these examples; the binary isn't committed here.
+
 ```sh
 # List all 32 patches in a ROM file
 node parse-rom.js ROM1A.syx
@@ -83,6 +87,37 @@ process = dx.algorithm(N) <: _,_;
 ```
 
 Then add it to the bundle compilation command and regenerate.
+
+## Porting a ROM patch into a modular channel
+
+The bundle workflow above sets patches via `nrpn(beat, idx, value)` calls inside the song. The **modular** layout used by the live app (one `.ts` per algorithm under `faust/dx7/`, transpiled with `faust2asc.js --for-editor`) instead keeps the song purely musical and sets each patch as **typed-field assignments** in `synth.ts` — e.g. `lead.feedback = <f32>7.0;`. The field value is the NRPN value scaled to the parameter's native range (`min + value/127 * (max-min)`); assigning a raw 0–127 to a 0–7 field would crash the DSP on the first note.
+
+`sequence-to-patches.js` automates that scaling. It reads an NRPN sequence and the transpiled `.ts` files, then emits ready-to-paste field assignments.
+
+**Worked example — porting SYN-LEAD 1 (ROM1A #14, Algorithm 18) onto channel 5:**
+
+```sh
+# 1. Algorithm 18 isn't compiled by default — transpile it once.
+#    (writes the .ts next to the other faust/dx7/*.ts in your song repo)
+echo 'import("stdfaust.lib");
+process = dx.algorithm(18) <: _,_;' > dsp/dx7_alg18.dsp
+node ../../tools/faust2as/faust2asc.js dsp/dx7_alg18.dsp \
+  --name Dx7Alg18 --for-editor --out /path/to/repo/faust/dx7/dx7_alg18.ts
+
+# 2. Dump the ROM patch as an NRPN sequence on channel 5.
+node parse-rom.js ROM1A.syx 14 --channel 5 > synlead.seq.js
+
+# 3. Convert that sequence to typed-field assignments for the modular .ts.
+node sequence-to-patches.js \
+  --src synlead.seq.js \
+  --faust /path/to/repo/faust/dx7 \
+  --map '5:lead:dx7_alg18:Dx7Alg18' \
+  --drum ''
+```
+
+Step 3 prints a `const lead = new Dx7Alg18Channel(...)` block plus 144 `lead.<field> = <f32>...;` lines. Paste it into `initializeMidiSynth()` in `synth.ts`, add a matching `addInstrument('...')` in `song.js` (instrument order = channel index), and the patch is live.
+
+> `--for-editor` emits depth-1 imports (`../mixes/...`); files placed in `faust/dx7/` need depth-2 (`../../mixes/...`). `sequence-to-patches.js` reads the channel class regardless, but fix the import depth in the generated `.ts` before compiling.
 
 ## Channel layout
 
