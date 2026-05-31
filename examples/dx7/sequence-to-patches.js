@@ -65,11 +65,15 @@ if (!FAUST_DIR) {
 const DEFAULT_MAP = '0:epiano:dx7_alg5:Dx7Alg5,1:bass:dx7_alg16:Dx7Alg16,2:strings:dx7_alg2:Dx7Alg2,3:bells:dx7_alg5_bells:Dx7Alg5Bells';
 const DEFAULT_DRUM = '4:0=kickRouter:dx7_alg17:Dx7Alg17,4:144=snareRouter:dx7_alg21:Dx7Alg21,4:288=hatRouter:dx7_alg5_hat:Dx7Alg5Hat';
 
-const melodic = getArg('--map', DEFAULT_MAP).split(',').map(s => {
+// Empty string (e.g. --map '' or --drum '') means "no entries in this group",
+// not one blank entry — split(',') on '' yields [''] which must be filtered.
+const splitSpecs = (s) => s.split(',').map(x => x.trim()).filter(Boolean);
+
+const melodic = splitSpecs(getArg('--map', DEFAULT_MAP)).map(s => {
     const [ch, name, alg, cls] = s.split(':');
     return { ch: +ch, name, alg, cls, srcChannel: +ch, isRouter: false };
 });
-const drums = getArg('--drum', DEFAULT_DRUM).split(',').map(s => {
+const drums = splitSpecs(getArg('--drum', DEFAULT_DRUM)).map(s => {
     // shape: "<srcCh>:<offset>=<name>:<alg>:<cls>"
     const [head, alg, cls] = s.split(':');
     // wait — colons are also separators for the head. parse manually:
