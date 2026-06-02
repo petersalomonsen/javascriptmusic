@@ -10,6 +10,9 @@ itself see the [app README](../README.md); for the monorepo overview see the
   JavaScript: tracks, patterns, notes, timing, instruments, audio & video.
 - [Animating images & text](animations.md) — frame-by-frame animation, text
   overlays, letterboxing and fades in the visualizer.
+- [Developing & testing visualizer shaders](shaders.md) — the fragment-shader
+  uniform contract and a headless compile + render harness
+  ([tools/shadertest](../../tools/shadertest/render.mjs)).
 
 ## Sharing & hosting
 
