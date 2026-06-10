@@ -48,7 +48,9 @@ test('faust-rs wasm module transpiles voice + library() sibling + effect=', asyn
         customElements.define = (name, ctor, opts) => {
             try { origDefine(name, ctor, opts); } catch (e) { /* already defined */ }
         };
-        const m = await import('/faust/faust-rs-transpile.js');
+        // Import the app's default transpile entry point — on this branch it
+        // delegates to the faust-rs module.
+        const m = await import('/faust/browser-transpile.js');
         const { ts, className } = await m.transpileDspSource(
             mainDsp,
             'testsynth.dsp',
