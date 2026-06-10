@@ -50,16 +50,33 @@ async function getFaustRs() {
             )
         );
 
-        // generateAuxFiles(name, source, args) → generated text or null.
+        const lastError = () => dec.decode(
+            mem().slice(
+                e.faust_wasm_last_error_ptr(),
+                e.faust_wasm_last_error_ptr() + e.faust_wasm_last_error_len()
+            )
+        );
+
+        // generateAuxFiles(name, source, args) → generated text; throws with
+        // the compiler's error message on failure.
         const generateAuxFiles = (name, source, args) => {
             const [np, nl] = writeStr(name);
             const [sp, sl] = writeStr(source);
             const [ap, al] = writeStr(args);
-            const handle = e.faust_wasm_generate_aux_files(np, nl, sp, sl, ap, al);
-            e.faust_wasm_dealloc(np, nl);
-            e.faust_wasm_dealloc(sp, sl);
-            e.faust_wasm_dealloc(ap, al);
-            if (!handle) return null;
+            let handle;
+            try {
+                handle = e.faust_wasm_generate_aux_files(np, nl, sp, sl, ap, al);
+            } catch (err) {
+                // A wasm trap (e.g. stack exhaustion) aborts the call itself.
+                throw new Error('faust-rs: compiler crashed: ' + err);
+            } finally {
+                e.faust_wasm_dealloc(np, nl);
+                e.faust_wasm_dealloc(sp, sl);
+                e.faust_wasm_dealloc(ap, al);
+            }
+            if (!handle) {
+                throw new Error('faust-rs: ' + (lastError() || 'compilation failed'));
+            }
             const ptr = e.faust_wasm_text_result_ptr(handle);
             const len = e.faust_wasm_text_result_len(handle);
             const text = dec.decode(mem().slice(ptr, ptr + len));
@@ -121,15 +138,11 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const clsName = toClassName(leafStem);
         const importDepth = 1 + (dspBaseName.match(/\//g) || []).length;
 
-        const rawAsSource = generateAuxFiles(
+        const asSource = normalizeASSource(generateAuxFiles(
             leafStem,
             dspSource,
             `-lang asc -cn ${clsName} -I /work -o /${leafStem}.out.ts`
-        );
-        if (rawAsSource === null) {
-            throw new Error('faust-rs: compilation failed (see console for details)');
-        }
-        const asSource = normalizeASSource(rawAsSource);
+        ));
 
         if (isStereoEffect(asSource)) {
             const lines = transpileEffect({
@@ -145,15 +158,11 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         let effectAsSource = null;
         if (hasEffect) {
             const effectName = clsName + 'Effect';
-            const rawEffect = generateAuxFiles(
+            effectAsSource = normalizeASSource(generateAuxFiles(
                 leafStem,
                 dspSource,
                 `-lang asc -cn ${effectName} -pn effect -I /work -o /${leafStem}.effect.out.ts`
-            );
-            if (rawEffect === null) {
-                throw new Error('faust-rs effect: compilation failed (see console for details)');
-            }
-            effectAsSource = normalizeASSource(rawEffect);
+            ));
         }
 
         const result = transpileDsp({

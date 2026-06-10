@@ -68,4 +68,33 @@ test('faust-rs wasm module transpiles voice + library() sibling + effect=', asyn
     // assembled editor-context single file
     expect(result.ts).toContain('initializeMidiSynth');
     expect(result.ts).toContain('postprocess');
+    // UI params flow through the getJSON() snapshot (the effect's wet slider
+    // becomes a named field on the generated channel/effect plumbing)
+    expect(result.ts).toContain('wet');
+});
+
+test('faust-rs resolves dx7.lib from the embedded library bundle', async ({ page }) => {
+    test.skip(!fs.existsSync(WASM_PATH), 'faust_wasm_ffi.wasm not built (see header comment)');
+
+    await page.goto('/');
+
+    const result = await page.evaluate(async () => {
+        const origDefine = customElements.define.bind(customElements);
+        customElements.define = (name, ctor, opts) => {
+            try { origDefine(name, ctor, opts); } catch (e) { /* already defined */ }
+        };
+        const m = await import('/faust/browser-transpile.js');
+        // dx.algorithm pulls dx7.lib, which lives in a faustlibraries
+        // subdirectory — regression check for the flattened embed aliases.
+        const { ts, className } = await m.transpileDspSource(
+            'import("stdfaust.lib");\nprocess = dx.algorithm(5) <: _,_;\n',
+            'dx7/dx7_alg5.dsp',
+            {}
+        );
+        return { length: ts.length, className, hasClass: ts.includes('class Dx7Alg5') };
+    });
+
+    expect(result.className).toBe('Dx7Alg5');
+    expect(result.hasClass).toBe(true);
+    expect(result.length).toBeGreaterThan(10000);
 });
