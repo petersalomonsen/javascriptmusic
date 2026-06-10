@@ -4,9 +4,9 @@
 // browser-transpile.js. Same public API: transpileDspSource().
 //
 // The module is loaded with a bare `WebAssembly.instantiate(bytes, {})` —
-// no emscripten loader, no MEMFS. Sibling .lib/.dsp files are registered
-// through the module's virtual-file ABI, and `-pn effect` selects the
-// `effect =` declaration just like the C++ faust path.
+// no emscripten loader, no MEMFS. Sibling .lib/.dsp files travel inline in
+// the args as `--virtual-source <path>=<base64>` entries, and `-pn effect`
+// selects the `effect =` declaration just like the C++ faust path.
 //
 // The wasm artifact is built from the faust-rs workspace (gitignored here):
 //   FAUST_RS_EMBEDDED_LIB_ROOT=<faustlibraries> \
@@ -50,22 +50,26 @@ async function getFaustRs() {
             )
         );
 
-        const lastError = () => dec.decode(
-            mem().slice(
-                e.faust_wasm_last_error_ptr(),
-                e.faust_wasm_last_error_ptr() + e.faust_wasm_last_error_len()
-            )
-        );
+        const readTextResult = (handle) => {
+            const ok = e.faust_wasm_text_result_is_ok(handle);
+            const ptr = e.faust_wasm_text_result_ptr(handle);
+            const len = e.faust_wasm_text_result_len(handle);
+            const text = dec.decode(mem().slice(ptr, ptr + len));
+            e.faust_wasm_text_result_free(handle);
+            return { ok, text };
+        };
 
-        // generateAuxFiles(name, source, args) → generated text; throws with
-        // the compiler's error message on failure.
+        // generateAuxFiles(name, source, args) → generated AS text; throws
+        // with the compiler's error message on failure. Uses the JSON-array
+        // export (each artifact base64-encoded) and returns the first
+        // textual artifact.
         const generateAuxFiles = (name, source, args) => {
             const [np, nl] = writeStr(name);
             const [sp, sl] = writeStr(source);
             const [ap, al] = writeStr(args);
             let handle;
             try {
-                handle = e.faust_wasm_generate_aux_files(np, nl, sp, sl, ap, al);
+                handle = e.faust_wasm_generate_aux_files_json(np, nl, sp, sl, ap, al);
             } catch (err) {
                 // A wasm trap (e.g. stack exhaustion) aborts the call itself.
                 throw new Error('faust-rs: compiler crashed: ' + err);
@@ -74,36 +78,54 @@ async function getFaustRs() {
                 e.faust_wasm_dealloc(sp, sl);
                 e.faust_wasm_dealloc(ap, al);
             }
-            if (!handle) {
-                throw new Error('faust-rs: ' + (lastError() || 'compilation failed'));
+            const { ok, text } = readTextResult(handle);
+            if (!ok) {
+                throw new Error('faust-rs: ' + (text || 'compilation failed'));
             }
-            const ptr = e.faust_wasm_text_result_ptr(handle);
-            const len = e.faust_wasm_text_result_len(handle);
-            const text = dec.decode(mem().slice(ptr, ptr + len));
-            e.faust_wasm_text_result_free(handle);
-            return text;
-        };
-
-        // mountSiblings equivalent: register sibling files for library()/import().
-        const mountSiblings = (libsByPath) => {
-            e.faust_wasm_clear_virtual_files();
-            for (const [relPath, content] of Object.entries(libsByPath || {})) {
-                // Register under both the -I /work spelling and the bare
-                // relative path so local-dir style lookups also resolve.
-                for (const p of ['/work/' + relPath, relPath]) {
-                    const [pp, pl] = writeStr(p);
-                    const [cp, cl] = writeStr(content);
-                    e.faust_wasm_add_virtual_file(pp, pl, cp, cl);
-                    e.faust_wasm_dealloc(pp, pl);
-                    e.faust_wasm_dealloc(cp, cl);
-                }
+            const files = JSON.parse(text);
+            const file = files.find(f => !f.binary);
+            if (!file) {
+                throw new Error('faust-rs: no textual artifact in generateAuxFiles result');
             }
+            return base64DecodeUtf8(file.content_base64);
         };
 
         console.log('faust-rs compiler module loaded:', version);
-        return { generateAuxFiles, mountSiblings, version };
+        return { generateAuxFiles, version };
     })();
     return modulePromise;
+}
+
+// UTF-8 safe base64 helpers (sibling sources can contain any text).
+function base64EncodeUtf8(text) {
+    const bytes = new TextEncoder().encode(text);
+    let binary = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(binary);
+}
+
+function base64DecodeUtf8(b64) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+}
+
+// mountSiblings equivalent: sibling .lib/.dsp files travel inline in the
+// argv string as `--virtual-source <path>=<base64>` entries (registered
+// under both the -I /work spelling and the bare relative path).
+function virtualSourceArgs(libsByPath) {
+    const args = [];
+    for (const [relPath, content] of Object.entries(libsByPath || {})) {
+        const b64 = base64EncodeUtf8(content);
+        for (const p of ['/work/' + relPath, relPath]) {
+            args.push(`--virtual-source ${p}=${b64}`);
+        }
+    }
+    return args.join(' ');
 }
 
 // faust-rs's asc backend doesn't emit the redundant <i32>() loop-header casts,
@@ -130,8 +152,8 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
     toggleSpinner(true);
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     try {
-        const { generateAuxFiles, mountSiblings } = await getFaustRs();
-        mountSiblings(libsByPath);
+        const { generateAuxFiles } = await getFaustRs();
+        const vsArgs = virtualSourceArgs(libsByPath);
 
         const leaf = dspBaseName.split('/').pop();
         const leafStem = leaf.replace(/\.dsp$/, '');
@@ -141,7 +163,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const asSource = normalizeASSource(generateAuxFiles(
             leafStem,
             dspSource,
-            `-lang asc -cn ${clsName} -I /work -o /${leafStem}.out.ts`
+            `-lang asc -cn ${clsName} -I /work ${vsArgs} -o /${leafStem}.out.ts`
         ));
 
         if (isStereoEffect(asSource)) {
@@ -161,7 +183,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
             effectAsSource = normalizeASSource(generateAuxFiles(
                 leafStem,
                 dspSource,
-                `-lang asc -cn ${effectName} -pn effect -I /work -o /${leafStem}.effect.out.ts`
+                `-lang asc -cn ${effectName} -pn effect -I /work ${vsArgs} -o /${leafStem}.effect.out.ts`
             ));
         }
 
