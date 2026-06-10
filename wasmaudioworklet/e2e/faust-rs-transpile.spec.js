@@ -134,6 +134,13 @@ test('dx7 transpile + patch params + in-app AS compile', async ({ page }) => {
     });
     expect(transpiled.className).toBe('Dx7Alg5');
 
+    // Param-order parity tripwire: with C++-faust UI ordering, the bare `l1`
+    // field is the GLOBAL Pitch EG L1 (init 50 = center). If UI ordering ever
+    // regresses, an operator Amp EG L1 (init 99) grabs the name instead —
+    // which scrambles every named patch assignment and NRPN number (heard as
+    // pitch glides, since patch values land in the Pitch EG).
+    expect(transpiled.ts).toMatch(/\/\*\* L1 \[init: 50,[^\n]*\n\s+l1: f32 = 50/);
+
     // 2. Inject midi.mix-style patch assignments on the typed channel.
     const construction = 'midichannels[0] = new Dx7Alg5Channel(10, (channel: MidiChannel) => new Dx7Alg5(channel));';
     expect(transpiled.ts).toContain(construction);
