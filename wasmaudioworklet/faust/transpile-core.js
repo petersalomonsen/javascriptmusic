@@ -427,6 +427,10 @@ export function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
             const sizeMatch = sf.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/);
             if (sizeMatch) {
                 sigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${sizeMatch[1]});`);
+            } else {
+                // Table initialized in place (faust-rs asc backend emits
+                // StaticArray.fromArray<T>([...]) literals) — pass through.
+                sigTables.push(`const ${shortName}: StaticArray<${asType}> = ${sf.initializer};`);
             }
         }
     }
