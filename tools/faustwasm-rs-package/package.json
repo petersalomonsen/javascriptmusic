@@ -1,0 +1,27 @@
+{
+  "name": "@psalomo/faustwasm-rs",
+  "version": "0.1.0",
+  "description": "faust-rs (Rust Faust compiler) built as a self-contained wasm32-unknown-unknown module with the AssemblyScript (-lang asc) backend. Binary distribution only.",
+  "files": [
+    "faust_wasm_ffi.wasm",
+    "README.md",
+    "provenance.json"
+  ],
+  "license": "SEE LICENSE IN README.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/petersalomonsen/javascriptmusic.git",
+    "directory": "tools/faustwasm-rs-package"
+  },
+  "keywords": [
+    "faust",
+    "webassembly",
+    "assemblyscript",
+    "audio",
+    "dsp"
+  ],
+  "author": "Peter Salomonsen",
+  "scripts": {
+    "update-wasm": "./update-wasm.sh"
+  }
+}

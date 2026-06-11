@@ -22,14 +22,32 @@ import {
 } from './transpile-core.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
 
+// Local build first (developer workflow: drop a fresh faust_wasm_ffi.wasm
+// next to this file), CDN-published binary as the fallback for deployments
+// where the gitignored local artifact doesn't exist.
 const WASM_URL = new URL('./faust_wasm_ffi.wasm', import.meta.url);
+const FAUSTWASM_RS_VERSION = '0.1.0';
+const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/faustwasm-rs@${FAUSTWASM_RS_VERSION}/faust_wasm_ffi.wasm`;
 
 let modulePromise = null;
+
+async function fetchWasmBytes() {
+    try {
+        const response = await fetch(WASM_URL);
+        if (response.ok) return await response.arrayBuffer();
+    } catch (e) { /* fall through to CDN */ }
+    console.log('faust-rs: local faust_wasm_ffi.wasm not found, loading from CDN');
+    const response = await fetch(WASM_CDN_URL);
+    if (!response.ok) {
+        throw new Error(`faust-rs: could not load compiler module (local missing, CDN ${response.status})`);
+    }
+    return await response.arrayBuffer();
+}
 
 async function getFaustRs() {
     if (modulePromise) return modulePromise;
     modulePromise = (async () => {
-        const bytes = await (await fetch(WASM_URL)).arrayBuffer();
+        const bytes = await fetchWasmBytes();
         const { instance } = await WebAssembly.instantiate(bytes, {});
         const e = instance.exports;
         const enc = new TextEncoder();
