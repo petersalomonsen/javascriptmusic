@@ -26,8 +26,8 @@ import { toggleSpinner } from '../common/ui/progress-spinner.js';
 // next to this file), CDN-published binary as the fallback for deployments
 // where the gitignored local artifact doesn't exist.
 const WASM_URL = new URL('./faust_wasm_ffi.wasm', import.meta.url);
-const FAUSTWASM_RS_VERSION = '0.1.0';
-const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/faustwasm-rs@${FAUSTWASM_RS_VERSION}/faust_wasm_ffi.wasm`;
+const COMPILER_MODULE_VERSION = '0.16.1-asc.1';
+const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/faustwasm@${COMPILER_MODULE_VERSION}/faust-compiler-module.wasm`;
 
 let modulePromise = null;
 
@@ -36,10 +36,10 @@ async function fetchWasmBytes() {
         const response = await fetch(WASM_URL);
         if (response.ok) return await response.arrayBuffer();
     } catch (e) { /* fall through to CDN */ }
-    console.log('faust-rs: local faust_wasm_ffi.wasm not found, loading from CDN');
+    console.log('faust compiler: local module not found, loading from CDN');
     const response = await fetch(WASM_CDN_URL);
     if (!response.ok) {
-        throw new Error(`faust-rs: could not load compiler module (local missing, CDN ${response.status})`);
+        throw new Error(`faust compiler: could not load module (local missing, CDN ${response.status})`);
     }
     return await response.arrayBuffer();
 }
@@ -90,7 +90,7 @@ async function getFaustRs() {
                 handle = e.faust_wasm_generate_aux_files_json(np, nl, sp, sl, ap, al);
             } catch (err) {
                 // A wasm trap (e.g. stack exhaustion) aborts the call itself.
-                throw new Error('faust-rs: compiler crashed: ' + err);
+                throw new Error('faust compiler crashed: ' + err);
             } finally {
                 e.faust_wasm_dealloc(np, nl);
                 e.faust_wasm_dealloc(sp, sl);
@@ -98,17 +98,17 @@ async function getFaustRs() {
             }
             const { ok, text } = readTextResult(handle);
             if (!ok) {
-                throw new Error('faust-rs: ' + (text || 'compilation failed'));
+                throw new Error('faust: ' + (text || 'compilation failed'));
             }
             const files = JSON.parse(text);
             const file = files.find(f => !f.binary);
             if (!file) {
-                throw new Error('faust-rs: no textual artifact in generateAuxFiles result');
+                throw new Error('faust: no textual artifact in generateAuxFiles result');
             }
             return base64DecodeUtf8(file.content_base64);
         };
 
-        console.log('faust-rs compiler module loaded:', version);
+        console.log('faust compiler module loaded');
         return { generateAuxFiles, version };
     })();
     return modulePromise;
