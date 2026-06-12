@@ -19,10 +19,9 @@ const __dirname = path.dirname(__filename);
 //      drifts from the C++ compiler, patch values land in the Pitch EG and
 //      every note glides upward at a constant rate.
 //
-// Skips when faust_wasm_ffi.wasm isn't built (see faust-rs-transpile.spec.js
-// header for build instructions).
+// Uses the local gitignored module build when present, otherwise the
+// published CDN package (see faust-rs-transpile.spec.js header).
 
-const WASM_PATH = path.join(__dirname, '..', 'faust', 'faust_wasm_ffi.wasm');
 
 // E.Piano-flavored patch on the transpiled dx7_alg5 channel: NRPN numbers are
 // the generated channel's sequential parameter indices (identical to the
@@ -126,7 +125,6 @@ function estimatePitch(samples, sampleRate) {
 }
 
 test('faust-rs dx7 renders a sustained, pitch-stable piano note', async ({ page }) => {
-    test.skip(!fs.existsSync(WASM_PATH), 'faust_wasm_ffi.wasm not built');
     test.setTimeout(300000);
 
     await page.goto('/');

@@ -9,8 +9,9 @@ const __dirname = path.dirname(__filename);
 // In-browser smoke test for the experimental faust-rs (Rust) compiler path
 // (faust/faust-rs-transpile.js + faust_wasm_ffi.wasm).
 //
-// The wasm artifact is built from the faust-rs workspace and is gitignored
-// here, so the test SKIPS when it's absent (e.g. CI). Build + copy:
+// The compiler module loads from the local gitignored build when present,
+// otherwise from the published CDN package (so this also runs in CI).
+// To test a fresh local build:
 //   FAUST_RS_EMBEDDED_LIB_ROOT=<faustlibraries> \
 //     cargo run -p xtask -- build-faustwasm-compiler-module
 //   cp target/wasm32-unknown-unknown/release/faust_wasm_ffi.wasm \
@@ -21,7 +22,6 @@ const __dirname = path.dirname(__filename);
 // the module), a sibling file pulled in via `library("helper.dsp")` (the
 // virtual-file ABI), and an `effect =` declaration (the `-pn effect` path).
 
-const WASM_PATH = path.join(__dirname, '..', 'faust', 'faust_wasm_ffi.wasm');
 
 const HELPER_DSP = `mono2stereo(g) = _ <: _*g, _*g;
 wet = hslider("wet", 0.5, 0, 1, 0.01);
@@ -37,7 +37,6 @@ effect = h.mono2stereo(h.wet);
 `;
 
 test('faust-rs wasm module transpiles voice + library() sibling + effect=', async ({ page }) => {
-    test.skip(!fs.existsSync(WASM_PATH), 'faust_wasm_ffi.wasm not built (see header comment)');
 
     await page.goto('/');
 
@@ -75,7 +74,6 @@ test('faust-rs wasm module transpiles voice + library() sibling + effect=', asyn
 });
 
 test('faust-rs resolves dx7.lib from the embedded library bundle', async ({ page }) => {
-    test.skip(!fs.existsSync(WASM_PATH), 'faust_wasm_ffi.wasm not built (see header comment)');
 
     await page.goto('/');
 
@@ -109,7 +107,6 @@ test('faust-rs resolves dx7.lib from the embedded library bundle', async ({ page
 //   - method ordering (classInit/instanceInit extraction grabbed the wrong
 //     bodies when definitions followed their call sites)
 test('dx7 transpile + patch params + in-app AS compile', async ({ page }) => {
-    test.skip(!fs.existsSync(WASM_PATH), 'faust_wasm_ffi.wasm not built (see header comment)');
     test.setTimeout(120000);
 
     await page.goto('/');
