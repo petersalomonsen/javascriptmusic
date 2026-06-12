@@ -31,17 +31,34 @@ const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/faustwasm@${COMPILER
 
 let modulePromise = null;
 
+// `\0asm` — SPA hosts (e.g. Cloudflare Pages) answer missing paths with
+// 200 + index.html, so a status check alone can't tell whether the local
+// module exists.
+function isWasm(buffer) {
+    const bytes = new Uint8Array(buffer);
+    return bytes.length > 4
+        && bytes[0] === 0x00 && bytes[1] === 0x61
+        && bytes[2] === 0x73 && bytes[3] === 0x6d;
+}
+
 async function fetchWasmBytes() {
     try {
         const response = await fetch(WASM_URL);
-        if (response.ok) return await response.arrayBuffer();
+        if (response.ok) {
+            const buffer = await response.arrayBuffer();
+            if (isWasm(buffer)) return buffer;
+        }
     } catch (e) { /* fall through to CDN */ }
-    console.log('faust compiler: local module not found, loading from CDN');
+    console.log('faust compiler: local module not available, loading from CDN');
     const response = await fetch(WASM_CDN_URL);
     if (!response.ok) {
         throw new Error(`faust compiler: could not load module (local missing, CDN ${response.status})`);
     }
-    return await response.arrayBuffer();
+    const buffer = await response.arrayBuffer();
+    if (!isWasm(buffer)) {
+        throw new Error('faust compiler: CDN response is not a wasm module');
+    }
+    return buffer;
 }
 
 async function getFaustRs() {
