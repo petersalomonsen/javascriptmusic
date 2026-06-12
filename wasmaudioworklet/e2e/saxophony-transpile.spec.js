@@ -25,7 +25,11 @@ test('saxophony.dsp transpiles in the browser via libfaust-wasm', async ({ page 
     const result = await page.evaluate(async (dspSource) => {
         try {
             const bt = await import('./faust/browser-transpile.js');
-            const out = await bt.transpileDspSource(
+            // This spec isolates the libfaust-wasm path specifically (the
+            // default transpileDspSource routes through faust-rs on this
+            // branch, which initializes tables inline instead of via
+            // initSIG0Tables()).
+            const out = await bt.transpileDspSourceLibfaust(
                 dspSource,
                 'physicalmodeling/faust-stk/saxophony.dsp',
                 {} // no sibling libs — saxophony.dsp is alone in its folder
