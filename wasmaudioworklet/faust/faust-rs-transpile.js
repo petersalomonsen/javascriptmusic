@@ -150,15 +150,19 @@ function base64DecodeUtf8(b64) {
 }
 
 // mountSiblings equivalent: sibling .lib/.dsp files travel inline in the
-// argv string as `--virtual-source <path>=<base64>` entries (registered
-// under both the -I /work spelling and the bare relative path).
+// argv string as `--virtual-source <path>=<base64>` entries, keyed by their
+// path relative to the .dsp's directory — the same spelling the source uses
+// in `library("...")` / `import("...")`. They are registered at the bare
+// relative path (NOT under a `/work/` prefix) so that a sibling resolved this
+// way keeps an empty base directory, and its own `import("stdfaust.lib")` /
+// `import("sibling.dsp")` resolve against the embedded stdlib and the other
+// bare-registered siblings — exactly as the top-level source does. (Putting
+// them under `/work/` + `-I /work` made the importing file's directory
+// `/work/`, where neither the embedded stdlib nor the siblings live.)
 function virtualSourceArgs(libsByPath) {
     const args = [];
     for (const [relPath, content] of Object.entries(libsByPath || {})) {
-        const b64 = base64EncodeUtf8(content);
-        for (const p of ['/work/' + relPath, relPath]) {
-            args.push(`--virtual-source ${p}=${b64}`);
-        }
+        args.push(`--virtual-source ${relPath}=${base64EncodeUtf8(content)}`);
     }
     return args.join(' ');
 }
@@ -198,7 +202,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const asSource = normalizeASSource(generateAuxFiles(
             leafStem,
             dspSource,
-            `-lang asc -cn ${clsName} -I /work ${vsArgs} -o /${leafStem}.out.ts`
+            `-lang asc -cn ${clsName} ${vsArgs} -o /${leafStem}.out.ts`
         ));
 
         if (isStereoEffect(asSource)) {
@@ -218,7 +222,7 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
             effectAsSource = normalizeASSource(generateAuxFiles(
                 leafStem,
                 dspSource,
-                `-lang asc -cn ${effectName} -pn effect -I /work ${vsArgs} -o /${leafStem}.effect.out.ts`
+                `-lang asc -cn ${effectName} -pn effect ${vsArgs} -o /${leafStem}.effect.out.ts`
             ));
         }
 

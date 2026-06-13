@@ -26,6 +26,10 @@ export let faustsourceeditor;
 let gitrepoconfig = null;
 let currentFaustFilename = null;
 let lastSavedFaustSource = null;
+// True only once the current source has transpiled successfully and its .ts is
+// written. Gates the "unchanged → skip" shortcut so a re-save still retries
+// after a failed transpile (e.g. a sibling library that was just added).
+let lastFaustTranspileOk = false;
 
 const SONG_MODE_WASM = 'WASM';
 const SONG_MODE_SOINTU = 'sointu';
@@ -211,6 +215,9 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
             faustsourceeditor.doc.setValue(contents || '');
             currentFaustFilename = path;
             lastSavedFaustSource = contents || '';
+            // A freshly-loaded file has no guaranteed-current .ts, so the next
+            // save must transpile even if the source isn't edited.
+            lastFaustTranspileOk = false;
             faustSaveStatus.textContent = '';
         } catch (e) {
             console.warn('Failed to read faust file', path, e);
@@ -280,17 +287,23 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     async function saveFaustIfChanged() {
         if (!gitrepoconfig || !currentFaustFilename) return false;
         const source = faustsourceeditor.doc.getValue();
-        if (source === lastSavedFaustSource) return false;
+        if (source === lastSavedFaustSource && lastFaustTranspileOk) return false;
         const basename = currentFaustFilename.substring(FAUST_DIR.length);
         const stem = basename.replace(/\.dsp$/, '');
+        // Persist the .dsp source FIRST, before transpiling. Transpilation can
+        // throw (e.g. a library/instrument that references a sibling file not
+        // saved yet), and the user's edits must never be lost to a compile
+        // error — the source has to survive so the sibling can be added and the
+        // file re-saved. The .ts is generated separately below.
+        await writefileandstage(currentFaustFilename, source);
+        lastSavedFaustSource = source;
         try {
             faustSaveStatus.textContent = 'Transpiling...';
             const libs = await collectSiblingLibs(currentFaustFilename);
             const { ts, className } = await transpileDspSource(source, basename, libs);
             const tsPath = currentFaustFilename.replace(/\.dsp$/, '.ts');
-            await writefileandstage(currentFaustFilename, source);
             await writefileandstage(tsPath, ts);
-            lastSavedFaustSource = source;
+            lastFaustTranspileOk = true;
             // Surface the ready-to-paste import line — works regardless of
             // how deep the .dsp lives under faust/.
             const importPath = '../faust/' + stem;
@@ -301,7 +314,9 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                 `  →  import { ${className} } from '${importPath}';`;
             return true;
         } catch (e) {
-            faustSaveStatus.textContent = '';
+            // Source is already saved above; only the .ts is missing. Tell the
+            // user the source is safe so they don't lose work to the error.
+            faustSaveStatus.textContent = `Saved ${basename} (transpile failed)`;
             displayFaustError('Faust transpile failed: ' + (e && e.message ? e.message : e));
             throw e;
         }
