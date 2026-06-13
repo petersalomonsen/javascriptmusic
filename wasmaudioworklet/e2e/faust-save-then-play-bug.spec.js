@@ -32,18 +32,19 @@ await createTrack(0).steps(4, [
 loopHere();
 `;
 
-// Helper to set up repo with song.js, synth.ts, and faust/simplesynth.dsp but NO faust/simplesynth.ts
+// Helper to set up repo with everything pushed in a single worker session.
+// Uses a single clone + writes to avoid the "directory already exists" hang
+// that occurs when cloning the same repo in separate workers.
 async function setupInitialRepo(page) {
-    await pushBaseline(page, repoName, SONG_SOURCE);
-    
     const creds = await fetchCredentials();
     const accessToken = JSON.stringify({
         accountId: creds.accountId,
         publicKey: creds.publicKey.replace('ed25519:', ''),
         privateKey: creds.secretKey.replace('ed25519:', ''),
     });
+    const repoUrl = `http://localhost:8080/near-repo/${repoName}`;
 
-    await page.evaluate(async ({ repoUrl, accessToken, username, synthMixSource, simplesynthDsp }) => {
+    await page.evaluate(async ({ repoUrl, accessToken, username, songSource, synthMixSource, simplesynthDsp }) => {
         const worker = new Worker(new URL('/wasmgit/wasmgitworker.js', location.origin), { type: 'module' });
         let resolveNext;
         const pending = [];
@@ -55,6 +56,8 @@ async function setupInitialRepo(page) {
 
         worker.postMessage({ accessToken, username, useremail: username });
         await next();
+
+        // Clone the repo (first clone — succeeds because directory is clean)
         worker.postMessage({ command: 'clone', url: repoUrl });
         await next();
 
@@ -64,13 +67,15 @@ async function setupInitialRepo(page) {
         worker.postMessage({ command: 'remote', args: ['add', 'origin', repoUrl], id: id++ });
         await next();
 
+        // Write song.js
+        worker.postMessage({ command: 'writefileandstage', filename: 'song.js', contents: songSource });
+        await next();
+
         // Write synth.ts
         worker.postMessage({ command: 'writefileandstage', filename: 'synth.ts', contents: synthMixSource });
         await next();
-        
-        // Create faust directory and write simplesynth.dsp
-        worker.postMessage({ command: 'mkdir', args: ['faust'], id: id++ });
-        await next();
+
+        // Create faust/ directory and write simplesynth.dsp
         worker.postMessage({ command: 'writefileandstage', filename: 'faust/simplesynth.dsp', contents: simplesynthDsp });
         await next();
 
@@ -82,9 +87,10 @@ async function setupInitialRepo(page) {
         await next();
         worker.terminate();
     }, {
-        repoUrl: `http://localhost:8080/near-repo/${repoName}`,
+        repoUrl,
         accessToken,
         username: creds.accountId,
+        songSource: SONG_SOURCE,
         synthMixSource: SYNTH_MIX_SOURCE,
         simplesynthDsp: SIMPLESYNTH_DSP,
     });
@@ -111,14 +117,14 @@ test.describe('Faust: save DSP then play bug - playing flag fix', () => {
         // Step 1: Click play (start button) - should fail because faust/simplesynth.ts doesn't exist yet
         await page.locator('#startaudiobutton').click();
         await page.waitForTimeout(5000); // Wait for compilation to complete (and fail)
-        
+
         // Verify compilation failed (WASM_SYNTH_BYTES should be null/undefined)
         const wasmBefore = await page.evaluate(() => window.WASM_SYNTH_BYTES);
         expect(wasmBefore).toBeFalsy();
 
         // Step 2: Open Faust editor
         await page.locator('#fausteditortogglecheckbox').check();
-        
+
         // Wait for Faust file list to populate
         await page.waitForFunction(() => {
             const sel = document.querySelector('app-javascriptmusic').shadowRoot
@@ -133,7 +139,7 @@ test.describe('Faust: save DSP then play bug - playing flag fix', () => {
             sel.value = 'faust/simplesynth.dsp';
             sel.dispatchEvent(new Event('change'));
         });
-        
+
         // Wait for file to load
         await page.waitForFunction(() => {
             const cm = document.querySelector('app-javascriptmusic').shadowRoot
@@ -153,7 +159,7 @@ test.describe('Faust: save DSP then play bug - playing flag fix', () => {
         await page.evaluate(async () => {
             await window.__saveFaustIfChanged();
         });
-        
+
         // Verify the .ts file was created by checking the save status
         const saveStatus = await page.evaluate(() => {
             return document.querySelector('app-javascriptmusic').shadowRoot
@@ -162,25 +168,30 @@ test.describe('Faust: save DSP then play bug - playing flag fix', () => {
         // The save status shows the basename without the faust/ prefix
         expect(saveStatus).toContain('Saved simplesynth.dsp');
         expect(saveStatus).toContain("import { Simplesynth } from '../faust/simplesynth'");
-        
+
         // Wait a moment for the file to be committed
         await page.waitForTimeout(2000);
-        
+
         // Verify the .ts file exists in the repo
         const tsExists = await readRepoFile(page, repoName, 'faust/simplesynth.ts');
         expect(tsExists).toBeTruthy();
 
-        // Step 3: Click play again - this SHOULD work without page reload
-        // The fix: reset window.WASM_SYNTH_BYTES to ensure fresh compilation
+        // Step 3: Click play again - this SHOULD work without page reload.
+        // The actual fix under test is the `playing` flag reset in
+        // audioworkletnode.js (without it, this click returns early at the
+        // `if (playing) return` guard and never recompiles). We null
+        // WASM_SYNTH_BYTES first purely as a test precaution, so the final
+        // assertion can only pass if THIS click triggered a fresh successful
+        // compile - not because of bytes left over from an earlier step.
         await page.evaluate(() => { window.WASM_SYNTH_BYTES = null; });
         await page.locator('#startaudiobutton').click();
-        
+
         // Wait for compilation to complete
         await page.waitForTimeout(15000);
-        
+
         // Check if WASM_SYNTH_BYTES was set (compilation succeeded)
         const wasmAfter = await page.evaluate(() => window.WASM_SYNTH_BYTES);
-        
+
         // With the fix (try-catch resetting playing flag), this should succeed
         expect(wasmAfter).toBeTruthy();
         const wasmBytes = await page.evaluate(() => window.WASM_SYNTH_BYTES ? window.WASM_SYNTH_BYTES.byteLength : 0);
