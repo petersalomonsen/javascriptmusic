@@ -127,15 +127,24 @@ export async function readRepoFile(page, repoName, filename) {
         const next = () => pending.length > 0 ? Promise.resolve(pending.shift()) : new Promise(r => { resolveNext = r; });
         try {
             // The repo is already in OPFS from the page's editor session.
-            // Replay just enough to get the worker into the right cwd.
-            worker.postMessage({ accessToken: '', username: '', useremail: '' });
-            await next();
-            worker.postMessage({ command: 'clone', url: repoUrl });
-            await next();
-            let id = 200;
-            worker.postMessage({ command: 'readfile', filename, id: id++ });
+            // Use synclocal to attach this fresh worker to the existing OPFS
+            // repo (clone would fail because the directory already exists).
+            // No auth handshake here: reading from local OPFS needs no token,
+            // and an empty-string accessToken is falsy in the worker, so it
+            // would never reply and this await would hang.
+            worker.postMessage({ command: 'synclocal', url: repoUrl });
+            const sync = await next();
+            if (!sync || !sync.dircontents) {
+                return null; // repo not present in OPFS
+            }
+            worker.postMessage({ command: 'readfile', filename });
             const reply = await next();
-            return reply && reply.contents;
+            if (!reply || reply.error) {
+                return null; // file not found
+            }
+            return typeof reply.filecontents === 'string'
+                ? reply.filecontents
+                : new TextDecoder().decode(reply.filecontents);
         } finally {
             worker.terminate();
         }
