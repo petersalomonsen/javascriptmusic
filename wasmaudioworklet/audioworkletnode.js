@@ -43,13 +43,13 @@ export function initAudioWorkletNode(componentRoot) {
             return;
         }
         playing = true;
+        try {
+            // For Safari iOS, MUST happen before using "await"
+            context.resume();
 
-        // For Safari iOS, MUST happen before using "await"
-        context.resume();
+            const song = await window.compileSong();
 
-        const song = await window.compileSong();
-
-        let bytes;
+            let bytes;
 
         if (song.eventlist) {
             await context.audioWorklet.addModule(getAudioWorkletModuleUrl(AudioWorkletProcessorSequencerModule));
@@ -157,6 +157,10 @@ export function initAudioWorkletNode(componentRoot) {
         recordAudioNode(audioworkletnode);
         componentRoot.getElementById('startaudiobutton').style.display = 'none';
         componentRoot.getElementById('stopaudiobutton').style.display = 'block';
+        } catch (e) {
+            playing = false;
+            throw e;
+        }
     };
 
     window.stopaudio = async () => {
