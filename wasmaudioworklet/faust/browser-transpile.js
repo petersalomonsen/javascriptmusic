@@ -86,6 +86,16 @@ function isStereoEffect(asSource) {
 //
 // Throws on faust compilation error.
 export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}) {
+    // This branch uses the faust-rs (Rust) compiler module by default — see
+    // faust-rs-transpile.js. The emscripten libfaust path below is kept as
+    // transpileDspSourceLibfaust for reference/fallback.
+    const faustRs = await import('./faust-rs-transpile.js');
+    return faustRs.transpileDspSource(dspSource, dspBaseName, libsByPath);
+}
+
+// Previous default: transpile through the emscripten libfaust
+// (@psalomo/faustwasm from CDN). Kept callable for comparison/debugging.
+export async function transpileDspSourceLibfaust(dspSource, dspBaseName, libsByPath = {}) {
     toggleSpinner(true);
     // Force a real paint between attach and the (often microtask-only,
     // when the compiler is cached) work. A single RAF fires *before* the
