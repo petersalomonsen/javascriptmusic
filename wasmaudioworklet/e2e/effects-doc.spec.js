@@ -66,7 +66,7 @@ function assembleSynthTs(withEcho) {
         // (wires itself onto channel 0); we re-export it and add the doc's
         // master-effect postprocess on top.
         `// midi mix: route voices via midichannels, then apply the master effect`,
-        `import { initializeMidiSynth } from '../faust/simplesynth';`,
+        `import { initializeMidiSynth } from '../faust/echovoice';`,
         `import { outputline } from '../mixes/globalimports';`,
         ...docImports, // import { Tapiir } from '../faust/tapiir';  (from the doc)
         `export { initializeMidiSynth };`,
@@ -260,7 +260,11 @@ test.describe('docs/effects.md — Pattern B (Tapiir master effect)', () => {
             return app && app.shadowRoot && app.shadowRoot.getElementById('startaudiobutton');
         }, { timeout: 30000 });
 
-        const voiceTs = await transpile(page, VOICE_DSP, 'simplesynth.dsp');
+        // A unique voice name (not "simplesynth") so this spec's pushes to the
+        // shared NEAR repo don't collide with faust-save-then-play, which needs
+        // faust/simplesynth.ts to be ABSENT at clone time. We write only .ts
+        // (no .dsp), so faust-editor's ".dsp file list" assertions are unaffected.
+        const voiceTs = await transpile(page, VOICE_DSP, 'echovoice.dsp');
         const tapiirTs = await transpile(page, TAPIIR_DSP, 'tapiir.dsp');
 
         // 2. Push a project: song, both transpiled faust .ts, and the echo
@@ -268,7 +272,7 @@ test.describe('docs/effects.md — Pattern B (Tapiir master effect)', () => {
         await setupRepo(page, {
             'song.js': SONG_SOURCE,
             'synth.ts': assembleSynthTs(true),
-            'faust/simplesynth.ts': voiceTs,
+            'faust/echovoice.ts': voiceTs,
             'faust/tapiir.ts': tapiirTs,
         });
 
