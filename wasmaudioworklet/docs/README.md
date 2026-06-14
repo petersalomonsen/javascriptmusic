@@ -13,6 +13,9 @@ itself see the [app README](../README.md); for the monorepo overview see the
 - [Developing & testing visualizer shaders](shaders.md) — the fragment-shader
   uniform contract and a headless compile + render harness
   ([tools/shadertest](../../tools/shadertest/render.mjs)).
+- [Faust effects: channel & master](effects.md) — adding a per-instrument
+  effect (`effect =`) or a whole-mix master effect (`postprocess()`), with a
+  chorus and a Tapiir-echo worked example.
 
 ## Sharing & hosting
 
