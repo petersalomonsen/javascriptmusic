@@ -91,14 +91,18 @@ export function formatTime(currentTime) {
     padNumber(Math.floor(currentTime % (1000)), 3);
 }
 
-export function attachSeek(seekFunc, getCurrentTimeFunc, max, bpm) {
+export function attachSeek(seekFunc, getCurrentTimeFunc, max, bpmOrGetter) {
   const timeindicatorelement = componentRoot.querySelector("#timeindicator");
   componentRoot.querySelector("#timeindicator").style.display = 'block';
   componentRoot.querySelector("#timespan").style.display = 'block';
   timeindicatorelement.max = max;
   timeindicatorelement.oninput = () => seekFunc(timeindicatorelement.value);
 
-  const timeToBeat = (time) => (time / (60 * 1000)) * bpm;
+  // Accept either a static bpm (legacy) or a getter that returns the
+  // currently-playing bpm (so the indicator follows tempo across
+  // quantized song switches).
+  const getBpm = typeof bpmOrGetter === 'function' ? bpmOrGetter : () => bpmOrGetter;
+  const timeToBeat = (time) => (time / (60 * 1000)) * getBpm();
 
   const updateTimeIndicatorLoop = () =>
     requestAnimationFrame(async () => {
