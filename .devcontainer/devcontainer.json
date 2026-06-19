@@ -1,4 +1,8 @@
 {
+    // Multi-stage Dockerfile bakes in the NEAR git-storage sandbox
+    // artifacts via `COPY --from=…` so no docker access is needed at
+    // runtime. See ./Dockerfile + ./README.md for the design.
+    "build": { "dockerfile": "Dockerfile" },
     "postCreateCommand": "./.devcontainer/post-create.sh",
     "customizations": {
         "vscode": {
