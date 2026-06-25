@@ -23,6 +23,7 @@ itself see the [app README](../README.md); for the monorepo overview see the
 
 - [faust2as transpiler](../../tools/faust2as/README.md) — Faust → AssemblyScript.
 - [DX7 FM synth example](../../examples/dx7/README.md) — Yamaha DX7 algorithms as transpiled instruments, and porting real ROM (`.syx`) patches into a channel.
+- [Beach Drive example](../../examples/beachdrive/README.md) — an OutRun-style pseudo-3D road turned into a MIDI-controllable driving game whose logic lives entirely in the song (via the generic synth→shader `synthState` channel).
 - [claude-bridge](../../tools/claude-bridge/README.md) — connect Claude Code to
   the app's editors.
 - [DAW plugin](../../dawplugin/README.md) — load exported wasm instruments in a DAW.
