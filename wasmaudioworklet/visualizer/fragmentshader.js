@@ -1,5 +1,5 @@
 import { setProgressbarValue } from '../common/ui/progress-bar.js';
-import { getCurrentTimeSeconds, setUseDefaultVisualizer, getUseDefaultVisualizer, getTargetNoteStates, clearPositions } from './defaultvisualizer.js';
+import { getCurrentTimeSeconds, setUseDefaultVisualizer, getUseDefaultVisualizer, getTargetNoteStates, getSynthState, clearPositions } from './defaultvisualizer.js';
 import { setGetCurrentTimeFunction, visualizeSong } from './midieventlistvisualizer.js';
 import { getActiveVideo } from './videoscheduler.js';
 
@@ -196,6 +196,11 @@ function configureGLContext(source) {
     // is a no-op against a null location.
     const smoothedNoteStatesUniformLocation = glContext.getUniformLocation(program, "smoothedNoteStates");
     glContext.uniform1fv(smoothedNoteStatesUniformLocation, computeSmoothedNoteStates());
+    // Merged MIDI controller values (0..1), relayed from the wasm synth. Null
+    // Generic synth state (f32 array), relayed from the wasm. The song's shader
+    // declares `uniform float synthState[N]`; null (no-op) for shaders that don't.
+    const synthStateUniformLocation = glContext.getUniformLocation(program, "synthState");
+    glContext.uniform1fv(synthStateUniformLocation, getSynthState());
 
     // uSampler / uSamplerPrev / uMix — null if the shader doesn't declare them
     // (single-sampler shaders just see uSampler bound to TEXTURE0 as before).
@@ -217,6 +222,7 @@ function configureGLContext(source) {
         timeUniformLocation,
         targetNoteStatesUniformLocation,
         smoothedNoteStatesUniformLocation,
+        synthStateUniformLocation,
         samplerUniformLocation,
         samplerPrevUniformLocation,
         mixUniformLocation,
@@ -243,6 +249,7 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
         timeUniformLocation,
         targetNoteStatesUniformLocation,
         smoothedNoteStatesUniformLocation,
+        synthStateUniformLocation,
         samplerUniformLocation,
         samplerPrevUniformLocation,
         mixUniformLocation,
@@ -265,6 +272,7 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
         glContext.uniform1f(timeUniformLocation, currentTimeSeconds);
         glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
         glContext.uniform1fv(smoothedNoteStatesUniformLocation, computeSmoothedNoteStates());
+        glContext.uniform1fv(synthStateUniformLocation, getSynthState());
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
 
         window.requestAnimationFrame(render);
@@ -305,6 +313,7 @@ export async function exportVideo(source, eventlist) {
         timeUniformLocation,
         targetNoteStatesUniformLocation,
         smoothedNoteStatesUniformLocation,
+        synthStateUniformLocation,
         samplerUniformLocation,
         samplerPrevUniformLocation,
         mixUniformLocation,
@@ -352,6 +361,7 @@ export async function exportVideo(source, eventlist) {
         glContext.uniform1f(timeUniformLocation, currentTimeSeconds);
         glContext.uniform1fv(targetNoteStatesUniformLocation, getTargetNoteStates());
         glContext.uniform1fv(smoothedNoteStatesUniformLocation, computeSmoothedNoteStates());
+        glContext.uniform1fv(synthStateUniformLocation, getSynthState());
         glContext.drawArrays(glContext.TRIANGLES, 0, 6);
 
         const frame = new VideoFrame(canvas, { timestamp: currentTimeMillis * 1000 });

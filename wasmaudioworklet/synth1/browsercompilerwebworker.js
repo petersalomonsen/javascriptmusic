@@ -29,7 +29,7 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_MIDISYNTH_MULTIPART_
             export const midipartschedule: MidiSequencerPartSchedule[] = [new MidiSequencerPartSchedule(0, 0)];
         `;
         assemblyscriptsynthsources[wasi_main_src] = `
-            export { fillSampleBuffer, fillSampleBufferWithNumSamples, samplebuffer, allNotesOff, shortmessage, getActiveVoicesStatusSnapshot } from './midi/midisynth';
+            export { fillSampleBuffer, fillSampleBufferWithNumSamples, samplebuffer, allNotesOff, shortmessage, getActiveVoicesStatusSnapshot, getSynthStateSnapshot } from './midi/midisynth';
             export { seek, playEventsAndFillSampleBuffer, currentTimeMillis } from './midi/sequencer/midisequencer';
             import { midipartschedule } from './midi/sequencer/midiparts';
 
@@ -53,7 +53,7 @@ function createWebAssemblySongData(song, mode = EXPORT_MODE_MIDISYNTH_MULTIPART_
             }];
         `;
         assemblyscriptsynthsources[wasi_main_src] = `
-            export { fillSampleBuffer, samplebuffer, allNotesOff, shortmessage, getActiveVoicesStatusSnapshot } from './midi/midisynth';
+            export { fillSampleBuffer, samplebuffer, allNotesOff, shortmessage, getActiveVoicesStatusSnapshot, getSynthStateSnapshot } from './midi/midisynth';
             export { seek, playEventsAndFillSampleBuffer, currentTimeMillis, setMidiPartSchedule } from './midi/sequencer/midisequencer';
         `;
     } else {

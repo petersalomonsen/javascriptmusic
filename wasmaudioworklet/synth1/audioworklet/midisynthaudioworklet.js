@@ -11,6 +11,7 @@ import { AssemblyScriptMidiSynthAudioWorkletProcessorModule } from './midisyntha
 import { AudioWorkletProcessorSequencerModule } from '../../midisequencer/audioworkletprocessorsequencer.js';
 import { addedAudio } from '../../midisequencer/songcompiler.js';
 import { bpm } from '../../midisequencer/pattern.js';
+import { setSynthState } from '../../visualizer/defaultvisualizer.js';
 
 export let audioworkletnode;
 
@@ -81,6 +82,11 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         };
         awn.port.addEventListener('message', (e) => {
             if (!e.data) return;
+            if (e.data.synthstate) {
+                // Generic f32 synth state relayed from the wasm → shader uniform.
+                setSynthState(e.data.synthstate);
+                return;
+            }
             if (typeof e.data.broadcastSend === 'string') {
                 channel.postMessage({ name: e.data.broadcastSend });
             } else if (typeof e.data.broadcastWaiting === 'string' && broadcastWaitingHandler) {

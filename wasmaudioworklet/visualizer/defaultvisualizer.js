@@ -16,6 +16,12 @@ void main() {
 `;
 
 const targetNoteStates = new Array(128).fill(-1);
+// Generic synth → shader state, relayed verbatim from the wasm as raw f32
+// (no MIDI quantization). A song's synth.ts writes these in postprocess(); its
+// shader reads them as `uniform float synthState[]`. The app assigns no meaning
+// to the slots. See `synthState`/getSynthStateSnapshot in midisynth.ts and the
+// relay in midisynthaudioworkletprocessor.js.
+const synthState = new Float32Array(64).fill(0);
 let animationFrameRequest = null;
 let gl;
 let currentTimeSeconds;
@@ -145,10 +151,27 @@ export function visualizeNoteOn(note, velocity) {
 
 export function clearVisualization() {
     targetNoteStates.fill(-1);
+    synthState.fill(0);
 }
 
 export function getTargetNoteStates() {
     return targetNoteStates;
+}
+
+// Relay sink for the generic wasm synth state (array of f32 from the worklet).
+export function setSynthState(values) {
+    for (let i = 0; i < synthState.length && i < values.length; i++) {
+        synthState[i] = values[i];
+    }
+}
+
+export function getSynthState() {
+    return synthState;
+}
+
+// Expose for tests / debugging — lets an e2e assert the relay reached JS.
+if (typeof window !== 'undefined') {
+    window.getSynthState = getSynthState;
 }
 
 export function setCurrentTimeSeconds(timeSeconds) {

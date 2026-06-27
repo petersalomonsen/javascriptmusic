@@ -4,6 +4,17 @@ import { midiLevelToGain } from '../synth/decibel';
 
 import { Pan } from '../synth/pan.class';
 import { DefaultInstrument } from './instruments/defaultinstrument';
+
+// Generic synth → shader data channel. A song's synth.ts writes whatever it
+// wants into this f32 buffer (e.g. game state, computed from notes/CCs in
+// postprocess()); the host relays it verbatim into the shader's
+// `uniform float synthState[]`. The engine assigns NO meaning to the slots —
+// the song and its shader agree on the layout. This is the only generic hook
+// needed for a song to drive its visuals beyond the note-state uniforms.
+export const synthState = new StaticArray<f32>(64);
+export function getSynthStateSnapshot(): usize {
+    return changetype<usize>(synthState);
+}
 // export { allocateAudioBuffer } from './instruments/audioplayer';
 
 export const MAX_ACTIVE_VOICES_SHIFT = 5; // up to 32 voices playing simultaneously
