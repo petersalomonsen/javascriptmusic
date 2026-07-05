@@ -71,6 +71,10 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
       <span>faust</span>
     </label>
     <span style="flex-grow: 1"></span>
+    <label title="studio agent (AI assistant)">
+      <input type="checkbox" id="studioagenttogglecheckbox" onclick="toggleStudioAgent(this.checked)" />
+      <span>agent</span>
+    </label>
   </div>
   <div class="editors">
     <div id="editor" class="editor"></div>
@@ -88,6 +92,16 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
       </div>
       <div id="faustcodemirror" style="flex-grow: 1; height: calc(100% - 32px);"></div>
     </div>
+  </div>
+
+  <div id="studioagentpanel" style="display: none">
+    <div id="studioagentstatus" class="sa-status">agent: connecting…</div>
+    <div id="studioagentlog" class="sa-log"></div>
+    <form id="studioagentform" class="sa-form">
+      <textarea id="studioagentinput" rows="2"
+        placeholder="Ask the studio agent…  e.g. 'make a song with a four-on-the-floor beat and a bassline'"></textarea>
+      <button type="submit" id="studioagentsend">Send</button>
+    </form>
   </div>
 
   <div id="errormessages">

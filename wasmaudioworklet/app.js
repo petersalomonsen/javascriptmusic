@@ -2,6 +2,7 @@ import { } from './audioworkletpolyfill.js';
 import { initAudioWorkletNode } from './audioworkletnode.js';
 import { initVisualizer, setCurrentTimeSeconds as setVisualizerCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { initEditor } from './editorcontroller.js';
+import { initStudioAgent } from './studio-agent-client.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 import { modalAlert } from './common/ui/modal.js';
 import apphtml from './app.html.js';
@@ -37,6 +38,7 @@ customElements.define('app-javascriptmusic',
           '\n\nThe spinner is cleared but the editor may not be fully usable. See the console for details.');
       }
       enablePlayAndSaveButtons();
+      initStudioAgent(this.shadowRoot);
 
       appReadyPromises.forEach(p => p());
       appReadyPromises = null;

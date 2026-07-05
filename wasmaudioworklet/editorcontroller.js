@@ -208,6 +208,9 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
             console.warn('Failed to list faust files', e);
         }
     }
+    // Exposed so the studio-agent (which writes .dsp files straight to OPFS) can
+    // refresh the Faust file dropdown after authoring an instrument.
+    window.refreshFaustFileList = refreshFaustFileList;
 
     async function loadFaustFile(path) {
         try {

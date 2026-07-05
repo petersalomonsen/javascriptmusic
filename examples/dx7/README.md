@@ -9,6 +9,7 @@ Yamaha DX7 synthesizer running as a transpiled AssemblyScript instrument via the
 | `dx7-synth.ts` | Generated synth bundle using C backend transpiler |
 | `dx7-synth-asc-backend.ts` | Generated synth bundle using ASC backend transpiler |
 | `dx7-sequence.js` | Example sequence with E.Piano, Bass, Strings, Bells, and Drum Kit patches |
+| `dx7-drumbeat.js` | Minimal, self-contained drums-only beat — embeds the channel-4 kick/snare/hat NRPN patch block, then a `steps()` groove. Load it alongside `dx7-synth.ts` and edit `setBPM`/the `steps()` pattern to make a beat. (Reminder: the patches MUST stay in the song — `initializeMidiSynth()` only zeroes defaults, which sound like a sine.) |
 | `dsp/` | Faust DSP source files for each algorithm variant |
 | `parse-rom.js` | Utility to convert DX7 SysEx ROM (`.syx`) files to NRPN patch data |
 | `sequence-to-patches.js` | Utility to convert an NRPN sequence into typed-field assignments for the modular per-algorithm `.ts` files (see "Porting a ROM patch into a modular channel" below) |
