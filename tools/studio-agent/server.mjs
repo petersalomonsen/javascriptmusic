@@ -24,6 +24,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
 const PORT = process.env.STUDIO_AGENT_PORT || 17891;
 const TOOL_TIMEOUT_MS = 120000;
+// Optional model override for speed/depth tradeoff, e.g. STUDIO_AGENT_MODEL=sonnet
+// (faster) vs opus (deeper). Unset = the SDK/Claude Code default.
+const MODEL = process.env.STUDIO_AGENT_MODEL || undefined;
 
 // ---- session logging: one JSONL file per server boot, for later review ------
 const LOG_DIR = resolve(__dirname, 'logs');
@@ -163,6 +166,7 @@ async function handleChat(ws, { text, sessionId }) {
       prompt: text,
       options: {
         resume: sessionId || undefined,
+        model: MODEL,
         cwd: REPO_ROOT,
         systemPrompt: SYSTEM_PROMPT,
         mcpServers: { studio },
@@ -233,4 +237,5 @@ wss.on('connection', (ws) => {
 
 console.log(`\n  studio-agent → ws://localhost:${PORT}`);
 console.log(`  repo root:     ${REPO_ROOT}`);
+console.log(`  model:         ${MODEL || '(default)'}`);
 console.log('  auth:          Claude Code subscription login (no API key)\n');

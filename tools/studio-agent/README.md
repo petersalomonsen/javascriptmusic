@@ -67,6 +67,9 @@ It also has read-only `Read`/`Glob`/`Grep` over this repo so it can learn from
 
 - `STUDIO_AGENT_PORT` — WebSocket port (default `17891`). The browser side reads
   `window.STUDIO_AGENT_PORT` if you need to override it there too.
+- `STUDIO_AGENT_MODEL` — model override for the speed/depth tradeoff, e.g.
+  `STUDIO_AGENT_MODEL=sonnet npm start` for faster replies, or `opus` for deeper
+  reasoning. Unset uses the Claude Code default. Shown at startup.
 
 ## Session logs
 
