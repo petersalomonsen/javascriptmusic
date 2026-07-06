@@ -151,7 +151,11 @@ function connect() {
   socket = new WebSocket(`ws://localhost:${port}`);
 
   socket.onopen = () => setStatus('connected');
-  socket.onclose = () => { setStatus('disconnected — retrying…'); setTimeout(connect, RECONNECT_MS); };
+  socket.onclose = () => {
+    if (activityTimer) { clearInterval(activityTimer); activityTimer = null; setBusy(false); }
+    setStatus('disconnected — retrying…');
+    setTimeout(connect, RECONNECT_MS);
+  };
   socket.onerror = () => setStatus('connection error (is studio-agent running?)');
   socket.onmessage = (ev) => onMessage(JSON.parse(ev.data));
 }
@@ -160,12 +164,15 @@ async function onMessage(msg) {
   switch (msg.t) {
     case 'session':
       sessionId = msg.sessionId;
+      setPhase('thinking…');
       break;
     case 'text':
       appendAgentText(msg.text);
+      setPhase('responding…');
       break;
     case 'tool': // assistant decided to use a tool (informational)
       addLine('tool', `⚙ ${shortName(msg.name)}`);
+      setPhase(`running ${shortName(msg.name)}…`);
       break;
     case 'tool_call': // request to EXECUTE a tool in the browser
       // Run STRICTLY one at a time: the agent can fire several tool calls at once,
@@ -175,11 +182,13 @@ async function onMessage(msg) {
       break;
     case 'done':
       finishAgentMessage();
+      stopActivity('done ✓');
       setBusy(false);
       break;
     case 'error':
       addLine('error', `⚠ ${msg.error}`);
       finishAgentMessage();
+      stopActivity('error ✗');
       setBusy(false);
       break;
   }
@@ -190,10 +199,16 @@ async function runTool({ id, name, args }) {
   if (!fn) return reply(id, false, `unknown tool ${name}`);
   try {
     const result = await fn(args || {});
-    if (result && result.__error) reply(id, false, result.__error);
-    else reply(id, true, result);
+    if (result && result.__error) {
+      addLine('error', `✗ ${shortName(name)}: ${result.__error}`);
+      reply(id, false, result.__error);
+    } else {
+      reply(id, true, result);
+    }
   } catch (e) {
-    reply(id, false, String(e?.message || e));
+    const emsg = String(e?.message || e);
+    addLine('error', `✗ ${shortName(name)}: ${emsg}`);
+    reply(id, false, emsg);
   }
 }
 
@@ -208,6 +223,7 @@ function sendChat(text) {
   addLine('user', text);
   startAgentMessage();
   setBusy(true);
+  startActivity();
   socket.send(JSON.stringify({ t: 'chat', text, sessionId }));
 }
 
@@ -238,6 +254,31 @@ function appendAgentText(t) {
   log.scrollTop = log.scrollHeight;
 }
 function finishAgentMessage() { agentMsgEl = null; }
+
+// ---- activity indicator: shows the agent is alive, what it's doing, elapsed time ----
+const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+let activityTimer = null;
+let turnStartMs = 0;
+let activityPhase = '';
+let spinIdx = 0;
+function startActivity() {
+  turnStartMs = Date.now();
+  activityPhase = 'thinking…';
+  if (activityTimer) clearInterval(activityTimer);
+  activityTimer = setInterval(renderActivity, 150);
+  renderActivity();
+}
+function setPhase(p) { activityPhase = p; if (activityTimer) renderActivity(); }
+function renderActivity() {
+  spinIdx = (spinIdx + 1) % SPIN.length;
+  const secs = Math.floor((Date.now() - turnStartMs) / 1000);
+  setStatus(`${SPIN[spinIdx]} ${activityPhase}  ${secs}s`);
+}
+function stopActivity(msg) {
+  if (activityTimer) { clearInterval(activityTimer); activityTimer = null; }
+  const secs = Math.floor((Date.now() - turnStartMs) / 1000);
+  setStatus(`${msg} — ${secs}s`);
+}
 
 // ---- public init (called from app.js once the editors exist) ----------------
 export function initStudioAgent(shadowRoot) {
