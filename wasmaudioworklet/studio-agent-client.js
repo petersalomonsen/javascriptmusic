@@ -7,7 +7,7 @@
 
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
-import { readfile, writefileandstage, listfiles } from './wasmgit/wasmgitclient.js';
+import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
 
 const DEFAULT_PORT = 17891;
 const FAUST_DIR = 'faust/';
@@ -72,6 +72,23 @@ const registry = {
   read_faust: async ({ path }) => {
     try { return await readfile(FAUST_DIR + normDsp(path)); }
     catch (e) { return faustUnavailable(e); }
+  },
+
+  // ---- git history (OPFS repo) — inspect commits / restore a committed file ----
+  git_log: async () => {
+    try { return (await gitLog()) || '(no commits yet)'; }
+    catch (e) { return faustUnavailable(e); }
+  },
+  // Read a file's committed content at a git ref (default HEAD). Use to restore
+  // something that was overwritten in the editor but is safe in a commit.
+  read_committed: async ({ path, ref = 'HEAD' }) => {
+    const spec = `${ref}:${path}`;
+    try {
+      try { return await gitCommand('show', [spec]); }
+      catch { return await gitCommand('cat-file', ['-p', spec]); }
+    } catch (e) {
+      return { __error: `couldn't read ${spec} from git: ${String(e?.error || e?.message || e)}` };
+    }
   },
   // Write a .dsp AND transpile it to AssemblyScript (same as the app's faust save):
   // persists faust/<name>.dsp + faust/<name>.ts and reports the generated classes.

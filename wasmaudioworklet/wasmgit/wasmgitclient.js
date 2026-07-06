@@ -46,6 +46,24 @@ async function callAndWaitForWorker(message) {
     });
 }
 
+// Generic git command passthrough — returns the captured stdout. Used by the
+// studio agent to inspect history and restore committed files from OPFS.
+export async function gitCommand(command, args = []) {
+    const res = await callAndWaitForWorker({ command, args });
+    return res.result;
+}
+
+// `git log` uses a dedicated worker branch that replies with { log } (no id).
+export async function gitLog() {
+    return await new Promise((resolve) => {
+        workerMessageListeners.push((msg) => {
+            if (msg.data.log !== undefined) { resolve(msg.data.log); return; }
+            return true;
+        });
+        worker.postMessage({ command: 'log' });
+    });
+}
+
 export async function initWASMGitClient(gitrepo, remoteUrl) {
     worker = new Worker(new URL('wasmgitworker.js', import.meta.url));
     worker.onmessage = (msg) => {

@@ -53,6 +53,7 @@ const STUDIO_TOOLS = [
   'get_song', 'set_song', 'get_synth', 'set_synth',
   'edit_synth', 'edit_song', 'grep_synth', 'grep_song',
   'write_faust', 'read_faust', 'list_faust',
+  'git_log', 'read_committed',
   'load_synth_from_file', 'load_song_from_file',
   'compile', 'play', 'stop',
 ];
@@ -135,6 +136,8 @@ function makeStudioServer(ws) {
       proxy('write_faust', 'Author an INSTRUMENT in Faust: write faust/<path>.dsp AND transpile it to AssemblyScript in one step (persists faust/<name>.dsp + faust/<name>.ts in the browser OPFS). Returns the generated class names to import into synth.ts, or the exact transpile error. This is the primary way to create instrument DSP — do NOT hand-write DSP in AssemblyScript.', { path: z.string(), source: z.string() }),
       proxy('read_faust', 'Read a Faust .dsp instrument source from the browser OPFS faust/ folder.', { path: z.string() }),
       proxy('list_faust', 'List the .dsp Faust instruments in the browser OPFS faust/ folder.', {}),
+      proxy('git_log', 'Show the commit history of the in-browser OPFS repo (the user commits their work here). Use it to find a commit to restore a file from.', {}),
+      proxy('read_committed', 'Read the COMMITTED content of a file from the OPFS git repo at a ref (default HEAD). Path is repo-relative (e.g. "song.js", "faust/bass.dsp"). Use to restore something overwritten in the editor: read_committed then set_song/set_synth it back.', { path: z.string(), ref: z.string().optional() }),
       loadInto('load_synth_from_file', 'set_synth', 'synth'),
       loadInto('load_song_from_file', 'set_song', 'song'),
       proxy('compile', 'Compile the current song+synth in the browser. Returns "compiled OK" or the exact compiler error. Call after every edit.', {}),
