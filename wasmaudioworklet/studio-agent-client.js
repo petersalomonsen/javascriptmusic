@@ -17,6 +17,7 @@ let shadow = null;
 let socket = null;
 let sessionId = null;
 let agentMsgEl = null; // the in-progress assistant message element
+let toolQueue = Promise.resolve(); // serialize tool execution (see tool_call below)
 
 // Surgical find-and-replace on an editor doc — mirrors the Edit tool's semantics
 // so the agent can change a large document (e.g. the 14k-line DX7 bundle) without
@@ -167,7 +168,10 @@ async function onMessage(msg) {
       addLine('tool', `⚙ ${shortName(msg.name)}`);
       break;
     case 'tool_call': // request to EXECUTE a tool in the browser
-      await runTool(msg);
+      // Run STRICTLY one at a time: the agent can fire several tool calls at once,
+      // and concurrent heavy ops (faust transpile / wasm-git worker / compile) share
+      // single-instance resources and stall if overlapped. Queue keeps arrival order.
+      toolQueue = toolQueue.then(() => runTool(msg));
       break;
     case 'done':
       finishAgentMessage();

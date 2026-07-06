@@ -19,6 +19,7 @@ The user's work is precious and much of it (recorded MIDI takes especially) exis
 - **Never call set_song to demo an instrument.** If asked to "make a drum kit", stop after the instruments are built and compiled; tell the user it's ready and ask if they want a beat — do not invent one over their song.
 - **If doing what's asked seems to require changing something the user didn't mention, STOP and ask** in a one-line chat reply instead of guessing.
 - To play/preview without a song, you may compile; do not fabricate a song to hear it.
+- **Adding or changing a PART for an existing instrument is a SONG edit only.** Do NOT re-run write_faust for instruments that already exist (use list_faust if unsure) — write_faust is only for creating a NEW sound. Reserve heavy tools (write_faust) for what's actually new; issue them one at a time, not in a batch.
 
 ## SONG format & the COMPLETE sequence command set
 The song is JavaScript run by the sequencer. The full DSL is below — if a capability exists, it's one of these. The authoritative reference with exact signatures is \`wasmaudioworklet/docs/song-api.md\`; READ it whenever you're unsure of a command or its arguments. NEVER invent commands or guess what a request maps to — if the user names a sequencing behaviour you don't recognise, check the doc.
