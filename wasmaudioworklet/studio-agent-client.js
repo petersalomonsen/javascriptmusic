@@ -153,6 +153,7 @@ function connect() {
   socket.onopen = () => setStatus('connected');
   socket.onclose = () => {
     if (activityTimer) { clearInterval(activityTimer); activityTimer = null; setBusy(false); }
+    const s = el('studioagentstatus'); if (s) s.classList.remove('working');
     setStatus('disconnected — retrying…');
     setTimeout(connect, RECONNECT_MS);
   };
@@ -264,6 +265,8 @@ let spinIdx = 0;
 function startActivity() {
   turnStartMs = Date.now();
   activityPhase = 'thinking…';
+  const s = el('studioagentstatus');
+  if (s) { s.classList.add('working'); s.classList.remove('idle'); }
   if (activityTimer) clearInterval(activityTimer);
   activityTimer = setInterval(renderActivity, 150);
   renderActivity();
@@ -276,6 +279,8 @@ function renderActivity() {
 }
 function stopActivity(msg) {
   if (activityTimer) { clearInterval(activityTimer); activityTimer = null; }
+  const s = el('studioagentstatus');
+  if (s) { s.classList.remove('working'); s.classList.add('idle'); }
   const secs = Math.floor((Date.now() - turnStartMs) / 1000);
   setStatus(`${msg} — ${secs}s`);
 }
