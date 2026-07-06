@@ -46,7 +46,7 @@ async function callAndWaitForWorker(message) {
     });
 }
 
-export async function initWASMGitClient(gitrepo) {
+export async function initWASMGitClient(gitrepo, remoteUrl) {
     worker = new Worker(new URL('wasmgitworker.js', import.meta.url));
     worker.onmessage = (msg) => {
         workerMessageListeners = workerMessageListeners.filter(listener => listener(msg) === true);
@@ -83,7 +83,20 @@ export async function initWASMGitClient(gitrepo) {
     let dircontents = await synclocal();
 
     if (!dircontents) {
-        dircontents = await clone();
+        // Nothing local yet — try to clone the remote. A clone against an
+        // unregistered/unreachable remote returns null (see the worker's
+        // clone handler); fall back to a persistent local OPFS repo so edits
+        // survive reload instead of being lost to in-memory WASMFS. See #151.
+        try {
+            dircontents = await clone();
+        } catch (e) {
+            console.warn('clone failed, falling back to local repo', e);
+            dircontents = null;
+        }
+        if (!dircontents) {
+            console.log('no remote to clone — initializing a local OPFS repo');
+            dircontents = await initlocal(remoteUrl);
+        }
     } else {
         console.log('Repository is already local');
     }
@@ -95,6 +108,12 @@ export async function initWASMGitClient(gitrepo) {
             command: 'remote',
             args: ['add', 'origin', gitrepourl]
         });
+    }
+    // A `?…&remote=<url>` param overrides origin so "Commit & Sync" pushes to
+    // an arbitrary remote (e.g. a local git server) instead of the NEAR
+    // default. Persisted in .git/config (OPFS), so it survives reload.
+    if (remoteUrl && remoteUrl !== gitrepourl) {
+        await setremote(remoteUrl);
     }
     if (dircontents.indexOf(CONFIG_FILE) > -1) {
         try {
@@ -149,6 +168,23 @@ export async function synclocal() {
         url: gitrepourl
     });
     return await awaitDirContents();
+}
+
+// Create a persistent local OPFS repo (no clone) when the remote can't be
+// cloned. origin defaults to the NEAR url for this repo, or `remoteUrl` when
+// a `?…&remote=<url>` param was supplied. See issue #151.
+export async function initlocal(remoteUrl) {
+    worker.postMessage({
+        command: 'initlocal',
+        url: gitrepourl,
+        remoteUrl: remoteUrl || gitrepourl,
+    });
+    return await awaitDirContents();
+}
+
+// Point origin at an arbitrary URL and persist it to .git/config (OPFS).
+export async function setremote(url) {
+    return await callAndWaitForWorker({ command: 'setremote', url });
 }
 
 export async function deletelocal() {

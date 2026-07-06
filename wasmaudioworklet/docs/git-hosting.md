@@ -18,6 +18,38 @@ project; the code in this folder (`wasmgit/`) is the browser client.
 > `petersalomonsen.com/webassemblymusic/...` does **not**, so `?gitrepo=` will
 > silently fail to load there.
 
+## Local-only repos (no NEAR registration)
+
+You can also open `?gitrepo=<name>` with a name that is **not** a registered
+NEAR repo (e.g. `?gitrepo=mysketch`). When the clone fails because there is
+nothing to clone, the app falls back to a **persistent local git repo in OPFS**:
+`git init`, no remote round-trip. Edits — including the `faust/` folder — are
+committed/saved into that OPFS repo and **survive reload**. "Commit & Sync"
+still commits locally; the push half just fails until a reachable remote exists.
+
+This is the registration-free path for scratch projects and
+Studio-Agent-authored instruments. To attach a remote and push later, set one
+with the `remote=` param below.
+
+### Point a local repo at any remote — `&remote=<url>`
+
+Add `&remote=<url>` to override the git `origin` for pushing, e.g. a local git
+server:
+
+```
+http://localhost:8080/?gitrepo=mysketch&remote=http://localhost:9418/mysketch.git
+```
+
+The URL is written into `.git/config` (which lives in OPFS), so it **persists
+across reloads** — you only need the param once. `origin` still defaults to the
+NEAR url for `<name>` when `remote=` is omitted.
+
+> **Non-NEAR remotes need CORS + git-over-HTTP.** Only `/near-repo/*` requests
+> go through the NEAR service worker; any other remote is a normal browser
+> `fetch`, so the target server must speak the git smart-HTTP protocol and send
+> permissive CORS headers. Persisting locally and *configuring* the remote work
+> regardless; whether a given server accepts the push depends on that server.
+
 ## How it works
 
 - `?gitrepo=<name>.gitfactory.testnet` is resolved to `<origin>/near-repo/<name>.git`

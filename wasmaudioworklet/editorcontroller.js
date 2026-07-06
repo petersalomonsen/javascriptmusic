@@ -779,6 +779,9 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
     const gitrepoparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gitrepo=') === 0) : null;
     const pngurlparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('pngurl=') === 0) : null;
+    // Optional override for the git origin remote (any git-http URL). Parsed via
+    // URLSearchParams so a remote URL containing '=' / ':' survives decoding.
+    const remoteparam = new URLSearchParams(location.search).get('remote');
 
     if (gistparam) {
         const gistid = gistparam.split('=')[1];
@@ -799,7 +802,7 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         console.log(`loaded from gist ${gistid}: ${songfilename}`);
     } else if (gitrepoparam) {
         const repoName = gitrepoparam.split('=')[1];
-        gitrepoconfig = await initWASMGitClient(repoName);
+        gitrepoconfig = await initWASMGitClient(repoName, remoteparam);
         appendToSubtoolbar1(document.createElement('wasmgit-ui'));
         // wasm-git is ready — connect the bridge and pull the full tree.
         // Repo identity lets the relay isolate this tab into its own

@@ -276,6 +276,23 @@ onmessage = async (msg) => {
 
     callMainInDir(['clone', msg.data.url, currentRepoDir]);
 
+    // A failed clone (unreachable/unregistered remote) leaves no repo behind —
+    // libgit2 removes the partial target dir. Detect that instead of blindly
+    // chdir'ing: an absent currentRepoDir makes ensureChdir() silently land at
+    // the in-memory WASMFS root, so every later write goes to ephemeral memory
+    // and vanishes on reload. Report null so the client can fall back to a
+    // persistent local `initlocal`. See issue #151.
+    let cloned = false;
+    try {
+      cloned = FS.readdir(currentRepoDir).indexOf('.git') > -1;
+    } catch (e) { /* target dir doesn't exist — clone failed */ }
+
+    if (!cloned) {
+      console.log('clone failed, no repository at', currentRepoDir);
+      postMessage({ dircontents: null, cloneFailed: true });
+      return;
+    }
+
     // Create symlink workaround for WASMFS getcwd() bug
     try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
     ensureChdir(currentRepoDir);
@@ -286,6 +303,37 @@ onmessage = async (msg) => {
 
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ dircontents: readdir() });
+  } else if (msg.data.command === 'initlocal') {
+    // Establish a persistent local OPFS repo when there's nothing to clone
+    // (unregistered/unreachable remote). Mkdir UNDER the OPFS mount so the
+    // working tree survives reload, then `git init` in place. origin is set to
+    // the requested URL so "Commit & Sync" can push once the remote exists.
+    // See issue #151.
+    const repoName = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    currentRepoDir = OPFS_MOUNT + '/' + repoName;
+    console.log('initlocal', currentRepoDir);
+
+    try { FS.mkdir(currentRepoDir); } catch (e) { /* already exists */ }
+    // Create symlink workaround for WASMFS getcwd() bug
+    try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
+    ensureChdir(currentRepoDir);
+    callMainInDir(['init', '.']);
+    // Same 0o755 mode-bit workaround as clone/synclocal.
+    try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
+    const originUrl = msg.data.remoteUrl || msg.data.url;
+    try { callMainInDir(['remote', 'add', 'origin', originUrl]); } catch (_) {}
+
+    console.log(currentRepoDir, 'initialized local repo, persisted via OPFS');
+    postMessage({ dircontents: readdir() });
+  } else if (msg.data.command === 'setremote') {
+    // Point origin at an arbitrary URL (the `?…&remote=<url>` param). The URL
+    // is written to .git/config, which lives in OPFS and so persists across
+    // reloads. `remote set-url` isn't available in every wasm-git build, so
+    // remove-then-add for robustness (both are supported). Idempotent.
+    ensureChdir(currentRepoDir);
+    try { callMainInDir(['remote', 'remove', 'origin']); } catch (_) { /* no origin yet */ }
+    try { callMainInDir(['remote', 'add', 'origin', msg.data.url]); } catch (_) {}
+    postMessage({ id: msg.data.id, dircontents: readdir() });
   } else if (msg.data.command === 'diff') {
     try {
       callAndCaptureOutput(['status']);
