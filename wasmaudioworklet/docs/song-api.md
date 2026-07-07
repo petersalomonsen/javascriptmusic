@@ -45,7 +45,10 @@ await waitForBeat(4);
 Resets playback to start from the current position, keeping only control change messages.
 
 ### `loopHere()`
-Marks the current position as a loop point.
+Marks the **end** of the song. When playback reaches this point it loops back to
+the **start** (beat 0). Anything sequenced *after* `loopHere()` is discarded and
+never plays — so call it once, as the last statement. It is not a "loop back to
+here" target; the loop always returns to the beginning.
 
 ---
 
