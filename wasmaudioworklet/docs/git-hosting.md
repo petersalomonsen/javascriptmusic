@@ -50,6 +50,40 @@ NEAR url for `<name>` when `remote=` is omitted.
 > permissive CORS headers. Persisting locally and *configuring* the remote work
 > regardless; whether a given server accepts the push depends on that server.
 
+#### Bring-your-own GitHub/GitLab via the built-in CORS proxy
+
+GitHub/GitLab don't send CORS headers and expect Basic auth, so the browser
+can't push to them directly. The site ships a tiny **stateless** proxy — a
+Cloudflare Pages Function at `functions/gitproxy/[[path]].js` — that fixes both:
+it forwards only the git smart-HTTP endpoints to an **allowlisted** host, and
+translates the `Authorization: Bearer <token>` the git client sends into the
+Basic auth GitHub expects. It never stores or logs tokens.
+
+Point `remote=` at it (same origin as the app):
+
+```
+https://<origin>/?gitrepo=mysketch&remote=https://<origin>/gitproxy/github.com/<user>/<repo>.git
+```
+
+- Use a **GitHub fine-grained PAT** scoped to just that repo (Contents:
+  read/write). If it ever leaks, the blast radius is that one repo. The token is
+  sent by the browser and only transits the proxy — which is first-party and
+  open-source, so it's within the same trust boundary as the app itself.
+- **Don't trust this instance?** The proxy is one self-contained file — deploy
+  your own copy and point `remote=` at it.
+- **Quick check** that the proxy + auth + host round-trip works, before wiring
+  the app:
+
+  ```sh
+  curl -H "Authorization: Bearer <your-fine-grained-PAT>" \
+    "https://<origin>/gitproxy/github.com/<user>/<repo>.git/info/refs?service=git-upload-pack"
+  ```
+
+  A git ref advertisement in the response means it works.
+
+> Allowed hosts: github.com, gitlab.com, codeberg.org, bitbucket.org (edit
+> `ALLOWED_HOSTS` in the function to change). Unit tests: `npm run test-gitproxy`.
+
 ## How it works
 
 - `?gitrepo=<name>.gitfactory.testnet` is resolved to `<origin>/near-repo/<name>.git`
