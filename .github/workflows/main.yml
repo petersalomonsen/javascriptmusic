@@ -14,6 +14,22 @@ jobs:
         run: |
           grep -rq --include '*.spec.js' \.only\( . && echo 'You have .only() in your tests!' && exit 1
           exit 0
+  unit-tests:
+    name: Unit tests (node:test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - name: Run node:test unit suites
+        run: |
+          # Pure-logic unit tests — no deps, no browser (studio-agent tool core,
+          # git CORS proxy incl. NEP-413/JWT crypto).
+          cd wasmaudioworklet
+          npm run test-agent-tools
+          npm run test-gitproxy
   web-test-runner:
     name: Web Test Runner
     runs-on: ubuntu-latest
