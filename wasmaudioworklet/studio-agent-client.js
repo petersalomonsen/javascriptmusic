@@ -8,6 +8,7 @@
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
+import { applyEditToText, grepText, normDsp, faustRegistrationHint } from './studio-agent-tools-core.js';
 
 const DEFAULT_PORT = 17891;
 const FAUST_DIR = 'faust/';
@@ -19,35 +20,18 @@ let sessionId = null;
 let agentMsgEl = null; // the in-progress assistant message element
 let toolQueue = Promise.resolve(); // serialize tool execution (see tool_call below)
 
-// Surgical find-and-replace on an editor doc — mirrors the Edit tool's semantics
-// so the agent can change a large document (e.g. the 14k-line DX7 bundle) without
-// rewriting the whole thing.
-function applyEdit(editor, { old_string, new_string, replace_all }) {
-  const cur = editor.doc.getValue();
-  if (old_string === new_string) return { __error: 'old_string and new_string are identical' };
-  const count = old_string ? cur.split(old_string).length - 1 : 0;
-  if (count === 0) return { __error: 'old_string not found in the document' };
-  if (count > 1 && !replace_all) return { __error: `old_string is not unique (${count} matches); add more surrounding context or set replace_all` };
-  const next = replace_all ? cur.split(old_string).join(new_string) : cur.replace(old_string, new_string);
-  editor.doc.setValue(next);
-  return `applied ${replace_all ? count : 1} edit(s)`;
+// Editor wrappers around the pure logic in studio-agent-tools-core.js.
+function applyEdit(editor, args) {
+  const r = applyEditToText(editor.doc.getValue(), args);
+  if (r.error) return { __error: r.error };
+  editor.doc.setValue(r.text);
+  return `applied ${r.count} edit(s)`;
 }
 
-// Grep the in-browser doc so the agent can locate anchors in a big document
-// without pulling the whole thing into context.
-function grepDoc(editor, { pattern, context = 0 }) {
-  let re;
-  try { re = new RegExp(pattern, 'i'); } catch (e) { return { __error: `bad regex: ${e.message}` }; }
-  const lines = editor.doc.getValue().split('\n');
-  const out = [];
-  for (let i = 0; i < lines.length && out.length < 120; i++) {
-    if (re.test(lines[i])) {
-      for (let j = Math.max(0, i - context); j <= Math.min(lines.length - 1, i + context); j++) {
-        out.push(`${j + 1}: ${lines[j].slice(0, 200)}`);
-      }
-    }
-  }
-  return out.length ? out.join('\n') : '(no matches)';
+function grepDoc(editor, args) {
+  const r = grepText(editor.doc.getValue(), args);
+  if (r && r.error) return { __error: r.error };
+  return r;
 }
 
 // ---- the tool registry: tool name -> async fn acting on the app -------------
@@ -107,17 +91,7 @@ const registry = {
       await writefileandstage(FAUST_DIR + stem + '.ts', ts);
       // refresh the app's Faust file dropdown so the user sees the new instrument
       if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
-      const classes = [...ts.matchAll(/export class (\w+)/g)].map((m) => m[1]);
-      const voice = classes.find((c) => !/Channel$/.test(c)) || 'Xxx';
-      const chan = classes.find((c) => /Channel$/.test(c));
-      // Only import the classes that actually exist; register with the generated
-      // channel class if there is one, otherwise the base MidiChannel.
-      const reg = chan
-        ? `midichannels[N] = new ${chan}(8, (channel: MidiChannel) => new ${voice}(channel));`
-        : `midichannels[N] = new MidiChannel(8, (channel: MidiChannel) => new ${voice}(channel));   // no ${voice}Channel was generated — use the base MidiChannel`;
-      return `transpiled OK → faust/${stem}.ts exports: ${classes.join(', ') || '(none)'}. ` +
-        `In synth.ts: import { ${classes.join(', ')} } from '../faust/${stem}';  (import ONLY these exact names) ` +
-        `then ${reg}`;
+      return faustRegistrationHint(ts, stem).message;
     } catch (e) { return faustUnavailable(e); }
   },
   compile: async () => {
@@ -133,12 +107,7 @@ const registry = {
   stop: async () => { window.stopaudio(); return 'stopped'; },
 };
 
-// Faust file helpers
-function normDsp(path) {
-  let rel = String(path || '').replace(/^faust\//, '');
-  if (!rel.endsWith('.dsp')) rel += '.dsp';
-  return rel;
-}
+// Faust file helpers (normDsp is imported from studio-agent-tools-core.js)
 function faustUnavailable(e) {
   const msg = String(e?.message || e);
   return { __error: `Faust/OPFS not available (${msg}). The app must be opened with a ?gitrepo=… URL so the OPFS git working tree exists.` };
