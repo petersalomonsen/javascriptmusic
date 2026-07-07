@@ -1,6 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onRequest } from './functions/gitproxy/[[path]].js';
+import { onRequest, base58Encode, base58Decode, serializeNep413Payload, verifyNep413Crypto } from './functions/gitproxy/[[path]].js';
+
+const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
+// Build a NEP-413 bearer token the way a NEAR wallet's signMessage would.
+async function makeNep413Token({ issuedAt = Date.now(), recipient = 'webassemblymusic.near', accountId = 'alice.near', kp } = {}) {
+  kp = kp || await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+  const rawPub = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+  const publicKey = 'ed25519:' + base58Encode(rawPub);
+  const message = JSON.stringify({ issuedAt });
+  const nonce = crypto.getRandomValues(new Uint8Array(32));
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', serializeNep413Payload({ message, nonce, recipient })));
+  const signature = b64(new Uint8Array(await crypto.subtle.sign('Ed25519', kp.privateKey, digest)));
+  const payload = { accountId, publicKey, signature, message, nonce: b64(nonce), recipient };
+  return { token: b64(new TextEncoder().encode(JSON.stringify(payload))), publicKey, accountId, kp };
+}
 
 const APP = 'https://app.example';
 const ctx = (method, path, headers = {}) => ({ request: new Request(APP + path, { method, headers }) });
@@ -77,4 +91,33 @@ test('non-Bearer Authorization is passed through unchanged', async () => {
   globalThis.fetch = async (_url, opts) => { fwd = opts.headers.get('authorization'); return new Response('', { status: 200 }); };
   await onRequest(ctx('GET', '/gitproxy/gitlab.com/u/r.git/info/refs?service=git-upload-pack', { Authorization: 'Basic already' }));
   assert.equal(fwd, 'Basic already');
+});
+
+test('base58 round-trips (encode/decode)', () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  assert.deepEqual(base58Decode(base58Encode(bytes)), bytes);
+});
+
+test('NEP-413: a valid signed token verifies (crypto round-trip)', async () => {
+  const { token, accountId, publicKey } = await makeNep413Token();
+  const res = await verifyNep413Crypto(token, { recipient: 'webassemblymusic.near' });
+  assert.deepEqual(res, { accountId, publicKey });
+});
+
+test('NEP-413: expired token is rejected', async () => {
+  const { token } = await makeNep413Token({ issuedAt: Date.now() - 2 * 60 * 60 * 1000 });
+  await assert.rejects(verifyNep413Crypto(token, { recipient: 'webassemblymusic.near' }), /expired/);
+});
+
+test('NEP-413: recipient mismatch is rejected', async () => {
+  const { token } = await makeNep413Token({ recipient: 'someone.else.near' });
+  await assert.rejects(verifyNep413Crypto(token, { recipient: 'webassemblymusic.near' }), /recipient mismatch/);
+});
+
+test('NEP-413: tampered signature is rejected', async () => {
+  const { token } = await makeNep413Token();
+  const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(token), (c) => c.charCodeAt(0))));
+  payload.signature = btoa(String.fromCharCode(...new Uint8Array(64))); // 64 zero bytes
+  const bad = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))));
+  await assert.rejects(verifyNep413Crypto(bad, { recipient: 'webassemblymusic.near' }), /invalid signature/);
 });
