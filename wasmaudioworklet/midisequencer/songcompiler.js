@@ -1,4 +1,4 @@
-import { resetTick, setBPM, nextTick, currentTime, waitForBeat } from './pattern.js';
+import { resetTick, setBPM, nextTick, currentTime, waitForBeat, waitDuration } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunctionKeys } from './trackerpattern.js';
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT } from './sequenceconstants.js';
 import { setVideoSchedule } from '../visualizer/videoscheduler.js';
@@ -146,6 +146,7 @@ const songargs = {
     'pitchbend': pitchbend,
     'controlchange': controlchange,
     'waitForBeat': waitForBeat,
+    'waitDuration': waitDuration,
     'startRecording': startRecording,
     'stopRecording': stopRecording,
     'startVideo': startVideo,

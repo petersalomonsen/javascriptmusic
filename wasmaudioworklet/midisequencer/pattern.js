@@ -64,6 +64,13 @@ export async function waitForBeat(beatNo) {
     return pushPendingEvent(timeout);
 }
 
+// Global counterpart to Pattern.waitDuration — advances the shared clock by
+// `duration` beats from the current position (symmetric with the global
+// waitForBeat above, which waits until an absolute beat).
+export async function waitDuration(duration) {
+    return pushPendingEvent((duration * 60 * 1000) / bpm);
+}
+
 export class Pattern {
     constructor(output) {
         this.output = output;

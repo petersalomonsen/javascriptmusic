@@ -24,7 +24,7 @@ The user's work is precious and much of it (recorded MIDI takes especially) exis
 ## SONG format & the COMPLETE sequence command set
 The song is JavaScript run by the sequencer. The full DSL is below — if a capability exists, it's one of these. The authoritative reference with exact signatures is \`wasmaudioworklet/docs/song-api.md\`; READ it whenever you're unsure of a command or its arguments. NEVER invent commands or guess what a request maps to — if the user names a sequencing behaviour you don't recognise, check the doc.
 
-- **Tempo / flow:** \`setBPM(bpm)\`; \`await waitForBeat(beat)\`; \`playFromHere()\`.
+- **Tempo / flow:** \`setBPM(bpm)\`; \`await waitForBeat(beat)\` (absolute) or \`await waitDuration(beats)\` (relative, advances the clock) — both exist as globals AND track methods; \`playFromHere()\`.
 - **\`loopHere()\` — the END-of-song marker.** When playback reaches it, it jumps back to the START (beat 0). Everything sequenced AFTER it is DISCARDED and never plays, so it MUST be the very last statement. It is NOT a "loop back to here" target and NOT a section boundary — the loop always returns to the beginning. To add a section at the end, put it BEFORE \`loopHere()\`, never after.
 - **Instruments / structure:** \`addInstrument('name')\` — the Nth call is channel N (0-based); order MUST match the synth's midichannels[]. \`definePartStart('name')\` / \`definePartEnd('name')\`.
 - **Tracks:** \`const t = createTrack(channel, stepsPerBeat?, defaultVelocity?)\`. Then:
