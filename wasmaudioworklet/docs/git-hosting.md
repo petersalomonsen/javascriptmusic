@@ -110,6 +110,28 @@ Validated live (2026-07): `GET info/refs` against `github.com` through the
 deployed proxy returns the ref advertisement with CORS headers — so clone works;
 authenticated push follows the same path with the token from step 3.
 
+#### Preventing abuse
+
+You can't cryptographically restrict a *client-side* app's proxy to "only my
+users" without a user-auth backend (any secret shipped to the browser is
+extractable). But the exposure is narrow and cheaply bounded:
+
+- **Host allowlist** — the proxy only reaches git hosts (`ALLOWED_HOSTS`), so it
+  can't be a general open proxy, and only the three git smart-HTTP endpoints.
+- **Origin allowlist** (`ALLOWED_ORIGINS`) — only browsers on our origins may use
+  it, which blocks other **web apps** from piggybacking (the realistic vector; a
+  browser can't spoof its `Origin`). Non-browser clients can bypass it, but they
+  gain nothing — the proxy only adds CORS + a Basic-auth tweak, so a script would
+  just hit the git host directly. Remove `localhost` from the list for a
+  locked-down production proxy.
+- **Rate limiting** — add a Cloudflare rate-limit rule (dashboard → Security →
+  WAF → Rate limiting) on `/gitproxy/*` to cap request volume per IP. Bounds cost
+  from any source, no code needed.
+
+If real abuse ever appears and you need true per-user gating, that requires a
+backend that authenticates users and issues short-lived signed tokens the proxy
+verifies (or reuse the NEAR login for a signature) — overkill until it's needed.
+
 ## How it works
 
 - `?gitrepo=<name>.gitfactory.testnet` is resolved to `<origin>/near-repo/<name>.git`

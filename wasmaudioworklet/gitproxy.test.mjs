@@ -46,6 +46,24 @@ test('POST git-receive-pack (push) is allowed and forwarded', async () => {
   assert.equal(method, 'POST');
 });
 
+test('request from a disallowed Origin → 403 (blocks other web apps)', async () => {
+  const res = await onRequest(ctx('GET', '/gitproxy/github.com/u/r.git/info/refs?service=git-upload-pack', { Origin: 'https://evil.example' }));
+  assert.equal(res.status, 403);
+});
+
+test('request from an allowed Origin → forwarded, ACAO echoes the origin', async () => {
+  globalThis.fetch = async () => new Response('# refs', { status: 200, headers: { 'content-type': 'application/x-git-upload-pack-advertisement' } });
+  const res = await onRequest(ctx('GET', '/gitproxy/github.com/u/r.git/info/refs?service=git-upload-pack', { Origin: 'https://webassemblymusic.pages.dev' }));
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('access-control-allow-origin'), 'https://webassemblymusic.pages.dev');
+});
+
+test('preview subdomain origin is allowed', async () => {
+  globalThis.fetch = async () => new Response('', { status: 200 });
+  const res = await onRequest(ctx('GET', '/gitproxy/github.com/u/r.git/info/refs?service=git-upload-pack', { Origin: 'https://git-cors-proxy.webassemblymusic.pages.dev' }));
+  assert.equal(res.status, 200);
+});
+
 test('gist.github.com is allowed (gists are git repos)', async () => {
   let url;
   globalThis.fetch = async (u) => { url = u; return new Response('# refs', { status: 200 }); };

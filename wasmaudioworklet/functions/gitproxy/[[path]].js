@@ -25,21 +25,39 @@ export const ALLOWED_HOSTS = new Set([
   'bitbucket.org',
 ]);
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
+// Only browsers on these origins may use the proxy (blocks other web apps from
+// piggybacking on it — the realistic abuse vector). A browser can't spoof its
+// Origin from JS; non-browser clients can, but they gain nothing here (they'd
+// just hit the git host directly). Requests with NO Origin (same-origin GET /
+// non-browser) are allowed. Tighten/remove `localhost` for a locked-down prod.
+export const ALLOWED_ORIGINS = [
+  /^https:\/\/([a-z0-9-]+\.)?webassemblymusic\.pages\.dev$/, // prod + preview deploys
+  /^http:\/\/localhost(:\d+)?$/,                             // local dev
+];
+
+const isOriginAllowed = (origin) => !origin || ALLOWED_ORIGINS.some((re) => re.test(origin));
+
+const corsHeaders = (origin) => ({
+  'Access-Control-Allow-Origin': origin || '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type, Accept, Accept-Encoding, Pragma, Cache-Control',
   'Access-Control-Expose-Headers': 'Content-Type, WWW-Authenticate',
   'Access-Control-Max-Age': '600',
   'Cross-Origin-Resource-Policy': 'cross-origin',
-};
+  'Vary': 'Origin',
+});
 
 // Only the three git smart-HTTP endpoints — never an arbitrary path.
 const GIT_ENDPOINT = /\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 
 export async function onRequest(context) {
   const { request } = context;
+  const origin = request.headers.get('Origin');
+  const CORS = corsHeaders(origin);
 
+  if (!isOriginAllowed(origin)) {
+    return new Response(`git-cors-proxy: origin not allowed: ${origin}`, { status: 403 });
+  }
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
   }
