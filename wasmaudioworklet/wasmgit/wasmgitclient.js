@@ -53,6 +53,21 @@ export async function gitCommand(command, args = []) {
     return res.result;
 }
 
+// Give the git worker a bring-your-own auth token (e.g. a GitHub fine-grained
+// PAT) + commit identity, so "Commit & Sync" can push to a `remote=…/gitproxy/…`
+// target. The worker sends it as `Authorization: Bearer <token>`; the CORS proxy
+// translates that to the Basic auth GitHub expects. Exposed as window.setGitToken
+// for now — a proper token-input UI is a follow-up.
+export async function setGitAuthToken(token, { username = 'wasmmusic', useremail = 'wasmmusic@users.noreply.github.com' } = {}) {
+    return await new Promise((resolve) => {
+        workerMessageListeners.push((msg) => {
+            if (msg.data.accessTokenConfigured) { resolve(true); return; }
+            return true;
+        });
+        worker.postMessage({ accessToken: token, username, useremail });
+    });
+}
+
 // `git log` uses a dedicated worker branch that replies with { log } (no id).
 export async function gitLog() {
     return await new Promise((resolve) => {
@@ -69,6 +84,11 @@ export async function initWASMGitClient(gitrepo, remoteUrl) {
     worker.onmessage = (msg) => {
         workerMessageListeners = workerMessageListeners.filter(listener => listener(msg) === true);
     }
+
+    // POC hook for bring-your-own-host pushing: from the console,
+    //   setGitToken('<github-fine-grained-PAT>', 'yourname', 'you@example.com')
+    // then click "Commit & Sync" to push to a `remote=…/gitproxy/…` target.
+    window.setGitToken = (token, username, useremail) => setGitAuthToken(token, { username, useremail });
 
     try {
         await initNear(gitrepo);

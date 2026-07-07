@@ -81,8 +81,34 @@ https://<origin>/?gitrepo=mysketch&remote=https://<origin>/gitproxy/github.com/<
 
   A git ref advertisement in the response means it works.
 
-> Allowed hosts: github.com, gitlab.com, codeberg.org, bitbucket.org (edit
-> `ALLOWED_HOSTS` in the function to change). Unit tests: `npm run test-gitproxy`.
+> Allowed hosts: github.com, gist.github.com, gitlab.com, codeberg.org,
+> bitbucket.org (edit `ALLOWED_HOSTS` in the function to change). Unit tests:
+> `npm run test-gitproxy`.
+
+#### Pushing from the app (step by step)
+
+1. Create the destination on GitHub: an empty **repo** (or a **gist** — gists are
+   git repos at `gist.github.com/<id>.git`), and a **fine-grained PAT** scoped to
+   it (Contents: read/write).
+2. Open the app with your local repo and the proxy as the remote — the proxy can
+   be any deployment (the app on `localhost` can use the deployed proxy
+   cross-origin; CORS is handled):
+   ```
+   http://localhost:8080/?gitrepo=mysketch&remote=https://<proxy-origin>/gitproxy/github.com/<user>/<repo>.git
+   ```
+3. Hand the git worker your token — in the browser console:
+   ```js
+   setGitToken('<your-fine-grained-PAT>', 'yourname', 'you@example.com')
+   ```
+   (A proper token-input UI is a follow-up; this console hook is the current way.)
+4. Click **Commit & Sync**. The worker pushes with `Authorization: Bearer <token>`;
+   the proxy rewrites it to Basic and forwards to GitHub.
+
+To a **gist** instead, use `…/gitproxy/gist.github.com/<gist-id>.git` in step 2.
+
+Validated live (2026-07): `GET info/refs` against `github.com` through the
+deployed proxy returns the ref advertisement with CORS headers — so clone works;
+authenticated push follows the same path with the token from step 3.
 
 ## How it works
 

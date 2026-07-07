@@ -46,6 +46,14 @@ test('POST git-receive-pack (push) is allowed and forwarded', async () => {
   assert.equal(method, 'POST');
 });
 
+test('gist.github.com is allowed (gists are git repos)', async () => {
+  let url;
+  globalThis.fetch = async (u) => { url = u; return new Response('# refs', { status: 200 }); };
+  const res = await onRequest(ctx('GET', '/gitproxy/gist.github.com/abc123.git/info/refs?service=git-upload-pack'));
+  assert.equal(res.status, 200);
+  assert.equal(url, 'https://gist.github.com/abc123.git/info/refs?service=git-upload-pack');
+});
+
 test('non-Bearer Authorization is passed through unchanged', async () => {
   let fwd;
   globalThis.fetch = async (_url, opts) => { fwd = opts.headers.get('authorization'); return new Response('', { status: 200 }); };

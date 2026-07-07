@@ -19,6 +19,7 @@
 
 export const ALLOWED_HOSTS = new Set([
   'github.com',
+  'gist.github.com', // gists are git repos: https://gist.github.com/<id>.git
   'gitlab.com',
   'codeberg.org',
   'bitbucket.org',
