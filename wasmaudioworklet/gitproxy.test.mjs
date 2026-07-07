@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onRequest, base58Encode, base58Decode, serializeNep413Payload, verifyNep413Crypto } from './functions/gitproxy/[[path]].js';
+import { onRequest, base58Encode, base58Decode, serializeNep413Payload, verifyNep413Crypto, jwtSign, jwtVerify } from './functions/gitproxy/[[path]].js';
 
 const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
 // Build a NEP-413 bearer token the way a NEAR wallet's signMessage would.
@@ -120,4 +120,29 @@ test('NEP-413: tampered signature is rejected', async () => {
   payload.signature = btoa(String.fromCharCode(...new Uint8Array(64))); // 64 zero bytes
   const bad = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(payload))));
   await assert.rejects(verifyNep413Crypto(bad, { recipient: 'webassemblymusic.near' }), /invalid signature/);
+});
+
+// --- session JWT (HS256), issued after NEP-413+NFT verification ---
+test('JWT: sign then verify round-trips with iat + claims', async () => {
+  const jwt = await jwtSign({ sub: 'alice.near' }, 'secret-key');
+  const payload = await jwtVerify(jwt, 'secret-key');
+  assert.equal(payload.sub, 'alice.near');
+  assert.equal(typeof payload.iat, 'number');
+});
+
+test('JWT: wrong secret is rejected', async () => {
+  const jwt = await jwtSign({ sub: 'alice.near' }, 'secret-key');
+  await assert.rejects(jwtVerify(jwt, 'other-key'), /bad jwt signature/);
+});
+
+test('JWT: tampered payload is rejected', async () => {
+  const jwt = await jwtSign({ sub: 'alice.near' }, 'secret-key');
+  const parts = jwt.split('.');
+  const forged = btoa(JSON.stringify({ sub: 'attacker.near', iat: Math.floor(Date.now() / 1000) })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  await assert.rejects(jwtVerify(`${parts[0]}.${forged}.${parts[2]}`, 'secret-key'), /bad jwt signature/);
+});
+
+test('JWT: expired token is rejected (server-decided window)', async () => {
+  const jwt = await jwtSign({ sub: 'alice.near' }, 'secret-key');
+  await assert.rejects(jwtVerify(jwt, 'secret-key', { maxAgeMs: -1 }), /expired/);
 });

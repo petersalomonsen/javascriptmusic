@@ -150,11 +150,39 @@ async function ownsNft(accountId) {
 }
 
 // Full gate: token crypto → key bound to account → account owns the NFT.
-async function authorizeNearNft(token) {
+export async function authorizeNearNft(token) {
   const { accountId, publicKey } = await verifyNep413Crypto(token, { recipient: AUTH_RECIPIENT });
   if (!(await accountHasKey(accountId, publicKey))) throw new Error('public key not on account');
   if (!(await ownsNft(accountId))) throw new Error(`account ${accountId} owns no ${NFT_CONTRACT} NFT`);
   return { accountId };
+}
+
+// ---- Session JWT (HS256) — issued by /gittoken after NEP-413+NFT verification,
+// then presented on every git request so the proxy needs no NEAR RPC per call.
+// `iat` only; the server decides the validity window. Secret lives in CF env.
+export const JWT_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h
+const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64urlToBytes = (s) => b64ToBytes(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+const hmacKey = (secret) => crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+
+export async function jwtSign(claims, secret) {
+  const enc = new TextEncoder();
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const payload = { iat: Math.floor(Date.now() / 1000), ...claims };
+  const signingInput = b64url(enc.encode(JSON.stringify(header))) + '.' + b64url(enc.encode(JSON.stringify(payload)));
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', await hmacKey(secret), enc.encode(signingInput)));
+  return signingInput + '.' + b64url(sig);
+}
+export async function jwtVerify(token, secret, { maxAgeMs = JWT_MAX_AGE_MS, now = Date.now() } = {}) {
+  const parts = String(token).split('.');
+  if (parts.length !== 3) throw new Error('malformed jwt');
+  const enc = new TextEncoder();
+  const ok = await crypto.subtle.verify('HMAC', await hmacKey(secret), b64urlToBytes(parts[2]), enc.encode(parts[0] + '.' + parts[1]));
+  if (!ok) throw new Error('bad jwt signature');
+  let payload; try { payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1]))); } catch { throw new Error('bad jwt payload'); }
+  const iatMs = (payload.iat || 0) * 1000;
+  if (!(iatMs <= now && iatMs > now - maxAgeMs)) throw new Error('jwt expired');
+  return payload;
 }
 
 export async function onRequest(context) {
