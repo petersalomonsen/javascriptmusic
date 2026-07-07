@@ -48,3 +48,7 @@ And you can listen to the song [songs/upbeat.js](songs/upbeat.js) here:
 https://soundcloud.com/psalomo/80s-nostalgica
 
 Run directly from nodejs, only dependes on the node midi package, and connect to a midi device.
+
+# License
+
+This project is licensed under the **GNU General Public License v3.0** — see [LICENSE](LICENSE) for the full text. Bundled third-party components (e.g. [4klang](4klang)) retain their own licenses.
