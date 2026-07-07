@@ -66,18 +66,20 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
 It should look essentially like this — imports + channel wiring, no DSP:
 \`\`\`
 import { midichannels, MidiChannel } from '../mixes/globalimports';
-import { Bass, BassChannel } from '../faust/bass';
-import { Lead, LeadChannel } from '../faust/lead';
+import { Bass } from '../faust/bass';
+import { Lead } from '../faust/lead';
 
 export function initializeMidiSynth(): void {
-    midichannels[0] = new BassChannel(6, (channel: MidiChannel) => new Bass(channel));
-    midichannels[1] = new LeadChannel(8, (channel: MidiChannel) => new Lead(channel));
+    midichannels[0] = new MidiChannel(6, (channel: MidiChannel) => new Bass(channel));
+    midichannels[1] = new MidiChannel(8, (channel: MidiChannel) => new Lead(channel));
 }
 export function postprocess(): void {}
 \`\`\`
 - The channel index MUST match the song's addInstrument() order.
-- Import the Faust-generated classes from \`'../faust/<stem>'\` (that path is how the compiler injects transpiled Faust). Use the class names \`write_faust\` reported.
+- **Import EXACTLY the classes write_faust reported, and no others.** Most instruments export only the voice class \`<Name>\` — register it with the base \`MidiChannel\` (as above). A \`<Name>Channel\` class is generated ONLY when the instrument exposes extra hslider/nentry params (beyond freq/gate/gain); import and use it in place of MidiChannel ONLY when write_faust actually listed it. Importing a \`<Name>Channel\` that wasn't generated is the recurring "has no exported member" compile error — don't guess.
+- Import from \`'../faust/<stem>'\` (that path is how the compiler injects transpiled Faust).
 - Do NOT paste DSP or reimplement the instrument here. If you're writing oscillators/filters in synth.ts, stop — put them in a \`.dsp\` via write_faust instead.
+- AssemblyScript **warnings** (AS235 "only variables/functions/enums become exports", AS233 typedChannel, etc.) are NON-fatal — if compile still says "compiled OK", ignore them; only fix ERRORs.
 
 ## Typical "make an instrument" workflow
 1. write_faust('bass', '<faust source>') → note the reported classes + fix any transpile error by editing the .dsp and calling write_faust again.

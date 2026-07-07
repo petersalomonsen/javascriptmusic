@@ -108,9 +108,16 @@ const registry = {
       // refresh the app's Faust file dropdown so the user sees the new instrument
       if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
       const classes = [...ts.matchAll(/export class (\w+)/g)].map((m) => m[1]);
+      const voice = classes.find((c) => !/Channel$/.test(c)) || 'Xxx';
+      const chan = classes.find((c) => /Channel$/.test(c));
+      // Only import the classes that actually exist; register with the generated
+      // channel class if there is one, otherwise the base MidiChannel.
+      const reg = chan
+        ? `midichannels[N] = new ${chan}(8, (channel: MidiChannel) => new ${voice}(channel));`
+        : `midichannels[N] = new MidiChannel(8, (channel: MidiChannel) => new ${voice}(channel));   // no ${voice}Channel was generated — use the base MidiChannel`;
       return `transpiled OK → faust/${stem}.ts exports: ${classes.join(', ') || '(none)'}. ` +
-        `In synth.ts: import { ${classes.join(', ')} } from '../faust/${stem}'; ` +
-        `then register e.g. midichannels[N] = new ${classes.find((c) => /Channel$/.test(c)) || 'XxxChannel'}(8, (ch) => new ${classes.find((c) => !/Channel$/.test(c)) || 'Xxx'}(ch));`;
+        `In synth.ts: import { ${classes.join(', ')} } from '../faust/${stem}';  (import ONLY these exact names) ` +
+        `then ${reg}`;
     } catch (e) { return faustUnavailable(e); }
   },
   compile: async () => {
