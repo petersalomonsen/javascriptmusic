@@ -79,16 +79,39 @@ export async function gitLog() {
     });
 }
 
+const GIT_TOKEN_KEY = 'git-http-token';
+
+// Apply a stored (or prompted) BYO git token to the worker BEFORE a clone/push,
+// so a PRIVATE remote repo can authenticate. Only used for `remote=` (gitproxy)
+// repos — NEAR repos use their own credentials.
+async function applyStoredGitToken(promptIfMissing) {
+    let stored = null;
+    try { stored = JSON.parse(sessionStorage.getItem(GIT_TOKEN_KEY) || 'null'); } catch (e) { /* ignore */ }
+    if ((!stored || !stored.token) && promptIfMissing) {
+        const token = window.prompt('GitHub token to clone/push this repo (fine-grained PAT, Contents: read/write). Leave empty for a public repo:', '');
+        if (token) {
+            stored = { token, username: 'wasmmusic', useremail: 'wasmmusic@users.noreply.github.com' };
+            try { sessionStorage.setItem(GIT_TOKEN_KEY, JSON.stringify(stored)); } catch (e) { /* ignore */ }
+        }
+    }
+    if (stored && stored.token) { await setGitAuthToken(stored.token, { username: stored.username, useremail: stored.useremail }); return true; }
+    return false;
+}
+
 export async function initWASMGitClient(gitrepo, remoteUrl) {
     worker = new Worker(new URL('wasmgitworker.js', import.meta.url));
     worker.onmessage = (msg) => {
         workerMessageListeners = workerMessageListeners.filter(listener => listener(msg) === true);
     }
 
-    // POC hook for bring-your-own-host pushing: from the console,
+    // BYO-host auth hook: from the console,
     //   setGitToken('<github-fine-grained-PAT>', 'yourname', 'you@example.com')
-    // then click "Commit & Sync" to push to a `remote=…/gitproxy/…` target.
-    window.setGitToken = (token, username, useremail) => setGitAuthToken(token, { username, useremail });
+    // Persisted in sessionStorage so it's applied BEFORE the clone on reload —
+    // needed to clone/push a PRIVATE repo through a `remote=…/gitproxy/…` target.
+    window.setGitToken = (token, username, useremail) => {
+        try { sessionStorage.setItem(GIT_TOKEN_KEY, JSON.stringify({ token, username, useremail })); } catch (e) { /* private mode */ }
+        return setGitAuthToken(token, { username, useremail });
+    };
 
     try {
         await initNear(gitrepo);
@@ -121,12 +144,17 @@ export async function initWASMGitClient(gitrepo, remoteUrl) {
     let dircontents = await synclocal();
 
     if (!dircontents) {
-        // Nothing local yet — try to clone the remote. A clone against an
-        // unregistered/unreachable remote returns null (see the worker's
-        // clone handler); fall back to a persistent local OPFS repo so edits
-        // survive reload instead of being lost to in-memory WASMFS. See #151.
+        // Nothing local yet. With a `remote=` (e.g. GitHub via the CORS proxy),
+        // clone from THAT remote — authenticating first so a private repo works.
+        // Otherwise clone the NEAR url. A failed/unreachable clone returns null;
+        // fall back to a persistent local OPFS repo so edits survive reload (#151).
         try {
-            dircontents = await clone();
+            if (remoteUrl) {
+                await applyStoredGitToken(true);
+                dircontents = await clone(remoteUrl);
+            } else {
+                dircontents = await clone();
+            }
         } catch (e) {
             console.warn('clone failed, falling back to local repo', e);
             dircontents = null;
@@ -173,10 +201,10 @@ export function addRemoteSyncListener(remoteSyncListener) {
     remoteSyncListeners.push(remoteSyncListener);
 }
 
-export async function clone() {
+export async function clone(url = gitrepourl) {
     worker.postMessage({
         command: 'clone',
-        url: gitrepourl
+        url
     });
     return await awaitDirContents();
 }
