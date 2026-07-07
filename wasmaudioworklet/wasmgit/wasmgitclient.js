@@ -1,6 +1,6 @@
 import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
-import { modal } from '../common/ui/modal.js';
+import { modal, modalPrompt } from '../common/ui/modal.js';
 
 async function registerNearGitServiceWorker() {
     await navigator.serviceWorker.register('/near-git-sw.js', { type: 'module' });
@@ -88,7 +88,8 @@ async function applyStoredGitToken(promptIfMissing) {
     let stored = null;
     try { stored = JSON.parse(sessionStorage.getItem(GIT_TOKEN_KEY) || 'null'); } catch (e) { /* ignore */ }
     if ((!stored || !stored.token) && promptIfMissing) {
-        const token = window.prompt('GitHub token to clone/push this repo (fine-grained PAT, Contents: read/write). Leave empty for a public repo:', '');
+        const token = await modalPrompt('GitHub token',
+            'Fine-grained PAT (Contents: read/write) to clone/push this repo. Leave empty for a public repo.', '');
         if (token) {
             stored = { token, username: 'wasmmusic', useremail: 'wasmmusic@users.noreply.github.com' };
             try { sessionStorage.setItem(GIT_TOKEN_KEY, JSON.stringify(stored)); } catch (e) { /* ignore */ }

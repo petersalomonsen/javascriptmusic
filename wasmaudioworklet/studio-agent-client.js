@@ -13,12 +13,30 @@ import { applyEditToText, grepText, normDsp, faustRegistrationHint } from './stu
 const DEFAULT_PORT = 17891;
 const FAUST_DIR = 'faust/';
 const RECONNECT_MS = 3000;
+const SESSION_FILE = 'studioagent-session.json'; // conversation stored in the OPFS repo
 
 let shadow = null;
 let socket = null;
 let sessionId = null;
 let agentMsgEl = null; // the in-progress assistant message element
 let toolQueue = Promise.resolve(); // serialize tool execution (see tool_call below)
+let conversation = []; // [{ role: 'user' | 'agent', text }] persisted to the repo
+
+// Persist the conversation + SDK session id into the OPFS repo so it survives a
+// reload (and travels with the project). No-op when not in ?gitrepo= mode.
+async function saveSession() {
+  try { await writefileandstage(SESSION_FILE, JSON.stringify({ sessionId, conversation }, null, 1)); }
+  catch (e) { /* no OPFS repo — in-memory only */ }
+}
+async function loadSession() {
+  try {
+    const data = JSON.parse(await readfile(SESSION_FILE));
+    sessionId = data.sessionId || null;
+    conversation = Array.isArray(data.conversation) ? data.conversation : [];
+    for (const m of conversation) addLine(m.role === 'user' ? 'user' : 'agent', m.text);
+    if (conversation.length) { addLine('tool', `— resumed ${conversation.length} messages —`); }
+  } catch (e) { /* no saved session yet */ }
+}
 
 // Editor wrappers around the pure logic in studio-agent-tools-core.js.
 function applyEdit(editor, args) {
@@ -141,6 +159,7 @@ async function onMessage(msg) {
   switch (msg.t) {
     case 'session':
       sessionId = msg.sessionId;
+      saveSession();
       setPhase('thinking…');
       break;
     case 'text':
@@ -157,11 +176,14 @@ async function onMessage(msg) {
       // single-instance resources and stall if overlapped. Queue keeps arrival order.
       toolQueue = toolQueue.then(() => runTool(msg));
       break;
-    case 'done':
+    case 'done': {
+      const agentText = agentMsgEl ? agentMsgEl.textContent : '';
+      if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }
       finishAgentMessage();
       stopActivity('done ✓');
       setBusy(false);
       break;
+    }
     case 'error':
       addLine('error', `⚠ ${msg.error}`);
       finishAgentMessage();
@@ -198,6 +220,8 @@ function reply(id, ok, result) {
 function sendChat(text) {
   if (!socket || socket.readyState !== WebSocket.OPEN) { setStatus('not connected'); return; }
   addLine('user', text);
+  conversation.push({ role: 'user', text });
+  saveSession();
   startAgentMessage();
   setBusy(true);
   startActivity();
@@ -284,5 +308,6 @@ export function initStudioAgent(shadowRoot) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
   });
 
+  loadSession(); // restore prior conversation from the OPFS repo (if any)
   connect();
 }
