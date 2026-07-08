@@ -4,6 +4,14 @@ Guides for making music and visuals in the app. For building/running the app
 itself see the [app README](../README.md); for the monorepo overview see the
 [top-level README](../../README.md).
 
+## Making music with the AI agent
+
+- [Agentic Composition](agenticcomposition.md) — a track made by talking to an
+  in-browser AI agent: it writes the sequence, builds Faust instruments, edits
+  the arrangement, and even its conversation is saved into the repo. (The
+  finished example lives at
+  [petersalomonsen/wasm-music-2026](https://github.com/petersalomonsen/wasm-music-2026).)
+
 ## Authoring a song
 
 - [Song API reference](song-api.md) — complete reference for writing songs in
