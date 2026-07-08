@@ -328,7 +328,11 @@ export async function diff() {
         command: 'diff'
     });
     const result = await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.diff ? resolve(msg.data.diff) : true)
+        // Resolve on the `diff` key being PRESENT, not truthy: a commit of only
+        // new (untracked) files produces an empty `git diff HEAD`, so the worker
+        // posts { diff: '' }. Testing `msg.data.diff` treated that empty string as
+        // falsy and never resolved — hanging the commit modal's spinner forever.
+        workerMessageListeners.push((msg) => msg.data.diff !== undefined ? resolve(msg.data.diff) : true)
     );
     return result;
 }
@@ -338,7 +342,9 @@ export async function log() {
         command: 'log'
     });
     const result = await new Promise((resolve) =>
-        workerMessageListeners.push((msg) => msg.data.log ? resolve(msg.data.log) : true)
+        // Same empty-string trap as diff(): resolve on the key being present so an
+        // empty log (e.g. a fresh repo) doesn't hang the caller.
+        workerMessageListeners.push((msg) => msg.data.log !== undefined ? resolve(msg.data.log) : true)
     );
     return result;
 }
