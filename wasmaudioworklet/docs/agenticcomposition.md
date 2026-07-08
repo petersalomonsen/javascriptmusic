@@ -55,6 +55,12 @@ session back up on reload:
 
 ![The AI conversation persisted as JSON inside the repo](conversation-in-repo.png)
 
+And the teaser video for this piece? Made the same way. The visuals are a
+music‑reactive shader plus a timed sequence — code the agent wrote — rendered
+live in the browser and captured straight from the app. No video editor: the
+audio and the visuals were exported from the page and joined with a single
+`ffmpeg` command. The trailer for an agentic composition, agentically composed.
+
 It's all open source — the app, the synth engine, the Faust instruments and
 every song. Come make something:
 **[github.com/petersalomonsen/javascriptmusic](https://github.com/petersalomonsen/javascriptmusic)** 🎛️🎶
