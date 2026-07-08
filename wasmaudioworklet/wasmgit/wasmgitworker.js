@@ -31,7 +31,13 @@ let lastHttpRequest;
 XMLHttpRequest.prototype._open = XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open = function (method, url, async, user, password) {
   this._open(method, url, async, user, password);
-  this.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+  // Only attach auth when we actually have a token. Sending `Bearer ANONYMOUS`
+  // (the no-token sentinel) makes the proxy forward bogus Basic credentials,
+  // which GitHub rejects with 401 even for PUBLIC repos — anonymous clone/fetch
+  // needs NO Authorization header at all.
+  if (accessToken && accessToken !== 'ANONYMOUS') {
+    this.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+  }
   lastHttpRequest = this;
 }
 
