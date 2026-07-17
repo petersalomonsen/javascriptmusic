@@ -45,9 +45,16 @@ await waitForBeat(4);
 Advances the shared clock by `beats` beats **from the current position** (relative;
 `waitForBeat` is absolute). Also available as a track method (`track.waitDuration(...)`).
 
+**Prefer `waitDuration` for sequencing sections back-to-back.** Because each wait
+is relative to where the previous section ended, inserting, removing, or
+reordering a section doesn't force you to recompute every following beat — unlike
+`waitForBeat`, where absolute numbers (64 → 80 → 96 …) all shift. Reserve
+`waitForBeat` for pinning an event to a specific absolute beat.
+
 **Example:**
 ```javascript
-await waitDuration(16); // advance 16 beats before scheduling the next section
+playIntro();  await waitDuration(16);   // 16 beats of intro
+playGroove(); await waitDuration(16);   // then 16 beats of groove — no beat math
 ```
 
 ### `playFromHere()`
