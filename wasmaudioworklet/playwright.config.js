@@ -7,6 +7,9 @@ export default defineConfig({
   // timing-sensitive and occasionally flake on slower runners. Locally,
   // failures should still surface immediately.
   retries: process.env.CI ? 2 : 0,
+  // The near-git specs all mutate the same sandbox repo, so files must not
+  // run in parallel (CI already passes --workers=1; make local runs match).
+  workers: 1,
   use: {
     baseURL: 'http://localhost:8080',
     video: 'on',

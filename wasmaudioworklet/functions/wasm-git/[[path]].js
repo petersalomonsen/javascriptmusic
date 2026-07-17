@@ -1,4 +1,4 @@
-const WASM_GIT_UNPKG = 'https://unpkg.com/wasm-git@0.0.14/';
+const WASM_GIT_UNPKG = 'https://unpkg.com/wasm-git@0.0.17/';
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);

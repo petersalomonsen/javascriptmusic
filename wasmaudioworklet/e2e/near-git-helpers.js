@@ -104,7 +104,13 @@ export async function pushBaseline(page, repoName, content) {
         const pushReply = await next();
         worker.terminate();
         if (pushReply && pushReply.error) {
-            throw new Error('pushBaseline failed: ' + pushReply.error);
+            let swError = '';
+            try {
+                const dbg = await caches.open('near-git-debug');
+                const resp = await dbg.match('/last-push-error');
+                if (resp) swError = ' | SW: ' + await resp.text();
+            } catch (e) { }
+            throw new Error('pushBaseline failed: ' + pushReply.error + swError);
         }
     }, {
         repoUrl: `http://localhost:8080/near-repo/${repoName}`,

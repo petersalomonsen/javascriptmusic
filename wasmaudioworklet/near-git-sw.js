@@ -157,6 +157,12 @@ function uint8ToBase64(bytes) {
     return btoa(binary);
 }
 
+// Highest nonce already used per access key. The optimistic-finality
+// view_access_key query can return a stale nonce right after a recent
+// transaction, and reusing it makes the RPC reject the tx with InvalidNonce
+// (surfaced to git as a failed push).
+const lastUsedNonces = {};
+
 async function nearFunctionCall(ctx, method, args) {
     const { auth } = ctx;
 
@@ -167,7 +173,9 @@ async function nearFunctionCall(ctx, method, args) {
         public_key: `ed25519:${auth.publicKey}`,
     });
     if (accessKeyRes.error) throw new Error(JSON.stringify(accessKeyRes.error));
-    const nonce = accessKeyRes.result.nonce + 1;
+    const nonceKey = `${auth.accountId}:${auth.publicKey}`;
+    const nonce = Math.max(accessKeyRes.result.nonce, lastUsedNonces[nonceKey] || 0) + 1;
+    lastUsedNonces[nonceKey] = nonce;
     const blockHash = accessKeyRes.result.block_hash;
 
     let argsBytes;
@@ -215,20 +223,35 @@ async function nearFunctionCall(ctx, method, args) {
         argsBytes = new TextEncoder().encode(JSON.stringify(args));
     }
 
-    const signedTxBase64 = create_signed_transaction(
-        auth.accountId,
-        auth.publicKey,
-        auth.privateKey,
-        ctx.contractId,
-        method,
-        argsBytes,
-        BigInt(nonce),
-        blockHash,
-        BigInt(300_000_000_000_000), // 300 TGas
-        '0',
-    );
+    let txNonce = nonce;
+    let broadcastRes;
+    for (let attempt = 0; ; attempt++) {
+        const signedTxBase64 = create_signed_transaction(
+            auth.accountId,
+            auth.publicKey,
+            auth.privateKey,
+            ctx.contractId,
+            method,
+            argsBytes,
+            BigInt(txNonce),
+            blockHash,
+            BigInt(300_000_000_000_000), // 300 TGas
+            '0',
+        );
 
-    const broadcastRes = await nearRpc(ctx, 'broadcast_tx_commit', [signedTxBase64]);
+        broadcastRes = await nearRpc(ctx, 'broadcast_tx_commit', [signedTxBase64]);
+        // The lastUsedNonces tracking only covers this SW instance — a tx sent
+        // before the SW restarted can still make our nonce stale. The error
+        // carries the chain's current nonce, so retry from there.
+        const invalidNonce = broadcastRes.error?.data?.TxExecutionError?.InvalidTxError?.InvalidNonce;
+        if (invalidNonce && attempt < 2) {
+            txNonce = invalidNonce.ak_nonce + 1;
+            lastUsedNonces[nonceKey] = txNonce;
+            console.warn(`[near-git-sw] stale nonce, retrying with ${txNonce}`);
+            continue;
+        }
+        break;
+    }
     if (broadcastRes.error) {
         return { success: false, error: JSON.stringify(broadcastRes.error) };
     }
@@ -463,9 +486,28 @@ async function handleReceivePack(ctx, body) {
                 ref_updates: refUpdates,
             });
             if (!pushResult.success) {
-                return makeReceivePackResponse([`ng unpack ${pushResult.error}`]);
+                try {
+                    const dbg = await caches.open('near-git-debug');
+                    await dbg.put('/last-push-error', new Response(pushResult.error));
+                } catch (e) { }
+                // report-status framing: first line must be "unpack <status>",
+                // then one "ng <refname> <reason>" per rejected ref. A bare
+                // "ng unpack ..." first line makes libgit2 fail with the opaque
+                // "report-status: protocol error", hiding the real cause.
+                return makeReceivePackResponse([
+                    `unpack ${pushResult.error}`,
+                    ...refUpdates.map(u => `ng ${u.name} ${pushResult.error}`),
+                ]);
             }
         }
+    }
+
+    // Read-your-writes: optimistic-finality views can lag broadcast_tx_commit
+    // by several seconds, so a clone right after this push would see the old
+    // refs (stale editor content, CAS failures on the next push). Hold the
+    // push response until get_refs reflects what we just pushed.
+    if (refUpdates.length > 0) {
+        await waitForRefsToCatchUp(ctx, refUpdates);
     }
 
     const statusLines = ['unpack ok'];
@@ -473,6 +515,28 @@ async function handleReceivePack(ctx, body) {
         statusLines.push(`ok ${update.name}`);
     }
     return makeReceivePackResponse(statusLines);
+}
+
+async function waitForRefsToCatchUp(ctx, refUpdates, timeoutMs = 10000) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        try {
+            const refs = await nearViewCall(ctx, 'get_refs', {});
+            const refMap = Object.fromEntries(refs);
+            const caughtUp = refUpdates.every(u =>
+                u.new_sha === ZERO_SHA
+                    ? !(u.name in refMap)
+                    : refMap[u.name] === u.new_sha);
+            if (caughtUp) return;
+        } catch (e) {
+            console.warn('[near-git-sw] get_refs poll failed', e);
+        }
+        if (Date.now() >= deadline) {
+            console.warn('[near-git-sw] refs still stale after push, giving up wait');
+            return;
+        }
+        await new Promise(r => setTimeout(r, 250));
+    }
 }
 
 async function handleUploadPack(ctx, body) {

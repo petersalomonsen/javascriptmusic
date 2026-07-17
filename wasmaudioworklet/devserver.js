@@ -4,7 +4,7 @@ import { join, extname } from 'node:path';
 
 const PORT = 8080;
 const STATIC_ROOT = new URL('.', import.meta.url).pathname;
-const WASM_GIT_UNPKG = 'https://unpkg.com/wasm-git@0.0.14/';
+const WASM_GIT_UNPKG = 'https://unpkg.com/wasm-git@0.0.17/';
 
 const MIME_TYPES = {
   '.html': 'text/html',
