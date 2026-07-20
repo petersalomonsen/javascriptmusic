@@ -212,6 +212,17 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     // refresh the Faust file dropdown after authoring an instrument.
     window.refreshFaustFileList = refreshFaustFileList;
 
+    // Exposed for the studio-agent: after it writes a .dsp straight to OPFS,
+    // reflect the new bytes in the editor. refreshFaustFileList() only reloads
+    // the editor when the selection changes, so a write to the file that's
+    // already on screen would otherwise show stale content until the user
+    // switches files and back. Re-read that file from OPFS into the editor.
+    window.showFaustFileInEditor = async (path) => {
+        const full = path.startsWith(FAUST_DIR) ? path : FAUST_DIR + path;
+        faustFileSelect.value = full;
+        await loadFaustFile(full);
+    };
+
     async function loadFaustFile(path) {
         try {
             const contents = await readfile(path);

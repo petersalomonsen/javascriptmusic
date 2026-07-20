@@ -408,6 +408,44 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         expect(secondWasmLen).not.toBe(firstWasmLen);
     });
 
+    test('studio-agent write_faust refreshes the editor showing that file (no file-switch needed)', async ({ page }) => {
+        // Regression: the agent's write_faust wrote straight to OPFS and only
+        // refreshed the dropdown, so overwriting the file already on screen
+        // left stale content in the editor until the user switched files and
+        // back. write_faust must now reflect the new bytes immediately.
+        page.on('console', (m) => {
+            if (m.type() === 'error' || m.type() === 'warning') console.log('[browser]', m.type(), m.text());
+        });
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+        await page.goto('http://localhost:8080');
+        await setupServiceWorker(page);
+        await pushBaseline(page, repoName, '// empty\n');
+        await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
+        await waitForAppReady(page);
+
+        // Open agentrefresh.dsp in the editor (seeded with the stdfaust template).
+        await page.locator('#fausteditortogglecheckbox').check();
+        await newFaustFile(page, 'agentrefresh');
+        await page.waitForFunction(() => {
+            const cm = document.querySelector('app-javascriptmusic').shadowRoot
+                .querySelector('#faustcodemirror .CodeMirror');
+            return cm && cm.CodeMirror.getValue().includes('import("stdfaust.lib")');
+        }, { timeout: 10000 });
+
+        // Agent overwrites the SAME file that is currently on screen.
+        const result = await page.evaluate((source) =>
+            window.studioAgentRunTool('write_faust', { path: 'agentrefresh', source }),
+            FAUST_SOURCE);
+        expect(String(result)).toContain('transpiled OK');
+
+        // The editor shows the agent's content without any file switching.
+        const inEditor = await getFaustEditorContent(page);
+        expect(inEditor).toBe(FAUST_SOURCE);
+        // ...and the dropdown selection still points at the same file.
+        const opts = await getDropdownOptions(page);
+        expect(opts).toEqual(['agentrefresh.dsp']);
+    });
+
     test('sub-folder layout: faust/<dir>/<dir>/main.dsp transpile + import works', async ({ page }) => {
         // Mirrors the user's vscode-prepared repo shape: a Faust file
         // nested several directories deep (e.g. faust/mysong/dsp/main.dsp).

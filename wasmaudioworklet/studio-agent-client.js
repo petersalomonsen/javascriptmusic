@@ -109,6 +109,9 @@ const registry = {
       await writefileandstage(FAUST_DIR + stem + '.ts', ts);
       // refresh the app's Faust file dropdown so the user sees the new instrument
       if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
+      // and reflect the written .dsp in the editor even when it's the file already
+      // on screen (dropdown refresh alone won't reload the current selection).
+      if (typeof window.showFaustFileInEditor === 'function') { try { await window.showFaustFileInEditor(FAUST_DIR + rel); } catch { /* non-fatal */ } }
       return faustRegistrationHint(ts, stem).message;
     } catch (e) { return faustUnavailable(e); }
   },
@@ -310,4 +313,8 @@ export function initStudioAgent(shadowRoot) {
 
   loadSession(); // restore prior conversation from the OPFS repo (if any)
   connect();
+
+  // Test hook: lets e2e specs invoke the agent's browser tools exactly as a
+  // tool_call from the server would (e.g. write_faust editor-refresh spec).
+  window.studioAgentRunTool = (name, args) => registry[name]?.(args || {});
 }
