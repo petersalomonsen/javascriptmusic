@@ -35,6 +35,12 @@ const HEAVY_TOOLS = new Set(['write_faust', 'compile']);
 // Optional model override for speed/depth tradeoff, e.g. STUDIO_AGENT_MODEL=sonnet
 // (faster) vs opus (deeper). Unset = the SDK/Claude Code default.
 const MODEL = process.env.STUDIO_AGENT_MODEL || undefined;
+// Proactive compaction threshold (tokens of per-call context). The SDK only
+// auto-compacts near the model's context LIMIT (~1M on opus) — far beyond the
+// point where every turn is already slow and expensive (a ~570k-token session
+// was thinking 35-80s per stretch at $1-6/turn). When a turn ends above this,
+// we run /compact on the session right away, while the user reads the reply.
+const COMPACT_THRESHOLD = Number(process.env.STUDIO_AGENT_COMPACT_THRESHOLD || 200000);
 
 // ---- session logging: one JSONL file per server boot, for later review ------
 const LOG_DIR = resolve(__dirname, 'logs');
@@ -84,6 +90,7 @@ function safeResolve(p) {
 // ---- WebSocket plumbing: one browser at a time -----------------------------
 let pending = new Map();   // id -> { resolve }
 let nextId = 1;
+let chatChain = Promise.resolve(); // serialize chat turns (and post-turn auto-compact)
 
 function callBrowser(ws, name, args) {
   return new Promise((resolveCall, rejectCall) => {
@@ -180,6 +187,7 @@ async function handleChat(ws, { text, sessionId }) {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
   const studio = makeStudioServer(ws);
   let sid = sessionId || null;
+  let contextTokens = 0; // last model call's input size (fresh + cached)
   dlog('chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)');
   logEvent({ kind: 'chat', sessionId: sid, resumed: !!sessionId, text });
 
@@ -216,6 +224,10 @@ async function handleChat(ws, { text, sessionId }) {
         logEvent({ kind: 'compact', sessionId: sid, metadata: m.compact_metadata });
         send({ t: 'compact', metadata: m.compact_metadata });
       } else if (m.type === 'assistant') {
+        // Each assistant message's usage reports THIS call's full input size
+        // (fresh + cached) — i.e. the session's current context footprint.
+        const u = m.message?.usage;
+        if (u) contextTokens = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
         for (const block of m.message?.content ?? []) {
           if (block.type === 'text' && block.text) { dlog('text:', block.text.slice(0, 80).replace(/\n/g, ' ')); logEvent({ kind: 'text', sessionId: sid, text: block.text }); send({ t: 'text', text: block.text }); }
           else if (block.type === 'tool_use') { dlog('tool_use →', block.name, JSON.stringify(block.input).slice(0, 80)); logEvent({ kind: 'tool_use', sessionId: sid, name: block.name, input: truncInput(block.input) }); send({ t: 'tool', name: block.name, input: block.input }); }
@@ -237,10 +249,38 @@ async function handleChat(ws, { text, sessionId }) {
       }
     }
     dlog('query loop ended');
+    if (sid && contextTokens > COMPACT_THRESHOLD) {
+      await autoCompact(send, sid, contextTokens);
+    }
   } catch (e) {
     dlog('EXCEPTION', e?.message || e);
     logEvent({ kind: 'error', sessionId: sid, error: String(e?.message || e) });
     send({ t: 'error', error: String(e?.message || e) });
+  }
+}
+
+// Run /compact on the session between turns (chats are serialized through
+// chatChain, so a message the user sends meanwhile simply waits for this).
+async function autoCompact(send, sid, contextTokens) {
+  dlog(`auto-compact: context ~${Math.round(contextTokens / 1000)}k tokens > ${Math.round(COMPACT_THRESHOLD / 1000)}k threshold`);
+  send({ t: 'compacting', tokens: contextTokens });
+  logEvent({ kind: 'autocompact', sessionId: sid, contextTokens });
+  try {
+    for await (const m of query({
+      prompt: '/compact',
+      options: { resume: sid, model: MODEL, cwd: REPO_ROOT, systemPrompt: SYSTEM_PROMPT, maxTurns: 2 },
+    })) {
+      if (m.type === 'system' && m.subtype === 'compact_boundary') {
+        dlog('context compacted', JSON.stringify(m.compact_metadata || {}));
+        logEvent({ kind: 'compact', sessionId: sid, metadata: m.compact_metadata });
+        send({ t: 'compact', metadata: m.compact_metadata });
+      } else if (m.type === 'result') {
+        logEvent({ kind: 'result', sessionId: sid, subtype: 'autocompact-' + m.subtype, turns: m.num_turns, costUsd: m.total_cost_usd, usage: m.usage });
+      }
+    }
+  } catch (e) {
+    dlog('auto-compact failed', e?.message || e);
+    logEvent({ kind: 'error', sessionId: sid, error: 'auto-compact: ' + String(e?.message || e) });
   }
 }
 
@@ -262,7 +302,7 @@ wss.on('connection', (ws) => {
       const p = pending.get(msg.id);
       if (p && typeof p.started === 'function') p.started();
     } else if (msg.t === 'chat') {
-      handleChat(ws, msg);
+      chatChain = chatChain.then(() => handleChat(ws, msg));
     }
   });
   ws.on('close', () => { clearInterval(keepalive); console.log('  browser disconnected'); });

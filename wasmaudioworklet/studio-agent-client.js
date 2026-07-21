@@ -212,6 +212,9 @@ async function onMessage(msg) {
       setBusy(false);
       break;
     }
+    case 'compacting': // server-initiated proactive /compact of a large session
+      addLine('tool', `— auto-compacting conversation (~${Math.round((msg.tokens || 0) / 1000)}k tokens of context)… —`);
+      break;
     case 'compact': // the SDK compacted the session (auto, or the user sent /compact)
       addLine('tool', `— conversation compacted (${msg.metadata?.trigger || 'auto'}) —`);
       break;
