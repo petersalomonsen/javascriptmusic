@@ -8,7 +8,11 @@ export default {
   ],
   concurrency: 1,
   watch: false,
-  testsFinishTimeout: 60000,
+  // midisynthaudioworklet.spec.js waits on real-time audio (hotswap decay,
+  // sequence playback, live MIDI recording) and runs ~30s locally on Firefox —
+  // on slower CI runners 60s had no headroom and the file timed out while all
+  // of its tests were passing.
+  testsFinishTimeout: 180000,
   testRunnerHtml: testRunnerImport =>
     `<html>
       <body>
