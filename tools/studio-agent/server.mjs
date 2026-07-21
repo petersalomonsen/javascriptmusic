@@ -66,7 +66,7 @@ const STUDIO_TOOLS = [
   'write_faust', 'read_faust', 'list_faust',
   'git_log', 'read_committed',
   'load_synth_from_file', 'load_song_from_file',
-  'compile', 'play', 'stop',
+  'compile', 'stop',
 ];
 const ALLOWED = new Set([
   ...STUDIO_TOOLS.map((n) => `mcp__studio__${n}`),
@@ -166,8 +166,7 @@ function makeStudioServer(ws) {
       proxy('read_committed', 'Read the COMMITTED content of a file from the OPFS git repo at a ref (default HEAD). Path is repo-relative (e.g. "song.js", "faust/bass.dsp"). Use to restore something overwritten in the editor: read_committed then set_song/set_synth it back.', { path: z.string(), ref: z.string().optional() }),
       loadInto('load_synth_from_file', 'set_synth', 'synth'),
       loadInto('load_song_from_file', 'set_song', 'song'),
-      proxy('compile', 'SAVE + compile the current song+synth in the browser (same as the app\'s save button). If a track is already playing, the changes are applied and audible immediately. Returns "compiled OK" or the exact compiler error. Call after every edit.', {}),
-      proxy('play', 'Start live audio playback in the browser. ONLY call this when the user explicitly asked to play/hear it — compile already applies changes to a playing track.', {}),
+      proxy('compile', 'SAVE + compile the current song+synth in the browser (same as the app\'s save button). If a track is already playing, the changes are applied and audible immediately. Returns "compiled OK" or the exact compiler error. Call after every edit. There is NO play tool — the user starts playback themselves.', {}),
       proxy('stop', 'Stop live audio playback. Only on the user\'s request.', {}),
     ],
   });

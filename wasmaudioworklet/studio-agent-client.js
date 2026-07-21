@@ -147,7 +147,9 @@ const registry = {
     const err = readErrorPanel();
     return err ? { __error: err } : 'compiled OK';
   },
-  play: async () => { await window.startaudio(); return 'playing'; },
+  // NOTE: intentionally NO `play` tool — starting playback is the user's
+  // action (play button). The agent saves via `compile`; a playing track
+  // picks the changes up live.
   stop: async () => { window.stopaudio(); return 'stopped'; },
 };
 

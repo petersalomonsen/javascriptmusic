@@ -35,7 +35,18 @@ export function onmidi(data) {
     });
 }
 
+// Stop path: the processor was told to terminate (it closes its message port),
+// so the node and message handler here are dead. They MUST be released —
+// posting to the closed port can never get a reply, and updateSynth awaiting
+// `wasmloaded` on it would hang forever (deadlocking e.g. the studio-agent's
+// serial tool queue behind a save that never resolves).
+export function releaseAudioWorklet() {
+    audioworkletnode = null;
+    workerMessageHandler = null;
+}
+
 export async function updateSong(sequencedata, toggleSongPlay) {
+    if (!audioworkletnode) return; // audio not running — nothing to update live
     audioworkletnode.port.postMessage({
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay
@@ -45,12 +56,24 @@ export async function updateSong(sequencedata, toggleSongPlay) {
 }
 
 export async function updateSynth(synthwasm, addedAudio) {
+    // Audio not running: nothing to swap live — the next startaudio picks up
+    // window.WASM_SYNTH_BYTES anyway.
+    if (!audioworkletnode) return;
     audioworkletnode.context.suspend();
-    await workerMessageHandler.callAndGetResult({
-        wasm: synthwasm,
-        audio: await Promise.all(addedAudio)
-    }, (msg) => msg.wasmloaded);
-    audioworkletnode.context.resume();
+    try {
+        // Bounded wait: if the worklet can't reply (e.g. it terminated between
+        // the check above and the post), fail the save instead of hanging it.
+        await Promise.race([
+            workerMessageHandler.callAndGetResult({
+                wasm: synthwasm,
+                audio: await Promise.all(addedAudio)
+            }, (msg) => msg.wasmloaded),
+            new Promise((_, reject) => setTimeout(() =>
+                reject(new Error('updateSynth: no wasmloaded reply from the audio worklet within 20s')), 20000))
+        ]);
+    } finally {
+        if (audioworkletnode) audioworkletnode.context.resume();
+    }
 }
 
 async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, toggleSongPlay) {
@@ -135,12 +158,16 @@ export async function createAudioWorklet(context, wasm_synth_bytes, sequencedata
 }
 
 export async function getRecordedData() {
+    if (!workerMessageHandler) return [];
     return (await workerMessageHandler.callAndGetResult({ recorded: true },
         (msgdata) => msgdata.recorded ? true : false))
         .recorded;
 }
 
 export async function getCurrentTime() {
+    // A current-time poll may still tick right after stopaudio released the
+    // worklet — report 0 instead of dereferencing the cleared handler.
+    if (!workerMessageHandler) return 0;
     const currentTime = (await workerMessageHandler.callAndGetResult({ currentTime: true },
         (msgdata) => msgdata.currentTime !== undefined ? true : false))
         .currentTime;

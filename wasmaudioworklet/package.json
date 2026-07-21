@@ -51,6 +51,7 @@
         "http-server": "^14.1.1",
         "mocha": "^10.2.0",
         "rollup": "^4.1.5",
-        "rollup-plugin-terser": "^7.0.2"
+        "rollup-plugin-terser": "^7.0.2",
+        "ws": "^7.5.10"
     }
 }

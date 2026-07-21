@@ -1,5 +1,5 @@
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
-import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi, setBroadcastUiHandlers } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi, setBroadcastUiHandlers, releaseAudioWorklet } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer } from './visualizer/defaultvisualizer.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
 import { attachSeek, detachSeek } from './app.js';
@@ -171,6 +171,10 @@ export function initAudioWorkletNode(componentRoot) {
             detachSeek();
             audioworkletnode = null;
             window.audioworkletnode = null;
+            // The processor closes its port on terminate — release the
+            // midisynthaudioworklet module's references so a later save
+            // (updateSynth) doesn't await a reply that can never arrive.
+            releaseAudioWorklet();
         }
         playing = false;
         if (wamsynth) {
