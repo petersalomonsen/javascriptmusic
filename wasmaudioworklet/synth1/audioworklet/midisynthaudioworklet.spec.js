@@ -365,7 +365,15 @@ describe('midisynth audio worklet', async function () {
             ]);
         `);
         synthsourceeditor.doc.setValue(synthsource + ' ');
+        // Save (while stopped), and WAIT for its compile to produce the new
+        // wasm before starting: clicking save+start unawaited raced two
+        // concurrent compileSong runs against each other, and pass/fail
+        // depended on which one's synth compile won (flaky on slow CI).
+        window.WASM_SYNTH_BYTES = null;
         appElement.querySelector('#savesongbutton').click();
+        while (!window.WASM_SYNTH_BYTES) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
         appElement.querySelector('#startaudiobutton').click();
 
         const expectedNotes = [
@@ -378,8 +386,11 @@ describe('midisynth audio worklet', async function () {
         for (let n = 0; n < expectedNotes.length; n++) {
             const nextExpectedNote = expectedNotes[n];
             console.log('expecting note in visualizer', nextExpectedNote);
+            // Poll at 50ms — a setTimeout(0) busy-loop starves the Firefox
+            // main thread while the audio pipeline is under load (notes are
+            // 2s apart at BPM 30, so 50ms is plenty of resolution).
             while (getTargetNoteStates()[nextExpectedNote] === -1) {
-                await new Promise(r => setTimeout(r, 0));
+                await new Promise(r => setTimeout(r, 50));
             }
             assert.approximately(getTargetNoteStates()[nextExpectedNote], 1.0, 0.1);
         }

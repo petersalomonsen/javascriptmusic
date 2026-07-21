@@ -172,9 +172,12 @@ export async function getRecordedData() {
 }
 
 export async function getCurrentTime() {
-    // A current-time poll may still tick right after stopaudio released the
-    // worklet — report 0 instead of dereferencing the cleared handler.
-    if (!workerMessageHandler) return 0;
+    // A current-time poll may still tick after stopaudio released the worklet.
+    // null is the visualizer's "no clock" protocol: it clears the display and
+    // stops polling. (Returning a number here replays/holds the STALE song's
+    // notes in the visualizer — reporting 0 rewound it to the top and re-lit
+    // old notes in the target note states.)
+    if (!workerMessageHandler) return null;
     const currentTime = (await workerMessageHandler.callAndGetResult({ currentTime: true },
         (msgdata) => msgdata.currentTime !== undefined ? true : false))
         .currentTime;
