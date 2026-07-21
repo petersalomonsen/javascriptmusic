@@ -95,6 +95,41 @@ test('unparseable tool arguments become an ERROR result without calling the tool
   assert.match(messages.find((m) => m.role === 'tool').content, /ERROR: could not parse/);
 });
 
+test('429 rate limit retries with exponential backoff, then succeeds', async () => {
+  const delays = [];
+  const retries = [];
+  let call = 0;
+  const responses = [
+    { ok: false, status: 429, text: async () => 'rate limit' },
+    { ok: false, status: 429, text: async () => 'rate limit' },
+    completion({ role: 'assistant', content: 'recovered' }),
+  ];
+  const texts = [];
+  await runAgentTurn({
+    fetchFn: async () => responses[call++],
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages: [{ role: 'user', content: 'x' }], runTool: () => {},
+    onText: (t) => texts.push(t),
+    onRetry: (status, delayMs, attempt) => retries.push([status, delayMs, attempt]),
+    sleepFn: async (ms) => delays.push(ms),
+  });
+  assert.deepEqual(texts, ['recovered']);
+  assert.deepEqual(delays, [1000, 2000]);
+  assert.deepEqual(retries, [[429, 1000, 1], [429, 2000, 2]]);
+});
+
+test('retries exhausted -> throws the transient error', async () => {
+  await assert.rejects(
+    runAgentTurn({
+      fetchFn: async () => ({ ok: false, status: 503, text: async () => 'down' }),
+      baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+      messages: [{ role: 'user', content: 'x' }], runTool: () => {},
+      maxRetries: 2, sleepFn: async () => {},
+    }),
+    /NEAR AI 503: down/,
+  );
+});
+
 test('HTTP error throws with status and body excerpt', async () => {
   await assert.rejects(
     runAgentTurn({

@@ -63,14 +63,27 @@ export async function runAgentTurn({
   runTool,
   onText = () => {},
   onToolCall = () => {},
+  onRetry = () => {},
   maxIterations = 25,
+  maxRetries = 4,
+  sleepFn = (ms) => new Promise((r) => setTimeout(r, ms)),
 }) {
   for (let i = 0; i < maxIterations; i++) {
-    const response = await fetchFn(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, tools: toOpenAiTools(), tool_choice: 'auto' }),
-    });
+    let response;
+    // Transient failures (rate limits, upstream 5xx) must not kill the turn —
+    // a live session died mid-work on a 429 "retry with exponential backoff".
+    for (let attempt = 0; ; attempt++) {
+      response = await fetchFn(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages, tools: toOpenAiTools(), tool_choice: 'auto' }),
+      });
+      const retryable = response.status === 429 || response.status >= 500;
+      if (response.ok || !retryable || attempt >= maxRetries) break;
+      const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s, 8s
+      onRetry(response.status, delayMs, attempt + 1);
+      await sleepFn(delayMs);
+    }
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       throw new Error(`NEAR AI ${response.status}: ${body.slice(0, 300)}`);

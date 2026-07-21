@@ -421,6 +421,7 @@ async function runNearaiTurn(text) {
       }),
       onText: (t) => { appendAgentText(t); setPhase('responding…'); },
       onToolCall: (name, args) => { addLine('tool', `⚙ ${name}`); setPhase(`running ${name}…`); },
+      onRetry: (status, delayMs, attempt) => { addLine('tool', `— ${status === 429 ? 'rate limited' : `upstream ${status}`}; retry ${attempt} in ${delayMs / 1000}s —`); setPhase(`retrying (${status})…`); },
     });
     const agentText = agentMsgEl ? agentMsgEl.textContent : '';
     if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }

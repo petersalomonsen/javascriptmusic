@@ -215,6 +215,16 @@ onmessage = async function (msg) {
                 { "runtime": "stub", "optimizeLevel": liveOpt, "shrinkLevel": 0 },
                 index_source);
 
+            if (!binary) {
+                // A FAILED compile must not poison the change detection: the
+                // source was stored above as "current", so retrying with the
+                // same (still broken) source would hit the no-changes branch
+                // and report success — agents then believe the error is gone.
+                // Forget it so the next request recompiles and re-reports.
+                assemblyscriptsynthsources[mix_source] = null;
+                lastFaustFingerprint = null;
+            }
+
             postMessage({
                 error: stderr.toString(),
                 binary: binary
