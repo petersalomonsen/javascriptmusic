@@ -241,6 +241,10 @@ async function runTool({ id, name, args }) {
   const finish = (ok) => {
     const secs = (performance.now() - t0) / 1000;
     if (secs > 2) console.warn(`[studio-agent] ${shortName(name)} took ${secs.toFixed(1)}s (${ok ? 'ok' : 'error'}, visibility ${vis0}→${document.visibilityState})`);
+    // The tool is done in the browser — anything from here on is the model
+    // reading the result. Without this, the status keeps blaming the last
+    // tool ("running grep_song… 51s") for what is model thinking time.
+    setPhase('thinking…');
   };
   try {
     const result = await fn(args || {});
