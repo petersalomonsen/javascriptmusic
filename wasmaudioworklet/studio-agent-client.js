@@ -9,6 +9,8 @@ import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
 import { applyEditToText, grepText, normDsp, faustRegistrationHint } from './studio-agent-tools-core.js';
+import { runAgentTurn, DEFAULT_BASE_URL, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';
+import { SYSTEM_PROMPT } from './studio-agent-prompt.js';
 
 const DEFAULT_PORT = 17891;
 const FAUST_DIR = 'faust/';
@@ -285,6 +287,21 @@ function reply(id, ok, result) {
 }
 
 function sendChat(text) {
+  // /nearai provider commands are handled locally and never enter the
+  // conversation (the API key must not be persisted into the OPFS repo).
+  if (text.startsWith('/nearai')) { handleNearaiCommand(text); return; }
+
+  if (nearaiConfig()) {
+    addLine('user', text);
+    conversation.push({ role: 'user', text });
+    saveSession();
+    startAgentMessage();
+    setBusy(true);
+    startActivity();
+    runNearaiTurn(text);
+    return;
+  }
+
   if (!socket || socket.readyState !== WebSocket.OPEN) { setStatus('not connected'); return; }
   addLine('user', text);
   conversation.push({ role: 'user', text });
@@ -295,6 +312,102 @@ function sendChat(text) {
   // summary rides along so the server can seed a FRESH session from it when
   // the sessionId can't be resumed (SDK sessions are per-machine).
   socket.send(JSON.stringify({ t: 'chat', text, sessionId, summary: sessionSummary }));
+}
+
+// ---- NEAR AI serverless provider (no local studio-agent process) ------------
+// Config lives in localStorage ONLY (never in the OPFS repo — it would get
+// committed and pushed with the project).
+function nearaiConfig() {
+  const apiKey = localStorage.getItem('nearai-api-key');
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    model: localStorage.getItem('nearai-model') || DEFAULT_MODEL,
+    baseUrl: localStorage.getItem('nearai-base-url') || DEFAULT_BASE_URL,
+  };
+}
+
+function handleNearaiCommand(text) {
+  const parts = text.trim().split(/\s+/).slice(1);
+  if (parts[0] === 'off') {
+    localStorage.removeItem('nearai-api-key');
+    addLine('tool', '— NEAR AI mode off; using the local studio-agent —');
+  } else if (parts[0] === 'model' && parts[1]) {
+    localStorage.setItem('nearai-model', parts[1]);
+    addLine('tool', `— NEAR AI model set to ${parts[1]} —`);
+  } else if (parts[0] && parts[0] !== 'model') {
+    localStorage.setItem('nearai-api-key', parts[0]);
+    if (parts[1]) localStorage.setItem('nearai-model', parts[1]);
+    nearaiMessages = null; // fresh model context on (re)configure
+    addLine('tool', `— NEAR AI mode ON (model ${localStorage.getItem('nearai-model') || DEFAULT_MODEL}). '/nearai off' to switch back, '/nearai model <id>' to change model —`);
+  } else {
+    const cfg = nearaiConfig();
+    addLine('tool', cfg
+      ? `— NEAR AI mode ON: ${cfg.model} @ ${cfg.baseUrl} —`
+      : `— NEAR AI mode off. Usage: /nearai <api-key> [model] · /nearai model <id> · /nearai off —`);
+  }
+}
+
+// Serverless replacements for the local agent's repo-file access: fetch from
+// the public GitHub repo via jsDelivr instead of local disk.
+const REPO_CDN = 'https://cdn.jsdelivr.net/gh/petersalomonsen/javascriptmusic@master/';
+async function fetchRepoFile(path) {
+  const res = await fetch(REPO_CDN + path.replace(/^\/+/, ''));
+  if (!res.ok) throw new Error(`could not fetch ${path} (${res.status})`);
+  return res.text();
+}
+
+async function runNearaiServerlessTool(name, args) {
+  if (registry[name]) {
+    const result = await registry[name](args || {});
+    if (result && result.__error) throw new Error(result.__error);
+    return result;
+  }
+  if (name === 'read_repo_file') {
+    const text = await fetchRepoFile(args.path);
+    return text.length > 100000 ? `${text.slice(0, 100000)}\n…[truncated — file is ${text.length} chars; use load_synth_from_file/load_song_from_file for large bundles]` : text;
+  }
+  if (name === 'load_synth_from_file' || name === 'load_song_from_file') {
+    const content = await fetchRepoFile(args.path);
+    await registry[name === 'load_synth_from_file' ? 'set_synth' : 'set_song']({ source: content });
+    return `loaded ${args.path} (${content.split('\n').length} lines) into the ${name === 'load_synth_from_file' ? 'synth' : 'song'} editor`;
+  }
+  throw new Error(`unknown tool ${name}`);
+}
+
+let nearaiMessages = null; // model-visible history (in-memory for iteration 1)
+
+async function runNearaiTurn(text) {
+  const cfg = nearaiConfig();
+  if (!nearaiMessages) {
+    nearaiMessages = [{ role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX }];
+  }
+  nearaiMessages.push({ role: 'user', content: text });
+  setPhase(`${cfg.model.split('/').pop()} thinking…`);
+  try {
+    const { usage } = await runAgentTurn({
+      fetchFn: (...a) => fetch(...a),
+      baseUrl: cfg.baseUrl,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      messages: nearaiMessages,
+      runTool: (name, args) => new Promise((resolve, reject) => {
+        // reuse the same serialization as WS tool calls
+        toolQueue = toolQueue.then(() => runNearaiServerlessTool(name, args).then(resolve, reject));
+      }),
+      onText: (t) => { appendAgentText(t); setPhase('responding…'); },
+      onToolCall: (name, args) => { addLine('tool', `⚙ ${name}`); setPhase(`running ${name}…`); },
+    });
+    const agentText = agentMsgEl ? agentMsgEl.textContent : '';
+    if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }
+    finishAgentMessage();
+    stopActivity(`done ✓ (${usage?.total_tokens ?? '?'} tokens)`);
+  } catch (e) {
+    addLine('error', `⚠ ${e?.message || e}`);
+    finishAgentMessage();
+    stopActivity('error ✗');
+  }
+  setBusy(false);
 }
 
 // ---- tiny UI helpers --------------------------------------------------------
