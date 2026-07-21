@@ -151,7 +151,14 @@ const registry = {
       return { __error: String(e?.message || e) };
     }
     const err = readErrorPanel();
-    return err ? { __error: err } : 'compiled OK';
+    if (!err) return 'compiled OK';
+    // The panel also surfaces NON-fatal AssemblyScript warnings (AS233/AS235…)
+    // after a successful build — reporting those as an error makes models
+    // "fix" working code. Only real ERROR lines fail the tool.
+    const text = err.replace(/^Error:\s*/, '');
+    const onlyWarnings = /^WARNING/.test(text) && !/(^|\n)\s*ERROR/.test(text);
+    if (onlyWarnings) return 'compiled OK (non-fatal AssemblyScript warnings in the panel — ignore them)';
+    return { __error: err };
   },
   // NOTE: intentionally NO `play` tool — starting playback is the user's
   // action (play button). The agent saves via `compile`; a playing track
@@ -174,18 +181,28 @@ function readErrorPanel() {
 
 // ---- WebSocket lifecycle ----------------------------------------------------
 function connect() {
+  // In NEAR AI mode the local agent isn't used: don't run the reconnect loop —
+  // its onclose fired every 3s, killing the activity spinner and stomping the
+  // status line ("connecting to ws://…") while a NEAR AI request was in flight.
+  if (nearaiConfig()) {
+    socket = null;
+    setStatus(`NEAR AI: ${nearaiConfig().model}`);
+    setTimeout(connect, RECONNECT_MS * 4); // re-check in case /nearai off
+    return;
+  }
   const port = window.STUDIO_AGENT_PORT || DEFAULT_PORT;
   setStatus(`connecting to ws://localhost:${port}…`);
   socket = new WebSocket(`ws://localhost:${port}`);
 
   socket.onopen = () => setStatus('connected');
   socket.onclose = () => {
+    if (nearaiConfig()) { setTimeout(connect, RECONNECT_MS); return; } // switched provider — leave UI alone
     if (activityTimer) { clearInterval(activityTimer); activityTimer = null; setBusy(false); }
     const s = el('studioagentstatus'); if (s) s.classList.remove('working');
     setStatus('disconnected — retrying…');
     setTimeout(connect, RECONNECT_MS);
   };
-  socket.onerror = () => setStatus('connection error (is studio-agent running?)');
+  socket.onerror = () => { if (!nearaiConfig()) setStatus('connection error (is studio-agent running?)'); };
   socket.onmessage = (ev) => onMessage(JSON.parse(ev.data));
 }
 
@@ -332,6 +349,7 @@ function handleNearaiCommand(text) {
   if (parts[0] === 'off') {
     localStorage.removeItem('nearai-api-key');
     addLine('tool', '— NEAR AI mode off; using the local studio-agent —');
+    if (!socket) connect();
   } else if (parts[0] === 'model' && parts[1]) {
     localStorage.setItem('nearai-model', parts[1]);
     addLine('tool', `— NEAR AI model set to ${parts[1]} —`);
@@ -339,6 +357,8 @@ function handleNearaiCommand(text) {
     localStorage.setItem('nearai-api-key', parts[0]);
     if (parts[1]) localStorage.setItem('nearai-model', parts[1]);
     nearaiMessages = null; // fresh model context on (re)configure
+    if (socket) { try { socket.onclose = null; socket.close(); } catch { /* */ } socket = null; }
+    setStatus(`NEAR AI: ${localStorage.getItem('nearai-model') || DEFAULT_MODEL}`);
     addLine('tool', `— NEAR AI mode ON (model ${localStorage.getItem('nearai-model') || DEFAULT_MODEL}). '/nearai off' to switch back, '/nearai model <id>' to change model —`);
   } else {
     const cfg = nearaiConfig();
