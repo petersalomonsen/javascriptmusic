@@ -52,6 +52,17 @@ gain = hslider("gain", 0.5, 0, 1, 0.01);
 process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate) <: _, _;
 `;
 
+// Deterministic pre-turn synth: the sandbox git repo is SHARED across the
+// whole e2e run, so without this the synth editor contains whatever an
+// earlier spec pushed — and the recorded transcript's edit anchors miss.
+const BASELINE_SYNTH = `// uses midichannels (route via midi.mix)
+import { midichannels, MidiChannel } from '../mixes/globalimports';
+
+export function initializeMidiSynth(): void {
+}
+export function postprocess(): void {}
+`;
+
 // The app's most recurring agent mistake: importing a Channel class the
 // transpiler never generated → ERROR TS2305 at compile.
 const BROKEN_SYNTH = `import { midichannels, MidiChannel } from '../mixes/globalimports';
@@ -116,6 +127,11 @@ async function setupScenario(page, scenario) {
     // on slow CI the gap is real.
     await page.waitForFunction(() => typeof window.toggleStudioAgent === 'function', { timeout: 30000 });
     await page.evaluate(() => window.toggleStudioAgent(true));
+
+    // Same starting synth in record AND replay, regardless of what earlier
+    // specs left in the shared sandbox repo.
+    await page.evaluate((source) =>
+        window.studioAgentRunTool('set_synth', { source }), BASELINE_SYNTH);
 
     return { apiKey, recording };
 }
