@@ -758,20 +758,28 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                 return;
             }
 
+            // Snapshot BEFORE compiling: a save initiated while audio is
+            // stopped must never post to the worklet — not even one created
+            // by a concurrent startaudio while our compile was running.
+            // (Posting updateSong with toggleSongPlay=false to a worklet a
+            // racing startaudio just launched pauses its fresh playback.)
+            // The next startaudio picks up WASM_SYNTH_BYTES by itself.
+            const wasRunning = !!window.audioworkletnode;
+
             const song = await compileSong();
 
-            if (song.synthwasm) {
+            if (wasRunning && song.synthwasm) {
                 await updateSynth(song.synthwasm, addedAudio);
             }
 
             if (song.eventlist) {
                 if (song.synthsource) {
                     await wamPostSong(song.eventlist, song.synthsource);
-                } else {
+                } else if (wasRunning) {
                     updateSong(song.eventlist, componentRoot.getElementById('toggleSongPlayCheckbox').checked ? true : false);
                     webassemblySynthUpdated = false;
                 }
-            } else if (window.audioworkletnode) {
+            } else if (wasRunning && window.audioworkletnode) {
                 audioworkletnode.port.postMessage({
                     song: song,
                     samplerate: window.audioworkletnode.context.sampleRate,
