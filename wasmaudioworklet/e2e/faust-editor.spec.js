@@ -446,6 +446,45 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         expect(opts).toEqual(['agentrefresh.dsp']);
     });
 
+    test('studio-agent compile saves + compiles without starting playback', async ({ page }) => {
+        // The agent's compile tool uses the app's save path (compileAndPostSong):
+        // a playing track picks up changes live, but when audio is stopped the
+        // tool must NOT start it — it just saves and compiles.
+        page.on('console', (m) => {
+            if (m.type() === 'error' || m.type() === 'warning') console.log('[browser]', m.type(), m.text());
+        });
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+        await page.goto('http://localhost:8080');
+        await setupServiceWorker(page);
+        await pushBaseline(page, repoName, SONG_SOURCE);
+        await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
+        await waitForAppReady(page);
+
+        // Author instrument + wire synth + song entirely through agent tools.
+        const writeResult = await page.evaluate((source) =>
+            window.studioAgentRunTool('write_faust', { path: 'agentsave', source }),
+            FAUST_SOURCE);
+        expect(String(writeResult)).toContain('transpiled OK');
+        await page.evaluate((source) =>
+            window.studioAgentRunTool('set_synth', { source }),
+            SYNTH_MIX_SOURCE('agentsave'));
+        await page.evaluate((source) =>
+            window.studioAgentRunTool('set_song', { source }),
+            SONG_SOURCE);
+
+        const compileResult = await page.evaluate(() =>
+            window.studioAgentRunTool('compile'));
+        expect(compileResult).toBe('compiled OK');
+
+        // Compiled a synth wasm (proves the full save path ran)…
+        const wasmLength = await page.evaluate(() =>
+            window.WASM_SYNTH_BYTES ? window.WASM_SYNTH_BYTES.length : 0);
+        expect(wasmLength).toBeGreaterThan(1000);
+        // …but did NOT start audio.
+        const audioStarted = await page.evaluate(() => !!window.audioworkletnode);
+        expect(audioStarted).toBe(false);
+    });
+
     test('sub-folder layout: faust/<dir>/<dir>/main.dsp transpile + import works', async ({ page }) => {
         // Mirrors the user's vscode-prepared repo shape: a Faust file
         // nested several directories deep (e.g. faust/mysong/dsp/main.dsp).

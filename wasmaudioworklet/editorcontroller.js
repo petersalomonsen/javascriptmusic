@@ -786,6 +786,12 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         }
     }
 
+    // Exposed for the studio-agent: same as pressing "save" — saves + compiles
+    // and posts the new wasm/eventlist to the audio worklet, so a track that is
+    // already playing picks up the changes without restarting playback (and
+    // nothing starts playing when stopped).
+    window.saveSong = compileAndPostSong;
+
     let storedsongcode = localStorage.getItem('storedsongcode');
     let storedsynthcode = localStorage.getItem('storedsynthcode');
     let storedshadercode = null;

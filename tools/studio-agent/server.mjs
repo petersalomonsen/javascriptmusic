@@ -23,7 +23,15 @@ import { SYSTEM_PROMPT } from './prompt.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
 const PORT = process.env.STUDIO_AGENT_PORT || 17891;
-const TOOL_TIMEOUT_MS = 120000;
+// Tool timeouts are measured from when the browser actually STARTS executing a
+// call (it acks with tool_started once the serial queue reaches it) — queue
+// wait must not count, or a cheap read_faust queued behind a heavy transpile
+// gets falsely timed out. Heavy tools (Faust transpile / full compile) run
+// 100s+ legitimately on big chains, so they get a much larger run budget.
+const TOOL_RUN_TIMEOUT_MS = 120000;            // normal tools, once started
+const HEAVY_TOOL_RUN_TIMEOUT_MS = 360000;      // write_faust / compile, once started
+const TOOL_START_TIMEOUT_MS = 600000;          // max time waiting in the browser queue
+const HEAVY_TOOLS = new Set(['write_faust', 'compile']);
 // Optional model override for speed/depth tradeoff, e.g. STUDIO_AGENT_MODEL=sonnet
 // (faster) vs opus (deeper). Unset = the SDK/Claude Code default.
 const MODEL = process.env.STUDIO_AGENT_MODEL || undefined;
@@ -80,14 +88,29 @@ let nextId = 1;
 function callBrowser(ws, name, args) {
   return new Promise((resolveCall, rejectCall) => {
     const id = nextId++;
-    pending.set(id, { resolve: resolveCall });
+    const runBudgetMs = HEAVY_TOOLS.has(name) ? HEAVY_TOOL_RUN_TIMEOUT_MS : TOOL_RUN_TIMEOUT_MS;
+    let timer = null;
+    const fail = (msg) => {
+      if (!pending.has(id)) return;
+      pending.delete(id);
+      rejectCall(new Error(msg));
+    };
+    const entry = {
+      resolve: (res) => { if (timer) clearTimeout(timer); pending.delete(id); resolveCall(res); },
+      // Browser acked that execution began (the serial queue reached this call):
+      // swap the queue-wait timer for the per-tool run timer.
+      started: () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => fail(
+          `browser tool "${name}" timed out after ${runBudgetMs / 1000}s of execution. The browser may STILL be finishing it — do NOT resend the same call; verify the result first (e.g. read_faust / grep).`
+        ), runBudgetMs);
+      },
+    };
+    pending.set(id, entry);
     ws.send(JSON.stringify({ t: 'tool_call', id, name, args: args || {} }));
-    setTimeout(() => {
-      if (pending.has(id)) {
-        pending.delete(id);
-        rejectCall(new Error(`browser tool "${name}" timed out`));
-      }
-    }, TOOL_TIMEOUT_MS);
+    timer = setTimeout(() => fail(
+      `browser tool "${name}" did not start within ${TOOL_START_TIMEOUT_MS / 1000}s — earlier tool calls are still running in the browser queue. Do NOT retry; wait for them to finish.`
+    ), TOOL_START_TIMEOUT_MS);
   });
 }
 
@@ -143,9 +166,9 @@ function makeStudioServer(ws) {
       proxy('read_committed', 'Read the COMMITTED content of a file from the OPFS git repo at a ref (default HEAD). Path is repo-relative (e.g. "song.js", "faust/bass.dsp"). Use to restore something overwritten in the editor: read_committed then set_song/set_synth it back.', { path: z.string(), ref: z.string().optional() }),
       loadInto('load_synth_from_file', 'set_synth', 'synth'),
       loadInto('load_song_from_file', 'set_song', 'song'),
-      proxy('compile', 'Compile the current song+synth in the browser. Returns "compiled OK" or the exact compiler error. Call after every edit.', {}),
-      proxy('play', 'Start live audio playback in the browser (compiles first).', {}),
-      proxy('stop', 'Stop live audio playback.', {}),
+      proxy('compile', 'SAVE + compile the current song+synth in the browser (same as the app\'s save button). If a track is already playing, the changes are applied and audible immediately. Returns "compiled OK" or the exact compiler error. Call after every edit.', {}),
+      proxy('play', 'Start live audio playback in the browser. ONLY call this when the user explicitly asked to play/hear it — compile already applies changes to a playing track.', {}),
+      proxy('stop', 'Stop live audio playback. Only on the user\'s request.', {}),
     ],
   });
 }
@@ -187,6 +210,12 @@ async function handleChat(ws, { text, sessionId }) {
         dlog('session init', m.session_id?.slice(0, 8), 'tools:', (m.tools || []).length);
         logEvent({ kind: 'session', sessionId: sid, toolCount: (m.tools || []).length });
         send({ t: 'session', sessionId: m.session_id });
+      } else if (m.type === 'system' && m.subtype === 'compact_boundary') {
+        // The SDK compacted the conversation (auto near the context limit, or
+        // the user sent /compact). Surface it in the chat panel.
+        dlog('context compacted', JSON.stringify(m.compact_metadata || {}));
+        logEvent({ kind: 'compact', sessionId: sid, metadata: m.compact_metadata });
+        send({ t: 'compact', metadata: m.compact_metadata });
       } else if (m.type === 'assistant') {
         for (const block of m.message?.content ?? []) {
           if (block.type === 'text' && block.text) { dlog('text:', block.text.slice(0, 80).replace(/\n/g, ' ')); logEvent({ kind: 'text', sessionId: sid, text: block.text }); send({ t: 'text', text: block.text }); }
@@ -202,7 +231,9 @@ async function handleChat(ws, { text, sessionId }) {
         }
       } else if (m.type === 'result') {
         dlog('RESULT', m.subtype, 'turns:', m.num_turns, 'cost:', m.total_cost_usd);
-        logEvent({ kind: 'result', sessionId: sid, subtype: m.subtype, turns: m.num_turns, costUsd: m.total_cost_usd });
+        // usage carries the per-turn token counts (input incl. cache reads) —
+        // logged so growing context is visible when reviewing a session.
+        logEvent({ kind: 'result', sessionId: sid, subtype: m.subtype, turns: m.num_turns, costUsd: m.total_cost_usd, usage: m.usage });
         send({ t: 'done', subtype: m.subtype });
       }
     }
@@ -227,7 +258,10 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(data.toString()); } catch { return; }
     if (msg.t === 'tool_result') {
       const p = pending.get(msg.id);
-      if (p) { pending.delete(msg.id); p.resolve(msg); }
+      if (p) p.resolve(msg);
+    } else if (msg.t === 'tool_started') {
+      const p = pending.get(msg.id);
+      if (p && typeof p.started === 'function') p.started();
     } else if (msg.t === 'chat') {
       handleChat(ws, msg);
     }

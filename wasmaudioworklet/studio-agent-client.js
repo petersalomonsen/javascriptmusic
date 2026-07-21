@@ -21,10 +21,15 @@ let sessionId = null;
 let agentMsgEl = null; // the in-progress assistant message element
 let toolQueue = Promise.resolve(); // serialize tool execution (see tool_call below)
 let conversation = []; // [{ role: 'user' | 'agent', text }] persisted to the repo
+// Only the tail of the conversation is persisted/replayed — the SDK session
+// (resumed via sessionId, auto-compacted server-side) holds the real history;
+// this is just what the chat panel shows again after a reload.
+const MAX_SAVED_MESSAGES = 100;
 
 // Persist the conversation + SDK session id into the OPFS repo so it survives a
 // reload (and travels with the project). No-op when not in ?gitrepo= mode.
 async function saveSession() {
+  if (conversation.length > MAX_SAVED_MESSAGES) conversation = conversation.slice(-MAX_SAVED_MESSAGES);
   try { await writefileandstage(SESSION_FILE, JSON.stringify({ sessionId, conversation }, null, 1)); }
   catch (e) { /* no OPFS repo — in-memory only */ }
 }
@@ -117,7 +122,11 @@ const registry = {
   },
   compile: async () => {
     try {
-      await window.compileSong();
+      // Same as the app's save button: saves + compiles AND applies the new
+      // wasm/eventlist to the audio worklet, so a track that is already
+      // playing becomes audible with the changes — without starting playback
+      // when stopped.
+      await window.saveSong();
     } catch (e) {
       return { __error: String(e?.message || e) };
     }
@@ -187,6 +196,9 @@ async function onMessage(msg) {
       setBusy(false);
       break;
     }
+    case 'compact': // the SDK compacted the session (auto, or the user sent /compact)
+      addLine('tool', `— conversation compacted (${msg.metadata?.trigger || 'auto'}) —`);
+      break;
     case 'error':
       addLine('error', `⚠ ${msg.error}`);
       finishAgentMessage();
@@ -199,6 +211,12 @@ async function onMessage(msg) {
 async function runTool({ id, name, args }) {
   const fn = registry[name];
   if (!fn) return reply(id, false, `unknown tool ${name}`);
+  // Tell the server execution has actually begun (the serial queue may have
+  // held this call for a while) — its run-timeout is armed from this moment,
+  // so a call waiting behind a heavy Faust transpile isn't falsely timed out.
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ t: 'tool_started', id }));
+  }
   try {
     const result = await fn(args || {});
     if (result && result.__error) {
@@ -263,10 +281,12 @@ function finishAgentMessage() { agentMsgEl = null; }
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 let activityTimer = null;
 let turnStartMs = 0;
+let phaseStartMs = 0;
 let activityPhase = '';
 let spinIdx = 0;
 function startActivity() {
   turnStartMs = Date.now();
+  phaseStartMs = turnStartMs;
   activityPhase = 'thinking…';
   const s = el('studioagentstatus');
   if (s) { s.classList.add('working'); s.classList.remove('idle'); }
@@ -274,11 +294,14 @@ function startActivity() {
   activityTimer = setInterval(renderActivity, 150);
   renderActivity();
 }
-function setPhase(p) { activityPhase = p; if (activityTimer) renderActivity(); }
+function setPhase(p) { activityPhase = p; phaseStartMs = Date.now(); if (activityTimer) renderActivity(); }
 function renderActivity() {
   spinIdx = (spinIdx + 1) % SPIN.length;
   const secs = Math.floor((Date.now() - turnStartMs) / 1000);
-  setStatus(`${SPIN[spinIdx]} ${activityPhase}  ${secs}s`);
+  const phaseSecs = Math.floor((Date.now() - phaseStartMs) / 1000);
+  // Per-phase elapsed first (what THIS step has taken), turn total after —
+  // "running compile… 751s" used to show turn time under the last tool's name.
+  setStatus(`${SPIN[spinIdx]} ${activityPhase} ${phaseSecs}s · ${secs}s total`);
 }
 function stopActivity(msg) {
   if (activityTimer) { clearInterval(activityTimer); activityTimer = null; }
