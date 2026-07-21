@@ -412,8 +412,12 @@ async function runNearaiTurn(text) {
       model: cfg.model,
       messages: nearaiMessages,
       runTool: (name, args) => new Promise((resolve, reject) => {
-        // reuse the same serialization as WS tool calls
-        toolQueue = toolQueue.then(() => runNearaiServerlessTool(name, args).then(resolve, reject));
+        // reuse the same serialization as WS tool calls; once the tool is
+        // done, everything after is the model reading the result — reset the
+        // phase so its time isn't blamed on the tool ("running compile… 49s").
+        toolQueue = toolQueue.then(() => runNearaiServerlessTool(name, args)
+          .then(resolve, reject)
+          .finally(() => setPhase(`${cfg.model.split('/').pop()} thinking…`)));
       }),
       onText: (t) => { appendAgentText(t); setPhase('responding…'); },
       onToolCall: (name, args) => { addLine('tool', `⚙ ${name}`); setPhase(`running ${name}…`); },
