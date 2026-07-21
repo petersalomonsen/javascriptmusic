@@ -111,6 +111,10 @@ async function setupScenario(page, scenario) {
     await pushBaseline(page, repoName, SONG_SOURCE);
     await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
     await waitForAppReady(page);
+    // waitForAppReady is satisfied at the end of initEditor, but
+    // initStudioAgent (which defines toggleStudioAgent) runs AFTER it —
+    // on slow CI the gap is real.
+    await page.waitForFunction(() => typeof window.toggleStudioAgent === 'function', { timeout: 30000 });
     await page.evaluate(() => window.toggleStudioAgent(true));
 
     return { apiKey, recording };

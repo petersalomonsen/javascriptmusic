@@ -11,10 +11,9 @@ const chatLog = (page) => page.locator('#studioagentlog');
 
 async function bootApp(page) {
     await page.goto('/');
-    await page.waitForFunction(() => {
-        const app = document.querySelector('app-javascriptmusic');
-        return app && app.shadowRoot && app.shadowRoot.getElementById('studioagentinput');
-    }, { timeout: 30000 });
+    // The chat input exists in the DOM before initStudioAgent runs — wait for
+    // toggleStudioAgent (defined at the END of app boot) to avoid a CI race.
+    await page.waitForFunction(() => typeof window.toggleStudioAgent === 'function', { timeout: 30000 });
     await page.evaluate(() => window.toggleStudioAgent(true));
 }
 
