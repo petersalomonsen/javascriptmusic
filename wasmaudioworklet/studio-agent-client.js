@@ -100,24 +100,38 @@ const registry = {
   },
   // Write a .dsp AND transpile it to AssemblyScript (same as the app's faust save):
   // persists faust/<name>.dsp + faust/<name>.ts and reports the generated classes.
+  // Per-step timings are logged + appended to the result: manual runs are ~1s but
+  // agent-driven runs have been observed at 47-111s, so we need to see WHICH step
+  // stalls (git-worker write? transpile? UI refresh?) and the tab visibility
+  // (a hidden tab throttles main-thread work like the faust transpile hard).
   write_faust: async ({ path, source }) => {
     const rel = normDsp(path);
     const stem = rel.replace(/\.dsp$/, '');
+    const t0 = performance.now();
+    const marks = [`visibility=${document.visibilityState}`];
+    let last = t0;
+    const mark = (label) => { const now = performance.now(); marks.push(`${label}=${((now - last) / 1000).toFixed(1)}s`); last = now; };
     try {
       await writefileandstage(FAUST_DIR + rel, source);
+      mark('write-dsp');
       let ts;
       try {
         ({ ts } = await transpileDspSource(source, rel, {}));
       } catch (e) {
         return { __error: `Faust transpile failed for ${rel}: ${e?.message || e}` };
       }
+      mark('transpile');
       await writefileandstage(FAUST_DIR + stem + '.ts', ts);
+      mark('write-ts');
       // refresh the app's Faust file dropdown so the user sees the new instrument
       if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
       // and reflect the written .dsp in the editor even when it's the file already
       // on screen (dropdown refresh alone won't reload the current selection).
       if (typeof window.showFaustFileInEditor === 'function') { try { await window.showFaustFileInEditor(FAUST_DIR + rel); } catch { /* non-fatal */ } }
-      return faustRegistrationHint(ts, stem).message;
+      mark('ui-refresh');
+      const timing = `${((performance.now() - t0) / 1000).toFixed(1)}s total (${marks.join(', ')})`;
+      console.log(`[studio-agent] write_faust ${rel}: ${timing}`);
+      return `${faustRegistrationHint(ts, stem).message} [timing: ${timing}]`;
     } catch (e) { return faustUnavailable(e); }
   },
   compile: async () => {
@@ -217,15 +231,27 @@ async function runTool({ id, name, args }) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ t: 'tool_started', id }));
   }
+  // Timing diagnostics: agent-driven tools have been observed 50-100x slower
+  // than the same operations run manually — log duration + tab visibility per
+  // tool so the stalling layer is identifiable in the browser console.
+  const t0 = performance.now();
+  const vis0 = document.visibilityState;
+  const finish = (ok) => {
+    const secs = (performance.now() - t0) / 1000;
+    if (secs > 2) console.warn(`[studio-agent] ${shortName(name)} took ${secs.toFixed(1)}s (${ok ? 'ok' : 'error'}, visibility ${vis0}→${document.visibilityState})`);
+  };
   try {
     const result = await fn(args || {});
     if (result && result.__error) {
+      finish(false);
       addLine('error', `✗ ${shortName(name)}: ${result.__error}`);
       reply(id, false, result.__error);
     } else {
+      finish(true);
       reply(id, true, result);
     }
   } catch (e) {
+    finish(false);
     const emsg = String(e?.message || e);
     addLine('error', `✗ ${shortName(name)}: ${emsg}`);
     reply(id, false, emsg);
