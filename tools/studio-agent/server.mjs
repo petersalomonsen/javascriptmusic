@@ -13,6 +13,7 @@
 
 import { WebSocketServer } from 'ws';
 import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { mkdirSync, createWriteStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -183,7 +184,7 @@ function makeStudioServer(ws) {
 const t0 = () => new Date().toISOString().slice(11, 23);
 const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 
-async function handleChat(ws, { text, sessionId }) {
+async function handleChat(ws, { text, sessionId, summary }, isRetry = false) {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
   const studio = makeStudioServer(ws);
   let sid = sessionId || null;
@@ -223,6 +224,7 @@ async function handleChat(ws, { text, sessionId }) {
         dlog('context compacted', JSON.stringify(m.compact_metadata || {}));
         logEvent({ kind: 'compact', sessionId: sid, metadata: m.compact_metadata });
         send({ t: 'compact', metadata: m.compact_metadata });
+        await sendCompactSummary(send, sid);
       } else if (m.type === 'assistant') {
         // Each assistant message's usage reports THIS call's full input size
         // (fresh + cached) — i.e. the session's current context footprint.
@@ -253,9 +255,53 @@ async function handleChat(ws, { text, sessionId }) {
       await autoCompact(send, sid, contextTokens);
     }
   } catch (e) {
-    dlog('EXCEPTION', e?.message || e);
-    logEvent({ kind: 'error', sessionId: sid, error: String(e?.message || e) });
-    send({ t: 'error', error: String(e?.message || e) });
+    const emsg = String(e?.message || e);
+    // SDK sessions are per-machine: a repo opened on another machine carries a
+    // sessionId this machine has never seen. Start FRESH, seeded with the
+    // compact summary the browser keeps in the repo (studioagent-session.json).
+    if (!isRetry && sessionId && /no conversation found/i.test(emsg)) {
+      dlog('resume failed — starting a fresh session' + (summary ? ' from the saved summary' : ''));
+      logEvent({ kind: 'freshsession', sessionId, hadSummary: !!summary });
+      send({ t: 'freshsession' });
+      const prompt = summary
+        ? `A previous session (possibly on another machine) was compacted to this summary:\n\n${summary}\n\n---\nContinue from that context. The user's request:\n${text}`
+        : text;
+      return handleChat(ws, { text: prompt, sessionId: null }, true);
+    }
+    dlog('EXCEPTION', emsg);
+    logEvent({ kind: 'error', sessionId: sid, error: emsg });
+    send({ t: 'error', error: emsg });
+  }
+}
+
+// After a compaction, pull the summary text out of the SDK's session store so
+// the browser can persist it into the OPFS repo: SDK sessions are per-machine,
+// so a repo cloned elsewhere can't resume the sessionId — but it CAN seed a
+// fresh session from this summary. The session jsonl marks the summary entry
+// with isCompactSummary: true.
+async function extractCompactSummary(sid) {
+  try {
+    const projDir = resolve(homedir(), '.claude', 'projects', REPO_ROOT.replace(/[/.]/g, '-'));
+    const lines = (await readFile(resolve(projDir, `${sid}.jsonl`), 'utf8')).trim().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let e;
+      try { e = JSON.parse(lines[i]); } catch { continue; }
+      if (e.isCompactSummary) {
+        const c = e.message?.content;
+        return typeof c === 'string' ? c : (Array.isArray(c) ? c.map((b) => b.text || '').join('') : null);
+      }
+    }
+  } catch (e) {
+    dlog('could not extract compact summary:', e?.message || e);
+  }
+  return null;
+}
+
+async function sendCompactSummary(send, sid) {
+  const summary = await extractCompactSummary(sid);
+  if (summary) {
+    dlog(`compact summary extracted (${summary.length} chars) → browser`);
+    send({ t: 'summary', text: summary });
   }
 }
 
@@ -274,6 +320,7 @@ async function autoCompact(send, sid, contextTokens) {
         dlog('context compacted', JSON.stringify(m.compact_metadata || {}));
         logEvent({ kind: 'compact', sessionId: sid, metadata: m.compact_metadata });
         send({ t: 'compact', metadata: m.compact_metadata });
+        await sendCompactSummary(send, sid);
       } else if (m.type === 'result') {
         logEvent({ kind: 'result', sessionId: sid, subtype: 'autocompact-' + m.subtype, turns: m.num_turns, costUsd: m.total_cost_usd, usage: m.usage });
       }

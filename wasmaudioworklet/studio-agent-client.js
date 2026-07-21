@@ -21,22 +21,26 @@ let sessionId = null;
 let agentMsgEl = null; // the in-progress assistant message element
 let toolQueue = Promise.resolve(); // serialize tool execution (see tool_call below)
 let conversation = []; // [{ role: 'user' | 'agent', text }] persisted to the repo
-// Only the tail of the conversation is persisted/replayed — the SDK session
-// (resumed via sessionId, auto-compacted server-side) holds the real history;
-// this is just what the chat panel shows again after a reload.
-const MAX_SAVED_MESSAGES = 100;
+// Latest compact summary of the SDK session. Persisted to the repo so a clone
+// on ANOTHER machine (where the SDK's local session store is absent) can start
+// a fresh session seeded with this summary instead of from nothing. Note the
+// conversation array itself is NEVER sent to the model — only the latest chat
+// text goes out; history lives in the SDK session (kept small by compaction).
+let sessionSummary = null;
 
-// Persist the conversation + SDK session id into the OPFS repo so it survives a
-// reload (and travels with the project). No-op when not in ?gitrepo= mode.
+// Persist the conversation + SDK session id + compact summary into the OPFS
+// repo so it survives a reload (and travels with the project). The full
+// conversation is kept as project history — it is replay/reference only, so
+// its size costs repo bytes, not model context. No-op when not in ?gitrepo= mode.
 async function saveSession() {
-  if (conversation.length > MAX_SAVED_MESSAGES) conversation = conversation.slice(-MAX_SAVED_MESSAGES);
-  try { await writefileandstage(SESSION_FILE, JSON.stringify({ sessionId, conversation }, null, 1)); }
+  try { await writefileandstage(SESSION_FILE, JSON.stringify({ sessionId, summary: sessionSummary, conversation }, null, 1)); }
   catch (e) { /* no OPFS repo — in-memory only */ }
 }
 async function loadSession() {
   try {
     const data = JSON.parse(await readfile(SESSION_FILE));
     sessionId = data.sessionId || null;
+    sessionSummary = data.summary || null;
     conversation = Array.isArray(data.conversation) ? data.conversation : [];
     for (const m of conversation) addLine(m.role === 'user' ? 'user' : 'agent', m.text);
     if (conversation.length) { addLine('tool', `— resumed ${conversation.length} messages —`); }
@@ -218,6 +222,13 @@ async function onMessage(msg) {
     case 'compact': // the SDK compacted the session (auto, or the user sent /compact)
       addLine('tool', `— conversation compacted (${msg.metadata?.trigger || 'auto'}) —`);
       break;
+    case 'summary': // the compact summary text — persist it with the session
+      sessionSummary = msg.text || null;
+      saveSession();
+      break;
+    case 'freshsession': // resume failed (e.g. repo opened on another machine)
+      addLine('tool', '— previous session not on this machine; started fresh from the saved summary —');
+      break;
     case 'error':
       addLine('error', `⚠ ${msg.error}`);
       finishAgentMessage();
@@ -281,7 +292,9 @@ function sendChat(text) {
   startAgentMessage();
   setBusy(true);
   startActivity();
-  socket.send(JSON.stringify({ t: 'chat', text, sessionId }));
+  // summary rides along so the server can seed a FRESH session from it when
+  // the sessionId can't be resumed (SDK sessions are per-machine).
+  socket.send(JSON.stringify({ t: 'chat', text, sessionId, summary: sessionSummary }));
 }
 
 // ---- tiny UI helpers --------------------------------------------------------

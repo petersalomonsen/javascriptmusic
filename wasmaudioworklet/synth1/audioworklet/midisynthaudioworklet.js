@@ -60,18 +60,25 @@ export async function updateSynth(synthwasm, addedAudio) {
     // window.WASM_SYNTH_BYTES anyway.
     if (!audioworkletnode) return;
     audioworkletnode.context.suspend();
+    // Bounded wait: if the worklet can't reply (e.g. it terminated between
+    // the check above and the post), fail the save instead of hanging it.
+    // The timer MUST be cleared on the normal path — a leftover timeout
+    // firing later rejects the losing race promise unhandled, which wedges
+    // test runners (Firefox wtr) and pollutes the console.
+    let timer = null;
     try {
-        // Bounded wait: if the worklet can't reply (e.g. it terminated between
-        // the check above and the post), fail the save instead of hanging it.
         await Promise.race([
             workerMessageHandler.callAndGetResult({
                 wasm: synthwasm,
                 audio: await Promise.all(addedAudio)
             }, (msg) => msg.wasmloaded),
-            new Promise((_, reject) => setTimeout(() =>
-                reject(new Error('updateSynth: no wasmloaded reply from the audio worklet within 20s')), 20000))
+            new Promise((_, reject) => {
+                timer = setTimeout(() =>
+                    reject(new Error('updateSynth: no wasmloaded reply from the audio worklet within 20s')), 20000);
+            })
         ]);
     } finally {
+        if (timer) clearTimeout(timer);
         if (audioworkletnode) audioworkletnode.context.resume();
     }
 }
