@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyEditToText, grepText, normDsp, faustRegistrationHint } from './studio-agent-tools-core.js';
+import { applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings } from './studio-agent-tools-core.js';
 
 test('applyEditToText: unique replace', () => {
   assert.deepEqual(applyEditToText('a b c', { old_string: 'b', new_string: 'X' }), { text: 'a X c', count: 1 });
@@ -49,4 +49,21 @@ test('faustRegistrationHint: instrument WITHOUT a channel class uses base MidiCh
   assert.match(h.message, /new MidiChannel\(8, \(channel: MidiChannel\) => new Bass/);
   assert.doesNotMatch(h.message, /new BassChannel/);          // must NOT instantiate a phantom channel class
   assert.doesNotMatch(h.message, /import \{ Bass, BassChannel \}/); // must NOT import one either
+});
+
+test('songSourceWarnings: flags async IIFE wrappers', () => {
+  const bad = `setBPM(120);\n(async () => {\n  await bass.steps(4, [c2]);\n})();\nloopHere();\n`;
+  const warnings = songSourceWarnings(bad);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /async IIFE/);
+  assert.match(warnings[0], /top-level/);
+});
+
+test('songSourceWarnings: flags async function wrappers too', () => {
+  assert.equal(songSourceWarnings('(async function() { await x(); })();').length, 1);
+});
+
+test('songSourceWarnings: clean top-level await passes', () => {
+  const good = `setBPM(120);\nawait createTrack(0).steps(4, [c2,, c2,,]);\nloopHere();\n`;
+  assert.deepEqual(songSourceWarnings(good), []);
 });

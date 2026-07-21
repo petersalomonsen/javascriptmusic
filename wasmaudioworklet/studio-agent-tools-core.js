@@ -37,6 +37,21 @@ export function normDsp(path) {
   return rel;
 }
 
+// Lint a song source for known agent mistakes; returns warning strings to
+// append to set_song/edit_song tool results. The song runs as ONE top-level
+// async function, so an async IIFE wrapper is never needed — and because it
+// is NOT awaited, loopHere() after it runs at beat 0 before any notes are
+// scheduled, silently breaking the song.
+export function songSourceWarnings(source) {
+  const warnings = [];
+  if (/\(\s*async\s*(\(|function)/.test(source)) {
+    warnings.push(
+      'WARNING: the song contains an async IIFE wrapper — it is NOT awaited, so loopHere()/code after it runs before the notes are scheduled and the song breaks. The song source is already one top-level async function: use plain top-level `await track.steps(...)` statements and remove the wrapper.'
+    );
+  }
+  return warnings;
+}
+
 // Build the write_faust success hint from a transpiled .ts: which classes to
 // import and how to register the channel. Uses the base MidiChannel when no
 // <Name>Channel was generated (fixes the recurring "no exported member" error).

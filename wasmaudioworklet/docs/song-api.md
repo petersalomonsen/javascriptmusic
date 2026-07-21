@@ -2,6 +2,16 @@
 
 This document describes the functions available when writing JavaScript music sequences in the song compiler.
 
+**The song source runs as one top-level async function** — `await` works directly at top level:
+
+```javascript
+setBPM(120);
+await createTrack(0).steps(4, [c2,, c2,, ds2,, c2,,]);
+loopHere();
+```
+
+Never wrap sequencing in an async IIFE (`(async () => { ... })()`) or any other wrapper function: the wrapper is not awaited, so code after it — including `loopHere()` — executes at beat 0 before any notes are scheduled, and the song breaks.
+
 ## Table of Contents
 
 - [Global Functions](#global-functions)

@@ -8,7 +8,7 @@
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
-import { applyEditToText, grepText, normDsp, faustRegistrationHint } from './studio-agent-tools-core.js';
+import { applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings } from './studio-agent-tools-core.js';
 import { runAgentTurn, DEFAULT_BASE_URL, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';
 import { SYSTEM_PROMPT } from './studio-agent-prompt.js';
 
@@ -67,11 +67,18 @@ function grepDoc(editor, args) {
 // Returning an object with `__error` marks a failed tool result.
 const registry = {
   get_song: async () => songsourceeditor.doc.getValue(),
-  set_song: async ({ source }) => { songsourceeditor.doc.setValue(source); return 'song updated'; },
+  set_song: async ({ source }) => {
+    songsourceeditor.doc.setValue(source);
+    return ['song updated', ...songSourceWarnings(source)].join(' ');
+  },
   get_synth: async () => synthsourceeditor.doc.getValue(),
   set_synth: async ({ source }) => { synthsourceeditor.doc.setValue(source); return 'synth updated'; },
   edit_synth: async (args) => applyEdit(synthsourceeditor, args),
-  edit_song: async (args) => applyEdit(songsourceeditor, args),
+  edit_song: async (args) => {
+    const result = applyEdit(songsourceeditor, args);
+    if (result && result.__error) return result;
+    return [result, ...songSourceWarnings(songsourceeditor.doc.getValue())].join(' ');
+  },
   grep_synth: async (args) => grepDoc(synthsourceeditor, args),
   grep_song: async (args) => grepDoc(songsourceeditor, args),
 
