@@ -805,11 +805,25 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     let storedshadercode = null;
 
     const gistparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gist=') === 0) : null;
-    const gitrepoparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gitrepo=') === 0) : null;
+    let gitrepoparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('gitrepo=') === 0) : null;
     const pngurlparam = location.search ? location.search.substring(1).split('&').find(param => param.indexOf('pngurl=') === 0) : null;
     // Optional override for the git origin remote (any git-http URL). Parsed via
     // URLSearchParams so a remote URL containing '=' / ':' survives decoding.
     const remoteparam = new URLSearchParams(location.search).get('remote');
+
+    // Landing with NO content source at all (no gitrepo/gist/pngurl and no
+    // previously stored localStorage work): boot into a local-only OPFS
+    // "workspace" repo instead of the storage-less localStorage mode — that
+    // gives new users persistence, Faust instrument authoring and studio-agent
+    // session storage out of the box. Gated off localhost so dev servers and
+    // the test suites keep the classic no-repo boot (opt in via ?defaultrepo).
+    const wantsDefaultRepo = location.hostname !== 'localhost'
+        || new URLSearchParams(location.search).has('defaultrepo');
+    if (!gitrepoparam && !gistparam && !pngurlparam && !storedsongcode
+        && wantsDefaultRepo
+        && typeof navigator.storage?.getDirectory === 'function') {
+        gitrepoparam = 'gitrepo=workspace';
+    }
 
     if (gistparam) {
         const gistid = gistparam.split('=')[1];
@@ -932,13 +946,15 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     if (storedsongcode) {
         songsourceeditor.doc.setValue(storedsongcode);
     } else {
-        songsourceeditor.doc.setValue(await fetch('emptysong.js').then(r => r.text()));
+        // MIDI-sequencer starter (the format the studio agent is tuned for) —
+        // the legacy pattern-sequencer template lives on in emptysong.js.
+        songsourceeditor.doc.setValue(await fetch('emptysong-midi.js').then(r => r.text()));
     }
 
     if (storedsynthcode) {
         synthsourceeditor.doc.setValue(storedsynthcode);
     } else {
-        synthsourceeditor.doc.setValue(await fetch('synth1/assembly/mixes/empty.mix.ts').then(r => r.text()));
+        synthsourceeditor.doc.setValue(await fetch('synth1/assembly/mixes/emptymidi.mix.ts').then(r => r.text()));
     }
     if (storedshadercode) {
         shadersourceeditor.doc.setValue(storedshadercode);
