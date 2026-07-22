@@ -9,7 +9,7 @@ import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
 import { transpileDspSource } from './faust/browser-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
 import { applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings } from './studio-agent-tools-core.js';
-import { runAgentTurn, DEFAULT_BASE_URL, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';
+import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';
 import { SYSTEM_PROMPT } from './studio-agent-prompt.js';
 
 const DEFAULT_PORT = 17891;
@@ -347,7 +347,7 @@ function nearaiConfig() {
   return {
     apiKey,
     model: localStorage.getItem('nearai-model') || DEFAULT_MODEL,
-    baseUrl: localStorage.getItem('nearai-base-url') || DEFAULT_BASE_URL,
+    baseUrl: localStorage.getItem('nearai-base-url') || resolveDefaultBaseUrl(location.hostname),
   };
 }
 

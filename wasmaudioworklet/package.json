@@ -33,7 +33,7 @@
         "near-sandbox": "docker run --rm -p 3030:8080 ghcr.io/petersalomonsen/near-git-storage/sandbox:main",
         "test-faust": "node ../tools/faust2as/generate-test-sources.js && npx playwright test e2e/faust2as-compilation.spec.js",
         "test-agent-tools": "node --test studio-agent-tools-core.test.mjs studio-agent-nearai-core.test.mjs",
-        "test-gitproxy": "node --test gitproxy.test.mjs"
+        "test-gitproxy": "node --test gitproxy.test.mjs nearai-proxy.test.mjs"
     },
     "resolutions": {
         "playwright": "1.59.1"

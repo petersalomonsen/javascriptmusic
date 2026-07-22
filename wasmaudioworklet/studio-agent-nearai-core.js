@@ -10,6 +10,15 @@
 export const DEFAULT_BASE_URL = 'https://cloud-api.near.ai/v1';
 export const DEFAULT_MODEL = 'Qwen/Qwen3.5-122B-A10B';
 
+// cloud-api.near.ai only CORS-allowlists localhost origins — anywhere else
+// (webassemblymusic.pages.dev etc.) goes through the same-origin Pages
+// Function proxy at /nearai/v1 (functions/nearai/[[path]].js).
+export function resolveDefaultBaseUrl(hostname) {
+  return hostname === 'localhost' || hostname === '127.0.0.1'
+    ? DEFAULT_BASE_URL
+    : '/nearai/v1';
+}
+
 // Tool definitions in OpenAI function-calling format. Descriptions mirror
 // tools/studio-agent/server.mjs — keep them in sync when tools change.
 const str = (description) => ({ type: 'string', description });
