@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { clearOPFS, waitForAppReady } from './near-git-helpers.js';
+import { clearOPFS, waitForAppReady, readRepoFile } from './near-git-helpers.js';
 
 // Landing with no content source (no ?gitrepo/?gist, empty localStorage)
 // boots a local-only OPFS "workspace" repo seeded with the MIDI-sequencer
@@ -40,10 +40,23 @@ test('first visit boots a workspace repo with the MIDI starter; work survives re
         .shadowRoot.querySelector('#editor .CodeMirror').CodeMirror
         .setValue('setBPM(95); // my persistent workspace edit\n\nawait createTrack(0).steps(4, [c5,,,,]);\n\nloopHere();\n'));
     await page.locator('#savesongbutton').click();
-    await page.waitForTimeout(1000); // async OPFS write inside compileSong
+    // The OPFS write inside compileSong is fire-and-forget — poll the repo
+    // file (via a fresh worker, like the near-git specs) until it landed
+    // before reloading, or the write could be lost mid-flight on slow CI.
+    await expect.poll(async () =>
+        (await readRepoFile(page, 'workspace', 'song.js'))
+        || (await readRepoFile(page, 'workspace.git', 'song.js'))
+        || '',
+    { timeout: 60000, intervals: [1000] }).toContain('my persistent workspace edit');
 
     await page.goto('http://localhost:8080/?defaultrepo=1');
     await waitForAppReady(page);
+    // Boot populates the editor asynchronously — wait for content.
+    await page.waitForFunction(() => {
+        const cm = document.querySelector('app-javascriptmusic')
+            .shadowRoot.querySelector('#editor .CodeMirror');
+        return cm && cm.CodeMirror.getValue().length > 0;
+    }, { timeout: 30000 });
     const reloaded = await page.evaluate(() => document.querySelector('app-javascriptmusic')
         .shadowRoot.querySelector('#editor .CodeMirror').CodeMirror.getValue());
     expect(reloaded).toContain('my persistent workspace edit');
