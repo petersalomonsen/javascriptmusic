@@ -65,6 +65,31 @@ test('browser agent loop drives tools against a mocked NEAR AI API', async ({ pa
     expect(JSON.stringify(requests)).not.toContain('test-api-key');
 });
 
+test('proxy mode (/nearai on): no key, no system prompt, no tools sent — server enforces them', async ({ page }) => {
+    page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+    const requests = [];
+    // Same-origin proxy path (on localhost the default is direct, so the test
+    // overrides the base URL the way resolveDefaultBaseUrl does on pages.dev).
+    await page.route('**/nearai/v1/chat/completions', async (route) => {
+        requests.push({ headers: route.request().headers(), body: route.request().postDataJSON() });
+        await route.fulfill({ json: { choices: [{ message: { role: 'assistant', content: 'via proxy!' } }] } });
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('nearai-enabled', '1');
+        localStorage.setItem('nearai-base-url', '/nearai/v1');
+    });
+    await bootApp(page);
+
+    await sendChat(page, 'hello there');
+    await expect(chatLog(page)).toContainText('via proxy!', { timeout: 15000 });
+
+    expect(requests.length).toBe(1);
+    expect(requests[0].headers.authorization).toBeUndefined();      // server holds the key
+    expect(requests[0].body.tools).toBeUndefined();                  // server injects tools
+    expect(requests[0].body.messages.some((m) => m.role === 'system')).toBe(false); // server injects the prompt
+    expect(requests[0].body.messages.at(-1)).toEqual({ role: 'user', content: 'hello there' });
+});
+
 test('API errors surface in the chat and /nearai off restores the local agent path', async ({ page }) => {
     await page.route('https://cloud-api.near.ai/**', (route) =>
         route.fulfill({ status: 401, json: { error: 'invalid api key' } }));

@@ -75,8 +75,14 @@ export async function runAgentTurn({
   onRetry = () => {},
   maxIterations = 25,
   maxRetries = 4,
+  // Proxy mode: the same-origin Pages Function injects auth, system prompt
+  // and tools server-side — the client then sends neither key nor tools.
+  sendTools = true,
   sleepFn = (ms) => new Promise((r) => setTimeout(r, ms)),
 }) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const bodyBase = sendTools ? { model, tools: toOpenAiTools(), tool_choice: 'auto' } : { model };
   for (let i = 0; i < maxIterations; i++) {
     let response;
     // Transient failures (rate limits, upstream 5xx) must not kill the turn —
@@ -84,8 +90,8 @@ export async function runAgentTurn({
     for (let attempt = 0; ; attempt++) {
       response = await fetchFn(`${baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages, tools: toOpenAiTools(), tool_choice: 'auto' }),
+        headers,
+        body: JSON.stringify({ ...bodyBase, messages }),
       });
       const retryable = response.status === 429 || response.status >= 500;
       if (response.ok || !retryable || attempt >= maxRetries) break;

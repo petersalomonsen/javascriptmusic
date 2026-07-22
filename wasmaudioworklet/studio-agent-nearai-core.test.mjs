@@ -95,6 +95,18 @@ test('unparseable tool arguments become an ERROR result without calling the tool
   assert.match(messages.find((m) => m.role === 'tool').content, /ERROR: could not parse/);
 });
 
+test('proxy mode: no apiKey → no Authorization header; sendTools:false → no tools in body', async () => {
+  let captured;
+  await runAgentTurn({
+    fetchFn: async (url, opts) => { captured = { headers: opts.headers, body: JSON.parse(opts.body) }; return completion({ role: 'assistant', content: 'ok' }); },
+    baseUrl: '/nearai/v1', apiKey: null, model: 'm', sendTools: false,
+    messages: [{ role: 'user', content: 'hi' }], runTool: () => {},
+  });
+  assert.equal(captured.headers.Authorization, undefined);
+  assert.equal(captured.body.tools, undefined);
+  assert.equal(captured.body.model, 'm');
+});
+
 test('429 rate limit retries with exponential backoff, then succeeds', async () => {
   const delays = [];
   const retries = [];

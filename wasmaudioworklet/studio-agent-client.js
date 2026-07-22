@@ -343,35 +343,57 @@ function sendChat(text) {
 // committed and pushed with the project).
 function nearaiConfig() {
   const apiKey = localStorage.getItem('nearai-api-key');
-  if (!apiKey) return null;
+  const enabled = apiKey || localStorage.getItem('nearai-enabled');
+  if (!enabled) return null;
+  const baseUrl = localStorage.getItem('nearai-base-url') || resolveDefaultBaseUrl(location.hostname);
+  // A relative base URL = the same-origin Pages Function proxy, which holds
+  // the API key AND injects the system prompt + tools server-side.
+  const proxy = baseUrl.startsWith('/');
+  if (!proxy && !apiKey) return null; // direct upstream needs the user's key
   return {
-    apiKey,
+    apiKey: proxy ? null : apiKey,
+    proxy,
     model: localStorage.getItem('nearai-model') || DEFAULT_MODEL,
-    baseUrl: localStorage.getItem('nearai-base-url') || resolveDefaultBaseUrl(location.hostname),
+    baseUrl,
   };
 }
 
 function handleNearaiCommand(text) {
   const parts = text.trim().split(/\s+/).slice(1);
+  const activate = () => {
+    nearaiMessages = null; // fresh model context on (re)configure
+    if (socket) { try { socket.onclose = null; socket.close(); } catch { /* */ } socket = null; }
+    const cfg = nearaiConfig();
+    setStatus(`NEAR AI: ${cfg.model}${cfg.proxy ? ' (via proxy)' : ''}`);
+    addLine('tool', `— NEAR AI mode ON (model ${cfg.model}${cfg.proxy ? ', server-side key via same-origin proxy' : ''}). '/nearai off' to switch back, '/nearai model <id>' to change model —`);
+  };
   if (parts[0] === 'off') {
     localStorage.removeItem('nearai-api-key');
+    localStorage.removeItem('nearai-enabled');
     addLine('tool', '— NEAR AI mode off; using the local studio-agent —');
     if (!socket) connect();
   } else if (parts[0] === 'model' && parts[1]) {
     localStorage.setItem('nearai-model', parts[1]);
     addLine('tool', `— NEAR AI model set to ${parts[1]} —`);
-  } else if (parts[0] && parts[0] !== 'model') {
+  } else if (parts[0] === 'on') {
+    // Key-free proxy mode — needs the same-origin Pages Function, which does
+    // not exist on a plain localhost devserver (use /nearai <key> there).
+    localStorage.setItem('nearai-enabled', '1');
+    if (!nearaiConfig()) {
+      localStorage.removeItem('nearai-enabled');
+      addLine('tool', `— no proxy on this host: on localhost use '/nearai <api-key>' (direct API) —`);
+      return;
+    }
+    activate();
+  } else if (parts[0]) {
     localStorage.setItem('nearai-api-key', parts[0]);
     if (parts[1]) localStorage.setItem('nearai-model', parts[1]);
-    nearaiMessages = null; // fresh model context on (re)configure
-    if (socket) { try { socket.onclose = null; socket.close(); } catch { /* */ } socket = null; }
-    setStatus(`NEAR AI: ${localStorage.getItem('nearai-model') || DEFAULT_MODEL}`);
-    addLine('tool', `— NEAR AI mode ON (model ${localStorage.getItem('nearai-model') || DEFAULT_MODEL}). '/nearai off' to switch back, '/nearai model <id>' to change model —`);
+    activate();
   } else {
     const cfg = nearaiConfig();
     addLine('tool', cfg
-      ? `— NEAR AI mode ON: ${cfg.model} @ ${cfg.baseUrl} —`
-      : `— NEAR AI mode off. Usage: /nearai <api-key> [model] · /nearai model <id> · /nearai off —`);
+      ? `— NEAR AI mode ON: ${cfg.model} @ ${cfg.baseUrl}${cfg.proxy ? ' (server-side key)' : ''} —`
+      : `— NEAR AI mode off. Usage: /nearai on (server-side key) · /nearai <api-key> [model] · /nearai model <id> · /nearai off —`);
   }
 }
 
@@ -407,7 +429,9 @@ let nearaiMessages = null; // model-visible history (in-memory for iteration 1)
 async function runNearaiTurn(text) {
   const cfg = nearaiConfig();
   if (!nearaiMessages) {
-    nearaiMessages = [{ role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX }];
+    // In proxy mode the server injects the system prompt (and tools) —
+    // sending them from here would be stripped anyway.
+    nearaiMessages = cfg.proxy ? [] : [{ role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX }];
   }
   nearaiMessages.push({ role: 'user', content: text });
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
@@ -417,6 +441,7 @@ async function runNearaiTurn(text) {
       baseUrl: cfg.baseUrl,
       apiKey: cfg.apiKey,
       model: cfg.model,
+      sendTools: !cfg.proxy,
       messages: nearaiMessages,
       runTool: (name, args) => new Promise((resolve, reject) => {
         // reuse the same serialization as WS tool calls; once the tool is
