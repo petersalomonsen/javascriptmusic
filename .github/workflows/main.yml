@@ -25,11 +25,15 @@ jobs:
           node-version: '20'
       - name: Run node:test unit suites
         run: |
-          # Pure-logic unit tests — no deps, no browser (studio-agent tool core,
-          # git CORS proxy incl. NEP-413/JWT crypto).
+          # Pure-logic unit tests — no browser (studio-agent tool core,
+          # git CORS proxy incl. NEP-413/JWT crypto). Only dependency is
+          # quickjs-wasm (QuickJS-in-wasm sandbox PoC for the song compiler),
+          # installed on its own to keep this job fast.
           cd wasmaudioworklet
+          npm install --no-save --no-audit --no-fund quickjs-wasm@0.0.1
           npm run test-agent-tools
           npm run test-gitproxy
+          npm run test-quickjs-sandbox
   web-test-runner:
     name: Web Test Runner
     runs-on: ubuntu-latest
