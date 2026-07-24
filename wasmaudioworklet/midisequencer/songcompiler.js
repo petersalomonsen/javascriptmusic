@@ -204,7 +204,48 @@ const songargs = {
 Object.assign(songargs, noteFunctions);
 export const songargkeys = Object.keys(songargs);
 
+// Compile a song in the QuickJS WebAssembly sandbox (see quickjssandbox.js).
+// The guest runs this module's own source through compileSongUnsafe and
+// returns a state snapshot, which is applied to this module's state here so
+// consumers (createMultipatternSequence, getSongParts, addedAudio, ...) work
+// exactly as with the native path. Media is only recorded in the guest —
+// the real addAudio/addVideo/addImage run below, on the host.
 export async function compileSong(songsource) {
+    const { runSongInSandbox } = await import('./quickjssandbox.js');
+    const result = await runSongInSandbox(songsource);
+
+    songmessages = result.events;
+    instrumentNames = result.instrumentNames;
+    recordingStartTimeMillis = result.recordingStartTimeMillis;
+    songParts = result.songParts;
+    trackerPatterns = result.trackerPatterns;
+
+    result.audioUrls.forEach(url => songargs.addAudio(url));
+
+    const videoSchedule = [];
+    Object.values(addedVideo).forEach(vid => vid.schedule = []);
+    for (const [name, spec] of Object.entries(result.visual)) {
+        if (spec.isImage) {
+            await songargs.addImage(name, spec.url);
+        } else {
+            await songargs.addVideo(name, spec.url);
+        }
+        addedVideo[name].schedule = spec.schedule;
+        spec.schedule.forEach(sch => {
+            sch.video = addedVideo[name];
+            videoSchedule.push(sch);
+        });
+    }
+    videoSchedule.sort((a, b) => b.startTime - a.startTime);
+    setVideoSchedule(videoSchedule);
+
+    return songmessages;
+}
+
+// Native (non-sandboxed) compile: runs the song source in the host JS engine
+// with full privileges. Used inside the QuickJS guest (where the "host"
+// engine is the sandbox itself) and by the embeddable songcompiler bundle.
+export async function compileSongUnsafe(songsource) {
     return await generateSong(new AsyncFunction(songargkeys, songsource));
 }
 

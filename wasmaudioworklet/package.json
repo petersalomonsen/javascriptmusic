@@ -33,6 +33,7 @@
         "near-sandbox": "docker run --rm -p 3030:8080 ghcr.io/petersalomonsen/near-git-storage/sandbox:main",
         "test-faust": "node ../tools/faust2as/generate-test-sources.js && npx playwright test e2e/faust2as-compilation.spec.js",
         "test-agent-tools": "node --test studio-agent-tools-core.test.mjs studio-agent-nearai-core.test.mjs",
+        "test-quickjs-sandbox": "node --test quickjs-sandbox-poc.test.mjs",
         "test-gitproxy": "node --test gitproxy.test.mjs nearai-proxy.test.mjs"
     },
     "resolutions": {
@@ -50,6 +51,7 @@
         "chai": "^4.3.7",
         "http-server": "^14.1.1",
         "mocha": "^10.2.0",
+        "quickjs-wasm": "0.0.2",
         "rollup": "^4.1.5",
         "rollup-plugin-terser": "^7.0.2",
         "ws": "^7.5.10"

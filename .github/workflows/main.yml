@@ -25,11 +25,17 @@ jobs:
           node-version: '20'
       - name: Run node:test unit suites
         run: |
-          # Pure-logic unit tests — no deps, no browser (studio-agent tool core,
-          # git CORS proxy incl. NEP-413/JWT crypto).
+          # Pure-logic unit tests — no browser (studio-agent tool core,
+          # git CORS proxy incl. NEP-413/JWT crypto). Only dependency is
+          # quickjs-wasm (QuickJS-in-wasm sandbox PoC for the song compiler),
+          # installed on its own to keep this job fast.
           cd wasmaudioworklet
+          # --legacy-peer-deps: pre-existing @as-pect/cli peer conflict with
+          # assemblyscript 0.28 that yarn (used by the other jobs) ignores.
+          npm install --no-save --no-audit --no-fund --legacy-peer-deps quickjs-wasm@0.0.2
           npm run test-agent-tools
           npm run test-gitproxy
+          npm run test-quickjs-sandbox
   web-test-runner:
     name: Web Test Runner
     runs-on: ubuntu-latest

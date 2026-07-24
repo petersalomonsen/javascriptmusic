@@ -5288,6 +5288,11 @@ queue-microtask@^1.2.2:
   resolved "https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz"
   integrity sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==
 
+quickjs-wasm@0.0.2:
+  version "0.0.2"
+  resolved "https://registry.yarnpkg.com/quickjs-wasm/-/quickjs-wasm-0.0.2.tgz#c654fda432cf9b7d124fbd141315ec73b128a950"
+  integrity sha512-I5+svgrA+y6h5rZCtxvn5SNL31AqG4fBJdlw2+WaupZuGgMlnfuxojSoDGJB+S5aeBprGpHsZvVf2rRhJrKAIw==
+
 qw@^1.0.2:
   version "1.0.2"
   resolved "https://registry.npmjs.org/qw/-/qw-1.0.2.tgz"
