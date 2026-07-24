@@ -187,8 +187,9 @@ test('real-model transcript: compile error (TS2305) is diagnosed and fixed', asy
     const wf = await page.evaluate((source) =>
         window.studioAgentRunTool('write_faust', { path: 'sawbass', source }), SIMPLE_SAWBASS_DSP);
     expect(String(wf)).toContain('transpiled OK');
-    // Precondition: the transpiler generated NO Channel class (the hint says so).
-    expect(String(wf)).toContain('no SawbassChannel was generated');
+    // Precondition: the transpiler generated NO Channel class (the hint says
+    // so — the class-name stem depends on the transpiler's naming scheme).
+    expect(String(wf)).toMatch(/no \w+Channel was generated/);
     await page.evaluate((source) =>
         window.studioAgentRunTool('set_synth', { source }), BROKEN_SYNTH);
     // Precondition: this really is the TS2305 broken state.
