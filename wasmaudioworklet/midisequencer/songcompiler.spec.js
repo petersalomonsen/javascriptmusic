@@ -37,7 +37,10 @@ loopHere();
         try {
             await compileSong(`createTrack(5).steps(4,[controlChange(91, 100)]);`);
         } catch (e) {
-            assert.isTrue(e.message === 'controlChange is not defined' || e.message === "Can't find variable: controlChange");
+            // Chromium / WebKit / QuickJS-sandbox message variants
+            assert.isTrue(e.message === 'controlChange is not defined' ||
+                e.message === "Can't find variable: controlChange" ||
+                e.message === "'controlChange' is not defined");
             hasError = true;
         }
         assert.equal(hasError, true);
