@@ -8,7 +8,20 @@
 // therefore only *recorded* in the guest — the host replays the recorded
 // specs through the real implementations afterwards (see compileSong in
 // songcompiler.js).
-import { createQuickJS } from './quickjs-wasm-vendored/js/quickjs.js';
+// quickjs-wasm is loaded from jsDelivr in the browser (jseval.wasm resolves
+// relative to quickjs.js's own import.meta.url, so it comes from the CDN
+// too — CORS/CORP headers verified compatible with this app's COEP), and
+// from the installed npm package in Node (Node cannot import https: URLs).
+// Keep the version in sync with the quickjs-wasm devDependency in
+// package.json.
+const QUICKJS_WASM_VERSION = '0.0.2';
+
+async function getCreateQuickJS() {
+    const { createQuickJS } = (typeof process !== 'undefined' && process.versions && process.versions.node)
+        ? await import('quickjs-wasm')
+        : await import(`https://cdn.jsdelivr.net/npm/quickjs-wasm@${QUICKJS_WASM_VERSION}/js/quickjs.js`);
+    return createQuickJS;
+}
 
 // Interrupts a runaway song (while(true){}) instead of hanging the tab.
 const SANDBOX_TIMEOUT_MS = 20000;
@@ -104,7 +117,7 @@ function getGuestSource() {
 
 export async function runSongInSandbox(songsource, timeoutMs = SANDBOX_TIMEOUT_MS) {
     const guestSource = await getGuestSource();
-    const quickjs = await createQuickJS();
+    const quickjs = await (await getCreateQuickJS())();
     quickjs.setMemoryLimit(SANDBOX_MEMORY_LIMIT);
     quickjs.hostFunctions['getSongSource'] = async () =>
         quickjs.allocateJSstring(songsource);
