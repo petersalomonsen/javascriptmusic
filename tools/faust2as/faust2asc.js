@@ -4,22 +4,21 @@
 // Usage: node faust2asc.js <input.dsp> [--name ClassName] [--out output.ts]
 //        node faust2asc.js --bundle <dsp1> <dsp2> ... [--out output.ts]
 //
-// Runs `faust -lang asc` (via @psalomo/faustwasm — wasm-compiled libfaust with
-// the AssemblyScript backend enabled) on the input .dsp, then reshapes the
-// generated AssemblyScript class into a MidiVoice subclass for the synth engine.
-//
-// Pure reshape/codegen logic lives in
+// Runs `faust -lang asc --ec --os` through the plain wasm32 compiler module
+// (same module and ABI as the browser editor path in faust-rs-transpile.js;
+// the Faust standard libraries are embedded in the module). The native class
+// ships control()/frame() entry points; the wrapper codegen lives in
 //   ../../wasmaudioworklet/faust/transpile-core.js
-// so the browser-side Faust editor can reuse it.
+// so the browser-side Faust editor reuses it.
+//
+// Compiler module resolution order:
+//   1. $FAUST_RS_COMPILER_MODULE            (explicit path, developer builds)
+//   2. wasmaudioworklet/faust/faust_wasm_ffi.wasm  (gitignored local drop)
+//   3. @psalomo/faustwasm/faust-compiler-module.wasm (npm package)
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import {
-    instantiateFaustModuleFromFile,
-    LibFaust,
-    FaustCompiler,
-} from '@psalomo/faustwasm/dist/esm/index.js';
 import {
     toClassName,
     transpileDsp as transpileDspPure,
@@ -89,70 +88,120 @@ if (effectMode) {
 }
 
 // ---------------------------------------------------------------------------
-// libfaust-wasm bootstrap + sync compile-to-AS helper
+// faust-rs wasm compiler module bootstrap + sync compile-to-AS helper
 // ---------------------------------------------------------------------------
 
-const faustwasmDir = path.dirname(
-    fileURLToPath(import.meta.resolve('@psalomo/faustwasm/package.json'))
-);
-const libfaustJs = path.join(faustwasmDir, 'libfaust-wasm', 'libfaust-wasm.js');
+function resolveCompilerModulePath() {
+    const candidates = [];
+    if (process.env.FAUST_RS_COMPILER_MODULE) {
+        candidates.push(process.env.FAUST_RS_COMPILER_MODULE);
+    }
+    candidates.push(path.resolve(__dirname, '..', '..', 'wasmaudioworklet', 'faust', 'faust_wasm_ffi.wasm'));
+    try {
+        const faustwasmDir = path.dirname(
+            fileURLToPath(import.meta.resolve('@psalomo/faustwasm/package.json'))
+        );
+        candidates.push(path.join(faustwasmDir, 'faust-compiler-module.wasm'));
+    } catch (_) { /* package not installed */ }
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    console.error('faust compiler module not found. Tried:\n  ' + candidates.join('\n  '));
+    process.exit(1);
+}
 
-const faustModule = await instantiateFaustModuleFromFile(libfaustJs);
-const libFaust = new LibFaust(faustModule);
-const faustCompiler = new FaustCompiler(libFaust);
-const faustFS = faustModule.FS;
+const modulePath = resolveCompilerModulePath();
+const { instance } = await WebAssembly.instantiate(fs.readFileSync(modulePath), {});
+const wasmExports = instance.exports;
 
-// Mirror the host directory containing inputDsp into the libfaust virtual FS at
-// /work/, so that `library("lib/foo.dsp")` and `import("siblings.lib")`
-// resolve. Re-mounts on every call (overwrites are cheap).
-const mountedDirs = new Set();
-function mountDspDir(hostDir) {
-    if (mountedDirs.has(hostDir)) return;
-    function walk(dir, virtBase) {
-        try { faustFS.mkdir(virtBase); } catch (_) { /* exists */ }
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+const wasmMem = () => new Uint8Array(wasmExports.memory.buffer);
+
+function writeWasmString(s) {
+    const bytes = textEncoder.encode(s);
+    const ptr = wasmExports.faust_wasm_alloc(bytes.length);
+    wasmMem().set(bytes, ptr);
+    return [ptr, bytes.length];
+}
+
+// generateAuxFiles(name, source, args) → generated AS text; throws with the
+// compiler's error message on failure. Same JSON-array export protocol as
+// the browser path (faust-rs-transpile.js).
+function generateAuxFiles(name, source, args) {
+    const [np, nl] = writeWasmString(name);
+    const [sp, sl] = writeWasmString(source);
+    const [ap, al] = writeWasmString(args);
+    let handle;
+    try {
+        handle = wasmExports.faust_wasm_generate_aux_files_json(np, nl, sp, sl, ap, al);
+    } catch (err) {
+        throw new Error('faust compiler crashed: ' + err);
+    } finally {
+        wasmExports.faust_wasm_dealloc(np, nl);
+        wasmExports.faust_wasm_dealloc(sp, sl);
+        wasmExports.faust_wasm_dealloc(ap, al);
+    }
+    const ok = wasmExports.faust_wasm_text_result_is_ok(handle);
+    const ptr = wasmExports.faust_wasm_text_result_ptr(handle);
+    const len = wasmExports.faust_wasm_text_result_len(handle);
+    const text = textDecoder.decode(wasmMem().slice(ptr, ptr + len));
+    wasmExports.faust_wasm_text_result_free(handle);
+    if (!ok) {
+        throw new Error('faust: ' + (text || 'compilation failed'));
+    }
+    const files = JSON.parse(text);
+    const file = files.find(f => !f.binary);
+    if (!file) {
+        throw new Error('faust: no textual artifact in generateAuxFiles result');
+    }
+    return Buffer.from(file.content_base64, 'base64').toString('utf-8');
+}
+
+// Sibling .dsp/.lib files travel inline in the argv as
+// `--virtual-source <relPath>=<base64>` entries so `library("lib/foo.dsp")`
+// and `import("siblings.lib")` resolve against the embedded stdlib bundle.
+const virtualSourceCache = new Map();
+function virtualSourceArgsFor(dspDir) {
+    if (virtualSourceCache.has(dspDir)) return virtualSourceCache.get(dspDir);
+    const parts = [];
+    function walk(dir, relBase) {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
             const hostPath = path.join(dir, entry.name);
-            const virtPath = `${virtBase}/${entry.name}`;
+            const relPath = relBase ? `${relBase}/${entry.name}` : entry.name;
             if (entry.isDirectory()) {
-                walk(hostPath, virtPath);
+                walk(hostPath, relPath);
             } else if (/\.(dsp|lib)$/.test(entry.name)) {
-                faustFS.writeFile(virtPath, fs.readFileSync(hostPath));
+                const b64 = fs.readFileSync(hostPath).toString('base64');
+                parts.push(`--virtual-source ${relPath}=${b64}`);
             }
         }
     }
-    walk(hostDir, '/work');
-    mountedDirs.add(hostDir);
+    walk(dspDir, '');
+    const argsString = parts.join(' ');
+    virtualSourceCache.set(dspDir, argsString);
+    return argsString;
 }
 
-// Compile a Faust .dsp file to AssemblyScript source via libfaust-wasm.
-// argsTail is the rest of the faust args (e.g. "-cn MyClass" or "-cn MyClass -pn effect").
-// Returns the AS source as a string. Throws on failure.
+// Compile a Faust .dsp file to native AssemblyScript source (with the
+// `--ec --os` execution options, so the class exposes control()/frame()).
+// argsTail carries the per-call options (e.g. "-cn MyClassDsp" or
+// "-cn MyClassEffectDsp -pn effect"). Throws on failure.
 function compileFaustToAS(inputDsp, argsTail) {
     const dspPath = path.resolve(inputDsp);
-    const dspDir = path.dirname(dspPath);
     const dspBase = path.basename(dspPath);
-
-    mountDspDir(dspDir);
-
     const dspSource = fs.readFileSync(dspPath, 'utf-8');
-    const outVirt = `/${dspBase}.out.ts`;
-    const args = `${argsTail} -I /work -o ${outVirt}`;
-
-    const ok = faustCompiler.generateAuxFiles(dspBase, dspSource, args);
-    if (!ok) {
-        const err = faustCompiler.getErrorMessage() || '(no error message)';
-        console.error(`Faust compilation failed for ${inputDsp}:\n${err}`);
+    const vsArgs = virtualSourceArgsFor(path.dirname(dspPath));
+    try {
+        return generateAuxFiles(
+            dspBase.replace(/\.dsp$/, ''),
+            dspSource,
+            `-lang asc ${argsTail} --ec --os ${vsArgs} -o /${dspBase}.out.ts`
+        );
+    } catch (err) {
+        console.error(`Faust compilation failed for ${inputDsp}:\n${err.message}`);
         process.exit(1);
     }
-
-    let asSource = faustFS.readFile(outVirt, { encoding: 'utf8' });
-    // Strip redundant <i32>() casts in for-loop headers (Faust 2.85.3+):
-    // "for (let x: i32 = <i32>(0); x < <i32>(N); x = (x + <i32>(1)))"
-    asSource = asSource.replace(
-        /for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
-        'for (let $1: i32 = $2; $1 < $3; $1 = ($1 + 1))'
-    );
-    return asSource;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,14 +214,13 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     const dspSource = fs.readFileSync(path.resolve(inputDsp), 'utf-8');
     const hasEffect = /^\s*effect\s*=/m.test(dspSource);
 
-    console.log(`Compiling ${path.basename(inputDsp)} -> ${clsName} (asc)`);
-    const asSource = compileFaustToAS(inputDsp, `-lang asc -cn ${clsName}`);
+    console.log(`Compiling ${path.basename(inputDsp)} -> ${clsName} (asc, native control/frame)`);
+    const asSource = compileFaustToAS(inputDsp, `-cn ${clsName}Dsp`);
 
     let effectAsSource = null;
     if (hasEffect) {
-        const effectClassName = clsName + 'Effect';
-        console.log(`Compiling ${path.basename(inputDsp)} effect -> ${effectClassName} (asc)`);
-        effectAsSource = compileFaustToAS(inputDsp, `-lang asc -cn ${effectClassName} -pn effect`);
+        console.log(`Compiling ${path.basename(inputDsp)} effect -> ${clsName}EffectDsp (asc)`);
+        effectAsSource = compileFaustToAS(inputDsp, `-cn ${clsName}EffectDsp -pn effect`);
         console.log(`Detected effect declaration — will generate ${clsName}Channel MidiChannel subclass`);
     }
 
@@ -198,7 +246,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
 
 function transpileEffect(inputDsp, clsName) {
     console.log(`Compiling ${path.basename(inputDsp)} -> ${clsName} (asc, effect)`);
-    const asSource = compileFaustToAS(inputDsp, `-lang asc -cn ${clsName}`);
+    const asSource = compileFaustToAS(inputDsp, `-cn ${clsName}Dsp`);
     return transpileEffectPure({
         asSource,
         clsName,

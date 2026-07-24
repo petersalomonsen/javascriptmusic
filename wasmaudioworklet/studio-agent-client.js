@@ -6,7 +6,7 @@
 // the "full in-app" path: tool calls operate on the browser, not on disk.
 
 import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
-import { transpileDspSource } from './faust/browser-transpile.js';
+import { transpileDspSource } from './faust/faust-rs-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
 import { applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings } from './studio-agent-tools-core.js';
 import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';

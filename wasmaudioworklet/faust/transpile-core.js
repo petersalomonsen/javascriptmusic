@@ -1,23 +1,30 @@
-// transpile-core.js — Pure reshape/codegen for Faust AS-backend output.
+// transpile-core.js — MidiVoice/MidiChannel wrapper codegen around the native
+// faust-rs AssemblyScript output.
 //
-// Extracted from tools/faust2as/faust2asc.js for reuse in the browser-side
-// Faust editor. No Node dependencies (no fs/path/child_process/url): callers
-// pass already-loaded AS source strings and basenames.
+// The DSPs are compiled with the execution options `--ec --os` (external
+// control + one-sample), so the native class ships ready-to-use entry points:
+//   control()                    — recompute control-rate values from the
+//                                  UI zone fields (fHsliderN, fButtonN, ...)
+//   frame(inputs, outputs)       — process exactly one sample over flat
+//                                  StaticArray<f32> channel arrays
+// The old block→one-sample structural reshape (parseComputeBody /
+// reshapeASLine / reshapeSIGInit / ...) is gone: the native class is included
+// verbatim and thin MidiVoice / MidiChannel wrappers delegate to it.
+//
+// Native-class naming convention: callers compile the voice DSP with
+// `-cn <ClsName>Dsp` and the effect (`-pn effect`) with
+// `-cn <ClsName>EffectDsp`, so the wrappers keep the historical public names
+// (<ClsName>, <ClsName>Channel).
 //
 // Public API:
 //   toClassName(base)                 — derive a PascalCase class name
 //   extractUIFromJSON(asSource)       — parse getJSON() metadata
-//   parseASSource(asSource, clsName)  — extract fields/methods/sigClasses
-//   parseComputeBody(body)            — split compute() into pre/loop/shift
-//   reshapeASLine(line, ...)          — rewrite this.X / SAMPLERATE / static refs
-//   reshapeInstanceConstants(...)
-//   reshapeInstanceClear(...)
-//   reshapeSIGInit(...)
+//   splitNativeSource(asSource, cls)  — split preamble / class, strip getJSON
 //   transpileDsp({ asSource, effectAsSource, clsName, sourceFile, options })
-//   transpileEffect({ asSource, clsName, sourceFile })
-//   generateNRPNSetParam(lines, ccParams, globalFields)
+//   transpileEffect({ asSource, clsName, sourceFile, importDepth })
+//   generateNRPNSetParam(lines, ccParams)
 //   generateNRPNDefaults(lines, ccParams, channelIndex)
-//   assembleSingleFile(result, { forEditor })
+//   assembleSingleFile(result, { forEditor, importDepth })
 //   assembleBundle(results, { forEditor })
 
 // ---------------------------------------------------------------------------
@@ -85,196 +92,58 @@ export function extractUIFromJSON(asSource) {
 }
 
 // ---------------------------------------------------------------------------
-// Parse AS source: extract class fields, methods, subcontainers
+// Split the native faust-rs output into preamble + class source
 // ---------------------------------------------------------------------------
 
-export function parseASSource(asSource, clsName) {
-    // Extract class body from `export class ClassName { ... }`
-    const classMatch = asSource.match(new RegExp(`export\\s+class\\s+${clsName}\\s*\\{([\\s\\S]*)\\}\\s*$`, 'm'));
-    if (!classMatch) {
-        throw new Error(`Could not find export class ${clsName} in AS output`);
-    }
-    const classBody = classMatch[1];
-
-    // Extract fields (instance and static)
-    const fields = [];
-    const staticFields = [];
-    const fieldRegex = /^\s+(static\s+)?(\w+):\s*((?:StaticArray<)?(?:f32|i32)>?)(\[\])?\s*(?:=\s*([^;]+))?\s*;/gm;
-    let m;
-    while ((m = fieldRegex.exec(classBody)) !== null) {
-        const isStatic = !!m[1];
-        const rawType = m[3];
-        // Normalize StaticArray<i32> → i32 for downstream processing, mark as array
-        const isStaticArray = rawType.startsWith('StaticArray<');
-        const baseType = isStaticArray ? rawType.match(/StaticArray<(\w+)>/)[1] : rawType;
-        const field = {
-            name: m[2],
-            type: baseType,       // 'f32' or 'i32'
-            isArray: !!m[4] || isStaticArray,
-            initializer: m[5] ? m[5].trim() : null,
-        };
-        if (isStatic) {
-            staticFields.push(field);
-        } else {
-            fields.push(field);
-        }
+// The native output is: a preamble of module-level math helpers (_fmodf,
+// _rintf, ... — identical for every DSP compiled by the same module) and
+// soundfile @external declarations, followed by one `export class X { ... }`.
+//
+// Returns { preamble, classSource } where classSource is the full class
+// with the (potentially very large) getJSON() method stripped.
+export function splitNativeSource(asSource, dspClassName) {
+    const marker = `export class ${dspClassName} {`;
+    const classStart = asSource.indexOf(marker);
+    if (classStart === -1) {
+        throw new Error(`Could not find export class ${dspClassName} in native AS output`);
     }
 
-    // Extract method bodies by name
-    function extractMethod(methodName) {
-        // Match: methodName(...): returnType { ... }
-        // Use brace counting for accurate extraction
-        const methodStart = classBody.indexOf(methodName + '(');
-        if (methodStart === -1) return '';
-        const braceStart = classBody.indexOf('{', methodStart);
-        if (braceStart === -1) return '';
+    let preamble = asSource.substring(0, classStart).trim();
+    let classSource = asSource.substring(classStart).trim();
 
-        let depth = 0;
-        let i = braceStart;
-        for (; i < classBody.length; i++) {
-            if (classBody[i] === '{') depth++;
-            if (classBody[i] === '}') depth--;
-            if (depth === 0) break;
-        }
-        return classBody.substring(braceStart + 1, i).trim();
+    // Drop the per-DSP header comment block (// Code generated with faust-rs
+    // ... // name: <dsp>) so the remaining helper preamble is byte-identical
+    // across DSPs and bundle assembly can deduplicate it.
+    preamble = preamble
+        .split('\n')
+        .filter(line => !/^\s*\/\//.test(line))
+        .join('\n')
+        .trim();
+
+    // Strip the embedded JSON string (parsed separately via
+    // extractUIFromJSON) to keep the shipped source and data segment small.
+    classSource = classSource.replace(
+        /\n\s*getJSON\(\)\s*:\s*string\s*\{\s*\n\s*return\s+"(?:[^"\\]|\\.)*"\s*;\s*\n\s*\}/,
+        ''
+    );
+
+    // Soundfile primitives need host-provided env imports the synth engine
+    // does not supply — reject clearly instead of failing at instantiation.
+    if (/\b_soundfile(?:Length|Rate|Buffer)\s*\(/.test(classSource)) {
+        throw new Error('Faust soundfile primitives are not supported by the MidiVoice transpiler');
     }
 
-    const instanceConstants = extractMethod('instanceConstants');
-    const instanceClear = extractMethod('instanceClear');
-    const instanceResetUI = extractMethod('instanceResetUserInterface');
-    const computeBody = extractMethod('compute');
+    // The @external soundfile declares would become mandatory wasm imports —
+    // strip them (they are unused after the check above).
+    preamble = preamble
+        .replace(/@external\("env",\s*"_soundfile\w+"\)\s*\n\s*declare function _soundfile\w+\([^)]*\)\s*:\s*\w+;\s*/g, '')
+        .trim();
 
-    // Extract defaults from instanceResetUserInterface
-    const defaults = {};
-    const defaultRegex = /this\.(\w+)\s*=\s*([^;]+);/g;
-    while ((m = defaultRegex.exec(instanceResetUI)) !== null) {
-        defaults[m[1]] = m[2].trim();
-    }
-
-    // Extract subcontainer classes (SIG classes) and their free functions
-    // These appear before the main export class
-    const mainClassStart = asSource.indexOf(`export class ${clsName}`);
-    const preClassSource = asSource.substring(0, mainClassStart);
-
-    // Extract SIG class bodies
-    const sigClasses = [];
-    const sigClassRegex = /class\s+(\w+SIG\d+)\s*\{([\s\S]*?)\n\}/g;
-    while ((m = sigClassRegex.exec(preClassSource)) !== null) {
-        sigClasses.push({ name: m[1], body: m[2] });
-    }
-
-    // Extract free functions (newXxxSIG0, fillXxxSIG0, etc.)
-    const freeFunctions = [];
-    const freeFnRegex = /^function\s+(\w+)\s*\([^)]*\)\s*:\s*\w+\s*\{[\s\S]*?\n\}/gm;
-    while ((m = freeFnRegex.exec(preClassSource)) !== null) {
-        freeFunctions.push({ name: m[1], code: m[0] });
-    }
-
-    // Extract classInit body (for SIG table initialization)
-    const classInit = extractMethod('static classInit');
-
-    return {
-        fields,
-        staticFields,
-        defaults,
-        instanceConstants,
-        instanceClear,
-        computeBody,
-        classInit,
-        sigClasses,
-        freeFunctions,
-        preClassSource,
-    };
+    return { preamble, classSource };
 }
 
 // ---------------------------------------------------------------------------
-// Parse compute body into structural sections
-// ---------------------------------------------------------------------------
-
-export function parseComputeBody(computeBody) {
-    const lines = computeBody.split('\n');
-    const preLoopDecls = [];     // let output0, output1, fSlow/iSlow declarations
-    const loopBodyLines = [];    // lines inside the for loop (computation + output writes)
-    const delayShiftLines = [];  // state-shift lines at the tail of the loop
-    let inLoop = false;
-    let loopBraceDepth = 0;
-    let inDelayShifts = false;
-    let innerForDepth = 0;
-
-    // A delay-shift line shifts state to the next sample, e.g.
-    //   this.fRec1[<i32>(1)] = this.fRec1[<i32>(0)];
-    //   this.IOTA0 = (this.IOTA0 + <i32>(1));
-    // The shift copies SAME field from index N to N+1 — that's how we tell it
-    // apart from recursion lines like `this.fRec25[0] = this.fRec26[0];` that
-    // are still part of the computation phase.
-    function isDelayShiftStart(line) {
-        const m = line.match(/^this\.(\w+)\[<i32>\(\d+\)\]\s*=\s*this\.(\w+)\[/);
-        if (m && m[1] === m[2]) return true;
-        return /^this\.IOTA\d+\s*=/.test(line);
-    }
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-
-        // Output channel declarations (before loop)
-        if (!inLoop && trimmed.match(/^let\s+output\d+:/)) continue;
-
-        // fSlow/iSlow declarations (before loop)
-        if (!inLoop && (trimmed.startsWith('let fSlow') || trimmed.startsWith('let iSlow'))) {
-            preLoopDecls.push(trimmed);
-            continue;
-        }
-
-        // Detect main loop start
-        if (!inLoop && trimmed.match(/^for\s*\(/)) {
-            inLoop = true;
-            loopBraceDepth = 0;
-            continue;
-        }
-
-        if (inLoop) {
-            // Track brace depth to know when the main loop ends
-            for (const ch of trimmed) {
-                if (ch === '{') loopBraceDepth++;
-                if (ch === '}') loopBraceDepth--;
-            }
-
-            // Skip the main loop's opening/closing braces
-            if (loopBraceDepth < 0) break; // main loop closed
-
-            // Detect transition into the state-shift tail by pattern. Keep all
-            // computation (including output0/output1 writes and any state
-            // updates between them) in loopBodyLines.
-            if (!inDelayShifts && isDelayShiftStart(trimmed)) {
-                inDelayShifts = true;
-            }
-
-            if (inDelayShifts) {
-                if (trimmed.match(/^for\s*\(/)) {
-                    innerForDepth++;
-                    delayShiftLines.push(trimmed);
-                    continue;
-                }
-                if (trimmed === '}' && innerForDepth > 0) {
-                    innerForDepth--;
-                    delayShiftLines.push(trimmed);
-                    continue;
-                }
-                if (trimmed === '{') continue;
-                delayShiftLines.push(trimmed);
-            } else {
-                if (trimmed === '{' || trimmed === '}') continue;
-                loopBodyLines.push(trimmed);
-            }
-        }
-    }
-
-    return { preLoopDecls, loopBodyLines, delayShiftLines };
-}
-
-// ---------------------------------------------------------------------------
-// Field-name derivation for UI params
+// Param naming helpers
 // ---------------------------------------------------------------------------
 
 const RESERVED_FIELD_NAMES = new Set([
@@ -282,6 +151,13 @@ const RESERVED_FIELD_NAMES = new Set([
     'freq', 'gate', 'gain', 'isDone', 'noteon', 'noteoff', 'nextframe', 'preprocess',
     'postprocess', 'controlchange', 'silentSamples', 'releaseSamples', 'typedChannel',
     'constructor', 'class', 'super', 'this', 'instanceConstants', 'instanceClear',
+    'dsp', 'effectDsp', 'applyParams', 'process',
+    // Inherited MidiChannel / MidiVoice members (an accessor cannot override
+    // a plain base-class property in AssemblyScript).
+    'volume', 'reverb', 'pan', 'controllerValues', 'sustainedVoices',
+    'voiceTransitionBuffer', 'activateVoice', 'removeFromSustainedVoices',
+    'channelNo', 'activeVoicesIndex', 'activationCount', 'minnote', 'maxnote',
+    'deactivate',
 ]);
 
 function slugifyLabel(label) {
@@ -321,226 +197,15 @@ function paramDocComment(p) {
     return `    /** ${p.name} [${bits.join(', ')}]${mapping} */`;
 }
 
-// ---------------------------------------------------------------------------
-// Reshape AS code for MidiVoice context
-// ---------------------------------------------------------------------------
-
-export function reshapeASLine(line, clsName, globalFields, staticFieldMap) {
-    let out = line;
-
-    // Replace this.field → globalName for global UI params
-    if (globalFields) {
-        for (const [field, globalName] of globalFields) {
-            out = out.replace(new RegExp(`this\\.${field}\\b`, 'g'), globalName);
-        }
-    }
-
-    // Replace ClassName.staticField → shortened name
-    if (staticFieldMap) {
-        for (const [fullName, shortName] of staticFieldMap) {
-            out = out.replace(new RegExp(`${clsName}\\.${fullName}\\b`, 'g'), shortName);
-        }
-    }
-
-    // Replace <f32>(this.fSampleRate) or this.fSampleRate with SAMPLERATE
-    out = out.replace(/<f32>\(this\.fSampleRate\)/g, 'SAMPLERATE');
-    out = out.replace(/\bthis\.fSampleRate\b/g, 'SAMPLERATE');
-
-    return out;
-}
-
-export function reshapeInstanceConstants(body, clsName, staticFieldMap) {
-    const lines = body.split('\n');
-    const result = [];
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        // Skip fSampleRate assignment — we use SAMPLERATE
-        if (trimmed.match(/this\.fSampleRate\s*=\s*sample_rate/)) continue;
-
-        let out = reshapeASLine(trimmed, clsName, null, staticFieldMap);
-
-        // Convert `this.fConstN = expr;` to keep `this.` prefix
-        // Convert `let fConstN: f32 = expr;` → `const fConstN: f32 = expr;`
-        out = out.replace(/^let\s+(fConst\w+)/, 'const $1');
-
-        result.push(out);
-    }
-    return result;
-}
-
-export function reshapeInstanceClear(body) {
-    const lines = body.split('\n');
-    const result = [];
-    let inForLoop = false;
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-
-        // Detect for loop start
-        if (trimmed.match(/^for\s*\(/)) {
-            // Compact single-line form: for (...) { this.field[i] = 0; }
-            let bodyLine = null;
-            // Look ahead to find the loop body
-            const idx = lines.indexOf(line);
-            for (let j = idx + 1; j < lines.length; j++) {
-                const inner = lines[j].trim();
-                if (!inner) continue;
-                if (inner === '}') break;
-                bodyLine = inner;
-                break;
-            }
-            if (bodyLine) {
-                result.push(`${trimmed.replace(/\{$/, '').trim()} { ${bodyLine} }`);
-                inForLoop = true;
-            } else {
-                result.push(trimmed);
-            }
-            continue;
-        }
-
-        // Skip lines already consumed by the compact form
-        if (inForLoop && (trimmed === '}' || trimmed.match(/^this\.\w+\[\w+\]\s*=\s*/))) {
-            if (trimmed === '}') inForLoop = false;
-            continue;
-        }
-
-        inForLoop = false;
-        result.push(trimmed);
-    }
-    return result;
-}
-
-// ---------------------------------------------------------------------------
-// Reshape SIG subcontainers into flat init functions
-// ---------------------------------------------------------------------------
-
-export function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
-    const sigTables = [];
-    const sigInit = [];
-
-    // Extract static table declarations from the main class
-    for (const sf of parsed.staticFields) {
-        const shortName = tablePrefix + sf.name.replace(clsName, '');
-        const asType = sf.type;
-        if (sf.isArray && sf.initializer) {
-            const sizeMatch = sf.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/);
-            if (sizeMatch) {
-                sigTables.push(`const ${shortName}: StaticArray<${asType}> = new StaticArray<${asType}>(${sizeMatch[1]});`);
-            } else {
-                // Table initialized in place (faust-rs asc backend emits
-                // StaticArray.fromArray<T>([...]) literals) — pass through.
-                sigTables.push(`const ${shortName}: StaticArray<${asType}> = ${sf.initializer};`);
-            }
-        }
-    }
-
-    if (parsed.sigClasses.length === 0) return { sigTables, sigInit, waveDataGlobals: [] };
-
-    sigInit.push(`let ${sigPrefix}_sig0_initialized: bool = false;`);
-    sigInit.push('');
-    sigInit.push(`function ${sigPrefix}_initSIG0Tables(): void {`);
-    sigInit.push(`    if (${sigPrefix}_sig0_initialized) return;`);
-    sigInit.push(`    ${sigPrefix}_sig0_initialized = true;`);
-
-    // Extract wave data globals from pre-class source (e.g. let iDX7SIG0Wave0: i32[] = [...])
-    const waveDataGlobals = [];
-    const waveDataRegex = /^let\s+(\w+Wave\d+):\s*(f32|i32)\[\]\s*=\s*(\[[^\]]*\]);/gm;
-    let wm;
-    while ((wm = waveDataRegex.exec(parsed.preClassSource)) !== null) {
-        const name = wm[1];
-        const type = wm[2];
-        // Strip <i32>() casts from array literal data (Faust 2.85.3+)
-        const data = wm[3].replace(/<i32>\((-?\d+)\)/g, '$1');
-        waveDataGlobals.push(`const ${name}: StaticArray<${type}> = ${data};`);
-    }
-
-    for (const sigClass of parsed.sigClasses) {
-        // Extract fields from SIG class. libfaust's ASC backend emits two
-        // shapes:
-        //   • scalar:   "name: i32;" or "name: f32 = 1.0;"
-        //   • array:    "name: StaticArray<i32> = new StaticArray<i32>(N);"
-        //               or the legacy "name: i32[] = …;" form
-        // Both forms have to land as locals in _initSIG0Tables(); without
-        // the StaticArray branch the array helpers were referenced but
-        // never declared (TS2304).
-        const sigFieldRegex = /^\s+(\w+):\s*(?:StaticArray<(f32|i32)>|(f32|i32)(\[\])?)\s*(?:=\s*([^;]+))?;/gm;
-        let m;
-        while ((m = sigFieldRegex.exec(sigClass.body)) !== null) {
-            const fieldName = m[1];
-            const staticArrayInner = m[2]; // set when type is StaticArray<T>
-            const scalarType = m[3];       // set when type is f32|i32 (with optional [])
-            const legacyArray = !!m[4];
-            const init = m[5] ? m[5].trim() : null;
-            if (fieldName === 'fSampleRate') continue;
-
-            const type = staticArrayInner || scalarType;
-            const isArray = !!staticArrayInner || legacyArray;
-            const localName = `sig0_${fieldName}`;
-            if (isArray && init) {
-                const sizeMatch = init.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/);
-                if (sizeMatch) {
-                    sigInit.push(`    const ${localName}: StaticArray<${type}> = new StaticArray<${type}>(${sizeMatch[1]});`);
-                }
-            } else {
-                sigInit.push(`    let ${localName}: ${type} = 0;`);
-            }
-        }
-
-        // Extract fill method body
-        const fillMatch = sigClass.body.match(/fill\w+\([^)]*\)\s*:\s*void\s*\{([\s\S]*?)\n\s{1,4}\}/);
-        if (fillMatch) {
-            // Find the table matching this SIG class by its SIG number suffix
-            const sigSuffix = sigClass.name.match(/SIG\d+$/)?.[0] || 'SIG0';
-            const matchingTable = sigTables.find(t => t.includes(sigSuffix));
-            const tableShortName = matchingTable
-                ? matchingTable.match(/const\s+(\w+):/)?.[1] || 'ftbl0SIG0'
-                : (sigTables.length > 0
-                    ? sigTables[sigTables.length - 1].match(/const\s+(\w+):/)?.[1] || 'ftbl0SIG0'
-                    : 'ftbl0SIG0');
-
-            const fillBody = fillMatch[1];
-            const fillLines = fillBody.split('\n');
-            let inFillLoop = false;
-            for (const line of fillLines) {
-                let trimmed = line.trim();
-                if (!trimmed) continue;
-
-                // Replace this.field → sig0_field
-                trimmed = trimmed.replace(/this\.(\w+)/g, (_match, field) => {
-                    if (field === 'fSampleRate') return 'SAMPLERATE';
-                    return `sig0_${field}`;
-                });
-
-                // Replace table[iN] → shortTableName[i]
-                trimmed = trimmed.replace(/table\[\w+\]/g, `${tableShortName}[i]`);
-
-                // Replace for loop header (handles both with and without <i32>() casts from Faust 2.85.3+)
-                const forMatch = trimmed.match(/^for\s*\(\s*let\s+\w+:\s*i32\s*=\s*(?:<i32>\()?0\)?;\s*\w+\s*<\s*count;/);
-                if (forMatch) {
-                    trimmed = trimmed.replace(/for\s*\(\s*let\s+\w+:\s*i32\s*=\s*(?:<i32>\()?0\)?;\s*\w+\s*<\s*count;/, `for (let i: i32 = 0; i < ${tableShortName}.length;`);
-                    trimmed = trimmed.replace(/(\w+)\s*=\s*\(\1\s*\+\s*(?:<i32>\()?1\)?\)\)/, 'i = (i + 1))');
-                    sigInit.push('    ' + trimmed);
-                    inFillLoop = true;
-                    continue;
-                }
-
-                if (inFillLoop) {
-                    sigInit.push('        ' + trimmed);
-                } else {
-                    sigInit.push('    ' + trimmed);
-                }
-            }
-            if (inFillLoop) {
-                sigInit.push('    }');
-            }
-        }
-    }
-
-    sigInit.push('}');
-    sigInit.push('');
-
-    return { sigTables, sigInit, waveDataGlobals };
+// Public accessor pair backed by `_<niceName>`: writing the param marks the
+// owner dirty so zone sync + control() happen before the next processed
+// frame. This keeps the old "assign the field and it takes effect" contract
+// for songs that poke params directly, without paying control() per write.
+function pushParamAccessor(lines, p) {
+    lines.push(`    private _${p.niceName}: f32 = <f32>(${p.init});`);
+    lines.push(paramDocComment(p));
+    lines.push(`    get ${p.niceName}(): f32 { return this._${p.niceName}; }`);
+    lines.push(`    set ${p.niceName}(value: f32) { this._${p.niceName} = value; this._paramsDirty = true; }`);
 }
 
 // ---------------------------------------------------------------------------
@@ -548,38 +213,27 @@ export function reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix) {
 // ---------------------------------------------------------------------------
 
 // transpileDsp({ asSource, effectAsSource, clsName, sourceFile, options })
-//   asSource       — AS output for the main class (run faust with -cn clsName)
-//   effectAsSource — AS output for the effect class (or null)
-//   clsName        — main class name
-//   sourceFile     — basename of the .dsp source (e.g. "master_me.dsp"); used
-//                    for globalPrefix and the resulting result.sourceFile field
-//   options        — { voiceTablePrefix, effectTablePrefix, voiceSigPrefix, effectSigPrefix }
-//
-// Returns the same `result` object the original transpileDsp produced.
+//   asSource       — native AS output for the voice DSP
+//                    (compiled with `-cn <clsName>Dsp --ec --os`)
+//   effectAsSource — native AS output for the effect (compiled with
+//                    `-cn <clsName>EffectDsp -pn effect --ec --os`), or null
+//   clsName        — public voice class name
+//   sourceFile     — basename of the .dsp source (header comment only)
+//   options        — legacy table/sig prefix options, accepted and ignored
+//                    (native static tables are class-scoped, so bundling
+//                    needs no renaming)
 export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceFile, options = {} }) {
-    const {
-        voiceTablePrefix = '',
-        effectTablePrefix = '_eff_',
-        voiceSigPrefix = '',
-        effectSigPrefix = '_eff',
-    } = options;
+    void options;
 
     const hasEffect = !!effectAsSource;
-    const effectClassName = clsName + 'Effect';
+    const dspClassName = clsName + 'Dsp';
+    const effectDspClassName = clsName + 'EffectDsp';
+    const channelClassName = clsName + 'Channel';
 
-    // === Step 2: Parse AS output ===
+    const { uiParams, numInputs, numOutputs } = extractUIFromJSON(asSource);
+    const native = splitNativeSource(asSource, dspClassName);
 
-    const parsed = parseASSource(asSource, clsName);
-    const { uiParams } = extractUIFromJSON(asSource);
-
-    // Build static field name map: ClassName.ftbl0ClassNameSIG0 → ftbl0SIG0
-    const staticFieldMap = new Map();
-    for (const sf of parsed.staticFields) {
-        const shortName = voiceTablePrefix + sf.name.replace(clsName, '');
-        staticFieldMap.set(sf.name, shortName);
-    }
-
-    // === Step 3: Determine global UI parameters ===
+    // === Determine global UI parameters ===
 
     const freqParam = uiParams.find(p => p.name === 'freq' || p.address.endsWith('/freq'));
     const gateParam = uiParams.find(p => p.isButton && (p.name === 'gate' || p.address.endsWith('/gate')));
@@ -614,114 +268,70 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     }
 
     // Derive an AS-friendly field name for each CC/NRPN-controlled UI param.
-    // Prefer Faust's [symbol:foo] metadata, then a slugified UI label, then
-    // a fallback. Names are unique within the DSP (collisions get suffixes).
     const takenNames = new Set();
     for (const p of ccParams) {
         p.niceName = deriveNiceName(p, takenNames);
     }
 
-    const channelClassName = clsName + 'Channel';
     const hasChannelClass = hasEffect || ccParams.length > 0;
 
-    // Reference expressions used inside the transpiled DSP body for each
-    // param. Voice DSP code runs in the voice class and reaches the channel
-    // via `this.typedChannel`; effect DSP code runs in the channel class
-    // itself, so it uses plain `this.<name>`.
-    const voiceParamRefs = new Map();
-    const effectParamRefs = new Map();
-    for (const p of ccParams) {
-        voiceParamRefs.set(p.field, `this.typedChannel.${p.niceName}`);
-        effectParamRefs.set(p.field, `this.${p.niceName}`);
-    }
-    // Aliased as `globalFields` for compatibility with reshapeASLine.
-    const globalFields = voiceParamRefs;
-
-    // === Step 4: Generate SIG tables and init ===
-
-    const { sigTables: voiceSigTables, sigInit: voiceSigInit, waveDataGlobals: voiceWaveData } = reshapeSIGInit(
-        parsed, clsName, voiceTablePrefix, voiceSigPrefix
-    );
-
-    // === Step 5: Generate voice class ===
+    // === Voice wrapper class ===
 
     const voiceClass = [];
     voiceClass.push(`export class ${clsName} extends MidiVoice {`);
-
-    // Fields
-    for (const field of parsed.fields) {
-        if (field.name === 'fSampleRate') continue;
-        if (globalFields.has(field.name)) continue;
-
-        if (field.isArray) {
-            const sizeMatch = field.initializer ? field.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/) : null;
-            const size = sizeMatch ? sizeMatch[1] : '0';
-            voiceClass.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
-        } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
-            voiceClass.push(`    private ${field.name}: i32 = 0;`);
-        } else if (parsed.defaults[field.name] !== undefined) {
-            voiceClass.push(`    private ${field.name}: f32 = ${parsed.defaults[field.name]};`);
-        } else if (field.initializer) {
-            voiceClass.push(`    private ${field.name}: ${field.type} = ${field.initializer};`);
-        } else {
-            voiceClass.push(`    private ${field.name}: ${field.type};`);
-        }
-    }
+    voiceClass.push(`    readonly dsp: ${dspClassName} = new ${dspClassName}();`);
+    voiceClass.push(`    private fin: StaticArray<f32> = new StaticArray<f32>(${numInputs});`);
+    voiceClass.push(`    private fout: StaticArray<f32> = new StaticArray<f32>(${Math.max(numOutputs, 1)});`);
     voiceClass.push('    private silentSamples: i32 = 0;');
     voiceClass.push('    private releaseSamples: i32 = 0;');
     if (hasChannelClass) {
-        // Typed back-reference so nextframe() can read per-instance UI params
-        // off the channel without a virtual call. Zero-cost reinterpret cast.
+        // Typed back-reference so param sync can read per-channel UI params
+        // without a virtual call. Zero-cost reinterpret cast.
         voiceClass.push(`    typedChannel!: ${channelClassName};`);
     }
     voiceClass.push('');
 
-    // Constructor
     voiceClass.push('    constructor(channel: MidiChannel) {');
     voiceClass.push('        super(channel);');
     if (hasChannelClass) {
         voiceClass.push(`        this.typedChannel = changetype<${channelClassName}>(changetype<usize>(channel));`);
     }
-    if (parsed.sigClasses.length > 0) {
-        voiceClass.push(`        ${voiceSigPrefix}_initSIG0Tables();`);
-    }
-    voiceClass.push('        this.instanceConstants();');
-    voiceClass.push('        this.instanceClear();');
+    voiceClass.push('        this.dsp.init(<i32>SAMPLERATE);');
     voiceClass.push('    }');
     voiceClass.push('');
 
-    // instanceConstants
-    voiceClass.push('    private instanceConstants(): void {');
-    const constLines = reshapeInstanceConstants(parsed.instanceConstants, clsName, staticFieldMap);
-    for (const line of constLines) {
-        voiceClass.push('        ' + line);
+    if (ccParams.length > 0) {
+        voiceClass.push('    // Copy channel-level params into the DSP UI zones and refresh');
+        voiceClass.push('    // control-rate state. Invoked from the channel when params change.');
+        voiceClass.push('    applyParams(): void {');
+        for (const p of ccParams) {
+            voiceClass.push(`        this.dsp.${p.field} = this.typedChannel.${p.niceName};`);
+        }
+        voiceClass.push('        this.dsp.control();');
+        voiceClass.push('    }');
+        voiceClass.push('');
     }
-    voiceClass.push('    }');
-    voiceClass.push('');
 
-    // instanceClear
-    voiceClass.push('    private instanceClear(): void {');
-    const clearLines = reshapeInstanceClear(parsed.instanceClear, clsName);
-    for (const line of clearLines) {
-        voiceClass.push('        ' + line);
-    }
-    voiceClass.push('    }');
-    voiceClass.push('');
-
-    // noteon / noteoff / isDone
     voiceClass.push('    noteon(note: u8, velocity: u8): void {');
     voiceClass.push('        super.noteon(note, velocity);');
     if (freqParam) {
-        voiceClass.push(`        this.${freqParam.field} = notefreq(note);`);
+        voiceClass.push(`        this.dsp.${freqParam.field} = notefreq(note);`);
     }
     if (gainParam) {
-        voiceClass.push(`        this.${gainParam.field} = <f32>velocity / 127.0;`);
+        voiceClass.push(`        this.dsp.${gainParam.field} = <f32>velocity / 127.0;`);
+    }
+    for (const p of ccParams) {
+        voiceClass.push(`        this.dsp.${p.field} = this.typedChannel.${p.niceName};`);
     }
     if (gateParam) {
-        voiceClass.push(`        this.${gateParam.field} = 0.0;`);
-        voiceClass.push('        this.nextframe();');
-        voiceClass.push(`        this.${gateParam.field} = 1.0;`);
+        // Retrigger: run one silent frame with the gate closed so envelopes
+        // restart cleanly when the voice is being reused.
+        voiceClass.push(`        this.dsp.${gateParam.field} = 0.0;`);
+        voiceClass.push('        this.dsp.control();');
+        voiceClass.push('        this.dsp.frame(this.fin, this.fout);');
+        voiceClass.push(`        this.dsp.${gateParam.field} = 1.0;`);
     }
+    voiceClass.push('        this.dsp.control();');
     voiceClass.push('        this.silentSamples = 0;');
     voiceClass.push('        this.releaseSamples = 0;');
     voiceClass.push('    }');
@@ -729,7 +339,8 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
 
     voiceClass.push('    noteoff(): void {');
     if (gateParam) {
-        voiceClass.push(`        this.${gateParam.field} = 0.0;`);
+        voiceClass.push(`        this.dsp.${gateParam.field} = 0.0;`);
+        voiceClass.push('        this.dsp.control();');
     }
     voiceClass.push('        this.silentSamples = 0;');
     voiceClass.push('        this.releaseSamples = 0;');
@@ -738,337 +349,164 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
 
     voiceClass.push('    isDone(): boolean {');
     if (gateParam) {
-        voiceClass.push(`        return this.${gateParam.field} == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);`);
+        voiceClass.push(`        return this.dsp.${gateParam.field} == 0.0 && (this.silentSamples > 4410 || this.releaseSamples > 132300);`);
     } else {
         voiceClass.push('        return this.silentSamples > 4410 || this.releaseSamples > 132300;');
     }
     voiceClass.push('    }');
     voiceClass.push('');
 
-    // nextframe
     voiceClass.push('    nextframe(): void {');
-
-    const { preLoopDecls, loopBodyLines, delayShiftLines } = parseComputeBody(parsed.computeBody);
-
-    // Pre-loop declarations (fSlow/iSlow)
-    for (const decl of preLoopDecls) {
-        let line = reshapeASLine(decl, clsName, globalFields, staticFieldMap);
-        // Convert `let` to `const` for fSlow/iSlow
-        line = line.replace(/^let\s+(fSlow|iSlow)/, 'const $1');
-        voiceClass.push('        ' + line);
-    }
-    voiceClass.push('');
-
-    // Loop body
-    for (const bodyLine of loopBodyLines) {
-        let line = reshapeASLine(bodyLine, clsName, globalFields, staticFieldMap);
-
-        // Mono voice path: ignore output1 (right channel) — voices write a single
-        // sample via addMonoSignal. Stereo handling lives in the effect/mastering paths.
-        if (line.match(/^output1\[/)) continue;
-
-        // Handle output assignment: output0[i0] = expr; → const output: f32 = expr;
-        const outputMatch = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
-        if (outputMatch) {
-            voiceClass.push(`        const output: f32 = ${outputMatch[1]};`);
-            continue;
-        }
-
-        // Convert `let` to `const` for local temp vars (fTemp, iTemp, fRec local assigns)
-        line = line.replace(/^let\s+(fTemp|iTemp|fRec\d|iRec\d)/, 'const $1');
-
-        voiceClass.push('        ' + line);
-    }
-    voiceClass.push('');
-
-    // Delay shifts
-    for (const shiftLine of delayShiftLines) {
-        const line = reshapeASLine(shiftLine, clsName, globalFields, staticFieldMap);
-        voiceClass.push('        ' + line);
-    }
-
-    voiceClass.push('');
+    voiceClass.push('        this.dsp.frame(this.fin, this.fout);');
+    voiceClass.push('        const output: f32 = this.fout[0];');
     voiceClass.push('        if (Mathf.abs(output) < 0.001) {');
     voiceClass.push('            this.silentSamples++;');
     voiceClass.push('        } else {');
     voiceClass.push('            this.silentSamples = 0;');
     voiceClass.push('        }');
     if (gateParam) {
-        voiceClass.push(`        if (this.${gateParam.field} == 0.0) this.releaseSamples++;`);
+        voiceClass.push(`        if (this.dsp.${gateParam.field} == 0.0) this.releaseSamples++;`);
     }
-    voiceClass.push('');
     voiceClass.push('        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
     voiceClass.push('    }');
     voiceClass.push('}');
 
-    // Module-level globals for UI params are gone — each param now lives as
-    // a public field on the channel class. `voiceGlobals` stays as an empty
-    // array to keep the return-shape stable for assembly.
-    const voiceGlobals = [];
+    // === Channel class (effect and/or CC params) ===
 
-    // === Step 7: Generate effect code sections ===
+    let effectNative = null;
+    let effUIParams = [];
+    let effNumInputs = 0;
+    let effNumOutputs = 0;
 
-    const effectWaveData = [];
-    const effectSigTables = [];
-    const effectSigInit = [];
-    const effectHelpers = [];
-    const effectClass = [];
-
-    if (hasEffect && effectAsSource) {
-        const effParsed = parseASSource(effectAsSource, effectClassName);
-        const effUI = extractUIFromJSON(effectAsSource);
-
-        // Derive nice names for the effect's own UI params (sharing the
-        // `takenNames` set with voice ccParams since both live on the same
-        // channel class). Hoist any direct CC mapping onto p.cc so doc
-        // comments can show it.
-        for (const p of effUI.uiParams) {
-            if (p.midi && p.midi.midi) {
-                const m = p.midi.midi.match(/ctrl\s+(\d+)/);
-                if (m) p.cc = parseInt(m[1]);
-            }
-            p.niceName = deriveNiceName(p, takenNames);
-            effectParamRefs.set(p.field, `this.${p.niceName}`);
-        }
-        const effUIByField = new Map(effUI.uiParams.map(p => [p.field, p]));
-
-        const effStaticFieldMap = new Map();
-        for (const sf of effParsed.staticFields) {
-            const shortName = effectTablePrefix + sf.name.replace(effectClassName, '');
-            effStaticFieldMap.set(sf.name, shortName);
-        }
-
-        // Effect SIG tables
-        const effSIG = reshapeSIGInit(effParsed, effectClassName, effectTablePrefix, effectSigPrefix);
-        effectSigTables.push(...effSIG.sigTables);
-        effectSigInit.push(...effSIG.sigInit);
-        effectWaveData.push(...effSIG.waveDataGlobals);
-
-        // Effect MidiChannel subclass
-        effectClass.push(`export class ${channelClassName} extends MidiChannel {`);
-
-        // Voice CC params live on this same channel — emit them as public
-        // fields with doc comments. The voice reads them via
-        // `this.typedChannel.<niceName>`.
-        for (const p of ccParams) {
-            const def = parsed.defaults[p.field] != null ? parsed.defaults[p.field] : `<f32>(${p.init})`;
-            effectClass.push(paramDocComment(p));
-            effectClass.push(`    ${p.niceName}: f32 = ${def};`);
-        }
-        if (ccParams.length > 0) effectClass.push('');
-
-        for (const field of effParsed.fields) {
-            if (field.name === 'fSampleRate') continue;
-
-            const uiParam = effUIByField.get(field.name);
-            if (field.isArray) {
-                const sizeMatch = field.initializer ? field.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/) : null;
-                const size = sizeMatch ? sizeMatch[1] : '0';
-                effectClass.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
-            } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
-                effectClass.push(`    private ${field.name}: i32 = 0;`);
-            } else if (uiParam) {
-                // Public, renamed, documented field for an effect UI param.
-                const def = effParsed.defaults[field.name] != null
-                    ? effParsed.defaults[field.name]
-                    : `<f32>(${uiParam.init})`;
-                effectClass.push(paramDocComment(uiParam));
-                effectClass.push(`    ${uiParam.niceName}: f32 = ${def};`);
-            } else if (effParsed.defaults[field.name] !== undefined) {
-                effectClass.push(`    private ${field.name}: f32 = ${effParsed.defaults[field.name]};`);
-            } else if (field.initializer) {
-                effectClass.push(`    private ${field.name}: ${field.type} = ${field.initializer};`);
-            } else {
-                effectClass.push(`    private ${field.name}: ${field.type};`);
-            }
-        }
-        effectClass.push('');
-
-        // Constructor
-        effectClass.push('    constructor(numvoices: i32, factoryFunc: (channel: MidiChannel, voiceindex: i32) => MidiVoice) {');
-        effectClass.push('        super(numvoices, factoryFunc);');
-        if (effParsed.sigClasses.length > 0) {
-            effectClass.push(`        ${effectSigPrefix}_initSIG0Tables();`);
-        }
-        effectClass.push('        this._effectInstanceConstants();');
-        effectClass.push('        this._effectInstanceClear();');
-        effectClass.push('    }');
-        effectClass.push('');
-
-        // _effectInstanceConstants
-        effectClass.push('    private _effectInstanceConstants(): void {');
-        const effConstLines = reshapeInstanceConstants(effParsed.instanceConstants, effectClassName, effStaticFieldMap);
-        for (const line of effConstLines) {
-            effectClass.push('        ' + line);
-        }
-        effectClass.push('    }');
-        effectClass.push('');
-
-        // _effectInstanceClear
-        effectClass.push('    private _effectInstanceClear(): void {');
-        const effClearLines = reshapeInstanceClear(effParsed.instanceClear, effectClassName);
-        for (const line of effClearLines) {
-            effectClass.push('        ' + line);
-        }
-        effectClass.push('    }');
-        effectClass.push('');
-
-        // preprocess()
-        effectClass.push('    preprocess(): void {');
-        const effCompute = parseComputeBody(effParsed.computeBody);
-
-        for (const decl of effCompute.preLoopDecls) {
-            let line = reshapeASLine(decl, effectClassName, effectParamRefs, effStaticFieldMap);
-            line = line.replace(/^let\s+(fSlow|iSlow)/, 'const $1');
-            effectClass.push('        ' + line);
-        }
-        if (effCompute.preLoopDecls.length > 0) effectClass.push('');
-
-        for (const bodyLine of effCompute.loopBodyLines) {
-            let line = reshapeASLine(bodyLine, effectClassName, effectParamRefs, effStaticFieldMap);
-
-            // Handle input references
-            line = line.replace(/input0\[\w+\]/g, 'this.signal.left');
-            line = line.replace(/input1\[\w+\]/g, 'this.signal.right');
-
-            // Handle output assignments
-            const out0Match = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
-            if (out0Match) {
-                effectClass.push(`        this.signal.left = ${out0Match[1]};`);
-                continue;
-            }
-            const out1Match = line.match(/^output1\[\w+\]\s*=\s*(.*);$/);
-            if (out1Match) {
-                effectClass.push(`        this.signal.right = ${out1Match[1]};`);
-                continue;
-            }
-
-            line = line.replace(/^let\s+(fTemp|iTemp)/, 'const $1');
-            effectClass.push('        ' + line);
-        }
-        effectClass.push('');
-
-        for (const shiftLine of effCompute.delayShiftLines) {
-            const line = reshapeASLine(shiftLine, effectClassName, effectParamRefs, effStaticFieldMap);
-            effectClass.push('        ' + line);
-        }
-
-        effectClass.push('    }');
-
-        // controlchange()
-        const ccMappings = [];
-        for (const param of effUI.uiParams) {
-            if (param.midi && param.midi.midi) {
-                const ccMatch = param.midi.midi.match(/ctrl\s+(\d+)/);
-                if (ccMatch) {
-                    ccMappings.push({
-                        cc: parseInt(ccMatch[1]),
-                        field: param.field,
-                        min: param.min,
-                        max: param.max,
-                    });
-                }
-            }
-        }
-        const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
-        const effectFieldName = (faustField) => {
-            const p = effUIByField.get(faustField);
-            return p ? p.niceName : faustField;
-        };
-        if (useNRPN && ccParams.length > 0) {
-            effectClass.push('');
-            effectClass.push('    private _nrpnMsb: u8 = 127;');
-            effectClass.push('    private _nrpnLsb: u8 = 127;');
-            effectClass.push('');
-            effectClass.push('    controlchange(controller: u8, value: u8): void {');
-            effectClass.push('        super.controlchange(controller, value);');
-            effectClass.push('        switch (controller) {');
-            for (const cc of ccMappings) {
-                effectClass.push(`            case ${cc.cc}:`);
-                effectClass.push(`                this.${effectFieldName(cc.field)} = ${cc.min} + (<f32>value / 127.0) * ${cc.max - cc.min};`);
-                effectClass.push('                break;');
-            }
-            effectClass.push('            case 99: this._nrpnMsb = value; break;');
-            effectClass.push('            case 98: this._nrpnLsb = value; break;');
-            effectClass.push('            case 6:');
-            effectClass.push('                this._setParam(<u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb, value);');
-            effectClass.push('                break;');
-            effectClass.push('        }');
-            effectClass.push('    }');
-            effectClass.push('');
-            generateNRPNSetParam(effectClass, ccParams);
-        } else if (ccMappings.length > 0 || voiceCCParams.length > 0) {
-            effectClass.push('');
-            effectClass.push('    controlchange(controller: u8, value: u8): void {');
-            effectClass.push('        super.controlchange(controller, value);');
-            effectClass.push('        switch (controller) {');
-            for (const cc of ccMappings) {
-                effectClass.push(`            case ${cc.cc}:`);
-                effectClass.push(`                this.${effectFieldName(cc.field)} = ${cc.min} + (<f32>value / 127.0) * ${cc.max - cc.min};`);
-                effectClass.push('                break;');
-            }
-            for (const p of voiceCCParams) {
-                const range = p.max - p.min;
-                const minStr = p.min === 0 ? '' : `${p.min} + `;
-                const rangeStr = range === 1 ? '' : ` * ${range}`;
-                effectClass.push(`            case ${p.cc}:`);
-                effectClass.push(`                this.${p.niceName} = ${minStr}<f32>value / 127.0${rangeStr};`);
-                effectClass.push('                break;');
-            }
-            effectClass.push('        }');
-            effectClass.push('    }');
-        }
-
-        effectClass.push('}');
-    }
-
-    // === Step 8: Generate channel class for voice CC params (no-effect case) ===
-
-    const voiceChannelClass = [];
+    const channelClass = [];
     const voiceCCParams = ccParams.filter(p => p.cc !== undefined);
-    if (!hasEffect && (voiceCCParams.length > 0 || (useNRPN && ccParams.length > 0))) {
-        voiceChannelClass.push(`export class ${channelClassName} extends MidiChannel {`);
-        // Public, per-instance UI param fields. Each carries a doc comment
-        // with init/min/max/step + CC or NRPN address so editor hover serves
-        // as the missing Faust UI.
-        for (const p of ccParams) {
-            const def = parsed.defaults[p.field] != null ? parsed.defaults[p.field] : `<f32>(${p.init})`;
-            voiceChannelClass.push(paramDocComment(p));
-            voiceChannelClass.push(`    ${p.niceName}: f32 = ${def};`);
+    if (hasChannelClass) {
+        if (hasEffect) {
+            const effUI = extractUIFromJSON(effectAsSource);
+            effUIParams = effUI.uiParams;
+            effNumInputs = effUI.numInputs;
+            effNumOutputs = effUI.numOutputs;
+            effectNative = splitNativeSource(effectAsSource, effectDspClassName);
+
+            // Derive nice names for the effect's own UI params (sharing the
+            // `takenNames` set with voice ccParams since both live on the same
+            // channel class). Hoist any direct CC mapping onto p.cc so doc
+            // comments can show it.
+            for (const p of effUIParams) {
+                if (p.midi && p.midi.midi) {
+                    const m = p.midi.midi.match(/ctrl\s+(\d+)/);
+                    if (m) p.cc = parseInt(m[1]);
+                }
+                p.niceName = deriveNiceName(p, takenNames);
+            }
         }
-        voiceChannelClass.push('');
-        if (useNRPN) {
-            voiceChannelClass.push('    private _nrpnMsb: u8 = 127;');
-            voiceChannelClass.push('    private _nrpnLsb: u8 = 127;');
-            voiceChannelClass.push('');
-            voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
-            voiceChannelClass.push('        super.controlchange(controller, value);');
-            voiceChannelClass.push('        switch (controller) {');
-            voiceChannelClass.push('            case 99: this._nrpnMsb = value; break;');
-            voiceChannelClass.push('            case 98: this._nrpnLsb = value; break;');
-            voiceChannelClass.push('            case 6:');
-            voiceChannelClass.push('                this._setParam(<u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb, value);');
-            voiceChannelClass.push('                break;');
-            voiceChannelClass.push('        }');
-            voiceChannelClass.push('    }');
-            voiceChannelClass.push('');
-            generateNRPNSetParam(voiceChannelClass, ccParams);
-        } else {
-            voiceChannelClass.push('    controlchange(controller: u8, value: u8): void {');
-            voiceChannelClass.push('        super.controlchange(controller, value);');
-            voiceChannelClass.push('        switch (controller) {');
+
+        channelClass.push(`export class ${channelClassName} extends MidiChannel {`);
+        channelClass.push('    private _paramsDirty: bool = true;');
+        channelClass.push('');
+        for (const p of ccParams) {
+            pushParamAccessor(channelClass, p);
+        }
+        for (const p of effUIParams) {
+            pushParamAccessor(channelClass, p);
+        }
+        channelClass.push('');
+
+        if (hasEffect) {
+            channelClass.push(`    readonly effectDsp: ${effectDspClassName} = new ${effectDspClassName}();`);
+            channelClass.push(`    private efin: StaticArray<f32> = new StaticArray<f32>(${effNumInputs});`);
+            channelClass.push(`    private efout: StaticArray<f32> = new StaticArray<f32>(${Math.max(effNumOutputs, 1)});`);
+            channelClass.push('');
+            channelClass.push('    constructor(numvoices: i32, factoryFunc: (channel: MidiChannel, voiceindex: i32) => MidiVoice) {');
+            channelClass.push('        super(numvoices, factoryFunc);');
+            channelClass.push('        this.effectDsp.init(<i32>SAMPLERATE);');
+            channelClass.push('    }');
+            channelClass.push('');
+        }
+
+        // Dirty-param sync: runs once per changed-param batch, before the
+        // next processed frame.
+        channelClass.push('    private applyParams(): void {');
+        if (ccParams.length > 0) {
+            channelClass.push('        for (let n = 0; n < this.voices.length; n++) {');
+            channelClass.push(`            (this.voices[n] as ${clsName}).applyParams();`);
+            channelClass.push('        }');
+        }
+        for (const p of effUIParams) {
+            channelClass.push(`        this.effectDsp.${p.field} = this._${p.niceName};`);
+        }
+        if (hasEffect) {
+            channelClass.push('        this.effectDsp.control();');
+        }
+        channelClass.push('    }');
+        channelClass.push('');
+
+        channelClass.push('    preprocess(): void {');
+        channelClass.push('        if (this._paramsDirty) {');
+        channelClass.push('            this._paramsDirty = false;');
+        channelClass.push('            this.applyParams();');
+        channelClass.push('        }');
+        if (hasEffect) {
+            if (effNumInputs > 0) {
+                channelClass.push('        this.efin[0] = this.signal.left;');
+            }
+            if (effNumInputs > 1) {
+                channelClass.push('        this.efin[1] = this.signal.right;');
+            }
+            channelClass.push('        this.effectDsp.frame(this.efin, this.efout);');
+            channelClass.push('        this.signal.left = this.efout[0];');
+            channelClass.push(effNumOutputs > 1
+                ? '        this.signal.right = this.efout[1];'
+                : '        this.signal.right = this.efout[0];');
+        }
+        channelClass.push('    }');
+
+        // controlchange(): map CCs / NRPN onto the param accessors.
+        const effCCMappings = effUIParams.filter(p => p.cc !== undefined);
+        if (useNRPN && ccParams.length > 0) {
+            channelClass.push('');
+            channelClass.push('    private _nrpnMsb: u8 = 127;');
+            channelClass.push('    private _nrpnLsb: u8 = 127;');
+            channelClass.push('');
+            channelClass.push('    controlchange(controller: u8, value: u8): void {');
+            channelClass.push('        super.controlchange(controller, value);');
+            channelClass.push('        switch (controller) {');
+            for (const p of effCCMappings) {
+                channelClass.push(`            case ${p.cc}:`);
+                channelClass.push(`                this.${p.niceName} = ${p.min} + (<f32>value / 127.0) * ${p.max - p.min};`);
+                channelClass.push('                break;');
+            }
+            channelClass.push('            case 99: this._nrpnMsb = value; break;');
+            channelClass.push('            case 98: this._nrpnLsb = value; break;');
+            channelClass.push('            case 6:');
+            channelClass.push('                this._setParam(<u16>this._nrpnMsb * 128 + <u16>this._nrpnLsb, value);');
+            channelClass.push('                break;');
+            channelClass.push('        }');
+            channelClass.push('    }');
+            channelClass.push('');
+            generateNRPNSetParam(channelClass, ccParams);
+        } else if (voiceCCParams.length > 0 || effCCMappings.length > 0) {
+            channelClass.push('');
+            channelClass.push('    controlchange(controller: u8, value: u8): void {');
+            channelClass.push('        super.controlchange(controller, value);');
+            channelClass.push('        switch (controller) {');
+            for (const p of effCCMappings) {
+                channelClass.push(`            case ${p.cc}:`);
+                channelClass.push(`                this.${p.niceName} = ${p.min} + (<f32>value / 127.0) * ${p.max - p.min};`);
+                channelClass.push('                break;');
+            }
             for (const p of voiceCCParams) {
                 const range = p.max - p.min;
                 const minStr = p.min === 0 ? '' : `${p.min} + `;
                 const rangeStr = range === 1 ? '' : ` * ${range}`;
-                voiceChannelClass.push(`            case ${p.cc}:`);
-                voiceChannelClass.push(`                this.${p.niceName} = ${minStr}<f32>value / 127.0${rangeStr};`);
-                voiceChannelClass.push('                break;');
+                channelClass.push(`            case ${p.cc}:`);
+                channelClass.push(`                this.${p.niceName} = ${minStr}<f32>value / 127.0${rangeStr};`);
+                channelClass.push('                break;');
             }
-            voiceChannelClass.push('        }');
-            voiceChannelClass.push('    }');
+            channelClass.push('        }');
+            channelClass.push('    }');
         }
-        voiceChannelClass.push('}');
+        channelClass.push('}');
     }
 
     return {
@@ -1078,23 +516,16 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
         hasChannelClass,
         useNRPN,
         ccParams,
-        externalFunctions: new Map(),
         uiParams,
         voice: {
-            globals: voiceGlobals,
-            waveData: voiceWaveData,
-            sigTables: voiceSigTables,
-            sigInit: voiceSigInit,
-            helpers: [],
+            preamble: native.preamble,
+            nativeClass: native.classSource,
             classCode: voiceClass,
-            channelClass: voiceChannelClass,
+            channelClass,
         },
         effect: {
-            waveData: effectWaveData,
-            sigTables: effectSigTables,
-            sigInit: effectSigInit,
-            helpers: effectHelpers,
-            classCode: effectClass,
+            preamble: effectNative ? effectNative.preamble : '',
+            nativeClass: effectNative ? effectNative.classSource : '',
         },
     };
 }
@@ -1132,6 +563,54 @@ export function generateNRPNDefaults(lines, ccParams, channelIndex) {
 }
 
 // ---------------------------------------------------------------------------
+// Shared assembly helpers
+// ---------------------------------------------------------------------------
+
+// The native preamble (math helpers) is identical for every DSP produced by
+// the same compiler module — emit each distinct preamble once per file.
+function pushPreambleOnce(out, seen, preamble) {
+    if (!preamble || seen.has(preamble)) return;
+    seen.add(preamble);
+    out.push(preamble);
+    out.push('');
+}
+
+function pushChannelDefaults(out, result, channelIndex) {
+    if (result.useNRPN && (result.ccParams || []).length > 0) {
+        out.push('');
+        generateNRPNDefaults(out, result.ccParams, channelIndex);
+    } else {
+        const ccMapped = (result.ccParams || []).filter(p => p.cc !== undefined);
+        if (ccMapped.length > 0) {
+            out.push('');
+            for (const p of ccMapped) {
+                const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
+                const label = p.name.replace(/_/g, ' ');
+                out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
+                out.push(`    midichannels[${channelIndex}].controlchange(${p.cc}, ${ccDefault});`);
+            }
+        }
+    }
+}
+
+function pushResultSections(out, result, seenPreambles) {
+    pushPreambleOnce(out, seenPreambles, result.voice.preamble);
+    out.push(result.voice.nativeClass);
+    out.push('');
+    out.push(...result.voice.classCode);
+    out.push('');
+    if (result.hasEffect) {
+        pushPreambleOnce(out, seenPreambles, result.effect.preamble);
+        out.push(result.effect.nativeClass);
+        out.push('');
+    }
+    if (result.voice.channelClass.length > 0) {
+        out.push(...result.voice.channelClass);
+        out.push('');
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Assembly: Single-file mode
 // ---------------------------------------------------------------------------
 
@@ -1139,7 +618,7 @@ export function assembleSingleFile(result, { forEditor = false, importDepth = 1 
     const out = [];
 
     out.push(`// Faust-generated ${result.className}`);
-    out.push(`// Auto-transpiled from Faust DSP by faust2as.js (AS backend)`);
+    out.push(`// Auto-transpiled from Faust DSP by faust2as.js (AS backend, native control/frame)`);
     out.push(`// Source: ${result.sourceFile}`);
     out.push('');
 
@@ -1158,69 +637,8 @@ export function assembleSingleFile(result, { forEditor = false, importDepth = 1 
     }
     out.push('');
 
-    // External lookup table functions (from ffunction headers) — preserved
-    // for forward-compat but currently unused by the ASC backend.
-    if (result.externalFunctions && result.externalFunctions.size > 0) {
-        const emittedTables = new Set();
-        for (const [fnName, info] of result.externalFunctions) {
-            // generateLookupTableAS lived in the C-backend transpiler; we keep
-            // a pass-through hook here in case a future caller injects it.
-            const lines = (result.generateLookupTableAS
-                ? result.generateLookupTableAS(fnName, info, '')
-                : []);
-            for (const line of lines) {
-                if (line.startsWith('const ') && emittedTables.has(line)) continue;
-                if (line.startsWith('const ')) emittedTables.add(line);
-                out.push(line);
-            }
-        }
-        out.push('');
-    }
-
-    // Voice wave data
-    out.push(...result.voice.waveData);
-    if (result.voice.waveData.length > 0) out.push('');
-
-    // Voice SIG tables + init
-    out.push(...result.voice.sigTables);
-    out.push(...result.voice.sigInit);
-
-    // Voice helper functions
-    for (const h of result.voice.helpers) out.push(h.code);
-    if (result.voice.helpers.length > 0) out.push('');
-
-    // Global variables for shared DSP parameters
-    if (result.voice.globals.length > 0) {
-        out.push(...result.voice.globals);
-        out.push('');
-    }
-
-    // Voice class
-    out.push(...result.voice.classCode);
-    out.push('');
-
-    // Voice channel class (no-effect case with CC params)
-    if (result.voice.channelClass.length > 0) {
-        out.push(...result.voice.channelClass);
-        out.push('');
-    }
-
-    // Effect sections
-    if (result.hasEffect) {
-        out.push(...result.effect.waveData);
-        if (result.effect.waveData.length > 0) out.push('');
-
-        out.push(...result.effect.sigTables);
-        out.push(...result.effect.sigInit);
-
-        const voiceHelperNames = new Set(result.voice.helpers.map(h => h.fnName));
-        const uniqueEffectHelpers = result.effect.helpers.filter(h => !voiceHelperNames.has(h.fnName));
-        for (const h of uniqueEffectHelpers) out.push(h.code);
-        if (uniqueEffectHelpers.length > 0) out.push('');
-
-        out.push(...result.effect.classCode);
-        out.push('');
-    }
+    const seenPreambles = new Set();
+    pushResultSections(out, result, seenPreambles);
 
     // initializeMidiSynth()
     const channelClass = result.hasChannelClass ? `${result.className}Channel` : 'MidiChannel';
@@ -1229,23 +647,7 @@ export function assembleSingleFile(result, { forEditor = false, importDepth = 1 
     out.push(`    midichannels[0].controlchange(7, 100);`);
     out.push(`    midichannels[0].controlchange(10, 64);`);
     out.push(`    midichannels[0].controlchange(91, 10);`);
-
-    if (result.useNRPN && (result.ccParams || []).length > 0) {
-        out.push('');
-        generateNRPNDefaults(out, result.ccParams, 0);
-    } else {
-        const ccMapped = (result.ccParams || []).filter(p => p.cc !== undefined);
-        if (ccMapped.length > 0) {
-            out.push('');
-            for (const p of ccMapped) {
-                const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
-                const label = p.name.replace(/_/g, ' ');
-                out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
-                out.push(`    midichannels[0].controlchange(${p.cc}, ${ccDefault});`);
-            }
-        }
-    }
-
+    pushChannelDefaults(out, result, 0);
     out.push('}');
     out.push('');
     out.push('export function postprocess(): void {');
@@ -1263,7 +665,7 @@ export function assembleBundle(results, { forEditor = false } = {}) {
     const out = [];
 
     out.push('// Faust-generated synth bundle');
-    out.push('// Auto-transpiled from Faust DSP by faust2as.js (AS backend)');
+    out.push('// Auto-transpiled from Faust DSP by faust2as.js (AS backend, native control/frame)');
     out.push(`// Sources: ${results.map(r => r.sourceFile).join(', ')}`);
     out.push('');
 
@@ -1271,51 +673,12 @@ export function assembleBundle(results, { forEditor = false } = {}) {
     // even when forEditor is false, matching the original CLI's `forEditor || bundleMode`.
     out.push("import { notefreq, midichannels, MidiChannel, MidiVoice } from '../mixes/globalimports';");
     out.push("import { SAMPLERATE } from '../environment';");
-    // Avoid an "unused" warning for the forEditor flag in lint:
     void forEditor;
     out.push('');
 
-    // Deduplicated helper functions
-    const allHelpers = new Map();
+    const seenPreambles = new Set();
     for (const r of results) {
-        for (const h of [...r.voice.helpers, ...r.effect.helpers]) {
-            if (!allHelpers.has(h.fnName)) allHelpers.set(h.fnName, h.code);
-        }
-    }
-    for (const code of allHelpers.values()) out.push(code);
-    if (allHelpers.size > 0) out.push('');
-
-    // Per-DSP: globals, wave data, SIG tables, SIG init, classes
-    for (const r of results) {
-        if (r.voice.globals.length > 0) {
-            out.push(...r.voice.globals);
-            out.push('');
-        }
-
-        out.push(...r.voice.waveData);
-        if (r.voice.waveData.length > 0) out.push('');
-
-        out.push(...r.voice.sigTables);
-        out.push(...r.voice.sigInit);
-
-        out.push(...r.voice.classCode);
-        out.push('');
-
-        if (r.voice.channelClass.length > 0) {
-            out.push(...r.voice.channelClass);
-            out.push('');
-        }
-
-        if (r.hasEffect) {
-            out.push(...r.effect.waveData);
-            if (r.effect.waveData.length > 0) out.push('');
-
-            out.push(...r.effect.sigTables);
-            out.push(...r.effect.sigInit);
-
-            out.push(...r.effect.classCode);
-            out.push('');
-        }
+        pushResultSections(out, r, seenPreambles);
     }
 
     // initializeMidiSynth()
@@ -1326,23 +689,7 @@ export function assembleBundle(results, { forEditor = false } = {}) {
         out.push(`    midichannels[${i}].controlchange(7, 100);`);
         out.push(`    midichannels[${i}].controlchange(10, 64);`);
         out.push(`    midichannels[${i}].controlchange(91, 10);`);
-
-        if (r.useNRPN && (r.ccParams || []).length > 0) {
-            out.push('');
-            generateNRPNDefaults(out, r.ccParams, i);
-        } else {
-            const ccMapped = (r.ccParams || []).filter(p => p.cc !== undefined);
-            if (ccMapped.length > 0) {
-                out.push('');
-                for (const p of ccMapped) {
-                    const ccDefault = Math.round((p.init - p.min) / (p.max - p.min) * 127);
-                    const label = p.name.replace(/_/g, ' ');
-                    out.push(`    // ${label} (CC ${p.cc}, range: ${p.min}–${p.max}, default: ${p.init})`);
-                    out.push(`    midichannels[${i}].controlchange(${p.cc}, ${ccDefault});`);
-                }
-            }
-        }
-
+        pushChannelDefaults(out, r, i);
         if (i < results.length - 1) out.push('');
     });
     out.push('}');
@@ -1361,47 +708,31 @@ export function assembleBundle(results, { forEditor = false } = {}) {
 // auto-mastering the outputline still works without any caller changes.
 // ---------------------------------------------------------------------------
 
-// transpileEffect({ asSource, clsName, sourceFile })
-//   asSource   — AS output for a stereo effect (2 in, 2 out)
+// transpileEffect({ asSource, clsName, sourceFile, importDepth })
+//   asSource   — native AS output for a stereo effect
+//                (compiled with `-cn <clsName>Dsp --ec --os`)
 //   clsName    — class name for the generated mastering class
-//   sourceFile — basename of the .dsp source (e.g. "master_me.dsp"); used
-//                only for the // Source: header comment
+//   sourceFile — basename of the .dsp source; header comment only
 //
 // Returns the array of output lines (caller joins with '\n').
 export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1 }) {
-    const parsed = parseASSource(asSource, clsName);
+    const dspClassName = clsName + 'Dsp';
     const { uiParams, numInputs, numOutputs } = extractUIFromJSON(asSource);
 
     if (numInputs !== 2 || numOutputs !== 2) {
         throw new Error(`Mastering mode requires stereo I/O (2 in, 2 out). Got ${numInputs} in, ${numOutputs} out.`);
     }
 
-    // Derive a public, AS-friendly name for each UI param (same scheme as
-    // the MIDI-instrument path) and build a `this.<niceName>` substitution
-    // map so the generated process() body references the renamed fields.
+    const native = splitNativeSource(asSource, dspClassName);
+
     const takenNames = new Set();
-    const uiByField = new Map();
     for (const p of uiParams) {
         p.niceName = deriveNiceName(p, takenNames);
-        uiByField.set(p.field, p);
     }
-    const paramRefs = new Map();
-    for (const p of uiParams) {
-        paramRefs.set(p.field, `this.${p.niceName}`);
-    }
-
-    const tablePrefix = '_' + clsName + '_';
-    const sigPrefix = '_' + clsName;
-    const staticFieldMap = new Map();
-    for (const sf of parsed.staticFields) {
-        staticFieldMap.set(sf.name, tablePrefix + sf.name.replace(clsName, ''));
-    }
-
-    const sigResult = reshapeSIGInit(parsed, clsName, tablePrefix, sigPrefix);
 
     const out = [];
     out.push(`// Mastering effect: ${clsName}`);
-    out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--effect)`);
+    out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--effect, native control/frame)`);
     out.push(`// Source: ${sourceFile}`);
     out.push('');
     // importDepth = number of '..' segments above the assembly/ root
@@ -1411,107 +742,42 @@ export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1
     out.push(`import { SAMPLERATE } from '${up}environment';`);
     out.push('');
 
-    if (sigResult.waveDataGlobals.length > 0) {
-        out.push(...sigResult.waveDataGlobals);
-        out.push('');
-    }
-    if (sigResult.sigTables.length > 0) {
-        out.push(...sigResult.sigTables);
-    }
-    if (sigResult.sigInit.length > 0) {
-        out.push(...sigResult.sigInit);
-    }
+    out.push(native.preamble);
+    out.push('');
+    out.push(native.classSource);
+    out.push('');
 
     out.push(`export class ${clsName} {`);
     // Public output bus — process(left, right) writes here.
-    out.push(`    signal: StereoSignal = new StereoSignal();`);
-
-    for (const field of parsed.fields) {
-        if (field.name === 'fSampleRate') continue;
-        const ui = uiByField.get(field.name);
-        if (field.isArray) {
-            const sizeMatch = field.initializer ? field.initializer.match(/new\s+(?:Static)?Array<\w+>\((\d+)\)/) : null;
-            const size = sizeMatch ? sizeMatch[1] : '0';
-            out.push(`    private ${field.name}: StaticArray<${field.type}> = new StaticArray<${field.type}>(${size});`);
-        } else if (field.name === 'IOTA0' || field.name.startsWith('IOTA')) {
-            out.push(`    private ${field.name}: i32 = 0;`);
-        } else if (ui) {
-            // Public, renamed, documented UI param.
-            const def = parsed.defaults[field.name] != null
-                ? parsed.defaults[field.name]
-                : `<f32>(${ui.init})`;
-            out.push(paramDocComment(ui));
-            out.push(`    ${ui.niceName}: f32 = ${def};`);
-        } else if (parsed.defaults[field.name] !== undefined) {
-            out.push(`    private ${field.name}: f32 = ${parsed.defaults[field.name]};`);
-        } else if (field.initializer) {
-            out.push(`    private ${field.name}: ${field.type} = ${field.initializer};`);
-        } else {
-            out.push(`    private ${field.name}: ${field.type};`);
-        }
-    }
+    out.push('    signal: StereoSignal = new StereoSignal();');
+    out.push(`    readonly dsp: ${dspClassName} = new ${dspClassName}();`);
+    out.push('    private fin: StaticArray<f32> = new StaticArray<f32>(2);');
+    out.push('    private fout: StaticArray<f32> = new StaticArray<f32>(2);');
+    out.push('    private _paramsDirty: bool = true;');
     out.push('');
+    for (const p of uiParams) {
+        pushParamAccessor(out, p);
+    }
+    if (uiParams.length > 0) out.push('');
 
     out.push('    constructor() {');
-    if (parsed.sigClasses.length > 0) {
-        out.push(`        ${sigPrefix}_initSIG0Tables();`);
-    }
-    out.push('        this.instanceConstants();');
-    out.push('        this.instanceClear();');
-    out.push('    }');
-    out.push('');
-
-    out.push('    private instanceConstants(): void {');
-    const constLines = reshapeInstanceConstants(parsed.instanceConstants, clsName, staticFieldMap);
-    for (const line of constLines) out.push('        ' + line);
-    out.push('    }');
-    out.push('');
-
-    out.push('    private instanceClear(): void {');
-    const clearLines = reshapeInstanceClear(parsed.instanceClear, clsName);
-    for (const line of clearLines) out.push('        ' + line);
+    out.push('        this.dsp.init(<i32>SAMPLERATE);');
     out.push('    }');
     out.push('');
 
     out.push('    process(inL: f32, inR: f32): void {');
-    out.push('');
-
-    const compute = parseComputeBody(parsed.computeBody);
-
-    for (const decl of compute.preLoopDecls) {
-        let line = reshapeASLine(decl, clsName, paramRefs, staticFieldMap);
-        line = line.replace(/^let\s+(fSlow|iSlow)/, 'const $1');
-        out.push('        ' + line);
+    out.push('        if (this._paramsDirty) {');
+    out.push('            this._paramsDirty = false;');
+    for (const p of uiParams) {
+        out.push(`            this.dsp.${p.field} = this._${p.niceName};`);
     }
-    if (compute.preLoopDecls.length > 0) out.push('');
-
-    for (const bodyLine of compute.loopBodyLines) {
-        let line = reshapeASLine(bodyLine, clsName, paramRefs, staticFieldMap);
-
-        line = line.replace(/input0\[\w+\]/g, 'inL');
-        line = line.replace(/input1\[\w+\]/g, 'inR');
-
-        const out0Match = line.match(/^output0\[\w+\]\s*=\s*(.*);$/);
-        if (out0Match) {
-            out.push(`        this.signal.left = ${out0Match[1]};`);
-            continue;
-        }
-        const out1Match = line.match(/^output1\[\w+\]\s*=\s*(.*);$/);
-        if (out1Match) {
-            out.push(`        this.signal.right = ${out1Match[1]};`);
-            continue;
-        }
-
-        line = line.replace(/^let\s+(fTemp|iTemp|fRec\d|iRec\d)/, 'const $1');
-        out.push('        ' + line);
-    }
-    out.push('');
-
-    for (const shiftLine of compute.delayShiftLines) {
-        const line = reshapeASLine(shiftLine, clsName, paramRefs, staticFieldMap);
-        out.push('        ' + line);
-    }
-
+    out.push('            this.dsp.control();');
+    out.push('        }');
+    out.push('        this.fin[0] = inL;');
+    out.push('        this.fin[1] = inR;');
+    out.push('        this.dsp.frame(this.fin, this.fout);');
+    out.push('        this.signal.left = this.fout[0];');
+    out.push('        this.signal.right = this.fout[1];');
     out.push('    }');
     out.push('}');
     out.push('');

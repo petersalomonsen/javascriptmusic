@@ -1,7 +1,6 @@
 // faust-rs-transpile.js — Faust .dsp → AssemblyScript transpiler backed by the
 // faust-rs (Rust) compiler compiled to a plain wasm32-unknown-unknown module
-// (faust_wasm_ffi.wasm), instead of the emscripten libfaust used by
-// browser-transpile.js. Same public API: transpileDspSource().
+// (faust_wasm_ffi.wasm). Public API: transpileDspSource().
 //
 // The module is loaded with a bare `WebAssembly.instantiate(bytes, {})` —
 // no emscripten loader, no MEMFS. Sibling .lib/.dsp files travel inline in
@@ -26,7 +25,10 @@ import { toggleSpinner } from '../common/ui/progress-spinner.js';
 // next to this file), CDN-published binary as the fallback for deployments
 // where the gitignored local artifact doesn't exist.
 const WASM_URL = new URL('./faust_wasm_ffi.wasm', import.meta.url);
-const COMPILER_MODULE_VERSION = '0.16.1-asc.2';
+// 0.16.1-asc.3: first module honoring the `--ec --os` execution options in
+// generateAuxFiles argv (native control()/frame() output) — older modules
+// silently ignore the flags and emit the classic block-compute class.
+const COMPILER_MODULE_VERSION = '0.16.1-asc.3';
 const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/faustwasm@${COMPILER_MODULE_VERSION}/faust-compiler-module.wasm`;
 
 let modulePromise = null;
@@ -168,7 +170,7 @@ function virtualSourceArgs(libsByPath) {
 }
 
 // faust-rs's asc backend doesn't emit the redundant <i32>() loop-header casts,
-// but keep the same normalization as browser-transpile.js for safety.
+// but keep the legacy normalization for safety.
 function normalizeASSource(src) {
     return src.replace(
         /for\s*\(\s*let\s+(\w+):\s*i32\s*=\s*<i32>\((\d+)\);\s*\1\s*<\s*<i32>\((\d+)\);\s*\1\s*=\s*\(\1\s*\+\s*<i32>\(1\)\)\)/g,
@@ -177,7 +179,7 @@ function normalizeASSource(src) {
 }
 
 // Detect mastering vs voice from the AS source's getNumInputs/getNumOutputs
-// (same heuristic as browser-transpile.js).
+// (getNumInputs/getNumOutputs heuristic on the native source).
 function isStereoEffect(asSource) {
     const inputsMatch = asSource.match(/getNumInputs\(\)\s*:\s*i32\s*\{[^}]*return\s+(\d+)/);
     const outputsMatch = asSource.match(/getNumOutputs\(\)\s*:\s*i32\s*\{[^}]*return\s+(\d+)/);
@@ -186,7 +188,7 @@ function isStereoEffect(asSource) {
     return numIn === 2 && numOut === 2;
 }
 
-// Public API — same contract as browser-transpile.js's transpileDspSource().
+// Public API.
 export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}) {
     toggleSpinner(true);
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -199,10 +201,14 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const clsName = toClassName(leafStem);
         const importDepth = 1 + (dspBaseName.match(/\//g) || []).length;
 
+        // `--ec --os`: the native class exposes control()/frame() so the
+        // transpile-core wrappers delegate instead of reshaping compute().
+        // `-cn ${clsName}Dsp` keeps the public wrapper names (${clsName},
+        // ${clsName}Channel) free — see transpile-core.js naming convention.
         const asSource = normalizeASSource(generateAuxFiles(
             leafStem,
             dspSource,
-            `-lang asc -cn ${clsName} ${vsArgs} -o /${leafStem}.out.ts`
+            `-lang asc -cn ${clsName}Dsp --ec --os ${vsArgs} -o /${leafStem}.out.ts`
         ));
 
         if (isStereoEffect(asSource)) {
@@ -218,11 +224,10 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const hasEffect = /^\s*effect\s*=/m.test(dspSource);
         let effectAsSource = null;
         if (hasEffect) {
-            const effectName = clsName + 'Effect';
             effectAsSource = normalizeASSource(generateAuxFiles(
                 leafStem,
                 dspSource,
-                `-lang asc -cn ${effectName} -pn effect ${vsArgs} -o /${leafStem}.effect.out.ts`
+                `-lang asc -cn ${clsName}EffectDsp -pn effect --ec --os ${vsArgs} -o /${leafStem}.effect.out.ts`
             ));
         }
 

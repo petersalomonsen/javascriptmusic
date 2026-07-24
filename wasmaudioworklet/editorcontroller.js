@@ -8,7 +8,7 @@ import { setInstrumentNames, appendToSubtoolbar1 } from './app.js';
 import { toggleSpinner } from './common/ui/progress-spinner.js';
 
 import { readfile, writefileandstage, unlinkfile, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
-import { transpileDspSource } from './faust/browser-transpile.js';
+import { transpileDspSource } from './faust/faust-rs-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal, modalPrompt, modalAlert } from './common/ui/modal.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';

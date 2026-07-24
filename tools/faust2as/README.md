@@ -50,7 +50,7 @@ For ready-made inputs see the `examples/` folder (e.g. `examples/dx7/dsp/`) or p
 ## Prerequisites
 
 - This script (`faust2as.js`, the **C backend**) still calls the system `faust` binary — `brew install faust` (or install from upstream).
-  - For the **ASC backend** sibling (`faust2asc.js`), nothing extra is needed: it pulls the wasm-compiled compiler from npm via `@psalomo/faustwasm`. Run `npm install` once in `tools/faust2as/`.
+  - For the **ASC backend** sibling (`faust2asc.js`), nothing extra is needed: it loads the plain-wasm compiler module from `@psalomo/faustwasm` (run `npm install` once in `tools/faust2as/`), from a gitignored `wasmaudioworklet/faust/faust_wasm_ffi.wasm` developer drop, or from `$FAUST_RS_COMPILER_MODULE`. DSPs are compiled with the `--ec --os` execution options, so the emitted class exposes native `control()`/`frame()` entry points and the generated `MidiVoice` wrapper simply delegates to them.
 - The `.dsp` file must be a MIDI instrument with `freq`, `gain`, and `gate` parameters
 
 ## What It Does

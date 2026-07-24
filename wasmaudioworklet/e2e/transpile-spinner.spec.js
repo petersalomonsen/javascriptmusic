@@ -66,7 +66,7 @@ test('progress-spinner paints during every faust transpile, not just the first',
     // First transpile — compiler not yet cached, libfaust-wasm fetches.
     await installSpinnerObserver(page);
     await page.evaluate(async (src) => {
-        const m = await import('/faust/browser-transpile.js');
+        const m = await import('/faust/faust-rs-transpile.js');
         await m.transpileDspSource(src, 'spinnertest.dsp', {});
     }, DSP_A);
     const first = await readSpinnerStats(page);
@@ -77,7 +77,7 @@ test('progress-spinner paints during every faust transpile, not just the first',
     // never sees it.
     await installSpinnerObserver(page);
     await page.evaluate(async (src) => {
-        const m = await import('/faust/browser-transpile.js');
+        const m = await import('/faust/faust-rs-transpile.js');
         await m.transpileDspSource(src, 'spinnertest.dsp', {});
     }, DSP_B);
     const second = await readSpinnerStats(page);

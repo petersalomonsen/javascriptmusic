@@ -49,7 +49,7 @@ test('faust-rs wasm module transpiles voice + library() sibling + effect=', asyn
         };
         // Import the app's default transpile entry point — on this branch it
         // delegates to the faust-rs module.
-        const m = await import('/faust/browser-transpile.js');
+        const m = await import('/faust/faust-rs-transpile.js');
         const { ts, className } = await m.transpileDspSource(
             mainDsp,
             'testsynth.dsp',
@@ -82,7 +82,7 @@ test('faust-rs resolves dx7.lib from the embedded library bundle', async ({ page
         customElements.define = (name, ctor, opts) => {
             try { origDefine(name, ctor, opts); } catch (e) { /* already defined */ }
         };
-        const m = await import('/faust/browser-transpile.js');
+        const m = await import('/faust/faust-rs-transpile.js');
         // dx.algorithm pulls dx7.lib, which lives in a faustlibraries
         // subdirectory — regression check for the flattened embed aliases.
         const { ts, className } = await m.transpileDspSource(
@@ -121,7 +121,7 @@ test('dx7 transpile + patch params + in-app AS compile', async ({ page }) => {
         customElements.define = (name, ctor, opts) => {
             try { origDefine(name, ctor, opts); } catch (e) { /* already defined */ }
         };
-        const m = await import('/faust/browser-transpile.js');
+        const m = await import('/faust/faust-rs-transpile.js');
         const { ts, className } = await m.transpileDspSource(
             'import("stdfaust.lib");\nprocess = dx.algorithm(5) <: _,_;\n',
             'dx7_alg5.dsp',
@@ -136,7 +136,7 @@ test('dx7 transpile + patch params + in-app AS compile', async ({ page }) => {
     // regresses, an operator Amp EG L1 (init 99) grabs the name instead —
     // which scrambles every named patch assignment and NRPN number (heard as
     // pitch glides, since patch values land in the Pitch EG).
-    expect(transpiled.ts).toMatch(/\/\*\* L1 \[init: 50,[^\n]*\n\s+l1: f32 = 50/);
+    expect(transpiled.ts).toMatch(/_l1: f32 = <f32>\(50\);\n\s+\/\*\* L1 \[init: 50,[^\n]*\n\s+get l1\(\): f32/);
 
     // 2. Inject midi.mix-style patch assignments on the typed channel.
     const construction = 'midichannels[0] = new Dx7Alg5Channel(10, (channel: MidiChannel) => new Dx7Alg5(channel));';
