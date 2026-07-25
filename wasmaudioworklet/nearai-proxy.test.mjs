@@ -35,8 +35,7 @@ test('OPTIONS preflight → 204 with CORS', async () => {
 });
 
 test('missing NEARAI_API_KEY secret → 503 with a clear message', async () => {
-  const res = await onRequest(chat({ messages: [] }, {}, ));
-  // rebuild with empty env
+  // empty env — no key, so this returns before any upstream call
   const res2 = await onRequest(ctx('POST', '/nearai/v1/chat/completions',
     { Origin: APP, 'Content-Type': 'application/json' }, '{"messages":[]}', {}));
   assert.equal(res2.status, 503);
