@@ -28,7 +28,41 @@ uniform float smoothedNoteStates[128]; // JS-smoothed view of the above: FAST at
 uniform sampler2D uSampler;            // active image/video frame (image shaders)
 uniform sampler2D uSamplerPrev;        // previous frame (crossfade pair)
 uniform float uMix;                    // 0..1 crossfade; pinned to 1 outside transitions
+uniform sampler2D uText;               // showText() layer — alpha is the text coverage
+uniform sampler2D uTextPrev;           // the outgoing text of a transition
+uniform float uTextMix;                // 0..1 progress of the current text's fade
 ```
+
+## Text and parameters the song controls
+
+Two song API calls drive the shader from the sequence (full reference in
+[song-api.md](song-api.md)):
+
+- **`showText(text, { fade, transition, ...style })`** puts text on the text
+  layer — its own texture pair, independent of `uSampler`, so text composites
+  over a photo, a video or a purely generative shader. `uTextMix` runs 0 → 1
+  over `fade` seconds, timed from song time (so it's identical when seeking or
+  exporting video).
+- **`setVisual(name, value, rampSeconds)`** sets any `uniform float <name>` the
+  shader declares. The app assigns no meaning to the names — this is where the
+  song says *how* to show something (which transition, how bright, which scene).
+
+```glsl
+uniform sampler2D uText;
+uniform sampler2D uTextPrev;
+uniform float uTextMix;
+uniform float textTransition;   // set by the song via setVisual / showText's `transition`
+
+// crossfade the outgoing text out and the incoming text in
+vec4 t = mix(texture2D(uTextPrev, tuv), texture2D(uText, tuv), uTextMix);
+col = mix(col, t.rgb, t.a);
+```
+
+Note the text image uploads top-row-first, so flip the y coordinate when
+sampling: `vec2 tuv = vec2(uv.x, 1.0 - uv.y);`. A shader that never declares
+these uniforms is unaffected — the renderer skips locations it can't find.
+[`examples/textoverlay`](../../examples/textoverlay) is a complete song + shader
+pair with four transition styles.
 
 Common idioms:
 
@@ -70,11 +104,19 @@ node ../tools/shadertest/render.mjs path/to/shader.glsl --time 6 --energy 0.7
 node ../tools/shadertest/render.mjs path/to/shader.glsl --frames 3,18,30 --energy 0.8
 ```
 
+```sh
+# text layer + song params: mid-transition between two texts, wipe style
+node ../tools/shadertest/render.mjs path/to/shader.glsl \
+  --text "Refrenget" --textprev "Første vers" --textmix 0.45 --visual textTransition=1
+```
+
 Options: `--time <s>`, `--frames <t1,t2,..>`, `--energy <0..1>` (fills a band of
 note states so reactive shaders light up), `--size <WxH>`, `--out <file.png>`,
-`--outdir <dir>`, `--compile-only`. On a compile error it prints the GLSL info
-log and exits non-zero. Each rendered frame prints a `lit=NN%` metric (fraction
-of non-black pixels) — a quick "did anything draw" sanity check.
+`--outdir <dir>`, `--text <string>` / `--textprev <string>` / `--textmix <0..1>`
+(the showText layer — `\n` for line breaks), `--visual <name=value>` (repeatable,
+for setVisual params), `--compile-only`. On a compile error it prints the GLSL
+info log and exits non-zero. Each rendered frame prints a `lit=NN%` metric
+(fraction of non-black pixels) — a quick "did anything draw" sanity check.
 
 The loop that works well:
 

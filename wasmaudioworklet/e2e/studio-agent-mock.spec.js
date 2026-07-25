@@ -194,6 +194,50 @@ test.describe('studio-agent client with mocked agent server', () => {
         expect(await page.evaluate(() => !!window.audioworkletnode)).toBe(false);
     });
 
+    test('shader tools: the agent can see and fix a shader that cannot show the song visuals', async ({ page }) => {
+        await openAppWithMockAgent(page, mock);
+
+        // A song that shows text, and a shader with no text layer — the
+        // combination that silently renders nothing.
+        expect((await mock.callTool('set_song', {
+            source: `setBPM(120);\nshowText('hello', { fade: 1 });\nawait createTrack(0).steps(4, [c4,,,,]);\nloopHere();\n`,
+        })).ok).toBe(true);
+        const noTextLayer = `precision highp float;
+uniform vec2 resolution;
+uniform float time;
+void main() { gl_FragColor = vec4(gl_FragCoord.xy / resolution, abs(sin(time)), 1.0); }
+`;
+        const set = await mock.callTool('set_shader', { source: noTextLayer });
+        expect(set.ok).toBe(true);
+        // Every shader write reports what the song schedules but this shader can't show.
+        expect(String(set.result)).toContain('uText');
+
+        expect((await mock.callTool('compile', {})).result).toContain('compiled OK');
+        // ...and so does compile, so the agent cannot miss it.
+        expect(String((await mock.callTool('compile', {})).result)).toContain('showText');
+
+        // grep_shader is how the agent inspects what the shader supports.
+        const grep = await mock.callTool('grep_shader', { pattern: 'uniform' });
+        expect(grep.ok).toBe(true);
+        expect(String(grep.result)).toContain('uniform vec2 resolution');
+
+        // edit_shader adds the text layer in place; the warning then clears.
+        const edit = await mock.callTool('edit_shader', {
+            old_string: 'uniform float time;',
+            new_string: `uniform float time;
+uniform sampler2D uText;
+uniform sampler2D uTextPrev;
+uniform float uTextMix;`,
+        });
+        expect(edit.ok).toBe(true);
+        expect(String(edit.result)).toContain('applied 1 edit');
+        expect(String(edit.result)).not.toContain('uText;'); // no warning left
+
+        const shader = await mock.callTool('get_shader', {});
+        expect(String(shader.result)).toContain('uniform sampler2D uTextPrev;');
+        expect(String((await mock.callTool('compile', {})).result)).not.toContain('showText');
+    });
+
     test('there is no play tool — the agent cannot start playback', async ({ page }) => {
         await openAppWithMockAgent(page, mock);
         const res = await mock.callTool('play', {});

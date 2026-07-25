@@ -56,9 +56,10 @@ errors, and starts playback — all in your browser.
 | `get_synth` / `set_synth` | read / replace the synth editor |
 | `edit_synth` / `edit_song` | surgical find-and-replace in place (like Edit) — change a large doc (e.g. the 14k-line DX7 bundle) without rewriting it |
 | `grep_synth` / `grep_song` | regex-search the current in-browser doc for anchors, without dumping the whole file into context |
+| `get_shader` / `set_shader` / `edit_shader` / `grep_shader` | read / replace / surgically edit / search the visualizer shader (GLSL). The song's visuals only reach the screen through uniforms this document declares, so `showText`/`setVisual` work is a shader job as much as a song job — the write tools report back anything the song schedules that the shader still cannot show |
 | `write_faust` / `read_faust` / `list_faust` | author instruments in **Faust** (`.dsp`) in OPFS `faust/` — `write_faust` also transpiles to AssemblyScript and reports the generated classes (needs `?gitrepo=` mode) |
-| `compile` | `window.compileSong()`, returns "compiled OK" or the compiler error |
-| `play` / `stop` | `window.startaudio()` / `window.stopaudio()` |
+| `compile` | `window.saveSong()` (save + compile + apply to a playing worklet), returns "compiled OK" or the compiler error |
+| `stop` | `window.stopaudio()` — there is deliberately no `play` tool; starting playback is the user's action |
 
 It also has read-only `Read`/`Glob`/`Grep` over this repo so it can learn from
 `examples/` (incl. the DX7 FM synth), `songs/`, and `wasmaudioworklet/docs/`.

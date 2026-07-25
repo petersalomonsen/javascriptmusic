@@ -22,6 +22,11 @@ Key detail: the schedule is sorted so the **latest `startTime` ≤ now wins**. S
 you do **not** need to set a stop time — each `startVideo` simply supersedes the
 previous frame. Rapid successive calls = animation.
 
+Before the first `startVideo` — and in a song with no images at all — `uSampler`
+and `uSamplerPrev` hold a fully **transparent** pixel, so a shader that
+composites the image layer by its alpha (`mix(col, card.rgb, card.a)`) just
+shows its own output.
+
 ## Frame rate
 
 `startVideo` stamps the *current song time*, so frame spacing is driven by the
@@ -111,31 +116,54 @@ if (x >= margin && x < (1.0 - margin)) {
 
 ## Text overlays
 
-There's no text primitive — render text to a canvas and use it as an image
-frame. Build a data-URL once, register it with `addImage`, and `startVideo` it
-when you want it on screen:
+`showText(text, options)` puts text on screen at the current song time. It
+renders the text to an SVG image internally — pure string work, so it runs
+inside the song sandbox (there is **no** `document` or canvas at song-compile
+time).
 
 ```js
-function textImage(lines) {
-  const c = document.createElement('canvas');
-  c.width = 1152; c.height = 1280;
-  const ctx = c.getContext('2d');
-  ctx.font = '70px Arial';
-  ctx.fillStyle = '#fff';
-  lines.forEach((t, i) => {
-    const w = ctx.measureText(t).width;
-    ctx.fillText(t, (c.width - w) / 2, 400 + i * 100);
-  });
-  return c.toDataURL();
-}
-
-addImage('title', textImage(['My Song', 'by me']));
-// ...
-startVideo('title');   // show the title card
+showText('My Song', { transition: 0, fade: 1.5 });
+// ...later
+showText(['Second verse', 'starts here'], { size: 72, transition: 1 });
+// ...and away
+hideText({ fade: 2 });
 ```
 
-(Note: in the browser song editor, `document` is available at song-compile
-time, so building a canvas data-URL like this works.)
+Text goes on its **own layer** — `uText` / `uTextPrev` / `uTextMix` — not the
+image layer, so it composites over an image slideshow, a video or a purely
+generative shader. **The shader must declare and composite those uniforms** or
+the text never appears (the app warns at compile time if it doesn't).
+`uTextMix` runs 0 → 1 over `fade` seconds; the shader decides what to do with it:
+
+```glsl
+uniform sampler2D uText;
+uniform sampler2D uTextPrev;
+uniform float uTextMix;
+uniform float textTransition;   // showText's `transition` option (via setVisual)
+
+vec2 tuv = vec2(uv.x, 1.0 - uv.y);          // texture rows upload top-first
+vec4 t = mix(texture2D(uTextPrev, tuv), texture2D(uText, tuv), uTextMix);
+col = mix(col, t.rgb, t.a);
+```
+
+Style options: `size`, `color`, `font`, `weight`, `align`, `x`, `y`,
+`lineHeight`, `background`, `stroke`, `strokeWidth`, `width`, `height` — see
+[song-api.md](song-api.md#shader-text--parameter-functions).
+
+`examples/textoverlay` is a complete song + shader pair showing fade, wipe,
+rise and dissolve transitions selected from the sequence.
+
+## Anything else the song wants to control
+
+`setVisual(name, value, rampSeconds)` schedules any named float the shader
+declares as `uniform float <name>` — the transition style above, a zoom, a
+scene index, a colour. Values step by default, or ramp over `rampSeconds`:
+
+```js
+setVisual('bloom', 0.0);
+// ...at the drop
+setVisual('bloom', 1.0, 2);   // ramp up over two seconds
+```
 
 ## Fades
 

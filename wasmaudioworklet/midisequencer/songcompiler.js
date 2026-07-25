@@ -1,7 +1,9 @@
 import { resetTick, setBPM, nextTick, currentTime, waitForBeat, waitDuration } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunctionKeys } from './trackerpattern.js';
 import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT } from './sequenceconstants.js';
-import { setVideoSchedule } from '../visualizer/videoscheduler.js';
+import { setVideoSchedule, setTextSchedule } from '../visualizer/videoscheduler.js';
+import { setVisualParamSchedule } from '../visualizer/visualparams.js';
+import { textToSvgDataUrl } from './textimage.js';
 
 // Map a URL to one suitable for assignment to <img>/<video>.src.
 // Repo-relative paths (no protocol, no leading slash) are read via the host-
@@ -55,6 +57,10 @@ export const addedVideo = {};
 
 let trackerPatterns = [];
 let songParts = {};
+// setVisual calls, stamped with song time: { time, name, value, ramp }.
+let visualParams = [];
+// showText registers each text as its own image entry — unique name per call.
+let textCounter = 0;
 
 const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor;
 const output = {
@@ -97,6 +103,56 @@ function startVideo(name, clipStartTime = 0) {
 
 function stopVideo(name) {
     addedVideo[name].schedule[addedVideo[name].schedule.length - 1].stopTime = currentTime();
+}
+
+// --- Visuals driven from the sequence ---------------------------------------
+// setVisual schedules a named float that the shader reads as
+// `uniform float <name>`; showText schedules a text image on the shader's text
+// layer (uText/uTextPrev/uTextMix). Together they let the song decide what to
+// show, when, and — via a param the shader branches on — how.
+
+const VISUAL_PARAM_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const DEFAULT_TEXT_FADE_SECONDS = 1.0;
+
+function setVisual(name, value, rampSeconds = 0) {
+    if (!VISUAL_PARAM_NAME.test(name)) {
+        throw new Error(`setVisual: '${name}' is not a valid GLSL uniform name`);
+    }
+    const numeric = typeof value === 'boolean' ? (value ? 1 : 0) : Number(value);
+    if (!isFinite(numeric)) {
+        throw new Error(`setVisual('${name}', ...): value must be a finite number, got ${value}`);
+    }
+    visualParams.push({
+        time: currentTime(),
+        name,
+        value: numeric,
+        ramp: Math.max(0, Number(rampSeconds) || 0) * 1000,
+    });
+}
+
+function showText(text, options = {}) {
+    const name = `__text${textCounter++}`;
+    // cache: false — the generated names repeat between compiles, and the
+    // content behind them changes when the song is edited.
+    // Not awaited on purpose: addImage registers addedVideo[name] synchronously
+    // (both in the guest recorder and on the host) before it resolves the URL,
+    // so the schedule push below always finds the entry.
+    songargs.addImage(name, textToSvgDataUrl(text, options), false);
+    addedVideo[name].layer = 'text';
+    addedVideo[name].schedule.push({
+        startTime: currentTime(),
+        fade: options.fade === undefined
+            ? DEFAULT_TEXT_FADE_SECONDS
+            : Math.max(0, Number(options.fade) || 0),
+    });
+    if (options.transition !== undefined) {
+        setVisual('textTransition', options.transition);
+    }
+    return name;
+}
+
+function hideText(options = {}) {
+    return showText('', options);
 }
 
 // Emit a named signal on the BroadcastChannel at the current song time.
@@ -151,6 +207,9 @@ const songargs = {
     'stopRecording': stopRecording,
     'startVideo': startVideo,
     'stopVideo': stopVideo,
+    'setVisual': setVisual,
+    'showText': showText,
+    'hideText': hideText,
     'broadcastSend': broadcastSend,
     'broadcastWait': broadcastWait,
     'definePartStart': (partName) => songParts[partName] = { startTime: currentTime() },
@@ -223,21 +282,29 @@ export async function compileSong(songsource) {
     result.audioUrls.forEach(url => songargs.addAudio(url));
 
     const videoSchedule = [];
+    const textSchedule = [];
     Object.values(addedVideo).forEach(vid => vid.schedule = []);
     for (const [name, spec] of Object.entries(result.visual)) {
+        const isText = spec.layer === 'text';
         if (spec.isImage) {
-            await songargs.addImage(name, spec.url);
+            // Text entries reuse their names between compiles with new content,
+            // so they must replace rather than hit the name cache.
+            await songargs.addImage(name, spec.url, !isText);
         } else {
             await songargs.addVideo(name, spec.url);
         }
+        addedVideo[name].layer = spec.layer;
         addedVideo[name].schedule = spec.schedule;
         spec.schedule.forEach(sch => {
             sch.video = addedVideo[name];
-            videoSchedule.push(sch);
+            (isText ? textSchedule : videoSchedule).push(sch);
         });
     }
     videoSchedule.sort((a, b) => b.startTime - a.startTime);
+    textSchedule.sort((a, b) => b.startTime - a.startTime);
     setVideoSchedule(videoSchedule);
+    setTextSchedule(textSchedule);
+    setVisualParamSchedule(result.visualParams);
 
     return songmessages;
 }
@@ -253,7 +320,10 @@ export async function generateSong(songfunc) {
     songmessages = [];
     instrumentNames = [];
     trackerPatterns = [];
+    visualParams = [];
+    textCounter = 0;
     const videoSchedule = [];
+    const textSchedule = [];
     Object.values(addedVideo).forEach(vid => vid.schedule = []);
     muted = {};
     solo = {};
@@ -281,11 +351,14 @@ export async function generateSong(songfunc) {
     Object.values(addedVideo).forEach(vid =>
         vid.schedule.forEach(sch => {
             sch.video = vid;
-            videoSchedule.push(sch);
+            (vid.layer === 'text' ? textSchedule : videoSchedule).push(sch);
         })
     );
     videoSchedule.sort((a, b) => b.startTime - a.startTime);
+    textSchedule.sort((a, b) => b.startTime - a.startTime);
     setVideoSchedule(videoSchedule);
+    setTextSchedule(textSchedule);
+    setVisualParamSchedule(visualParams);
 
     const loopMessageIndex = songmessages.findIndex(evt => evt.message == SEQ_MSG_LOOP);
     if (loopMessageIndex > -1) {

@@ -30,6 +30,7 @@ const SANDBOX_MEMORY_LIMIT = 64 * 1024 * 1024;
 const GUEST_SOURCE_FILES = [
     'sequenceconstants.js',
     'pattern.js',
+    'textimage.js',
     'trackerpattern.js',
     'songcompiler.js',
 ];
@@ -39,6 +40,8 @@ const GUEST_SOURCE_FILES = [
 const GUEST_PRELUDE = `
 globalThis.console = { log: print, warn: print, error: print };
 const setVideoSchedule = () => {};
+const setTextSchedule = () => {};
+const setVisualParamSchedule = () => {};
 `;
 
 // Appended in the same module scope as the stripped sources: replace the
@@ -80,14 +83,17 @@ export async function __runSong() {
         output: { startTime: p.output.startTime, midievents: p.output.midievents }
     }));
     result.audioUrls = __audioUrls;
+    result.visualParams = visualParams;
     result.visual = Object.fromEntries(Object.entries(addedVideo)
         .map(([name, v]) => [name, {
             url: v.url,
             isImage: !!v.isImage,
+            layer: v.layer,
             schedule: v.schedule.map(s => ({
                 startTime: s.startTime,
                 stopTime: s.stopTime,
-                clipStartTime: s.clipStartTime
+                clipStartTime: s.clipStartTime,
+                fade: s.fade
             }))
         }]));
     return JSON.stringify(result);

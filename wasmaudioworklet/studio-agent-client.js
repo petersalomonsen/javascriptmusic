@@ -5,7 +5,7 @@
 // editors, the compiler, the audio worklet) and send the result back. This is
 // the "full in-app" path: tool calls operate on the browser, not on disk.
 
-import { songsourceeditor, synthsourceeditor } from './editorcontroller.js';
+import { songsourceeditor, synthsourceeditor, shadersourceeditor } from './editorcontroller.js';
 import { transpileDspSource } from './faust/faust-rs-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
 import { applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings } from './studio-agent-tools-core.js';
@@ -63,6 +63,14 @@ function grepDoc(editor, args) {
   return r;
 }
 
+// What the last compiled song schedules but the CURRENT shader document cannot
+// show (showText with no uText, setVisual names the shader never declares).
+// The app computes the same warnings for the human in the error panel; the
+// agent gets them straight in the tool result, where it can act on them.
+function shaderWarnings() {
+  return window.getVisualWarnings ? window.getVisualWarnings(shadersourceeditor.doc.getValue()) : [];
+}
+
 // ---- the tool registry: tool name -> async fn acting on the app -------------
 // Returning an object with `__error` marks a failed tool result.
 const registry = {
@@ -81,6 +89,22 @@ const registry = {
   },
   grep_synth: async (args) => grepDoc(synthsourceeditor, args),
   grep_song: async (args) => grepDoc(songsourceeditor, args),
+
+  // ---- the visualizer shader (GLSL) ----
+  // The song's visuals only reach the screen through uniforms this document
+  // declares, so shader edits and song edits belong to the same job. Every
+  // write reports back what the song schedules but the shader can't show.
+  get_shader: async () => shadersourceeditor.doc.getValue() || '(no shader — the shader editor is empty)',
+  set_shader: async ({ source }) => {
+    shadersourceeditor.doc.setValue(source);
+    return ['shader updated', ...shaderWarnings()].join('\n');
+  },
+  edit_shader: async (args) => {
+    const result = applyEdit(shadersourceeditor, args);
+    if (result && result.__error) return result;
+    return [result, ...shaderWarnings()].join('\n');
+  },
+  grep_shader: async (args) => grepDoc(shadersourceeditor, args),
 
   // ---- Faust instrument authoring (OPFS faust/ folder; needs ?gitrepo= mode) ----
   list_faust: async () => {
@@ -158,13 +182,19 @@ const registry = {
       return { __error: String(e?.message || e) };
     }
     const err = readErrorPanel();
-    if (!err) return 'compiled OK';
+    // Visuals the song scheduled that the shader can't show are read straight
+    // from the app rather than the panel — a later synth warning would
+    // otherwise overwrite them there.
+    const visual = shaderWarnings();
+    if (!err) return ['compiled OK', ...visual].join('\n');
     // The panel also surfaces NON-fatal AssemblyScript warnings (AS233/AS235…)
     // after a successful build — reporting those as an error makes models
     // "fix" working code. Only real ERROR lines fail the tool.
     const text = err.replace(/^Error:\s*/, '');
-    const onlyWarnings = /^WARNING/.test(text) && !/(^|\n)\s*ERROR/.test(text);
-    if (onlyWarnings) return 'compiled OK (non-fatal AssemblyScript warnings in the panel — ignore them)';
+    const onlyWarnings = /^WARNING/i.test(text) && !/(^|\n)\s*ERROR/.test(text);
+    if (onlyWarnings) {
+      return ['compiled OK (non-fatal AssemblyScript warnings in the panel — ignore them)', ...visual].join('\n');
+    }
     return { __error: err };
   },
   // NOTE: intentionally NO `play` tool — starting playback is the user's

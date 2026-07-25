@@ -1,4 +1,6 @@
 import { exportVideo, setupWebGL } from './fragmentshader.js';
+import { setVisualParamSchedule } from './visualparams.js';
+import { compileSong, addedVideo } from '../midisequencer/songcompiler.js';
 
 describe('fragmentshader', function() {
     this.timeout(20000);
@@ -9,6 +11,98 @@ describe('fragmentshader', function() {
     });
     this.afterAll(async () => {
         document.documentElement.removeChild(document.getElementById('glCanvas'));
+    });
+    // Must run before the export test: exportVideo leaves the module in
+    // "exporting" mode, which stops all render loops.
+    it('should set song-scheduled visual params as shader uniforms', async () => {
+        const canvaselement = document.createElement('canvas');
+        canvaselement.width = 64;
+        canvaselement.height = 64;
+        document.documentElement.appendChild(canvaselement);
+
+        setVisualParamSchedule([
+            { time: 0, name: 'textTransition', value: 2 },
+            { time: 0, name: 'zoom', value: 1 },
+            { time: 1000, name: 'zoom', value: 3, ramp: 1000 },
+        ]);
+
+        const shadersource = `
+            precision highp float;
+            uniform float textTransition;
+            uniform float zoom;
+            uniform sampler2D uText;
+            uniform float uTextMix;
+            void main() {
+                gl_FragColor = vec4(textTransition, zoom, uTextMix * texture2D(uText, vec2(0.5)).a, 1.0);
+            }
+        `;
+        // song time 1.5s — halfway into the zoom ramp
+        setupWebGL(shadersource, canvaselement, () => 1.5);
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const gl = canvaselement.getContext('webgl');
+        const program = gl.getParameter(gl.CURRENT_PROGRAM);
+        const uniform = name => gl.getUniform(program, gl.getUniformLocation(program, name));
+        expect(uniform('textTransition')).to.equal(2);
+        expect(uniform('zoom')).to.be.closeTo(2, 1e-6);
+        // the text layer binds even with no text scheduled
+        expect(uniform('uText')).to.equal(2);
+        expect(uniform('uTextMix')).to.equal(1);
+
+        setVisualParamSchedule([]);
+        document.documentElement.removeChild(canvaselement);
+    });
+    it('should render text scheduled by showText into the uText layer', async () => {
+        const canvaselement = document.createElement('canvas');
+        canvaselement.width = 160;
+        canvaselement.height = 90;
+        document.documentElement.appendChild(canvaselement);
+
+        await compileSong(`
+            setBPM(120);
+            showText('IIIIIIII', { fade: 2 });
+            await createTrack(0).steps(4, [c3,,,,]);
+            loopHere();
+        `);
+        // the text image is an SVG data url — wait for the browser to decode it
+        await Promise.all(Object.values(addedVideo)
+            .filter(vid => vid.layer === 'text')
+            .map(vid => vid.imageElement.decode()));
+
+        const shadersource = `
+            precision highp float;
+            uniform vec2 resolution;
+            uniform sampler2D uText;
+            uniform sampler2D uTextPrev;
+            uniform float uTextMix;
+            void main() {
+                vec2 uv = gl_FragCoord.xy / resolution;
+                float a = texture2D(uText, vec2(uv.x, 1.0 - uv.y)).a
+                        + 0.0 * texture2D(uTextPrev, uv).a;
+                gl_FragColor = vec4(vec3(a * uTextMix), 1.0);
+            }
+        `;
+        // 1s into a 2s fade
+        setupWebGL(shadersource, canvaselement, () => 1.0);
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const gl = canvaselement.getContext('webgl');
+        const program = gl.getParameter(gl.CURRENT_PROGRAM);
+        expect(gl.getUniform(program, gl.getUniformLocation(program, 'uTextMix'))).to.be.closeTo(0.5, 1e-6);
+
+        // draw once more and read it back before the compositor clears
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        const pixels = new Uint8Array(160 * 90 * 4);
+        gl.readPixels(0, 0, 160, 90, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        let lit = 0;
+        for (let ndx = 0; ndx < pixels.length; ndx += 4) {
+            if (pixels[ndx] > 0) lit++;
+        }
+        // the glyphs cover a small part of the frame, at half opacity
+        expect(lit).to.be.greaterThan(20);
+        expect(lit).to.be.lessThan(160 * 90 * 0.5);
+
+        document.documentElement.removeChild(canvaselement);
     });
     it('should export a video from the fragment shader', async () => {
         if (!('VideoEncoder' in window) || /\bHeadlessChrome\//.test(navigator.userAgent)) {

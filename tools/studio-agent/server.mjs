@@ -70,6 +70,7 @@ if (process.env.ANTHROPIC_API_KEY) {
 const STUDIO_TOOLS = [
   'get_song', 'set_song', 'get_synth', 'set_synth',
   'edit_synth', 'edit_song', 'grep_synth', 'grep_song',
+  'get_shader', 'set_shader', 'edit_shader', 'grep_shader',
   'write_faust', 'read_faust', 'list_faust',
   'git_log', 'read_committed',
   'load_synth_from_file', 'load_song_from_file',
@@ -167,6 +168,10 @@ function makeStudioServer(ws) {
       proxy('edit_song', 'Surgically find-and-replace in the song document IN PLACE. old_string must match exactly and be unique unless replace_all is true.', { old_string: z.string(), new_string: z.string(), replace_all: z.boolean().optional() }),
       proxy('grep_synth', 'Search the CURRENT in-browser synth document for a regex; returns matching line numbers + text (optionally with surrounding context lines). Use to find exact anchors for edit_synth in a large synth without dumping the whole file.', { pattern: z.string(), context: z.number().optional() }),
       proxy('grep_song', 'Search the CURRENT in-browser song document for a regex; returns matching line numbers + text.', { pattern: z.string(), context: z.number().optional() }),
+      proxy('get_shader', 'Return the current visualizer shader document (GLSL ES 1.00 fragment shader). This is what the song\'s visuals actually render through — read it before concluding anything about what is or is not on screen.', {}),
+      proxy('set_shader', 'Replace the entire visualizer shader document. Provide the full new GLSL source. Reports back any visuals the song schedules that the new shader still cannot show.', { source: z.string() }),
+      proxy('edit_shader', 'Surgically find-and-replace in the visualizer shader document IN PLACE. old_string must match exactly and be unique unless replace_all is true. Reports back any visuals the song schedules that the shader still cannot show.', { old_string: z.string(), new_string: z.string(), replace_all: z.boolean().optional() }),
+      proxy('grep_shader', 'Search the CURRENT in-browser shader document for a regex; returns matching line numbers + text. Use it to check which uniforms the shader declares (e.g. "uText|uSampler|uniform float") before editing the song\'s visuals.', { pattern: z.string(), context: z.number().optional() }),
       proxy('write_faust', 'Author an INSTRUMENT in Faust: write faust/<path>.dsp AND transpile it to AssemblyScript in one step (persists faust/<name>.dsp + faust/<name>.ts in the browser OPFS). Returns the generated class names to import into synth.ts, or the exact transpile error. This is the primary way to create instrument DSP — do NOT hand-write DSP in AssemblyScript.', { path: z.string(), source: z.string() }),
       proxy('read_faust', 'Read a Faust .dsp instrument source from the browser OPFS faust/ folder.', { path: z.string() }),
       proxy('list_faust', 'List the .dsp Faust instruments in the browser OPFS faust/ folder.', {}),
