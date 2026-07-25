@@ -32,7 +32,7 @@ jobs:
           cd wasmaudioworklet
           # --legacy-peer-deps: pre-existing @as-pect/cli peer conflict with
           # assemblyscript 0.28 that yarn (used by the other jobs) ignores.
-          npm install --no-save --no-audit --no-fund --legacy-peer-deps quickjs-wasm@0.0.3
+          npm install --no-save --no-audit --no-fund --legacy-peer-deps quickjs-wasm@0.0.5
           npm run test-agent-tools
           npm run test-gitproxy
           npm run test-quickjs-sandbox
