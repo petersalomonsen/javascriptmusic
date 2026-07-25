@@ -41,7 +41,7 @@ void disassembleInstruments() {
 	for (int i = 0; i < MAX_INSTRUMENTS; i++)
 	{
 		
-		sprintf(comstr, "GO4K_BEGIN_CMDDEF(Instrument%d)\n", i + mergeMaxInst); CommandString += comstr;
+		snprintf(comstr, sizeof(comstr), "GO4K_BEGIN_CMDDEF(Instrument%d)\n", i + mergeMaxInst); CommandString += comstr;
 		for (int u = 0; u < MAX_UNITS; u++)
 		{
 			comstr[0] = 0;
@@ -49,41 +49,41 @@ void disassembleInstruments() {
 			// cout << "CMD " << i << " " << u << " " << (int)SynthObj.InstrumentValues[i][u][0] << endl;
 			
 			if (SynthObj.InstrumentValues[i][u][0] == M_ENV)
-				sprintf(comstr, "\tdb GO4K_ENV_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_ENV_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_VCO)
-				sprintf(comstr, "\tdb GO4K_VCO_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_VCO_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_VCF)
-				sprintf(comstr, "\tdb GO4K_VCF_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_VCF_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_DST)
-				sprintf(comstr, "\tdb GO4K_DST_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_DST_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_DLL)
-				sprintf(comstr, "\tdb GO4K_DLL_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_DLL_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_FOP)
-				sprintf(comstr, "\tdb GO4K_FOP_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_FOP_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_FST)
 			{
 				FST_valP v = (FST_valP)(SynthObj.InstrumentValues[i][u]);
 				// local storage
 				if (v->dest_stack == -1 || v->dest_stack == i)
-					sprintf(comstr, "\tdb GO4K_FST_ID\n"); 
+					snprintf(comstr, sizeof(comstr), "\tdb GO4K_FST_ID\n"); 
 				// global storage
 				else
-					sprintf(comstr, "\tdb GO4K_FSTG_ID\n"); 
+					snprintf(comstr, sizeof(comstr), "\tdb GO4K_FSTG_ID\n"); 
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_PAN)
-				sprintf(comstr, "\tdb GO4K_PAN_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_PAN_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_OUT)
-				sprintf(comstr, "\tdb GO4K_OUT_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_OUT_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_ACC)
-				sprintf(comstr, "\tdb GO4K_ACC_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_ACC_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_FLD)
-				sprintf(comstr, "\tdb GO4K_FLD_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_FLD_ID\n"); 
 			if (SynthObj.InstrumentValues[i][u][0] == M_GLITCH)
-				sprintf(comstr, "\tdb GO4K_GLITCH_ID\n"); 
+				snprintf(comstr, sizeof(comstr), "\tdb GO4K_GLITCH_ID\n"); 
 
 			CommandString += comstr;
 		}			
-		sprintf(comstr, "GO4K_END_CMDDEF\n"); CommandString += comstr;
+		snprintf(comstr, sizeof(comstr), "GO4K_END_CMDDEF\n"); CommandString += comstr;
 	};
 	//fprintf(file, "%s", CommandString.c_str());
 
@@ -152,7 +152,7 @@ void disassembleInstruments() {
 			if (SynthObj.InstrumentValues[i][u][0] == M_ENV)
 			{
 				ENV_valP v = (ENV_valP)(SynthObj.InstrumentValues[i][u]);
-				sprintf(valstr, "\tGO4K_ENV\tATTAC(%d),DECAY(%d),SUSTAIN(%d),RELEASE(%d),GAIN(%d)\n", v->attac, v->decay, v->sustain, v->release, v->gain);
+				snprintf(valstr, sizeof(valstr), "\tGO4K_ENV\tATTAC(%d),DECAY(%d),SUSTAIN(%d),RELEASE(%d),GAIN(%d)\n", v->attac, v->decay, v->sustain, v->release, v->gain);
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_VCO)
 			{
@@ -161,20 +161,20 @@ void disassembleInstruments() {
 				char lfo[16]; lfo[0] = 0;
 				char stereo[16]; stereo[0] = 0;
 				if (v->flags & VCO_SINE)
-					sprintf(type, "SINE");
+					snprintf(type, sizeof(type), "SINE");
 				if (v->flags & VCO_TRISAW)
-					sprintf(type, "TRISAW");
+					snprintf(type, sizeof(type), "TRISAW");
 				if (v->flags & VCO_PULSE)
-					sprintf(type, "PULSE");
+					snprintf(type, sizeof(type), "PULSE");
 				if (v->flags & VCO_NOISE)
-					sprintf(type, "NOISE");
+					snprintf(type, sizeof(type), "NOISE");
 				if (v->flags & VCO_GATE)
-					sprintf(type, "GATE");
+					snprintf(type, sizeof(type), "GATE");
 				if (v->flags & VCO_LFO)
-					sprintf(lfo, "|LFO");
+					snprintf(lfo, sizeof(lfo), "|LFO");
 				if (v->flags & VCO_STEREO)
-					sprintf(stereo, "|VCO_STEREO");
-				sprintf(valstr, "\tGO4K_VCO\tTRANSPOSE(%d),DETUNE(%d),PHASE(%d),GATES(%d),COLOR(%d),SHAPE(%d),GAIN(%d),FLAGS(%s%s%s)\n", v->transpose, v->detune, v->phaseofs, v->gate, v->color, v->shape, v->gain, type, lfo, stereo);
+					snprintf(stereo, sizeof(stereo), "|VCO_STEREO");
+				snprintf(valstr, sizeof(valstr), "\tGO4K_VCO\tTRANSPOSE(%d),DETUNE(%d),PHASE(%d),GATES(%d),COLOR(%d),SHAPE(%d),GAIN(%d),FLAGS(%s%s%s)\n", v->transpose, v->detune, v->phaseofs, v->gate, v->color, v->shape, v->gain, type, lfo, stereo);
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_VCF)
 			{
@@ -183,38 +183,38 @@ void disassembleInstruments() {
 				char stereo[16]; stereo[0] = 0;
 				int t = v->type & ~VCF_STEREO;
 				if (t == VCF_LOWPASS)
-					sprintf(type, "LOWPASS");
+					snprintf(type, sizeof(type), "LOWPASS");
 				if (t == VCF_HIGHPASS)
-					sprintf(type, "HIGHPASS");
+					snprintf(type, sizeof(type), "HIGHPASS");
 				if (t == VCF_BANDPASS)
-					sprintf(type, "BANDPASS");
+					snprintf(type, sizeof(type), "BANDPASS");
 				if (t == VCF_BANDSTOP)
-					sprintf(type, "BANDSTOP");
+					snprintf(type, sizeof(type), "BANDSTOP");
 				if (t == VCF_ALLPASS)
-					sprintf(type, "ALLPASS");
+					snprintf(type, sizeof(type), "ALLPASS");
 				if (t == VCF_PEAK)
-					sprintf(type, "PEAK");
+					snprintf(type, sizeof(type), "PEAK");
 				if (v->type & VCF_STEREO)
-					sprintf(stereo, "|STEREO");
-				sprintf(valstr, "\tGO4K_VCF\tFREQUENCY(%d),RESONANCE(%d),VCFTYPE(%s%s)\n", v->freq, v->res, type, stereo);
+					snprintf(stereo, sizeof(stereo), "|STEREO");
+				snprintf(valstr, sizeof(valstr), "\tGO4K_VCF\tFREQUENCY(%d),RESONANCE(%d),VCFTYPE(%s%s)\n", v->freq, v->res, type, stereo);
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_DST)
 			{
 				DST_valP v = (DST_valP)(SynthObj.InstrumentValues[i][u]);
-				sprintf(valstr, "\tGO4K_DST\tDRIVE(%d), SNHFREQ(%d), FLAGS(%s)\n", v->drive, v->snhfreq, v->stereo & VCF_STEREO ? "STEREO" : "0");
+				snprintf(valstr, sizeof(valstr), "\tGO4K_DST\tDRIVE(%d), SNHFREQ(%d), FLAGS(%s)\n", v->drive, v->snhfreq, v->stereo & VCF_STEREO ? "STEREO" : "0");
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_DLL)
 			{
 				DLL_valP v = (DLL_valP)(SynthObj.InstrumentValues[i][u]);
 				if (v->delay < delay_indices.size())
 				{
-					sprintf(valstr, "\tGO4K_DLL\tPREGAIN(%d),DRY(%d),FEEDBACK(%d),DAMP(%d),FREQUENCY(%d),DEPTH(%d),DELAY(%d),COUNT(%d)\n", 
+					snprintf(valstr, sizeof(valstr), "\tGO4K_DLL\tPREGAIN(%d),DRY(%d),FEEDBACK(%d),DAMP(%d),FREQUENCY(%d),DEPTH(%d),DELAY(%d),COUNT(%d)\n", 
 						v->pregain, v->dry, v->feedback, v->damp, v->freq, v->depth, delay_indices[v->delay], v->count);	
 				}
 				// error handling in case indices are fucked up
 				else
 				{
-					sprintf(valstr, "\tGO4K_DLL\tPREGAIN(%d),DRY(%d),FEEDBACK(%d),DAMP(%d),FREQUENCY(%d),DEPTH(%d),DELAY(%d),COUNT(%d) ; ERROR\n", 
+					snprintf(valstr, sizeof(valstr), "\tGO4K_DLL\tPREGAIN(%d),DRY(%d),FEEDBACK(%d),DAMP(%d),FREQUENCY(%d),DEPTH(%d),DELAY(%d),COUNT(%d) ; ERROR\n", 
 						v->pregain, v->dry, v->feedback, v->damp, v->freq, v->depth, v->delay, v->count);
 				}
 			}
@@ -223,26 +223,26 @@ void disassembleInstruments() {
 				FOP_valP v = (FOP_valP)(SynthObj.InstrumentValues[i][u]);
 				char type[16]; type[0] = 0;
 				if (v->flags == FOP_POP)
-					sprintf(type, "FOP_POP");
+					snprintf(type, sizeof(type), "FOP_POP");
 				if (v->flags == FOP_PUSH)
-					sprintf(type, "FOP_PUSH");
+					snprintf(type, sizeof(type), "FOP_PUSH");
 				if (v->flags == FOP_XCH)
-					sprintf(type, "FOP_XCH");
+					snprintf(type, sizeof(type), "FOP_XCH");
 				if (v->flags == FOP_ADD)
-					sprintf(type, "FOP_ADD");
+					snprintf(type, sizeof(type), "FOP_ADD");
 				if (v->flags == FOP_ADDP)
-					sprintf(type, "FOP_ADDP");
+					snprintf(type, sizeof(type), "FOP_ADDP");
 				if (v->flags == FOP_MUL)
-					sprintf(type, "FOP_MUL");
+					snprintf(type, sizeof(type), "FOP_MUL");
 				if (v->flags == FOP_MULP)
-					sprintf(type, "FOP_MULP");
+					snprintf(type, sizeof(type), "FOP_MULP");
 				if (v->flags == FOP_ADDP2)
-					sprintf(type, "FOP_ADDP2");
+					snprintf(type, sizeof(type), "FOP_ADDP2");
 				if (v->flags == FOP_LOADNOTE)
-					sprintf(type, "FOP_LOADNOTE");
+					snprintf(type, sizeof(type), "FOP_LOADNOTE");
 				if (v->flags == FOP_MULP2)
-					sprintf(type, "FOP_MULP2");
-				sprintf(valstr, "\tGO4K_FOP\tOP(%s)\n", type);
+					snprintf(type, sizeof(type), "FOP_MULP2");
+				snprintf(valstr, sizeof(valstr), "\tGO4K_FOP\tOP(%s)\n", type);
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_FST)
 			{
@@ -265,7 +265,7 @@ void disassembleInstruments() {
 					//	modes = "FST_MUL";
 					if (v->type & FST_POP)
 						modes += "+FST_POP";
-					sprintf(valstr, "\tGO4K_FST\tAMOUNT(%d),DEST(%d*MAX_UNIT_SLOTS+%d+%s)\n", v->amount, v->dest_unit-emptySkip, v->dest_slot, modes.c_str() );
+					snprintf(valstr, sizeof(valstr), "\tGO4K_FST\tAMOUNT(%d),DEST(%d*MAX_UNIT_SLOTS+%d+%s)\n", v->amount, v->dest_unit-emptySkip, v->dest_slot, modes.c_str() );
 				}
 				// global storage
 				else
@@ -293,7 +293,7 @@ void disassembleInstruments() {
 					// invalid store target, possibly due non usage of the target instrument
 					if (storestack == -1)
 					{
-						sprintf(valstr, "\tGO4K_FSTG\tAMOUNT(0),DEST(7*4+go4k_instrument.workspace)\n");
+						snprintf(valstr, sizeof(valstr), "\tGO4K_FSTG\tAMOUNT(0),DEST(7*4+go4k_instrument.workspace)\n");
 					}
 					else
 					{
@@ -305,45 +305,45 @@ void disassembleInstruments() {
 						//	modes = "FST_MUL";
 						if (v->type & FST_POP)
 							modes += "+FST_POP";
-						sprintf(valstr, "\tGO4K_FSTG\tAMOUNT(%d),DEST((%d*go4k_instrument.size*MAX_VOICES/4)+(%d*MAX_UNIT_SLOTS+%d)+(go4k_instrument.workspace/4)+%s)\n", v->amount, storestack, v->dest_unit-emptySkip, v->dest_slot, modes.c_str());
+						snprintf(valstr, sizeof(valstr), "\tGO4K_FSTG\tAMOUNT(%d),DEST((%d*go4k_instrument.size*MAX_VOICES/4)+(%d*MAX_UNIT_SLOTS+%d)+(go4k_instrument.workspace/4)+%s)\n", v->amount, storestack, v->dest_unit-emptySkip, v->dest_slot, modes.c_str());
 					}
 				}
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_PAN)
 			{
 				PAN_valP v = (PAN_valP)(SynthObj.InstrumentValues[i][u]);
-				sprintf(valstr, "\tGO4K_PAN\tPANNING(%d)\n", v->panning);
+				snprintf(valstr, sizeof(valstr), "\tGO4K_PAN\tPANNING(%d)\n", v->panning);
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_OUT)
 			{
 				OUT_valP v = (OUT_valP)(SynthObj.InstrumentValues[i][u]);
-				sprintf(valstr, "\tGO4K_OUT\tGAIN(%d), AUXSEND(%d)\n", v->gain, v->auxsend);
+				snprintf(valstr, sizeof(valstr), "\tGO4K_OUT\tGAIN(%d), AUXSEND(%d)\n", v->gain, v->auxsend);
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_ACC)
 			{
 				ACC_valP v = (ACC_valP)(SynthObj.InstrumentValues[i][u]);
 				if (v->flags == ACC_OUT)
-					sprintf(valstr, "\tGO4K_ACC\tACCTYPE(OUTPUT)\n");
+					snprintf(valstr, sizeof(valstr), "\tGO4K_ACC\tACCTYPE(OUTPUT)\n");
 				else
-					sprintf(valstr, "\tGO4K_ACC\tACCTYPE(AUX)\n");
+					snprintf(valstr, sizeof(valstr), "\tGO4K_ACC\tACCTYPE(AUX)\n");
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_FLD)
 			{
 				FLD_valP v = (FLD_valP)(SynthObj.InstrumentValues[i][u]);
-				sprintf(valstr, "\tGO4K_FLD\tVALUE(%d)\n", v->value);
+				snprintf(valstr, sizeof(valstr), "\tGO4K_FLD\tVALUE(%d)\n", v->value);
 			}
 			if (SynthObj.InstrumentValues[i][u][0] == M_GLITCH)
 			{
 				GLITCH_valP v = (GLITCH_valP)(SynthObj.InstrumentValues[i][u]);
 				if (v->delay < delay_indices.size())
 				{
-					sprintf(valstr, "\tGO4K_GLITCH\tACTIVE(%d),DRY(%d),SLICEFACTOR(%d),PITCHFACTOR(%d),SLICESIZE(%d)\n", 
+					snprintf(valstr, sizeof(valstr), "\tGO4K_GLITCH\tACTIVE(%d),DRY(%d),SLICEFACTOR(%d),PITCHFACTOR(%d),SLICESIZE(%d)\n", 
 						v->active, v->dry, v->dsize, v->dpitch, delay_indices[v->delay]);	
 				}
 				// error handling in case indices are fucked up
 				else
 				{
-					sprintf(valstr, "\tGO4K_GLITCH\tACTIVE(%d),DRY(%d),SLICEFACTOR(%d),PITCHFACTOR(%d),SLICESIZE(%d) ; ERROR\n",
+					snprintf(valstr, sizeof(valstr), "\tGO4K_GLITCH\tACTIVE(%d),DRY(%d),SLICEFACTOR(%d),PITCHFACTOR(%d),SLICESIZE(%d) ; ERROR\n",
 						v->active, v->dry, v->dsize, v->dpitch, v->delay);	
 				}
 			}
