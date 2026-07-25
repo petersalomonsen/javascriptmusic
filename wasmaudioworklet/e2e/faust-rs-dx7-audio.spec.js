@@ -139,7 +139,7 @@ test('faust-rs dx7 renders a sustained, pitch-stable piano note', async ({ page 
         customElements.define = (name, ctor, opts) => {
             try { origDefine(name, ctor, opts); } catch (e) { /* already defined */ }
         };
-        const m = await import('/faust/browser-transpile.js');
+        const m = await import('/faust/faust-rs-transpile.js');
         const { ts } = await m.transpileDspSource(
             'import("stdfaust.lib");\nprocess = dx.algorithm(5) <: _,_;\n',
             'dx7_alg5.dsp',
