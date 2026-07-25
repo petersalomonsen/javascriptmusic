@@ -14,7 +14,7 @@
 // from the installed npm package in Node (Node cannot import https: URLs).
 // Keep the version in sync with the quickjs-wasm devDependency in
 // package.json.
-const QUICKJS_WASM_VERSION = '0.0.2';
+const QUICKJS_WASM_VERSION = '0.0.3';
 
 async function getCreateQuickJS() {
     const { createQuickJS } = (typeof process !== 'undefined' && process.versions && process.versions.node)
