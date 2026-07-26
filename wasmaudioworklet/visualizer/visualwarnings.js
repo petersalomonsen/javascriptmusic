@@ -12,14 +12,21 @@ export function visualWarnings(shaderSource, { hasText = false, paramNames = [] 
     const source = shaderSource || '';
     const warnings = [];
 
-    // Declaring the uniforms is not enough: GLSL drops uniforms that are never
-    // read, so a shader that declares uText without sampling it renders nothing
-    // and reports no error. Check for a reference OUTSIDE the declarations.
-    const body = source.replace(/uniform[^;]*;/g, '');
-    if (hasText && !/\buText\b/.test(body)) {
+    // Shaders here tend to document their uniform contract in a header
+    // comment, so comments are stripped before anything is concluded from a
+    // mention of uText — otherwise the docs mask the warning.
+    const code = source
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/[^\n]*/g, '');
+    // Declaring the uniform is not enough either: GLSL drops uniforms that are
+    // never read, so a shader that declares uText without sampling it renders
+    // nothing and reports no error. Look for a reference outside declarations.
+    const declaresText = /uniform\s+sampler2D\s+uText\b/.test(code);
+    const usesText = /\buText\b/.test(code.replace(/uniform[^;]*;/g, ''));
+    if (hasText && !usesText) {
         warnings.push(source.trim().length === 0
             ? `Warning: the song calls showText(), but there is no fragment shader to show it on. ${TEXT_DOC_HINT}`
-            : /\buText\b/.test(source)
+            : declaresText
                 ? 'Warning: the shader declares `uText` but never samples it, so the song\'s text still renders ' +
                 'nothing (GLSL drops unused uniforms). Composite it in main() with 0..1 coordinates: ' +
                 '`vec2 tuv = gl_FragCoord.xy / resolution; tuv.y = 1.0 - tuv.y;` then mix ' +

@@ -46,6 +46,21 @@ describe('visualwarnings', function () {
         expect(warnings[0]).to.contain('never samples it');
     });
 
+    it('should not let comments about uText silence the warning', () => {
+        // Shaders here often document the uniform contract in a header block;
+        // a production run seeded exactly this shape and got no warning.
+        const commentOnly = `
+            precision highp float;
+            // uText / uTextPrev — the current and outgoing text images
+            /* uTextMix runs 0..1 over each showText's fade */
+            uniform vec2 resolution;
+            void main() { gl_FragColor = vec4(gl_FragCoord.xy / resolution, 0.0, 1.0); }
+        `;
+        const warnings = visualWarnings(commentOnly, { hasText: true });
+        expect(warnings.length).to.equal(1);
+        expect(warnings[0]).to.contain('never uses');
+    });
+
     it('should warn about visual params the shader does not declare', () => {
         const warnings = visualWarnings(TEXT_SHADER, { hasText: true, paramNames: ['textTransition', 'zoom'] });
         expect(warnings.length).to.equal(1);
