@@ -53,14 +53,18 @@ uniform sampler2D uTextPrev;
 uniform float uTextMix;
 uniform float textTransition;   // set by the song via setVisual / showText's `transition`
 
+vec2 tuv = gl_FragCoord.xy / resolution;   // 0..1 — NOT the centered `uv` above
+tuv.y = 1.0 - tuv.y;                       // texture rows upload top-first
 // crossfade the outgoing text out and the incoming text in
 vec4 t = mix(texture2D(uTextPrev, tuv), texture2D(uText, tuv), uTextMix);
 col = mix(col, t.rgb, t.a);
 ```
 
-Note the text image uploads top-row-first, so flip the y coordinate when
-sampling: `vec2 tuv = vec2(uv.x, 1.0 - uv.y);`. A shader that never declares
-these uniforms is unaffected — the renderer skips locations it can't find.
+Two easy mistakes: sampling with the **centered** `uv` from the idiom above
+(texture coordinates must be 0..1, or the text ends up clipped in a corner),
+and declaring the uniforms without ever sampling them (GLSL drops unused
+uniforms, so nothing appears). A shader that never declares them at all is
+unaffected — the renderer skips locations it can't find.
 [`examples/textoverlay`](../../examples/textoverlay) is a complete song + shader
 pair with four transition styles.
 

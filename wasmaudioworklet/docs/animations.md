@@ -141,7 +141,8 @@ uniform sampler2D uTextPrev;
 uniform float uTextMix;
 uniform float textTransition;   // showText's `transition` option (via setVisual)
 
-vec2 tuv = vec2(uv.x, 1.0 - uv.y);          // texture rows upload top-first
+vec2 tuv = gl_FragCoord.xy / resolution;    // must be 0..1, not a centered uv
+tuv.y = 1.0 - tuv.y;                        // texture rows upload top-first
 vec4 t = mix(texture2D(uTextPrev, tuv), texture2D(uText, tuv), uTextMix);
 col = mix(col, t.rgb, t.a);
 ```

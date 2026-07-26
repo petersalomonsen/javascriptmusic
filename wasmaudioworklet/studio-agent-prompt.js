@@ -66,11 +66,14 @@ uniform sampler2D uText;
 uniform sampler2D uTextPrev;
 uniform float uTextMix;
 // ... at the end of main(), over the colour the shader already computed:
-vec2 tuv = vec2(uv.x, 1.0 - uv.y);
+vec2 tuv = gl_FragCoord.xy / resolution;   // texture coords MUST be 0..1
+tuv.y = 1.0 - tuv.y;                       // texture rows upload top-first
 vec4 t = mix(texture2D(uTextPrev, tuv), texture2D(uText, tuv), uTextMix);
 col = mix(col, t.rgb, clamp(t.a, 0.0, 1.0));
 \`\`\`
+**Compute those coordinates fresh — do NOT reuse the host shader's \`uv\`.** Most shaders here define \`uv\` as centered and aspect-corrected (\`(gl_FragCoord.xy - 0.5*resolution)/resolution.y\`, roughly -0.9..0.9), and sampling a texture with that puts the text in a corner, clipped. Only reuse an existing variable if you have read its definition and it really is 0..1.
 Rules of thumb:
+- **Add a layer ALONGSIDE what is already there — never delete another layer to make room.** Removing the image-card block (\`uSampler\`/\`uSamplerPrev\`/\`uMix\` and its aspect-fit maths) breaks the song's images/slides the moment the user brings them back; the text layer is independent and costs nothing to add next to it.
 - \`edit_shader\` for surgical changes (same semantics as edit_synth); \`set_shader\` only for a shader you are writing from scratch. \`grep_shader('uText|uSampler|uniform float')\` tells you what the current shader supports.
 - set_shader/edit_shader/compile report back visuals the song schedules that the shader still can't show — treat those warnings as work to finish, not noise.
 - \`compile\` also applies the shader and returns GLSL compile errors verbatim.

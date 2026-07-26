@@ -29,6 +29,23 @@ describe('visualwarnings', function () {
         expect(visualWarnings('void main(){}', { hasText: false })).to.deep.equal([]);
     });
 
+    it('should warn when uText is declared but never sampled', () => {
+        // A real NEAR AI model produced exactly this: uniforms added, no
+        // compositing. GLSL drops the unused uniform, so nothing renders and
+        // nothing errors.
+        const declaredOnly = `
+            precision highp float;
+            uniform vec2 resolution;
+            uniform sampler2D uText;
+            uniform sampler2D uTextPrev;
+            uniform float uTextMix;
+            void main() { gl_FragColor = vec4(gl_FragCoord.xy / resolution, 0.0, 1.0); }
+        `;
+        const warnings = visualWarnings(declaredOnly, { hasText: true });
+        expect(warnings.length).to.equal(1);
+        expect(warnings[0]).to.contain('never samples it');
+    });
+
     it('should warn about visual params the shader does not declare', () => {
         const warnings = visualWarnings(TEXT_SHADER, { hasText: true, paramNames: ['textTransition', 'zoom'] });
         expect(warnings.length).to.equal(1);
