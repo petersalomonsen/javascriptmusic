@@ -6,6 +6,16 @@ const CONFIG_FILE = 'wasmmusic.config.json';
 const WASM_GIT_BASE_URL = '/wasm-git/';
 const OPFS_MOUNT = '/opfs';
 
+// Which OPFS directory a command operates on. The client sends `repoName`
+// explicitly so the local directory stays keyed on `?gitrepo=` even when the
+// clone url points somewhere else entirely (`?…&remote=`); deriving it from
+// the url instead made clones land where synclocal and "Delete local" could
+// never find them again. See issue #183. The url fallback keeps older callers
+// (and the e2e worker drivers) working.
+function repoDirName(data) {
+  return data.repoName || data.url.substring(data.url.lastIndexOf('/') + 1);
+}
+
 globalThis.wasmGitModuleOverrides = {
   locateFile: function (s) {
     return WASM_GIT_BASE_URL + s;
@@ -218,66 +228,50 @@ onmessage = async (msg) => {
     console.log(currentRepoDir, 'persisted via OPFS');
     postMessage({ id: msg.data.id, error: err ? err : undefined, dircontents: readdir() });
   } else if (msg.data.command === 'synclocal') {
-    const repoName = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
-    currentRepoDir = OPFS_MOUNT + '/' + repoName;
-    console.log('synclocal', currentRepoDir);
+    // Candidates in priority order: the canonical `?gitrepo=`-derived name
+    // first, then the LEGACY remote-derived name a pre-#183 `?…&remote=` clone
+    // landed in. Adopting the legacy directory keeps existing local work
+    // reachable instead of silently re-cloning next to it.
+    const candidates = [repoDirName(msg.data)];
+    if (msg.data.legacyRepoName && candidates.indexOf(msg.data.legacyRepoName) === -1) {
+      candidates.push(msg.data.legacyRepoName);
+    }
 
-    try {
-      const entries = FS.readdir(currentRepoDir);
-      if (entries.find(file => file === '.git')) {
-        // Create symlink workaround for WASMFS getcwd() bug
-        try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
-        ensureChdir(currentRepoDir);
-        // WASMFS+OPFS has no real Unix mode bits — every file stat's as
-        // 0o755, so git would otherwise flag every file as a mode change
-        // (100644 → 100755) on every diff. Idempotent re-set is fine.
-        try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
-        postMessage({ dircontents: readdir() });
-        console.log(currentRepoDir, 'restored from OPFS');
-      } else {
-        console.log('no git repo in', currentRepoDir);
-        postMessage({ dircontents: null });
+    let restored = false;
+    for (const repoName of candidates) {
+      currentRepoDir = OPFS_MOUNT + '/' + repoName;
+      console.log('synclocal', currentRepoDir);
+
+      try {
+        const entries = FS.readdir(currentRepoDir);
+        if (entries.find(file => file === '.git')) {
+          // Create symlink workaround for WASMFS getcwd() bug
+          try { FS.symlink(currentRepoDir, '/' + repoName); } catch (e) { }
+          ensureChdir(currentRepoDir);
+          // WASMFS+OPFS has no real Unix mode bits — every file stat's as
+          // 0o755, so git would otherwise flag every file as a mode change
+          // (100644 → 100755) on every diff. Idempotent re-set is fine.
+          try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
+          postMessage({ dircontents: readdir(), repoName });
+          console.log(currentRepoDir, 'restored from OPFS');
+          restored = true;
+          break;
+        } else {
+          console.log('no git repo in', currentRepoDir);
+        }
+      } catch (e) {
+        console.log('no directory', currentRepoDir);
       }
-    } catch (e) {
-      console.log('no directory', currentRepoDir);
+    }
+
+    if (!restored) {
+      // Leave currentRepoDir at the canonical name so a following clone /
+      // initlocal lands where the next synclocal will look for it.
+      currentRepoDir = OPFS_MOUNT + '/' + candidates[0];
       postMessage({ dircontents: null });
     }
-  } else if (msg.data.command === 'deletelocal') {
-    // Recursively remove the repo directory from WASMFS
-    function rmdirRecursive(path) {
-      const entries = FS.readdir(path);
-      for (const entry of entries) {
-        if (entry === '.' || entry === '..') continue;
-        const fullPath = path + '/' + entry;
-        const stat = FS.stat(fullPath);
-        if (FS.isDir(stat.mode)) {
-          rmdirRecursive(fullPath);
-        } else {
-          FS.unlink(fullPath);
-        }
-      }
-      FS.rmdir(path);
-    }
-    const repoName = currentRepoDir.substring(currentRepoDir.lastIndexOf('/') + 1);
-    try {
-      FS.chdir(OPFS_MOUNT);
-      rmdirRecursive(currentRepoDir);
-    } catch (e) {
-      console.error('Error deleting from WASMFS', currentRepoDir, e);
-    }
-    // Also clear the underlying OPFS storage
-    try {
-      const opfsRoot = await navigator.storage.getDirectory();
-      await opfsRoot.removeEntry(repoName, { recursive: true });
-      console.log('Deleted OPFS entry', repoName);
-    } catch (e) {
-      console.error('Error deleting from OPFS', repoName, e);
-    }
-    try { FS.unlink('/' + repoName); } catch (e) { }
-    currentRepoDir = undefined;
-    postMessage({ id: msg.data.id, deleted: repoName });
   } else if (msg.data.command === 'clone') {
-    const repoName = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    const repoName = repoDirName(msg.data);
     currentRepoDir = OPFS_MOUNT + '/' + repoName;
 
     callMainInDir(['clone', msg.data.url, currentRepoDir]);
@@ -308,14 +302,14 @@ onmessage = async (msg) => {
     try { callMainInDir(['config', 'core.fileMode', 'false']); } catch (_) {}
 
     console.log(currentRepoDir, 'persisted via OPFS');
-    postMessage({ dircontents: readdir() });
+    postMessage({ dircontents: readdir(), repoName });
   } else if (msg.data.command === 'initlocal') {
     // Establish a persistent local OPFS repo when there's nothing to clone
     // (unregistered/unreachable remote). Mkdir UNDER the OPFS mount so the
     // working tree survives reload, then `git init` in place. origin is set to
     // the requested URL so "Commit & Sync" can push once the remote exists.
     // See issue #151.
-    const repoName = msg.data.url.substring(msg.data.url.lastIndexOf('/') + 1);
+    const repoName = repoDirName(msg.data);
     currentRepoDir = OPFS_MOUNT + '/' + repoName;
     console.log('initlocal', currentRepoDir);
 
@@ -330,7 +324,7 @@ onmessage = async (msg) => {
     try { callMainInDir(['remote', 'add', 'origin', originUrl]); } catch (_) {}
 
     console.log(currentRepoDir, 'initialized local repo, persisted via OPFS');
-    postMessage({ dircontents: readdir() });
+    postMessage({ dircontents: readdir(), repoName });
   } else if (msg.data.command === 'setremote') {
     // Point origin at an arbitrary URL (the `?…&remote=<url>` param). The URL
     // is written to .git/config, which lives in OPFS and so persists across
