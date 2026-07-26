@@ -15,6 +15,9 @@ import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midi
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
 import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
+import { hasScheduledText } from './visualizer/videoscheduler.js';
+import { getVisualParamNames } from './visualizer/visualparams.js';
+import { visualWarnings } from './visualizer/visualwarnings.js';
 import { triggerDownload } from './common/filedownload.js';
 import { decodeBufferFromPNG, encodeBufferAsPNG } from './common/png.js';
 import { isSointuSong, getSointuWasm, getSointuYaml } from './sointu/playsointu.js';
@@ -363,6 +366,23 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
 
     componentRoot.getElementById('savesongbutton').onclick = () => compileAndPostSong();
 
+    // Visuals the song asks for that a shader source cannot show. Defaults to
+    // the shader EDITOR's current content so the studio agent can check a
+    // shader it just edited without compiling first — which is also why the
+    // song is scanned textually as well as through the compiled schedule: an
+    // edited-but-not-yet-compiled song must still produce the warning.
+    window.getVisualWarnings = (source = shadersourceeditor.doc.getValue()) => {
+        const songsource = songsourceeditor.doc.getValue();
+        const paramNames = new Set(getVisualParamNames());
+        for (const m of songsource.matchAll(/setVisual\s*\(\s*['"`]([A-Za-z_][A-Za-z0-9_]*)['"`]/g)) {
+            paramNames.add(m[1]);
+        }
+        return visualWarnings(source, {
+            hasText: hasScheduledText() || /\b(showText|hideText)\s*\(/.test(songsource),
+            paramNames: [...paramNames],
+        });
+    };
+
     window.compileSong = async function (exportProject = false) {
         const errorMessagesElement = componentRoot.querySelector('#errormessages');
         const errorMessagesContentElement = errorMessagesElement.querySelector('span');
@@ -456,6 +476,12 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                 const eventlist = await compileMidiSong(songsource);
                 if (midiInstrumentNames.length > 0) {
                     setInstrumentNames(midiInstrumentNames);
+                }
+                // Non-fatal: the song compiled, but its visuals have no shader
+                // uniform to land on (a real error later overwrites this).
+                const warnings = window.getVisualWarnings();
+                if (warnings.length) {
+                    displayError(warnings.join('\n\n'));
                 }
                 if (synthSourceIsXML && exportProject) {
                     await exportWAMAudio(eventlist, synthsource);

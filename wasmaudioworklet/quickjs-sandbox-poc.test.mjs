@@ -84,3 +84,38 @@ test('malicious song cannot reach the network', async () => {
 test('runaway song is interrupted instead of hanging', async () => {
     await assert.rejects(runSongInSandbox('while(true){}', 1000));
 });
+
+// showText builds its image as an SVG data URL, which is pure string work —
+// the guest has no canvas or document to render text with. The host only
+// receives the URL and turns it into an <img> (see compileSong).
+test('visuals: setVisual and showText cross the sandbox boundary', async () => {
+    const result = await runSongInSandbox(`
+        setBPM(120);
+        setVisual('glow', 0.25);
+        showText('Hei & hå', { fade: 0.5, transition: 2 });
+        await createTrack(0).steps(4, [c3,,,,]);
+        setVisual('glow', 1, 1.5);
+        hideText({ fade: 0 });
+        loopHere();
+    `);
+
+    assert.deepStrictEqual(result.visualParams, [
+        { time: 0, name: 'glow', value: 0.25, ramp: 0 },
+        { time: 0, name: 'textTransition', value: 2, ramp: 0 },
+        { time: 500, name: 'glow', value: 1, ramp: 1500 },
+    ]);
+
+    const texts = Object.values(result.visual).filter(spec => spec.layer === 'text');
+    assert.strictEqual(texts.length, 2);
+    assert.deepStrictEqual(texts[0].schedule, [{ startTime: 0, fade: 0.5 }]);
+    assert.match(decodeURIComponent(texts[0].url), /<text[^>]*>Hei &amp; hå<\/text>/);
+    assert.deepStrictEqual(texts[1].schedule, [{ startTime: 500, fade: 0 }]);
+    assert.doesNotMatch(decodeURIComponent(texts[1].url), /<text/);
+});
+
+test('setVisual rejects names that are not valid GLSL uniforms', async () => {
+    await assert.rejects(runSongInSandbox(`setVisual('not a name', 1); await createTrack(0).steps(4, [c3]);`),
+        /not a valid GLSL uniform name/);
+    await assert.rejects(runSongInSandbox(`setVisual('glow', 'bright'); await createTrack(0).steps(4, [c3]);`),
+        /must be a finite number/);
+});

@@ -18,6 +18,7 @@ Never wrap sequencing in an async IIFE (`(async () => { ... })()`) or any other 
 - [Track Functions](#track-functions)
 - [Note Functions](#note-functions)
 - [Video/Audio Functions](#videoaudio-functions)
+- [Shader Text & Parameter Functions](#shader-text--parameter-functions)
 - [Recording Functions](#recording-functions)
 - [Song Structure Functions](#song-structure-functions)
 - [Channel Control Functions](#channel-control-functions)
@@ -224,6 +225,61 @@ Stops video playback.
 
 **Parameters:**
 - `name` (string): Video identifier
+
+---
+
+## Shader Text & Parameter Functions
+
+The sequence can drive the visualizer shader directly: **what** text is on
+screen, **when** it appears, and — through a parameter the shader branches on —
+**how** it appears. See [shaders.md](shaders.md) for the shader side and
+[animations.md](animations.md) for worked examples.
+
+### `showText(text, options = {})`
+Shows text at the current song time, on the shader's text layer
+(`uText` / `uTextPrev` / `uTextMix`). Each call supersedes the previous text.
+The text is rendered to an SVG image — no DOM needed, so it works inside the
+song sandbox.
+
+**Parameters:**
+- `text` (string | string[]): the text; `\n` or an array gives several lines
+- `options` (object):
+  - `fade` (number): seconds for `uTextMix` to travel 0 → 1 (default `1.0`; `0` snaps)
+  - `transition` (number): sets the `textTransition` visual param, which the
+    shader reads to pick a style. Only meaningful if your shader implements it.
+  - `size` (number), `color`, `font`, `weight`, `align` (`left`/`center`/`right`),
+    `x`, `y` (0..1 anchors), `lineHeight`, `background`, `stroke`, `strokeWidth`,
+    `width`, `height` — styling of the generated image (defaults: 1280x720,
+    96px bold white sans-serif, centered, transparent background)
+
+**Example:**
+```javascript
+showText('Første vers', { transition: 1, fade: 0.8 });
+showText(['Two lines', 'at once'], { size: 72, stroke: '#000', strokeWidth: 6 });
+```
+
+### `hideText(options = {})`
+Clears the text layer (an empty image, transitioned like any other text).
+Takes the same `fade` / `transition` options.
+
+### `setVisual(name, value, rampSeconds = 0)`
+Schedules a named float that the shader reads as `uniform float <name>`. The
+app assigns no meaning to the names — the song and its shader agree on them.
+
+**Parameters:**
+- `name` (string): must be a valid GLSL identifier (`[A-Za-z_][A-Za-z0-9_]*`)
+- `value` (number | boolean): booleans become 1 / 0
+- `rampSeconds` (number): interpolate from the previous value over this many
+  seconds instead of stepping (default `0`)
+
+Before its first scheduled value a parameter reads `0`. Values are resolved
+from song time, so seeking and video export give the same result as playback.
+
+**Example:**
+```javascript
+setVisual('sceneMode', 2);          // step
+setVisual('bloom', 1.0, 4);         // ramp up over 4 seconds
+```
 
 ---
 

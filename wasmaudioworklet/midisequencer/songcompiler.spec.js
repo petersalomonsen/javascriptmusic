@@ -1,4 +1,5 @@
-import { getActiveVideo } from '../visualizer/videoscheduler.js';
+import { getActiveVideo, getActiveText } from '../visualizer/videoscheduler.js';
+import { getActiveVisualParams } from '../visualizer/visualparams.js';
 import { compileSong, convertEventListToByteArraySequence, createMultipatternSequence, addedVideo, getSongParts, reassembleSongParts } from './songcompiler.js';
 
 describe('songcompiler', async function () {
@@ -466,6 +467,40 @@ loopHere();
         expect(getActiveVideo(500).src).to.equal(img2);
         expect(getActiveVideo(1000).src).to.equal(img3);
         expect(getActiveVideo(1500).src).to.equal(img4);
+    });
+    it('should schedule text and visual params from the song', async () => {
+        const songsource = `
+        setBPM(120);
+
+        setVisual('glow', 0.25);
+        showText('Hello', { fade: 0.5 });
+        await createTrack(0).steps(4, [c3,,,,]);
+        setVisual('glow', 1, 1);
+        showText('World', { transition: 2, fade: 0 });
+        await createTrack(0).steps(4, [c3,,,,]);
+        hideText();
+        loopHere();
+`;
+        await compileSong(songsource);
+
+        // one beat at 120bpm = 500ms
+        const first = getActiveText(0);
+        expect(first.fade).to.equal(0.5);
+        expect(decodeURIComponent(first.video.imageElement.src)).to.contain('>Hello<');
+        expect(decodeURIComponent(getActiveText(700).video.imageElement.src)).to.contain('>World<');
+        // hideText renders an image without any text element
+        expect(decodeURIComponent(getActiveText(1200).video.imageElement.src)).to.not.contain('<text');
+
+        // text goes on its own layer — the image/video schedule stays empty
+        expect(getActiveVideo(700)).to.equal(undefined);
+
+        expect(getActiveVisualParams(0).get('glow')).to.equal(0.25);
+        // ramped over 1s from 500ms
+        expect(getActiveVisualParams(1000).get('glow')).to.be.closeTo(0.625, 1e-9);
+        expect(getActiveVisualParams(1500).get('glow')).to.equal(1);
+        // showText's transition rides on the same channel
+        expect(getActiveVisualParams(0).get('textTransition')).to.equal(0);
+        expect(getActiveVisualParams(700).get('textTransition')).to.equal(2);
     });
 }
 );
