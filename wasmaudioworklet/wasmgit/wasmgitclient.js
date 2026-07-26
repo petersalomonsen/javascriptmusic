@@ -15,9 +15,22 @@ async function registerNearGitServiceWorker() {
 
 export const CONFIG_FILE = 'wasmmusic.config.json';
 
+// The OPFS directory a git url maps to — the last path segment, e.g.
+// `…/near-repo/mysong.git` -> `mysong.git`.
+export function repoNameFromUrl(url) {
+    return url.substring(url.lastIndexOf('/') + 1);
+}
+
 export let worker;
 
 let gitrepourl;
+// The `?…&remote=<url>` override, if any. Kept so the OPFS directory name can
+// stay tied to `?gitrepo=` while the clone still happens FROM the remote.
+let gitremoteurl;
+// Name of the OPFS directory actually holding the repo, as reported by the
+// worker. Normally repoNameFromUrl(gitrepourl), but an older clone (see
+// LEGACY note below) may live under the remote-derived name instead.
+let localRepoName;
 let commitAndPushButton;
 let discardChangesButton;
 let deleteLocalButton;
@@ -141,6 +154,8 @@ export async function initWASMGitClient(gitrepo, remoteUrl) {
     }
 
     gitrepourl = `${location.origin}/near-repo/${gitrepo}.git`;
+    gitremoteurl = remoteUrl;
+    localRepoName = repoNameFromUrl(gitrepourl);
 
     let dircontents = await synclocal();
 
@@ -202,10 +217,16 @@ export function addRemoteSyncListener(remoteSyncListener) {
     remoteSyncListeners.push(remoteSyncListener);
 }
 
+// `url` is where we clone FROM (the `?…&remote=` target when there is one),
+// while `repoName` is where it lands in OPFS. These must stay decoupled: the
+// local directory is keyed on `?gitrepo=` so that synclocal and "Delete local"
+// can find the repo again on the next boot, regardless of what the remote
+// happens to be called. See PR #183.
 export async function clone(url = gitrepourl) {
     worker.postMessage({
         command: 'clone',
-        url
+        url,
+        repoName: repoNameFromUrl(gitrepourl)
     });
     return await awaitDirContents();
 }
@@ -222,6 +243,11 @@ async function awaitDirContents(timeoutMs = 30000) {
         workerMessageListeners.push((msg) => {
             if (msg.data.dircontents !== undefined) {
                 clearTimeout(timer);
+                // Track where the repo actually lives, so "Delete local"
+                // targets the real directory even when it's a legacy one.
+                if (msg.data.repoName) {
+                    localRepoName = msg.data.repoName;
+                }
                 resolve(msg.data.dircontents);
             } else {
                 return true;
@@ -232,7 +258,13 @@ async function awaitDirContents(timeoutMs = 30000) {
 export async function synclocal() {
     worker.postMessage({
         command: 'synclocal',
-        url: gitrepourl
+        url: gitrepourl,
+        repoName: repoNameFromUrl(gitrepourl),
+        // LEGACY: before the fix for #183, a `?…&remote=` clone landed in a
+        // directory named after the REMOTE url instead of `?gitrepo=`. Existing
+        // users still have their work there, so adopt it when the canonical
+        // directory is absent.
+        legacyRepoName: gitremoteurl ? repoNameFromUrl(gitremoteurl) : undefined
     });
     return await awaitDirContents();
 }
@@ -244,6 +276,7 @@ export async function initlocal(remoteUrl) {
     worker.postMessage({
         command: 'initlocal',
         url: gitrepourl,
+        repoName: repoNameFromUrl(gitrepourl),
         remoteUrl: remoteUrl || gitrepourl,
     });
     return await awaitDirContents();
@@ -255,22 +288,35 @@ export async function setremote(url) {
 }
 
 export async function deletelocal() {
-    // Extract repo name from URL
-    const repoName = gitrepourl.substring(gitrepourl.lastIndexOf('/') + 1);
+    // The directory the worker reported working in — NOT a name re-derived from
+    // a url. With `?…&remote=`, those differ, and deleting the re-derived name
+    // silently removed nothing while reporting success (PR #183).
+    const repoName = localRepoName || repoNameFromUrl(gitrepourl);
 
     // Terminate the worker so it releases the OPFS lock
     worker.terminate();
 
     // Clear OPFS from the main thread (worker no longer holds the lock)
+    let error = null;
     try {
         const opfsRoot = await navigator.storage.getDirectory();
         await opfsRoot.removeEntry(repoName, { recursive: true });
         console.log('Deleted OPFS entry', repoName);
     } catch (e) {
+        error = e;
         console.error('Error deleting from OPFS', repoName, e);
     }
 
-    if (await modal(`<p>Local clone deleted</p>
+    // Report honestly: a failed delete used to still say "Local clone deleted",
+    // which is what hid #183 for weeks. repoName comes from the `?gitrepo=`
+    // param, so escape it like modalAlert does rather than injecting raw HTML.
+    const escape = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const message = error
+        ? `<p>Could not delete the local clone <code>${escape(repoName)}</code></p>
+           <p>${escape(error.name)}: ${escape(error.message)}</p>`
+        : `<p>Local clone deleted</p>`;
+
+    if (await modal(`${message}
             <button onclick="getRootNode().result(null)">Dismiss</button>
             <button onclick="getRootNode().result(true)">Reload</button>
     `)) {
