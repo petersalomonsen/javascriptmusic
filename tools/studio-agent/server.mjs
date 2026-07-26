@@ -20,6 +20,7 @@ import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { SYSTEM_PROMPT } from './prompt.mjs';
+import { toolDefsFor, sdkToolNames } from '../../wasmaudioworklet/studio-agent-tools-def.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
@@ -66,16 +67,11 @@ if (process.env.ANTHROPIC_API_KEY) {
   );
 }
 
-// Tools the agent may use: our browser-proxied studio tools + read-only repo access.
-const STUDIO_TOOLS = [
-  'get_song', 'set_song', 'get_synth', 'set_synth',
-  'edit_synth', 'edit_song', 'grep_synth', 'grep_song',
-  'get_shader', 'set_shader', 'edit_shader', 'grep_shader',
-  'write_faust', 'read_faust', 'list_faust',
-  'git_log', 'read_committed',
-  'load_synth_from_file', 'load_song_from_file',
-  'compile', 'stop',
-];
+// Tools the agent may use: our browser-proxied studio tools + read-only repo
+// access. The tool set itself is declared once in
+// wasmaudioworklet/studio-agent-tools-def.js and shared with the in-browser
+// NEAR AI provider, so adding a tool cannot reach only one of them.
+const STUDIO_TOOLS = sdkToolNames();
 const ALLOWED = new Set([
   ...STUDIO_TOOLS.map((n) => `mcp__studio__${n}`),
   'Read', 'Glob', 'Grep',
@@ -123,6 +119,24 @@ function callBrowser(ws, name, args) {
   });
 }
 
+// The shared tool defs carry JSON Schema (what the OpenAI-compatible NEAR AI
+// path sends); the Agent SDK wants a zod shape. Only the primitive types the
+// defs actually use are supported — anything else is a mistake worth throwing on.
+function zodShape(parameters) {
+  const required = new Set(parameters.required || []);
+  const shape = {};
+  for (const [name, spec] of Object.entries(parameters.properties || {})) {
+    let field;
+    if (spec.type === 'string') field = z.string();
+    else if (spec.type === 'number') field = z.number();
+    else if (spec.type === 'boolean') field = z.boolean();
+    else throw new Error(`studio tool schema: unsupported type "${spec.type}" for "${name}"`);
+    if (spec.description) field = field.describe(spec.description);
+    shape[name] = required.has(name) ? field : field.optional();
+  }
+  return shape;
+}
+
 // ---- Build the in-process MCP tools, bound to one browser socket -----------
 function makeStudioServer(ws) {
   const proxy = (name, description, shape) =>
@@ -141,16 +155,15 @@ function makeStudioServer(ws) {
 
   // Load a repo file straight into an editor: the bytes are read server-side and
   // pushed to the browser, so a huge bundle never has to pass through the model.
-  const loadInto = (toolName, browserOp, label) =>
-    tool(toolName,
-      `Load a repository file DIRECTLY into the ${label} editor without reading it into context. Use this for large bundles (e.g. examples/dx7/dx7-synth.ts) — pass a repo-relative path; the file content is sent to the browser for you.`,
-      { path: z.string() },
+  const loadInto = (def) =>
+    tool(def.name, `${def.description} The file content is read here and sent to the browser for you.`,
+      zodShape(def.parameters),
       async ({ path }) => {
         try {
           const content = await readFile(safeResolve(path), 'utf8');
-          const res = await callBrowser(ws, browserOp, { source: content });
+          const res = await callBrowser(ws, def.target === 'synth' ? 'set_synth' : 'set_song', { source: content });
           if (!res.ok) return { content: [{ type: 'text', text: `ERROR: ${res.result ?? 'load failed'}` }], isError: true };
-          return { content: [{ type: 'text', text: `loaded ${path} (${content.split('\n').length} lines) into the ${label} editor` }] };
+          return { content: [{ type: 'text', text: `loaded ${path} (${content.split('\n').length} lines) into the ${def.target} editor` }] };
         } catch (e) {
           return { content: [{ type: 'text', text: `ERROR: ${e?.message || e}` }], isError: true };
         }
@@ -160,27 +173,8 @@ function makeStudioServer(ws) {
     name: 'studio',
     version: '1.0.0',
     tools: [
-      proxy('get_song', 'Return the current song document (JavaScript sequencer DSL).', {}),
-      proxy('set_song', 'Replace the entire song document. Provide the full new source.', { source: z.string() }),
-      proxy('get_synth', 'Return the current synth document (AssemblyScript).', {}),
-      proxy('set_synth', 'Replace the entire synth document. Provide the full new source.', { source: z.string() }),
-      proxy('edit_synth', 'Surgically find-and-replace in the synth document IN PLACE (like the Edit tool). Use this to add a voice/channel to a large synth (e.g. the DX7 bundle) WITHOUT rewriting it. old_string must match exactly and be unique unless replace_all is true.', { old_string: z.string(), new_string: z.string(), replace_all: z.boolean().optional() }),
-      proxy('edit_song', 'Surgically find-and-replace in the song document IN PLACE. old_string must match exactly and be unique unless replace_all is true.', { old_string: z.string(), new_string: z.string(), replace_all: z.boolean().optional() }),
-      proxy('grep_synth', 'Search the CURRENT in-browser synth document for a regex; returns matching line numbers + text (optionally with surrounding context lines). Use to find exact anchors for edit_synth in a large synth without dumping the whole file.', { pattern: z.string(), context: z.number().optional() }),
-      proxy('grep_song', 'Search the CURRENT in-browser song document for a regex; returns matching line numbers + text.', { pattern: z.string(), context: z.number().optional() }),
-      proxy('get_shader', 'Return the current visualizer shader document (GLSL ES 1.00 fragment shader). This is what the song\'s visuals actually render through — read it before concluding anything about what is or is not on screen.', {}),
-      proxy('set_shader', 'Replace the entire visualizer shader document. Provide the full new GLSL source. Reports back any visuals the song schedules that the new shader still cannot show.', { source: z.string() }),
-      proxy('edit_shader', 'Surgically find-and-replace in the visualizer shader document IN PLACE. old_string must match exactly and be unique unless replace_all is true. Reports back any visuals the song schedules that the shader still cannot show.', { old_string: z.string(), new_string: z.string(), replace_all: z.boolean().optional() }),
-      proxy('grep_shader', 'Search the CURRENT in-browser shader document for a regex; returns matching line numbers + text. Use it to check which uniforms the shader declares (e.g. "uText|uSampler|uniform float") before editing the song\'s visuals.', { pattern: z.string(), context: z.number().optional() }),
-      proxy('write_faust', 'Author an INSTRUMENT in Faust: write faust/<path>.dsp AND transpile it to AssemblyScript in one step (persists faust/<name>.dsp + faust/<name>.ts in the browser OPFS). Returns the generated class names to import into synth.ts, or the exact transpile error. This is the primary way to create instrument DSP — do NOT hand-write DSP in AssemblyScript.', { path: z.string(), source: z.string() }),
-      proxy('read_faust', 'Read a Faust .dsp instrument source from the browser OPFS faust/ folder.', { path: z.string() }),
-      proxy('list_faust', 'List the .dsp Faust instruments in the browser OPFS faust/ folder.', {}),
-      proxy('git_log', 'Show the commit history of the in-browser OPFS repo (the user commits their work here). Use it to find a commit to restore a file from.', {}),
-      proxy('read_committed', 'Read the COMMITTED content of a file from the OPFS git repo at a ref (default HEAD). Path is repo-relative (e.g. "song.js", "faust/bass.dsp"). Use to restore something overwritten in the editor: read_committed then set_song/set_synth it back.', { path: z.string(), ref: z.string().optional() }),
-      loadInto('load_synth_from_file', 'set_synth', 'synth'),
-      loadInto('load_song_from_file', 'set_song', 'song'),
-      proxy('compile', 'SAVE + compile the current song+synth in the browser (same as the app\'s save button). If a track is already playing, the changes are applied and audible immediately. Returns "compiled OK" or the exact compiler error. Call after every edit. There is NO play tool — the user starts playback themselves.', {}),
-      proxy('stop', 'Stop live audio playback. Only on the user\'s request.', {}),
+      ...toolDefsFor('browser').map((d) => proxy(d.name, d.description, zodShape(d.parameters))),
+      ...toolDefsFor('loadfile').map((d) => loadInto(d)),
     ],
   });
 }

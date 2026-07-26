@@ -376,9 +376,12 @@ function nearaiConfig() {
   const enabled = apiKey || localStorage.getItem('nearai-enabled');
   if (!enabled) return null;
   const baseUrl = localStorage.getItem('nearai-base-url') || resolveDefaultBaseUrl(location.hostname);
-  // A relative base URL = the same-origin Pages Function proxy, which holds
-  // the API key AND injects the system prompt + tools server-side.
-  const proxy = baseUrl.startsWith('/');
+  // The Pages Function proxy holds the API key AND injects the system prompt +
+  // tools server-side. Normally it is same-origin (a relative base URL), but an
+  // absolute .../nearai/v1 also counts — that lets a locally served app drive a
+  // deployed proxy (it origin-allowlists localhost), which is how the NEAR AI
+  // path gets exercised without handing a key to the browser.
+  const proxy = baseUrl.startsWith('/') || (!apiKey && /\/nearai\/v1\/?$/.test(baseUrl));
   if (!proxy && !apiKey) return null; // direct upstream needs the user's key
   return {
     apiKey: proxy ? null : apiKey,
