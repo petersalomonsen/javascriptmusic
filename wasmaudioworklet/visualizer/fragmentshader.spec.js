@@ -1,6 +1,11 @@
 import { exportVideo, setupWebGL } from './fragmentshader.js';
 import { setVisualParamSchedule } from './visualparams.js';
-import { compileSong, addedVideo } from '../midisequencer/songcompiler.js';
+import { setTextSchedule } from './videoscheduler.js';
+// textimage.js is pure string work with no imports — deliberately NOT going
+// through the song compiler here: that would pull the QuickJS sandbox (and its
+// CDN wasm download) into this page, which pushed Firefox past its 30s page
+// start budget in CI.
+import { textToSvgDataUrl } from '../midisequencer/textimage.js';
 
 describe('fragmentshader', function() {
     this.timeout(20000);
@@ -36,9 +41,10 @@ describe('fragmentshader', function() {
                 gl_FragColor = vec4(textTransition, zoom, uTextMix * texture2D(uText, vec2(0.5)).a, 1.0);
             }
         `;
-        // song time 1.5s — halfway into the zoom ramp
+        // song time 1.5s — halfway into the zoom ramp. setupWebGL renders one
+        // frame synchronously before scheduling the rAF loop, so there is no
+        // need to wait for a frame (rAF is unreliable in headless CI).
         setupWebGL(shadersource, canvaselement, () => 1.5);
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         const gl = canvaselement.getContext('webgl');
         const program = gl.getParameter(gl.CURRENT_PROGRAM);
@@ -58,16 +64,12 @@ describe('fragmentshader', function() {
         canvaselement.height = 90;
         document.documentElement.appendChild(canvaselement);
 
-        await compileSong(`
-            setBPM(120);
-            showText('IIIIIIII', { fade: 2 });
-            await createTrack(0).steps(4, [c3,,,,]);
-            loopHere();
-        `);
-        // the text image is an SVG data url — wait for the browser to decode it
-        await Promise.all(Object.values(addedVideo)
-            .filter(vid => vid.layer === 'text')
-            .map(vid => vid.imageElement.decode()));
+        // what showText() schedules: a text image on the text layer at song
+        // time 0, fading over 2s (see songcompiler.spec.js for the song path)
+        const image = new Image();
+        image.src = textToSvgDataUrl('IIIIIIII');
+        await image.decode();
+        setTextSchedule([{ startTime: 0, fade: 2, video: { imageElement: image } }]);
 
         const shadersource = `
             precision highp float;
@@ -82,9 +84,8 @@ describe('fragmentshader', function() {
                 gl_FragColor = vec4(vec3(a * uTextMix), 1.0);
             }
         `;
-        // 1s into a 2s fade
+        // 1s into a 2s fade; the first frame is drawn synchronously
         setupWebGL(shadersource, canvaselement, () => 1.0);
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         const gl = canvaselement.getContext('webgl');
         const program = gl.getParameter(gl.CURRENT_PROGRAM);

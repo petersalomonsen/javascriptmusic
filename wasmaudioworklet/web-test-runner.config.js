@@ -13,6 +13,12 @@ export default {
   // on slower CI runners 60s had no headroom and the file timed out while all
   // of its tests were passing.
   testsFinishTimeout: 180000,
+  // Firefox on CI has failed to open a test page inside the default 30s
+  // ("unable to create and start a test page", page.goto NS_BINDING_ABORTED)
+  // while other files were still pulling wasm over the network. Local runs open
+  // a page in well under a second, so a larger budget costs nothing and only
+  // stops a slow runner from being reported as a test failure.
+  browserStartTimeout: 90000,
   testRunnerHtml: testRunnerImport =>
     `<html>
       <body>
