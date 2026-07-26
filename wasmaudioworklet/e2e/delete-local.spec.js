@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// Regression for issue #183: with `?gitrepo=A&remote=…/B.git` the local OPFS
+// Regression for PR #183: with `?gitrepo=A&remote=…/B.git` the local OPFS
 // directory used to be named after the REMOTE (B.git) while synclocal and
 // "Delete local" both looked for the `?gitrepo=` name (A.git). The result was a
 // delete that removed nothing yet reported "Local clone deleted", plus a doomed

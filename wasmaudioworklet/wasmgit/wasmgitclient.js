@@ -221,7 +221,7 @@ export function addRemoteSyncListener(remoteSyncListener) {
 // while `repoName` is where it lands in OPFS. These must stay decoupled: the
 // local directory is keyed on `?gitrepo=` so that synclocal and "Delete local"
 // can find the repo again on the next boot, regardless of what the remote
-// happens to be called. See issue #183.
+// happens to be called. See PR #183.
 export async function clone(url = gitrepourl) {
     worker.postMessage({
         command: 'clone',
@@ -290,7 +290,7 @@ export async function setremote(url) {
 export async function deletelocal() {
     // The directory the worker reported working in — NOT a name re-derived from
     // a url. With `?…&remote=`, those differ, and deleting the re-derived name
-    // silently removed nothing while reporting success (issue #183).
+    // silently removed nothing while reporting success (PR #183).
     const repoName = localRepoName || repoNameFromUrl(gitrepourl);
 
     // Terminate the worker so it releases the OPFS lock

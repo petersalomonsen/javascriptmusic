@@ -10,7 +10,7 @@ const OPFS_MOUNT = '/opfs';
 // explicitly so the local directory stays keyed on `?gitrepo=` even when the
 // clone url points somewhere else entirely (`?…&remote=`); deriving it from
 // the url instead made clones land where synclocal and "Delete local" could
-// never find them again. See issue #183. The url fallback keeps older callers
+// never find them again. See PR #183. The url fallback keeps older callers
 // (and the e2e worker drivers) working.
 function repoDirName(data) {
   return data.repoName || data.url.substring(data.url.lastIndexOf('/') + 1);
