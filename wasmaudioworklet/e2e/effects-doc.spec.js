@@ -134,7 +134,7 @@ async function transpile(page, src, filename) {
         customElements.define = (name, ctor, opts) => {
             try { origDefine(name, ctor, opts); } catch (e) { /* already defined */ }
         };
-        const m = await import('/faust/browser-transpile.js');
+        const m = await import('/faust/faust-rs-transpile.js');
         const { ts } = await m.transpileDspSource(src, filename, {});
         return ts;
     }, { src, filename });

@@ -91,8 +91,14 @@ midichannels[0].controlchange(58, 45);  // chorus deviation (CC 58)
 
 ## B. Tapiir echo — master effect (whole mix)
 
-Tapiir is its own class, applied to the final mix in `postprocess()`. This is
-already wired in `demo/synth.ts`:
+Tapiir is its own class, applied to the final mix in `postprocess()`.
+
+Transpiling a stereo-in/stereo-out `.dsp` (like `tapiir.dsp`) puts the transpiler
+in **mastering mode**: the generated `faust/tapiir.ts` exports the `Tapiir` class
+*and* a ready-made `postprocess()` that runs a default singleton over
+`outputline`. That hook only fires if the effect file itself is the mix entry —
+normally your `synth.ts` is (it's the file that wires `midichannels`), so wire the
+effect there yourself:
 
 ```ts
 import { Tapiir } from '../faust/tapiir';
