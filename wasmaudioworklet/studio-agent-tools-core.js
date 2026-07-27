@@ -49,7 +49,41 @@ export function songSourceWarnings(source) {
       'WARNING: the song contains an async IIFE wrapper — it is NOT awaited, so loopHere()/code after it runs before the notes are scheduled and the song breaks. The song source is already one top-level async function: use plain top-level `await track.steps(...)` statements and remove the wrapper.'
     );
   }
+  warnings.push(...sequentialTracksWarning(source));
   return warnings;
+}
+
+// Awaiting a pattern advances the shared clock to its end; merely CALLING it
+// schedules its notes from the current position. So parts that should sound
+// together are plain calls and only the beat-keeper is awaited. Awaiting every
+// pattern instead makes different instruments play one AFTER another — the
+// most common song bug, and one the agent cannot hear.
+//
+// Only warn when the song awaits back-to-back patterns on DIFFERENT tracks and
+// never calls one without await: a song that already uses the idiom anywhere is
+// assumed to know it, so a deliberate sequential arrangement stays quiet.
+function sequentialTracksWarning(source) {
+  const calls = [
+    ...stripComments(source).matchAll(
+      /(await\s+)?([A-Za-z_$][\w$]*(?:\s*\([^()]*\))?)\s*\.\s*(?:steps|play)\s*\(/g
+    )
+  ].map((m) => ({ awaited: !!m[1], receiver: m[2].replace(/\s+/g, '') }));
+
+  if (calls.length < 2 || calls.some((c) => !c.awaited)) return [];
+
+  const pair = calls.slice(1).find((c, ndx) => c.receiver !== calls[ndx].receiver);
+  if (!pair) return [];
+
+  return [
+    'WARNING: every pattern in this song is awaited, and patterns on different tracks follow each other. ' +
+      'Awaiting a pattern advances the clock to its END, so those parts play one AFTER the other, not together. ' +
+      'If they are meant to sound simultaneously, await ONLY the pattern that keeps the beat and call the others plainly: ' +
+      '`hats.steps(2, [...]); await kick.steps(1, [...]);`. Ignore this if the parts really are separate sections.'
+  ];
+}
+
+function stripComments(source) {
+  return String(source).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 }
 
 // Build the write_faust success hint from a transpiled .ts: which classes to

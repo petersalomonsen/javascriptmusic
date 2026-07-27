@@ -33,6 +33,57 @@ loopHere();
         assert.equal(eventlist[eventlist.length - 1].message[0], -1);
     }
     );
+    // Documents the concurrency rule in docs/song-api.md ("Playing tracks at the
+    // same time"): CALLING steps() schedules its notes from the current song
+    // position; only AWAITING it advances the shared clock. So the beat-keeping
+    // pattern is awaited and the ones playing along with it are not.
+    it('should play tracks simultaneously when only the beat-keeping pattern is awaited', async () => {
+        const bpm = 125;
+        const beatTime = beatNo => Math.floor((beatNo / bpm) * 60 * 1000);
+        const noteOns = eventlist => eventlist
+            .filter(evt => (evt.message[0] & 0xf0) === 0x90 && evt.message[2] > 0)
+            .map(evt => [evt.message[0] & 0x0f, evt.time]);
+
+        const simultaneous = await compileSong(`
+setBPM(${bpm});
+
+const kick = createTrack(0);
+const hats = createTrack(1);
+
+// hats play ALONGSIDE the kick - scheduled, not awaited
+hats.steps(2, [, fs3, , fs3]);
+// the kick keeps the beat, so it is the one that is awaited
+await kick.steps(1, [c2, c2]);
+
+loopHere();
+`);
+        // kick on beats 0 and 1, hats interleaved on the offbeats 0.5 and 1.5
+        assert.deepEqual(noteOns(simultaneous), [
+            [0, beatTime(0)],
+            [1, beatTime(0.5)],
+            [0, beatTime(1)],
+            [1, beatTime(1.5)]
+        ]);
+
+        // Awaiting both plays them one after the other instead - the bug this rule prevents.
+        const sequential = await compileSong(`
+setBPM(${bpm});
+
+const kick = createTrack(0);
+const hats = createTrack(1);
+
+await kick.steps(1, [c2, c2]);
+await hats.steps(2, [, fs3, , fs3]);
+
+loopHere();
+`);
+        assert.deepEqual(noteOns(sequential), [
+            [0, beatTime(0)],
+            [0, beatTime(1)],
+            [1, beatTime(2.5)],
+            [1, beatTime(3.5)]
+        ]);
+    });
     it('should not hang when writing wrong code', async () => {
         let hasError = false;
         try {

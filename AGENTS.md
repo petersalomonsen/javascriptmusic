@@ -21,7 +21,13 @@ You can't see the canvas or hear the audio, so lean on the headless checks:
   an edit; render frames at a few times/energies and read the PNGs before
   claiming a shader works.
 - **Songs (`song.js`)**: it's ESM with top-level `await`; a quick
-  `node --check` catches syntax errors before loading in the app.
+  `node --check` catches syntax errors before loading in the app. Timing follows
+  one model — calling a pattern schedules it at the playhead, `await` is the only
+  thing that moves the playhead — so parts that sound together are plain calls
+  and only the beat-keeper is awaited. Read
+  [the playhead model](wasmaudioworklet/docs/song-api.md#how-a-song-works--the-playhead-model)
+  before editing a song; the layering, `loopHere()` and wrapper-function rules
+  are all consequences of it.
 - **Faust / AssemblyScript / near-git**: Playwright suites under
   `wasmaudioworklet/e2e` (`npm run test-faust`, `test-near-git`, etc.).
 

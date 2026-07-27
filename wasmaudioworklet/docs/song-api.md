@@ -2,18 +2,14 @@
 
 This document describes the functions available when writing JavaScript music sequences in the song compiler.
 
-**The song source runs as one top-level async function** — `await` works directly at top level:
-
-```javascript
-setBPM(120);
-await createTrack(0).steps(4, [c2,, c2,, ds2,, c2,,]);
-loopHere();
-```
-
-Never wrap sequencing in an async IIFE (`(async () => { ... })()`) or any other wrapper function: the wrapper is not awaited, so code after it — including `loopHere()` — executes at beat 0 before any notes are scheduled, and the song breaks.
+New to this way of writing music? Start with
+[Writing songs in JavaScript](writing-songs.md) — a song read as what it is, a
+sequence of actions with pauses, plus the loops and functions that keep it
+readable. Written for people who don't code. This page is the reference.
 
 ## Table of Contents
 
+- [How a song works — the playhead model](#how-a-song-works--the-playhead-model)
 - [Global Functions](#global-functions)
 - [Track Functions](#track-functions)
 - [Note Functions](#note-functions)
@@ -25,6 +21,127 @@ Never wrap sequencing in an async IIFE (`(async () => { ... })()`) or any other 
 - [TrackerPattern Class](#trackerpattern-class)
 - [TrackerPattern Instance Methods](#trackerpattern-instance-methods)
 - [Array Extensions](#array-extensions)
+
+---
+
+## How a song works — the playhead model
+
+A song is **not** a program that plays music. It is a program that runs once, at
+compile time, and writes down a timeline. Playback happens afterwards, from that
+timeline.
+
+The whole model is four sentences:
+
+1. The song source is **one top-level async function**, so `await` works
+   directly at top level. Statements run in order.
+2. There is a **playhead** — the current song position. It starts at beat 0.
+3. **Calling** a pattern (`track.steps(...)`, `track.play(...)`) schedules its
+   notes relative to where the playhead is *now*. It does not move the playhead.
+4. **`await` is the only thing that moves the playhead.** Awaiting a pattern
+   moves it to the end of that pattern.
+
+Musically, that's just: **every statement starts a part playing, and `await`
+means "wait for that part to finish before going on."** Which is exactly what
+`async`/`await` means in JavaScript generally — this is ordinary concurrency,
+running over song time instead of wall-clock time.
+
+That's it. Everything below follows from those four sentences rather than being
+a separate rule to remember.
+
+### Playing tracks at the same time
+
+Layering and sequencing are the same mechanism, used two ways: **don't await to
+stack parts, await to move past them.**
+
+So to play several parts together, **`await` only the one pattern that keeps the
+beat, and call the others plainly.** They all start at the same position; the
+awaited one decides how long the section lasts.
+
+```javascript
+const kick = createTrack(0);
+const hats = createTrack(1);
+
+// hats play alongside the kick — scheduled, not awaited
+hats.steps(2, [
+    , fs3, , fs3, , fs3, , fs3
+].repeat(8));
+
+// the kick keeps the beat, so it is the one that is awaited
+await kick.steps(1, [
+    c2, c2, c2, c2
+].repeat(8));
+```
+
+`await`ing both instead is the classic bug: the kick's 32 beats play through to
+the end, and *then* the hats start — two parts back to back instead of one
+groove.
+
+```javascript
+await kick.steps(1, [c2, c2, c2, c2].repeat(8));
+await hats.steps(2, [, fs3, , fs3, , fs3, , fs3].repeat(8));   // WRONG — starts at beat 32
+```
+
+The awaited pattern should be the **longest** in the group (or equal). A part
+longer than it keeps running into whatever comes next, and anything past
+`loopHere()` is cut off.
+
+`Promise.all([...])` also works and is equivalent when the parts are the same
+length, but it is noisier — prefer awaiting the beat-keeper.
+
+### If nothing is awaited, the song is empty
+
+The playhead never moves, so `loopHere()` marks the end of the song at beat 0
+and the entire timeline is discarded. The compiled result is literally just an
+end-of-song marker — no notes at all, even though the source is full of them.
+
+This is also why you must **never wrap sequencing in an async IIFE**
+(`(async () => { ... })()`) or any other wrapper function. The wrapper is not
+awaited, so the playhead is still at 0 when `loopHere()` runs:
+
+```javascript
+(async () => {                  // WRONG — nothing awaits this wrapper
+    await bass.steps(4, [c2]);
+})();
+loopHere();                     // runs at beat 0 → empty song
+```
+
+It is the same failure as awaiting nothing at all. No wrapper is ever needed:
+the source already *is* an async function.
+
+### `loopHere()` marks the playhead
+
+`loopHere()` records "the song ends here" at the current playhead position, and
+playback loops from there back to beat 0. It is not a "loop back to *here*"
+target. Since it captures wherever the playhead happens to be, it must be the
+**last statement** — anything sequenced after it is never reached.
+
+### Moving the playhead directly
+
+Besides awaiting a pattern, you can move the playhead by hand:
+
+- `await waitDuration(beats)` — move **relative** to the current position.
+- `await waitForBeat(beat)` — move to an **absolute** beat.
+
+Prefer `waitDuration` for laying out sections back-to-back: each section starts
+where the last ended, so inserting or reordering one doesn't force you to
+recompute every beat number that follows.
+
+### The rule generalises
+
+Anything that occupies time follows the same two-way rule — call it to run it
+alongside, await it to advance past it. That covers `steps()`, `play()`,
+`controlchange()`, `pitchbend()`, and your own helper functions:
+
+```javascript
+for (let n = 0; n < 4; n++) {
+    pianos();            // plays along
+    bass1();             // plays along
+    guitar1();           // plays along
+    await basicdrums();  // keeps the beat — sets how long this section is
+}
+```
+
+That is the whole arrangement structure of `examples/beachdrive/song.js`.
 
 ---
 
@@ -53,13 +170,11 @@ await waitForBeat(4);
 ```
 
 ### `waitDuration(beats)`
-Advances the shared clock by `beats` beats **from the current position** (relative;
+Moves the playhead `beats` beats **from the current position** (relative;
 `waitForBeat` is absolute). Also available as a track method (`track.waitDuration(...)`).
 
-**Prefer `waitDuration` for sequencing sections back-to-back.** Because each wait
-is relative to where the previous section ended, inserting, removing, or
-reordering a section doesn't force you to recompute every following beat — unlike
-`waitForBeat`, where absolute numbers (64 → 80 → 96 …) all shift. Reserve
+**Prefer `waitDuration` for sequencing sections back-to-back** — see
+[Moving the playhead directly](#moving-the-playhead-directly). Reserve
 `waitForBeat` for pinning an event to a specific absolute beat.
 
 **Example:**
@@ -72,10 +187,11 @@ playGroove(); await waitDuration(16);   // then 16 beats of groove — no beat m
 Resets playback to start from the current position, keeping only control change messages.
 
 ### `loopHere()`
-Marks the **end** of the song. When playback reaches this point it loops back to
-the **start** (beat 0). Anything sequenced *after* `loopHere()` is discarded and
-never plays — so call it once, as the last statement. It is not a "loop back to
-here" target; the loop always returns to the beginning.
+Marks the **end** of the song, at the current playhead position. When playback
+reaches this point it loops back to the **start** (beat 0). Anything sequenced
+*after* `loopHere()` is discarded and never plays — so call it once, as the last
+statement. It is not a "loop back to here" target; the loop always returns to
+the beginning. See [`loopHere()` marks the playhead](#loophere-marks-the-playhead).
 
 ---
 
@@ -407,6 +523,11 @@ await track.steps(4, [
 ]);
 ```
 
+Calling it schedules the notes from the current song position; `await` advances
+the clock to the end of the pattern. Omit the `await` to have this part play
+alongside another one — see
+[Playing tracks at the same time](#playing-tracks-at-the-same-time).
+
 ### `play(rows, rowbeatcolumnmode)`
 Plays events with custom timing.
 
@@ -527,17 +648,18 @@ const drums = createTrack(9, 4, 100);
 
 definePartStart('intro');
 
-await Promise.all([
-    synth.steps(4, [
-        c4, , e4, ,
-        g4, , c5, 
-    ].repeat(3)),
-    
-    drums.steps(4, [
-        c2, , , ,
-        , , c2, 
-    ].repeat(3))
-]);
+// The synth part plays along — scheduled, not awaited.
+synth.steps(4, [
+    c4, , e4, ,
+    g4, , c5, 
+].repeat(3));
+
+// The drums keep the beat, so they are awaited: this is what
+// decides how long the intro lasts.
+await drums.steps(4, [
+    c2, , , ,
+    , , c2, 
+].repeat(3));
 
 definePartEnd('intro');
 

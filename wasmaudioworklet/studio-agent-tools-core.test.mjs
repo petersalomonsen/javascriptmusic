@@ -67,3 +67,48 @@ test('songSourceWarnings: clean top-level await passes', () => {
   const good = `setBPM(120);\nawait createTrack(0).steps(4, [c2,, c2,,]);\nloopHere();\n`;
   assert.deepEqual(songSourceWarnings(good), []);
 });
+
+// The kick/hats case: awaiting both makes them play back to back instead of together.
+test('songSourceWarnings: flags awaiting every pattern on different tracks', () => {
+  const bad = `setBPM(125);
+const kick = createTrack(0);
+const hats = createTrack(1);
+await kick.steps(1, [c2, c2, c2, c2].repeat(8));
+await hats.steps(2, [, fs3, , fs3].repeat(8));
+loopHere();
+`;
+  const warnings = songSourceWarnings(bad);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /play one AFTER the other/);
+  assert.match(warnings[0], /await ONLY the pattern that keeps the beat/);
+});
+
+test('songSourceWarnings: the beat-keeper idiom is not flagged', () => {
+  const good = `setBPM(125);
+const kick = createTrack(0);
+const hats = createTrack(1);
+hats.steps(2, [, fs3, , fs3].repeat(8));
+await kick.steps(1, [c2, c2, c2, c2].repeat(8));
+loopHere();
+`;
+  assert.deepEqual(songSourceWarnings(good), []);
+});
+
+test('songSourceWarnings: consecutive sections on the SAME track are not flagged', () => {
+  const good = `setBPM(120);
+const drums = createTrack(9);
+await drums.steps(4, [c3,,,,]);
+await drums.steps(4, [d3,,,,]);
+loopHere();
+`;
+  assert.deepEqual(songSourceWarnings(good), []);
+});
+
+test('songSourceWarnings: a commented-out pattern does not count as an un-awaited call', () => {
+  const bad = `setBPM(120);
+// hats.steps(2, [fs3]);
+await kick.steps(1, [c2]);
+await hats.steps(2, [fs3]);
+`;
+  assert.equal(songSourceWarnings(bad).length, 1);
+});
