@@ -794,6 +794,12 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
 
             const song = await compileSong();
 
+            // Keep the compiled MIDI event list for the studio agent: it is the
+            // ground truth for what the song actually plays, and the agent has
+            // no other way to check its work (it cannot hear anything). Stashed
+            // rather than recompiled on demand — compiling twice is expensive.
+            window.lastCompiledEventList = song.eventlist || null;
+
             if (wasRunning && song.synthwasm) {
                 await updateSynth(song.synthwasm, addedAudio);
             }

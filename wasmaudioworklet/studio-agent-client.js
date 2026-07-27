@@ -8,7 +8,10 @@
 import { songsourceeditor, synthsourceeditor, shadersourceeditor } from './editorcontroller.js';
 import { transpileDspSource } from './faust/faust-rs-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
-import { applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings } from './studio-agent-tools-core.js';
+import {
+  applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
+  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource
+} from './studio-agent-tools-core.js';
 import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';
 import { SYSTEM_PROMPT } from './studio-agent-prompt.js';
 
@@ -186,22 +189,51 @@ const registry = {
     // from the app rather than the panel — a later synth warning would
     // otherwise overwrite them there.
     const visual = shaderWarnings();
-    if (!err) return ['compiled OK', ...visual].join('\n');
+    // What the song actually PLAYS, read from the compiled event list. The
+    // agent cannot hear the result, so anomalies here (nothing sounds at all,
+    // instruments that never overlap) are the only signal that a song is
+    // structurally wrong despite compiling cleanly.
+    const events = songEventAnomalies();
+    if (!err) return ['compiled OK', ...visual, ...events].join('\n');
     // The panel also surfaces NON-fatal AssemblyScript warnings (AS233/AS235…)
     // after a successful build — reporting those as an error makes models
     // "fix" working code. Only real ERROR lines fail the tool.
     const text = err.replace(/^Error:\s*/, '');
     const onlyWarnings = /^WARNING/i.test(text) && !/(^|\n)\s*ERROR/.test(text);
     if (onlyWarnings) {
-      return ['compiled OK (non-fatal AssemblyScript warnings in the panel — ignore them)', ...visual].join('\n');
+      return ['compiled OK (non-fatal AssemblyScript warnings in the panel — ignore them)', ...visual, ...events].join('\n');
     }
     return { __error: err };
+  },
+  song_summary: async () => {
+    const summary = analyzeCompiledSong();
+    if (!summary) {
+      return { __error: 'No compiled event list available — call compile first (and note that only the midi-synth path produces one).' };
+    }
+    return formatSongSummary(summary);
   },
   // NOTE: intentionally NO `play` tool — starting playback is the user's
   // action (play button). The agent saves via `compile`; a playing track
   // picks the changes up live.
   stop: async () => { window.stopaudio(); return 'stopped'; },
 };
+
+// Analyse the event list stashed by the last compile (editorcontroller.js).
+function analyzeCompiledSong() {
+  const eventlist = window.lastCompiledEventList;
+  if (!eventlist || !eventlist.length) return null;
+  return summarizeSongEvents(eventlist, songBpmFromSource(songsourceeditor.doc.getValue()));
+}
+
+function songEventAnomalies() {
+  try {
+    const summary = analyzeCompiledSong();
+    return summary ? songEventWarnings(summary) : [];
+  } catch (e) {
+    console.error('song event analysis failed', e);
+    return [];
+  }
+}
 
 // Faust file helpers (normDsp is imported from studio-agent-tools-core.js)
 function faustUnavailable(e) {

@@ -49,41 +49,148 @@ export function songSourceWarnings(source) {
       'WARNING: the song contains an async IIFE wrapper — it is NOT awaited, so loopHere()/code after it runs before the notes are scheduled and the song breaks. The song source is already one top-level async function: use plain top-level `await track.steps(...)` statements and remove the wrapper.'
     );
   }
-  warnings.push(...sequentialTracksWarning(source));
   return warnings;
 }
 
-// Awaiting a pattern advances the shared clock to its end; merely CALLING it
-// schedules its notes from the current position. So parts that should sound
-// together are plain calls and only the beat-keeper is awaited. Awaiting every
-// pattern instead makes different instruments play one AFTER another — the
-// most common song bug, and one the agent cannot hear.
+// ---- compiled-event analysis ------------------------------------------------
 //
-// Only warn when the song awaits back-to-back patterns on DIFFERENT tracks and
-// never calls one without await: a song that already uses the idiom anywhere is
-// assumed to know it, so a deliberate sequential arrangement stays quiet.
-function sequentialTracksWarning(source) {
-  const calls = [
-    ...stripComments(source).matchAll(
-      /(await\s+)?([A-Za-z_$][\w$]*(?:\s*\([^()]*\))?)\s*\.\s*(?:steps|play)\s*\(/g
-    )
-  ].map((m) => ({ awaited: !!m[1], receiver: m[2].replace(/\s+/g, '') }));
+// Compiling a song produces a MIDI event list — note on/off, CC, at exact
+// times. That is the ground truth for what the song actually DOES, and the
+// agent cannot hear anything, so it is the only way for it to check its work.
+// Whether two instruments play together is a FACT here, not a guess: either
+// their notes fall in the same bars or they don't.
+//
+// Deliberately reports facts rather than grading a supplied expectation: an
+// agent that misunderstands the timing model would write an expectation
+// matching its own bug and mark it passed. The digest is compared against what
+// the USER asked for, which the agent did not author.
 
-  if (calls.length < 2 || calls.some((c) => !c.awaited)) return [];
+const NOTE_ON = 0x90;
+const CONTROL_CHANGE = 0xb0;
+const END_OF_SONG = -1;
 
-  const pair = calls.slice(1).find((c, ndx) => c.receiver !== calls[ndx].receiver);
-  if (!pair) return [];
+// eventlist: [{ time (ms), message: [status, data1, data2] }], as returned by
+// compileSong. bpm is needed to express times in beats; song BPM lives inside
+// the sandboxed compile, so callers pass it (see songBpmFromSource).
+export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4 } = {}) {
+  const msPerBeat = (60 * 1000) / (bpm > 0 ? bpm : 110);
+  const toBeat = (ms) => ms / msPerBeat;
+  const byChannel = new Map();
+  let lengthBeats = 0;
 
-  return [
-    'WARNING: every pattern in this song is awaited, and patterns on different tracks follow each other. ' +
-      'Awaiting a pattern advances the clock to its END, so those parts play one AFTER the other, not together. ' +
-      'If they are meant to sound simultaneously, await ONLY the pattern that keeps the beat and call the others plainly: ' +
-      '`hats.steps(2, [...]); await kick.steps(1, [...]);`. Ignore this if the parts really are separate sections.'
-  ];
+  for (const evt of eventlist || []) {
+    const [status, , velocity] = evt.message || [];
+    if (status === undefined) continue;
+    const beat = toBeat(evt.time);
+    lengthBeats = Math.max(lengthBeats, beat);
+    if (status === END_OF_SONG) continue;
+
+    const channel = status & 0x0f;
+    let c = byChannel.get(channel);
+    if (!c) {
+      c = { channel, notes: 0, ccs: 0, firstBeat: Infinity, lastBeat: -Infinity, bars: new Set() };
+      byChannel.set(channel, c);
+    }
+    if ((status & 0xf0) === NOTE_ON && velocity > 0) {
+      c.notes++;
+      c.firstBeat = Math.min(c.firstBeat, beat);
+      c.lastBeat = Math.max(c.lastBeat, beat);
+      c.bars.add(Math.floor(beat / beatsPerBar));
+    } else if ((status & 0xf0) === CONTROL_CHANGE) {
+      c.ccs++;
+    }
+  }
+
+  const channels = [...byChannel.values()].sort((a, b) => a.channel - b.channel);
+  const sounding = channels.filter((c) => c.notes > 0);
+
+  // The bug this catches is one part playing straight AFTER another: it ends
+  // before the other begins. Test the note ranges, not bar-by-bar occupancy —
+  // instruments that alternate bars (call and response, a guitar answering a
+  // lead) share no single bar yet are perfectly normal music. examples/
+  // beachdrive/song.js has exactly that, and bar-set comparison flagged it.
+  const disjointPairs = [];
+  for (let i = 0; i < sounding.length; i++) {
+    for (let j = i + 1; j < sounding.length; j++) {
+      const [a, b] = [sounding[i], sounding[j]];
+      const [first, second] = a.firstBeat <= b.firstBeat ? [a, b] : [b, a];
+      if (first.lastBeat < second.firstBeat) disjointPairs.push([first, second]);
+    }
+  }
+
+  return {
+    bpm,
+    beatsPerBar,
+    lengthBeats,
+    totalNotes: sounding.reduce((sum, c) => sum + c.notes, 0),
+    channels,
+    sounding,
+    disjointPairs
+  };
 }
 
-function stripComments(source) {
-  return String(source).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+const round = (n) => Math.round(n * 100) / 100;
+const barRange = (c) => {
+  const bars = [...c.bars].sort((a, b) => a - b);
+  return bars.length === 1 ? `bar ${bars[0] + 1}` : `bars ${bars[0] + 1}-${bars[bars.length - 1] + 1}`;
+};
+
+// Compact digest — a fixed handful of lines whatever the song's size. Never
+// dump the event list itself: a few minutes of music is thousands of events.
+export function formatSongSummary(s) {
+  const bars = Math.ceil(s.lengthBeats / s.beatsPerBar);
+  const lines = [
+    `song: ${round(s.lengthBeats)} beats (${bars} bars) at ${s.bpm} BPM · ` +
+      `${s.sounding.length} sounding channel(s) · ${s.totalNotes} notes`
+  ];
+  if (!s.sounding.length) {
+    lines.push('(no notes at all)');
+  }
+  for (const c of s.channels) {
+    lines.push(
+      c.notes
+        ? `ch${c.channel}: ${c.notes} notes, beats ${round(c.firstBeat)}-${round(c.lastBeat)}, ` +
+          `${barRange(c)}${c.ccs ? `, ${c.ccs} CC` : ''}`
+        : `ch${c.channel}: no notes${c.ccs ? ` (${c.ccs} CC only)` : ''}`
+    );
+  }
+  for (const [a, b] of s.disjointPairs) {
+    lines.push(
+      `ch${a.channel} and ch${b.channel} NEVER overlap: ch${a.channel} stops at beat ${round(a.lastBeat)} ` +
+        `before ch${b.channel} starts at beat ${round(b.firstBeat)}`
+    );
+  }
+  return lines.join('\n');
+}
+
+// Anomalies worth interrupting the agent with, appended to compile results the
+// way shader warnings already are. Only things that are almost certainly wrong.
+export function songEventWarnings(s) {
+  const warnings = [];
+  if (!s.sounding.length) {
+    warnings.push(
+      'WARNING: the compiled song contains NO notes. Nothing moved the playhead, so loopHere() ended the song at beat 0 and every note was discarded. ' +
+        'Check that at least one pattern is awaited, and that no sequencing is wrapped in a function that is never awaited.'
+    );
+  }
+  for (const [a, b] of s.disjointPairs) {
+    warnings.push(
+      `WARNING: channels ${a.channel} and ${b.channel} NEVER play at the same time — ` +
+        `ch${a.channel} stops at beat ${round(a.lastBeat)} (${barRange(a)}) before ch${b.channel} starts at beat ${round(b.firstBeat)} (${barRange(b)}). ` +
+        'If the user asked for these instruments TOGETHER, this is the await bug: await ONLY the pattern that keeps the beat and call the others plainly. ' +
+        'Ignore this if they really are separate sections.'
+    );
+  }
+  return warnings;
+}
+
+// The song compiles inside the QuickJS sandbox, so its BPM is not readable
+// from the host — take it from the source. Structural findings (note counts,
+// which channels overlap) do not depend on this; only the beat/bar labels do.
+export function songBpmFromSource(source, fallback = 110) {
+  const m = /setBPM\s*\(\s*([\d.]+)\s*\)/.exec(String(source || ''));
+  const bpm = m ? Number(m[1]) : NaN;
+  return Number.isFinite(bpm) && bpm > 0 ? bpm : fallback;
 }
 
 // Build the write_faust success hint from a transpiled .ts: which classes to
