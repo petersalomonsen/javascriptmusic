@@ -10,7 +10,7 @@ import { transpileDspSource } from './faust/faust-rs-transpile.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
-  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource
+  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments
 } from './studio-agent-tools-core.js';
 import { probeNote, probeNotes, probeWarnings } from './instrumentprobe.js';
 import { parseNote, noteName } from './audioanalysis.js';
@@ -262,7 +262,8 @@ const registry = {
 function analyzeCompiledSong() {
   const eventlist = window.lastCompiledEventList;
   if (!eventlist || !eventlist.length) return null;
-  return summarizeSongEvents(eventlist, songBpmFromSource(songsourceeditor.doc.getValue()));
+  const source = songsourceeditor.doc.getValue();
+  return summarizeSongEvents(eventlist, songBpmFromSource(source), { instruments: declaredInstruments(source) });
 }
 
 // Probe every channel the song actually plays, using a note it really uses, and

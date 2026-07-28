@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
-  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource
+  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments
 } from './studio-agent-tools-core.js';
 import { spectrum, measureNote, parseNote, noteName } from './audioanalysis.js';
 import { probeWarnings } from './instrumentprobe.js';
@@ -300,4 +300,44 @@ test('probeWarnings: a fully silent channel must not be reported as ready', () =
 
 test('probeWarnings: audible notes produce no warning', () => {
   assert.deepEqual(probeWarnings([{ channel: 0, name: 'c3', silent: false }]), []);
+});
+
+// A part scheduled AFTER the awaited beat-keeper starts past the end of the
+// song and loopHere() discards it. The channel then has no events at all, so it
+// vanishes from the digest entirely — the agent sees a tidy summary and hunts
+// the fault in the instrument, which probes perfectly fine. Reproduces a live
+// session where the agent looped on probe_instrument for exactly this.
+test('summarizeSongEvents: an instrument declared but never played is named', () => {
+  const events = [];
+  for (let b = 0; b < 4; b++) events.push(noteOn(0, 60, b), noteOn(1, 36, b));
+  events.push(endAt(4));
+
+  const s = summarizeSongEvents(events, BPM, { instruments: ['piano', 'kick', 'hihat'] });
+  assert.equal(s.declaredSilent.length, 1);
+  assert.deepEqual(s.declaredSilent[0], { channel: 2, name: 'hihat' });
+
+  const w = songEventWarnings(s).find((x) => /hihat/.test(x));
+  assert.ok(w, 'a declared-but-silent instrument must warn');
+  assert.match(w, /plays NO notes/);
+  assert.match(w, /SONG bug, NOT an instrument bug/);
+  assert.match(w, /BEFORE the pattern you await/);
+  assert.match(formatSongSummary(s), /ch2 \('hihat'\): DECLARED but plays NO notes/);
+});
+
+test('summarizeSongEvents: instruments that all play produce no declared-silent warning', () => {
+  const events = [noteOn(0, 60, 0), noteOn(1, 36, 0), endAt(4)];
+  const s = summarizeSongEvents(events, BPM, { instruments: ['piano', 'kick'] });
+  assert.deepEqual(s.declaredSilent, []);
+  assert.equal(songEventWarnings(s).filter((w) => /declared/.test(w)).length, 0);
+});
+
+test('declaredInstruments: reads addInstrument in channel order, ignoring comments', () => {
+  const src = `setBPM(125);
+addInstrument('piano');
+// addInstrument('ghost');
+addInstrument("kick");
+/* addInstrument('other'); */
+addInstrument('hihat');`;
+  assert.deepEqual(declaredInstruments(src), ['piano', 'kick', 'hihat']);
+  assert.deepEqual(declaredInstruments(''), []);
 });

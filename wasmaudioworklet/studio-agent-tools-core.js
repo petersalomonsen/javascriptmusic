@@ -72,7 +72,7 @@ const END_OF_SONG = -1;
 // eventlist: [{ time (ms), message: [status, data1, data2] }], as returned by
 // compileSong. bpm is needed to express times in beats; song BPM lives inside
 // the sandboxed compile, so callers pass it (see songBpmFromSource).
-export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4 } = {}) {
+export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, instruments = [] } = {}) {
   const msPerBeat = (60 * 1000) / (bpm > 0 ? bpm : 110);
   const toBeat = (ms) => ms / msPerBeat;
   const byChannel = new Map();
@@ -105,6 +105,14 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4 } = 
   const sounding = channels.filter((c) => c.notes > 0);
   const noteCollisions = findNoteCollisions(eventlist || [], toBeat);
 
+  // An instrument the song DECLARED but that emits nothing. Its channel has no
+  // events at all, so it is absent from the list above and simply goes
+  // unmentioned — the agent then sees a tidy digest and hunts for the fault in
+  // the instrument, which probes perfectly fine. Name it instead.
+  const declaredSilent = instruments
+    .map((name, channel) => ({ channel, name }))
+    .filter(({ channel }) => !sounding.some((c) => c.channel === channel));
+
   // The bug this catches is one part playing straight AFTER another: it ends
   // before the other begins. Test the note ranges, not bar-by-bar occupancy —
   // instruments that alternate bars (call and response, a guitar answering a
@@ -127,8 +135,17 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4 } = 
     channels,
     sounding,
     disjointPairs,
-    noteCollisions
+    noteCollisions,
+    declaredSilent
   };
+}
+
+// `addInstrument('name')` in call order: the Nth call is channel N.
+export function declaredInstruments(source) {
+  const clean = String(source || '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+  return [...clean.matchAll(/addInstrument\s*\(\s*['"`]([^'"`]*)['"`]\s*\)/g)].map((m) => m[1]);
 }
 
 // Note-off and note-on land on the same millisecond (times are rounded ints).
@@ -214,6 +231,9 @@ export function formatSongSummary(s) {
         : `ch${c.channel}: no notes${c.ccs ? ` (${c.ccs} CC only)` : ''}`
     );
   }
+  for (const { channel, name } of s.declaredSilent) {
+    lines.push(`ch${channel} ('${name}'): DECLARED but plays NO notes — nothing of it reaches the timeline`);
+  }
   for (const [a, b] of s.disjointPairs) {
     lines.push(
       `ch${a.channel} and ch${b.channel} NEVER overlap: ch${a.channel} stops at beat ${round(a.lastBeat)} ` +
@@ -239,6 +259,15 @@ export function songEventWarnings(s) {
     warnings.push(
       'WARNING: the compiled song contains NO notes. Nothing moved the playhead, so loopHere() ended the song at beat 0 and every note was discarded. ' +
         'Check that at least one pattern is awaited, and that no sequencing is wrapped in a function that is never awaited.'
+    );
+  }
+  for (const { channel, name } of s.declaredSilent) {
+    warnings.push(
+      `WARNING: '${name}' (channel ${channel}) is declared with addInstrument but plays NO notes — its part never reaches the timeline. ` +
+        'This is a SONG bug, NOT an instrument bug: probing that instrument will show it works perfectly. ' +
+        'Almost always the pattern is written AFTER the awaited beat-keeper, so it starts past the end of the song and `loopHere()` discards it. ' +
+        'Parts that sound TOGETHER must be scheduled BEFORE the pattern you await — the awaited one comes LAST: ' +
+        '`hats.steps(...); bass.steps(...); await kick.steps(...);`'
     );
   }
   for (const [a, b] of s.disjointPairs) {
