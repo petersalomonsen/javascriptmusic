@@ -64,12 +64,12 @@ const hats = createTrack(1);
 // hats play alongside the kick — scheduled, not awaited
 hats.steps(2, [
     , fs3, , fs3, , fs3, , fs3
-].repeat(8));
+].repeat(7));                    // .repeat(7) = 8 copies = 32 beats
 
 // the kick keeps the beat, so it is the one that is awaited
 await kick.steps(1, [
     c2, c2, c2, c2
-].repeat(8));
+].repeat(7));                    // also 32 beats — same length, so they line up
 ```
 
 `await`ing both instead is the classic bug: the kick's 32 beats play through to
@@ -77,8 +77,8 @@ the end, and *then* the hats start — two parts back to back instead of one
 groove.
 
 ```javascript
-await kick.steps(1, [c2, c2, c2, c2].repeat(8));
-await hats.steps(2, [, fs3, , fs3, , fs3, , fs3].repeat(8));   // WRONG — starts at beat 32
+await kick.steps(1, [c2, c2, c2, c2].repeat(7));
+await hats.steps(2, [, fs3, , fs3, , fs3, , fs3].repeat(7));   // WRONG — starts at beat 32
 ```
 
 The awaited pattern should be the **longest** in the group (or equal). A part
@@ -626,11 +626,20 @@ Quantizes note timing to a grid.
 Sets fixed velocity for all events in the array.
 
 ### `.repeat(times = 1)`
-Repeats the array contents.
+Appends `times` **further** copies of the array — so the result is
+`times + 1` copies in total, not `times`.
 
-**Example:**
+> **This is NOT `String.prototype.repeat`.** `'ab'.repeat(3)` gives three
+> copies; `[c4].repeat(3)` gives **four**. Getting this backwards is the usual
+> cause of a part that is one bar longer than everything around it — and if it
+> is the awaited beat-keeper, of a section that drifts out of alignment.
+
+To play a one-bar pattern **N times, pass `N - 1`**:
+
 ```javascript
-[c4, e4, g4].repeat(3)  // Plays the pattern 4 times total
+[c4, e4, g4].repeat(3)   // 4 copies
+[c3, c3, c3, c3].repeat(7)   // 8 copies — a 4-beat bar over 32 beats
+[c3, c3, c3, c3].repeat(8)   // 9 copies = 36 beats, probably not what you meant
 ```
 
 ---

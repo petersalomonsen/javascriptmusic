@@ -84,6 +84,27 @@ loopHere();
             [1, beatTime(3.5)]
         ]);
     });
+    // `.repeat(n)` appends n FURTHER copies, so the result is n+1 — unlike
+    // String.prototype.repeat. Pinned here with the exact numbers the docs and
+    // the studio-agent prompt quote, because getting it backwards makes a part
+    // one bar longer than everything around it.
+    it('should repeat a pattern n+1 times, not n', async () => {
+        const bpm = 120;
+        const lengthBeats = async (repeatArg) => {
+            const eventlist = await compileSong(`
+setBPM(${bpm});
+await createTrack(0).steps(1, [ c2, c2, c2, c2 ].repeat(${repeatArg}));
+loopHere();
+`);
+            const noteOns = eventlist.filter(e => (e.message[0] & 0xf0) === 0x90 && e.message[2] > 0);
+            return { notes: noteOns.length, beats: eventlist[eventlist.length - 1].time / ((60 / bpm) * 1000) };
+        };
+
+        assert.deepEqual(await lengthBeats(1), { notes: 8, beats: 8 });    // 2 copies
+        assert.deepEqual(await lengthBeats(3), { notes: 16, beats: 16 });  // 4 copies
+        assert.deepEqual(await lengthBeats(7), { notes: 32, beats: 32 });  // 8 copies — a bar over 32 beats
+        assert.deepEqual(await lengthBeats(8), { notes: 36, beats: 36 });  // 9 copies, NOT 8
+    });
     it('should not hang when writing wrong code', async () => {
         let hasError = false;
         try {

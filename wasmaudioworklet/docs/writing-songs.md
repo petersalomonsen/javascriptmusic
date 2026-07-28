@@ -99,6 +99,11 @@ await drums.steps(1, [ c3, c3, c3, c3 ].repeat(3));   // the bar, four times tot
 
 (`.repeat(3)` means "three more times" — four in total.)
 
+Watch out for that one: `.repeat` here adds *extra* copies, so you get one more
+than the number you write. **To play a bar N times, ask for `N - 1`** —
+`.repeat(7)` for eight bars. If a part ever comes out one bar longer than
+everything else, this is why.
+
 For a whole section, use a **loop**. This plays the bar four times over:
 
 ```javascript

@@ -36,8 +36,8 @@ Musically: every statement starts a part; \`await\` means "wait for that part to
 
 - **CONCURRENCY — \`await\` ONLY the part that keeps the beat.** Parts that must sound TOGETHER are plain calls (playhead stays put, so they stack); the ONE part defining the section's length (usually drums/kick) is awaited. This is THE #1 song bug: awaiting BOTH makes the kick's 32 beats finish and only THEN the hats start, so the user hears the parts one after another instead of a groove. If a user says parts "play apart", "aren't simultaneous", or "one plays after the other" — that is this: remove \`await\` from every part except the beat-keeper. The awaited part must be the LONGEST of the group (parts running past it spill into the next section and get cut at \`loopHere()\`). \`Promise.all([...])\` is equivalent for equal-length parts but noisier — prefer awaiting the beat-keeper.
   \`\`\`javascript
-  hats.steps(2, [ , fs3, , fs3, , fs3, , fs3 ].repeat(8));   // plays along — no await
-  await kick.steps(1, [ c2, c2, c2, c2 ].repeat(8));        // keeps the beat — awaited
+  hats.steps(2, [ , fs3, , fs3, , fs3, , fs3 ].repeat(7));   // plays along — no await
+  await kick.steps(1, [ c2, c2, c2, c2 ].repeat(7));        // keeps the beat — awaited
   \`\`\`
   Scales to arrangements — accompaniment called plainly, drums awaited: \`pianos(); bass1(); await basicdrums();\` (examples/beachdrive/song.js).
 - **If NOTHING is awaited the song is EMPTY** — the playhead never moves, \`loopHere()\` marks the end at beat 0, and the compiled result is just an end-marker with ZERO notes. Same reason you must NEVER wrap sequencing in an async IIFE (\`(async () => { ... })()\`) or any wrapper function: nothing awaits the wrapper, so \`loopHere()\` runs at beat 0 and the song is silent. The source already IS one top-level async function — \`await\` works directly at top level, no wrapper is ever needed.
@@ -45,7 +45,7 @@ Musically: every statement starts a part; \`await\` means "wait for that part to
 - **Moving the playhead by hand:** \`await waitDuration(beats)\` (relative) or \`await waitForBeat(beat)\` (absolute) — both exist as globals AND track methods. **PREFER \`waitDuration\`** (\`playIntro(); await waitDuration(16); playGroove(); await waitDuration(16); ...\`): each section is relative to where the last ended, so inserting/reordering doesn't force recomputing every following beat. If you find yourself hand-computing cumulative beats (64 → 80 → 96 …), switch to \`waitDuration\`. Also \`setBPM(bpm)\`, \`playFromHere()\`.
 - **Instruments / structure:** \`addInstrument('name')\` — the Nth call is channel N (0-based); order MUST match the synth's midichannels[]. \`definePartStart('name')\` / \`definePartEnd('name')\`.
 - **Tracks:** \`const t = createTrack(channel, stepsPerBeat?, defaultVelocity?)\`. Then:
-  - \`t.steps(stepsPerBeat, [ ...notes ])\` — step grid; empty slot = rest; \`[...].repeat(n)\`.
+  - \`t.steps(stepsPerBeat, [ ...notes ])\` — step grid; empty slot = rest; \`[...].repeat(n)\` (see the repeat rule below).
   - \`t.play([ [beat, note(...), ...], ... ])\` — absolute-beat placement; append \`.quantize(stepsPerBeat, pct?)\` to snap timing.
   - \`t.setChannel(ch)\`, \`t.waitForBeat(b)\`, \`t.waitForStep(s)\`, \`t.waitDuration(d)\`, \`t.note(midiNo, dur)\`, \`t.playNote('c4', dur)\`.
 
@@ -56,7 +56,8 @@ Musically: every statement starts a part; \`await\` means "wait for that part to
 - **Media:** \`addAudio(url)\`, \`addImage(name,url)\`, \`addVideo(name,url)\`, \`startVideo(name, t?)\`, \`stopVideo(name)\`.
 - **Shader text & params:** \`showText(text, {fade, transition, size, color, align, y, stroke, ...})\` shows text (string or array of lines) on the shader's own text layer at the current song time — each call supersedes the previous; \`hideText({fade})\` clears it; \`setVisual(name, value, rampSeconds?)\` sets any \`uniform float <name>\` the shader declares (ramped when rampSeconds > 0). The shader side is \`uText\`/\`uTextPrev\`/\`uTextMix\` plus whatever names the song and shader agree on — see wasmaudioworklet/docs/song-api.md and docs/shaders.md, and examples/textoverlay for a worked song+shader pair. Songs run sandboxed: there is NO \`document\`/canvas at song-compile time, so never hand-roll text images. **showText draws NOTHING unless the CURRENT shader declares \`uText\`** — see the shader section below; fix the shader, don't re-edit the song.
 - **Multi-window sync (midi path):** \`broadcastSend('name')\`, \`await broadcastWait('name')\`.
-- **Array helpers:** \`.repeat(n)\`, \`.quantize(stepsPerBeat, pct?)\`, \`.fixVelocity(v)\`.
+- **\`.repeat(n)\` gives n+1 COPIES, not n — it appends n FURTHER copies.** This is NOT \`String.prototype.repeat\`: \`[c3,c3,c3,c3].repeat(8)\` is NINE copies = 36 beats, not 8/32. **To play a pattern N times, pass N-1** (\`.repeat(7)\` for 8 bars, \`.repeat(3)\` for 4). Getting this wrong makes a part one bar longer than everything around it — and if that part is the awaited beat-keeper, every later section is shifted. When you need an exact length, compute it: steps ÷ stepsPerBeat × (n+1) = beats, and confirm with song_summary after compiling — the song length there catches the mistake ONLY on the awaited beat-keeper. On a layered part the surplus is silently CUT at \`loopHere()\`, so the digest looks perfect; check that arithmetic yourself.
+- **Array helpers:** \`.quantize(stepsPerBeat, pct?)\`, \`.fixVelocity(v)\`.
 
 ## Adding a voice/channel to a LARGE existing synth (e.g. mixing a non-DX7 voice into the DX7 bundle)
 A song plays through ONE synth document. To add a different instrument (say a waveguide string from examples/beachdrive/synth.ts) alongside the DX7 voices, you must put its voice class + a midichannels[N] registration INTO the current synth — but if that synth is the 14k-line DX7 bundle you CANNOT rewrite it with set_synth. Use surgical edits instead:
