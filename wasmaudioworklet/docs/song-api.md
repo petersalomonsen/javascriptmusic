@@ -126,6 +126,35 @@ Prefer `waitDuration` for laying out sections back-to-back: each section starts
 where the last ended, so inserting or reordering one doesn't force you to
 recompute every beat number that follows.
 
+### Held notes must release before the same pitch is played again
+
+A note-off that lands at exactly the next note-on of the **same pitch on the
+same channel** cuts that new note: the synth receives an attack and then a
+release for one sounding note, and what you hear is a chord tone dropping out.
+
+It shows up when a chord is held into the next chord that shares a pitch —
+A#maj7 → F both contain `f5` and `a5`:
+
+```javascript
+await piano.play([
+    [0,   as4(2.5), d5(2.5), f5(2.5), a5(2.5)],   // WRONG — reaches exactly beat 2.5
+    [2.5, f5(1), a5(1), c6(1)],                   // f5 and a5 are cut here
+]);
+```
+
+Trim each held note by a hair so its release clears the next attack:
+
+```javascript
+await piano.play([
+    [0,   as4(2.45), d5(2.45), f5(2.45), a5(2.45)],   // ~0.05 beat of daylight
+    [2.5, f5(0.95), a5(0.95), c6(0.95)],
+]);
+```
+
+This applies to **sustained** parts. Short percussive steps in a grid re-trigger
+normally — a hi-hat on every eighth has its note-off on the next note-on by
+construction, and that is the idiom, not a bug.
+
 ### The rule generalises
 
 Anything that occupies time follows the same two-way rule — call it to run it

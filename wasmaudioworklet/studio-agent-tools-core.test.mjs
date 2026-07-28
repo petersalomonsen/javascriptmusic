@@ -164,6 +164,60 @@ test('summarizeSongEvents: control changes are counted but do not make a channel
   assert.equal(s.channels[0].notes, 0);
 });
 
+// A chord tone held into the next chord that repeats the same pitch: the synth
+// gets note-on then note-off for one sounding note, and the new note is cut.
+test('summarizeSongEvents: a held note re-attacked at its own note-off is flagged', () => {
+  const held = (ch, note, from, to) => [noteOn(ch, note, from), noteOff(ch, note, to)];
+  const events = [
+    ...held(0, 70, 0, 2.5),      // as4 in A#maj7
+    ...held(0, 65, 0, 2.5),      // f5  held...
+    ...held(0, 65, 2.5, 3.5),    // ...and repeated in F at the exact note-off
+    endAt(4)
+  ];
+  const s = summarizeSongEvents(events, BPM);
+  assert.equal(s.noteCollisions.length, 1);
+  assert.equal(s.noteCollisions[0].name, 'f5');
+  assert.equal(s.noteCollisions[0].onBeat, 2.5);
+
+  const warning = songEventWarnings(s).find(w => /CUT by/.test(w));
+  assert.ok(warning, 'a collision must produce a warning');
+  assert.match(warning, /f5 at beat 2\.5/);
+  assert.match(warning, /SHORTENING the earlier note's duration/);
+});
+
+test('summarizeSongEvents: trimming the held note clears the collision', () => {
+  const events = [
+    noteOn(0, 65, 0), noteOff(0, 65, 2.45),   // released just before the next attack
+    noteOn(0, 65, 2.5), noteOff(0, 65, 3.45),
+    endAt(4)
+  ];
+  assert.deepEqual(summarizeSongEvents(events, BPM).noteCollisions, []);
+});
+
+// Every note in a step grid lasts exactly one step, so repeated drum hits always
+// coincide. beachdrive has 209 of them and sounds fine — percussive retriggers
+// are the idiom, not a bug.
+test('summarizeSongEvents: repeated short drum hits are NOT flagged', () => {
+  const events = [];
+  for (let b = 0; b < 8; b += 0.5) {
+    events.push(noteOn(9, 42, b), noteOff(9, 42, b + 0.5));   // hats, note-off meets next note-on
+  }
+  events.push(endAt(8));
+  assert.deepEqual(summarizeSongEvents(events, BPM).noteCollisions, []);
+  assert.deepEqual(songEventWarnings(summarizeSongEvents(events, BPM)), []);
+});
+
+// Recorded playing overlaps by ragged amounts; only durations written to land
+// exactly on the next onset are an authoring artefact worth reporting.
+test('summarizeSongEvents: a ragged recorded overlap is NOT flagged', () => {
+  const events = [
+    noteOn(1, 64, 0), noteOff(1, 64, 4.06),   // held 0.06 beats past the next attack
+    noteOn(1, 64, 4), noteOff(1, 64, 8),
+    endAt(8)
+  ];
+  assert.deepEqual(summarizeSongEvents(events, BPM).noteCollisions, []);
+});
+
 test('formatSongSummary: compact digest names channels, bars and the overlap failure', () => {
   const events = [];
   for (let b = 0; b < 4; b++) events.push(noteOn(0, 36, b));

@@ -103,6 +103,7 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4 } = 
 
   const channels = [...byChannel.values()].sort((a, b) => a.channel - b.channel);
   const sounding = channels.filter((c) => c.notes > 0);
+  const noteCollisions = findNoteCollisions(eventlist || [], toBeat);
 
   // The bug this catches is one part playing straight AFTER another: it ends
   // before the other begins. Test the note ranges, not bar-by-bar occupancy —
@@ -125,8 +126,67 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4 } = 
     totalNotes: sounding.reduce((sum, c) => sum + c.notes, 0),
     channels,
     sounding,
-    disjointPairs
+    disjointPairs,
+    noteCollisions
   };
+}
+
+// Note-off and note-on land on the same millisecond (times are rounded ints).
+const COINCIDENT_MS = 1;
+const NOTE_NAMES = ['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'];
+export const noteName = (n) => NOTE_NAMES[n % 12] + Math.floor(n / 12);
+
+// A note whose note-OFF lands at or after the next note-ON of the SAME pitch on
+// the SAME channel. The synth gets "attack, then release" for one sounding
+// note, so the new note is cut instead of played — audible as a chord tone
+// dropping out when it is held over into the next chord. The fix is always to
+// shorten the earlier note's duration slightly, so its release clears the next
+// attack. Not detectable from the source: it depends on durations, positions
+// and which voicings happen to share a pitch.
+function findNoteCollisions(eventlist, toBeat, minHeldBeats = 1) {
+  const byKey = new Map();
+  for (const evt of eventlist) {
+    const [status, note, velocity] = evt.message || [];
+    if (status === undefined || status === END_OF_SONG) continue;
+    const type = status & 0xf0;
+    const isOn = type === NOTE_ON && velocity > 0;
+    const isOff = type === 0x80 || (type === NOTE_ON && velocity === 0);
+    if (!isOn && !isOff) continue;
+    const key = `${status & 0x0f}:${note}`;
+    if (!byKey.has(key)) byKey.set(key, { channel: status & 0x0f, note, ons: [], offs: [] });
+    byKey.get(key)[isOn ? 'ons' : 'offs'].push(evt.time);
+  }
+
+  const collisions = [];
+  for (const { channel, note, ons, offs } of byKey.values()) {
+    const onTimes = [...ons].sort((a, b) => a - b);
+    const offTimes = [...offs].sort((a, b) => a - b);
+    for (let i = 0; i < onTimes.length - 1; i++) {
+      // the release that ends the note started at onTimes[i]
+      const off = offTimes.find((t) => t >= onTimes[i]);
+      if (off === undefined || off < onTimes[i + 1]) continue;
+      // Only SUSTAINED notes. In a step grid every note lasts exactly one step,
+      // so consecutive hits of the same drum always collide — 209 of them in
+      // examples/beachdrive/song.js, which sounds fine. The audible failure is
+      // a held note (a chord tone) being re-attacked and cut.
+      if (toBeat(off - onTimes[i]) < minHeldBeats) continue;
+      // Only EXACT coincidence: a duration written to land precisely on the
+      // next onset. That is an authoring artefact — the case where a chord is
+      // given a round length that happens to meet the next chord. Recorded
+      // takes overlap by ragged amounts (beachdrive has held notes running 0.06
+      // beats past the next attack) and are left alone.
+      if (Math.abs(off - onTimes[i + 1]) > COINCIDENT_MS) continue;
+      collisions.push({
+        channel,
+        note,
+        name: noteName(note),
+        onBeat: toBeat(onTimes[i + 1]),
+        offBeat: toBeat(off),
+        heldBeats: toBeat(off - onTimes[i])
+      });
+    }
+  }
+  return collisions.sort((a, b) => a.onBeat - b.onBeat);
 }
 
 const round = (n) => Math.round(n * 100) / 100;
@@ -160,8 +220,16 @@ export function formatSongSummary(s) {
         `before ch${b.channel} starts at beat ${round(b.firstBeat)}`
     );
   }
+  if (s.noteCollisions.length) {
+    lines.push(`${s.noteCollisions.length} note(s) cut by the previous note's note-off: ${collisionExamples(s)}`);
+  }
   return lines.join('\n');
 }
+
+const collisionExamples = (s, limit = 3) =>
+  s.noteCollisions.slice(0, limit)
+    .map((c) => `ch${c.channel} ${c.name} at beat ${round(c.onBeat)} (off at ${round(c.offBeat)})`)
+    .join('; ') + (s.noteCollisions.length > limit ? `, +${s.noteCollisions.length - limit} more` : '');
 
 // Anomalies worth interrupting the agent with, appended to compile results the
 // way shader warnings already are. Only things that are almost certainly wrong.
@@ -179,6 +247,14 @@ export function songEventWarnings(s) {
         `ch${a.channel} stops at beat ${round(a.lastBeat)} (${barRange(a)}) before ch${b.channel} starts at beat ${round(b.firstBeat)} (${barRange(b)}). ` +
         'If the user asked for these instruments TOGETHER, this is the await bug: await ONLY the pattern that keeps the beat and call the others plainly. ' +
         'Ignore this if they really are separate sections.'
+    );
+  }
+  if (s.noteCollisions.length) {
+    warnings.push(
+      `WARNING: ${s.noteCollisions.length} note(s) are CUT by the previous note's note-off — the same pitch is re-attacked ` +
+        `on the same channel before its earlier note-off, so the synth gets attack-then-release and the new note does not sound: ` +
+        `${collisionExamples(s)}. This happens when a note is held into the next chord that contains the same pitch. ` +
+        "Fix it by SHORTENING the earlier note's duration slightly (e.g. 2 → 1.95) so its release clears the next attack."
     );
   }
   return warnings;
