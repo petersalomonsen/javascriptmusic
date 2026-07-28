@@ -3,17 +3,17 @@
 // Two provider paths consume this:
 //   • the local Agent SDK process (tools/studio-agent/server.mjs) turns each
 //     def into an in-process MCP tool (JSON Schema -> zod there);
-//   • the in-browser NEAR AI loop (studio-agent-nearai-core.js) sends them as
+//   • the in-browser NEAR AI loop (nearai-core.js) sends them as
 //     OpenAI function-calling definitions — and the Pages Function proxy
 //     (functions/nearai/[[path]].js) injects that same list server-side.
 //
 // It used to be two hand-maintained lists with a "keep them in sync" comment;
 // they drifted the first time a tool was added (the shader tools reached the
 // SDK path only). Pure data, no imports, so both Node and the browser can read
-// it, and studio-agent-tools-def.test.mjs checks it stays coherent.
+// it, and tools-def.test.mjs checks it stays coherent.
 //
 // `where` says who executes the call:
-//   'browser'  — proxied to the browser tool registry (studio-agent-client.js)
+//   'browser'  — proxied to the browser tool registry (client.js)
 //   'loadfile' — reads a repo file and pushes it into an editor: server-side
 //                from disk in the SDK path, via the jsDelivr CDN in the browser
 //   'repofile' — reads a repo reference file for the model. Serverless ONLY;
@@ -65,6 +65,7 @@ export const TOOL_DEFS = [
 
     // ---- build / transport ----
     { name: 'compile', where: 'browser', description: "SAVE + compile the current song+synth in the browser (same as the app's save button). If a track is already playing, the changes are applied and audible immediately. Returns \"compiled OK\" or the exact compiler error. Call after every edit. There is NO play tool — the user starts playback themselves.", parameters: obj({}) },
+    { name: 'probe_instrument', where: 'browser', description: "Play notes into the COMPILED synth offline and measure the audio (run compile first). Returns peak, RMS, dominant frequency and spectral centroid per note — or SILENT. This is the ONLY way to know a sound exists: a Faust voice with no `gate` compiles, registers and plays nothing. Also verifies note mapping: if two notes return the same spectrum they are the same sound, so there is no per-note drum mapping. Use it before telling the user an instrument is ready.", parameters: obj({ channel: num('MIDI channel to play (default 0)'), notes: str('comma-separated notes, e.g. "c3,fs3" (default c3,c4,c5)'), hold: num('seconds to hold the note (default 0.4)'), velocity: num('note-on velocity 1-127 (default 100)') }) },
     { name: 'song_summary', where: 'browser', description: "What the song ACTUALLY plays, read from the compiled MIDI event list (run compile first). Returns a compact digest: song length, and per channel the note count, beat range and bars it sounds in — plus any pair of channels that NEVER sound in the same bar. This is how you VERIFY a song without hearing it: if the user asked for instruments to play together, their bars must overlap here. Reports facts about structure only — it says nothing about how anything SOUNDS.", parameters: obj({}) },
     { name: 'stop', where: 'browser', description: "Stop live audio playback. Only on the user's request.", parameters: obj({}) },
 

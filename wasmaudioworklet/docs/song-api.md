@@ -81,8 +81,23 @@ await kick.steps(1, [c2, c2, c2, c2].repeat(7));
 await hats.steps(2, [, fs3, , fs3, , fs3, , fs3].repeat(7));   // WRONG — starts at beat 32
 ```
 
-The awaited pattern should be the **longest** in the group (or equal). A part
-longer than it keeps running into whatever comes next, and anything past
+**Order matters: the awaited pattern goes last.** Everything meant to sound
+alongside it must be scheduled *before* it. A pattern written after the `await`
+is anchored at the end of the awaited one, so it begins after the section has
+finished — and if `loopHere()` comes next, every one of its notes is discarded:
+
+```javascript
+await kick.steps(1, [c2, c2, c2, c2]);
+hats.steps(2, [, fs3, , fs3, , fs3, , fs3]);   // WRONG — starts at beat 4
+loopHere();                                     // …and is cut here. Silent.
+```
+
+That failure is easy to misread, because the instrument is fine — probe it and
+it sounds. The channel is simply never given any notes. `song_summary` reports
+it as *declared with addInstrument but plays NO notes*.
+
+The awaited pattern should also be the **longest** in the group (or equal). A
+part longer than it keeps running into whatever comes next, and anything past
 `loopHere()` is cut off.
 
 `Promise.all([...])` also works and is equivalent when the parts are the same

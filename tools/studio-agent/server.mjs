@@ -20,7 +20,7 @@ import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { SYSTEM_PROMPT } from './prompt.mjs';
-import { toolDefsFor, sdkToolNames } from '../../wasmaudioworklet/studio-agent-tools-def.js';
+import { toolDefsFor, sdkToolNames } from '../../wasmaudioworklet/studio-agent/tools-def.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
@@ -69,7 +69,7 @@ if (process.env.ANTHROPIC_API_KEY) {
 
 // Tools the agent may use: our browser-proxied studio tools + read-only repo
 // access. The tool set itself is declared once in
-// wasmaudioworklet/studio-agent-tools-def.js and shared with the in-browser
+// wasmaudioworklet/studio-agent/tools-def.js and shared with the in-browser
 // NEAR AI provider, so adding a tool cannot reach only one of them.
 const STUDIO_TOOLS = sdkToolNames();
 const ALLOWED = new Set([

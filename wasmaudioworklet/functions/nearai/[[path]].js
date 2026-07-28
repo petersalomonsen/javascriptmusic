@@ -19,8 +19,8 @@
 // Spending is additionally bounded by the key's own limit on cloud.near.ai.
 // Future billing/gating: the gitproxy's NEP-413 + NFT gate is ready to port.
 
-import { SYSTEM_PROMPT } from '../../studio-agent-prompt.js';
-import { toOpenAiTools, SERVERLESS_PROMPT_SUFFIX, DEFAULT_MODEL } from '../../studio-agent-nearai-core.js';
+import { SYSTEM_PROMPT } from '../../studio-agent/prompt.js';
+import { toOpenAiTools, SERVERLESS_PROMPT_SUFFIX, DEFAULT_MODEL } from '../../studio-agent/nearai-core.js';
 
 export const UPSTREAM = 'https://cloud-api.near.ai';
 

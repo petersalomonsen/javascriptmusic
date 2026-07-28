@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
-  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource
-} from './studio-agent-tools-core.js';
+  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments
+} from './tools-core.js';
+import { spectrum, measureNote, parseNote, noteName } from '../audioprobe/audioanalysis.js';
+import { probeWarnings } from '../audioprobe/instrumentprobe.js';
 
 test('applyEditToText: unique replace', () => {
   assert.deepEqual(applyEditToText('a b c', { old_string: 'b', new_string: 'X' }), { text: 'a X c', count: 1 });
@@ -237,4 +239,105 @@ test('songBpmFromSource: reads setBPM, falls back when absent', () => {
   assert.equal(songBpmFromSource('setBPM( 93.5 )'), 93.5);
   assert.equal(songBpmFromSource('no tempo here'), 110);
   assert.equal(songBpmFromSource(''), 110);
+});
+
+// ---- audio analysis (shared by the in-app probe and tools/instrumenttest) ----
+test('spectrum: finds the dominant frequency of a sine', () => {
+  const sr = 44100, hz = 440;
+  const buf = new Float32Array(8192);
+  for (let i = 0; i < buf.length; i++) buf[i] = Math.sin(2 * Math.PI * hz * i / sr);
+  const { dominantHz, centroidHz } = spectrum(buf, sr);
+  assert.ok(Math.abs(dominantHz - hz) < 15, `dominant ${dominantHz} should be ~${hz}`);
+  assert.ok(Math.abs(centroidHz - hz) < 100, 'a pure sine centroid sits at its own frequency');
+});
+
+test('spectrum: a bright source has a far higher centroid than a low sine', () => {
+  const sr = 44100;
+  const low = new Float32Array(8192);
+  const high = new Float32Array(8192);
+  for (let i = 0; i < low.length; i++) {
+    low[i] = Math.sin(2 * Math.PI * 60 * i / sr);       // kick-ish
+    high[i] = Math.sin(2 * Math.PI * 12000 * i / sr);   // hat-ish
+  }
+  // This gap is what distinguishes drums without listening.
+  assert.ok(spectrum(high, sr).centroidHz > spectrum(low, sr).centroidHz * 10);
+});
+
+test('measureNote: silence is reported as silent, not merely quiet', () => {
+  const quiet = new Float32Array(4096);   // all zeros
+  const m = measureNote(quiet, quiet, { note: 36 });
+  assert.equal(m.silent, true);
+  assert.equal(m.peak, 0);
+  assert.equal(m.name, 'c3');
+});
+
+test('measureNote: an audible note is not silent and carries its expected pitch', () => {
+  const sr = 44100;
+  const buf = new Float32Array(8192);
+  for (let i = 0; i < buf.length; i++) buf[i] = 0.5 * Math.sin(2 * Math.PI * 65.4 * i / sr);
+  const m = measureNote(buf, new Float32Array(512), { note: 36, sampleRate: sr });
+  assert.equal(m.silent, false);
+  assert.ok(m.peak > 0.4);
+  assert.ok(Math.abs(m.expectedHz - 65.4) < 0.5, 'c3 is ~65.4Hz');
+});
+
+test('parseNote: names and numbers, matching the sequencer convention', () => {
+  assert.equal(parseNote('c3'), 36);
+  assert.equal(parseNote('fs3'), 42);
+  assert.equal(parseNote('60'), 60);
+  assert.equal(noteName(60), 'c5');
+  assert.throws(() => parseNote('h9'), /unrecognised note/);
+});
+
+test('probeWarnings: a fully silent channel must not be reported as ready', () => {
+  const silent = [{ channel: 0, name: 'c3', silent: true }, { channel: 0, name: 'fs3', silent: true }];
+  const w = probeWarnings(silent);
+  assert.equal(w.length, 1);
+  assert.match(w[0], /NO SOUND/);
+  assert.match(w[0], /do NOT report this as ready/);
+  assert.match(w[0], /`gate`/);
+});
+
+test('probeWarnings: audible notes produce no warning', () => {
+  assert.deepEqual(probeWarnings([{ channel: 0, name: 'c3', silent: false }]), []);
+});
+
+// A part scheduled AFTER the awaited beat-keeper starts past the end of the
+// song and loopHere() discards it. The channel then has no events at all, so it
+// vanishes from the digest entirely — the agent sees a tidy summary and hunts
+// the fault in the instrument, which probes perfectly fine. Reproduces a live
+// session where the agent looped on probe_instrument for exactly this.
+test('summarizeSongEvents: an instrument declared but never played is named', () => {
+  const events = [];
+  for (let b = 0; b < 4; b++) events.push(noteOn(0, 60, b), noteOn(1, 36, b));
+  events.push(endAt(4));
+
+  const s = summarizeSongEvents(events, BPM, { instruments: ['piano', 'kick', 'hihat'] });
+  assert.equal(s.declaredSilent.length, 1);
+  assert.deepEqual(s.declaredSilent[0], { channel: 2, name: 'hihat' });
+
+  const w = songEventWarnings(s).find((x) => /hihat/.test(x));
+  assert.ok(w, 'a declared-but-silent instrument must warn');
+  assert.match(w, /plays NO notes/);
+  assert.match(w, /SONG bug, NOT an instrument bug/);
+  assert.match(w, /BEFORE the pattern you await/);
+  assert.match(formatSongSummary(s), /ch2 \('hihat'\): DECLARED but plays NO notes/);
+});
+
+test('summarizeSongEvents: instruments that all play produce no declared-silent warning', () => {
+  const events = [noteOn(0, 60, 0), noteOn(1, 36, 0), endAt(4)];
+  const s = summarizeSongEvents(events, BPM, { instruments: ['piano', 'kick'] });
+  assert.deepEqual(s.declaredSilent, []);
+  assert.equal(songEventWarnings(s).filter((w) => /declared/.test(w)).length, 0);
+});
+
+test('declaredInstruments: reads addInstrument in channel order, ignoring comments', () => {
+  const src = `setBPM(125);
+addInstrument('piano');
+// addInstrument('ghost');
+addInstrument("kick");
+/* addInstrument('other'); */
+addInstrument('hihat');`;
+  assert.deepEqual(declaredInstruments(src), ['piano', 'kick', 'hihat']);
+  assert.deepEqual(declaredInstruments(''), []);
 });
