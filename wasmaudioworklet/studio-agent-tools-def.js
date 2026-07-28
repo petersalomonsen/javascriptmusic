@@ -65,6 +65,7 @@ export const TOOL_DEFS = [
 
     // ---- build / transport ----
     { name: 'compile', where: 'browser', description: "SAVE + compile the current song+synth in the browser (same as the app's save button). If a track is already playing, the changes are applied and audible immediately. Returns \"compiled OK\" or the exact compiler error. Call after every edit. There is NO play tool — the user starts playback themselves.", parameters: obj({}) },
+    { name: 'song_summary', where: 'browser', description: "What the song ACTUALLY plays, read from the compiled MIDI event list (run compile first). Returns a compact digest: song length, and per channel the note count, beat range and bars it sounds in — plus any pair of channels that NEVER sound in the same bar. This is how you VERIFY a song without hearing it: if the user asked for instruments to play together, their bars must overlap here. Reports facts about structure only — it says nothing about how anything SOUNDS.", parameters: obj({}) },
     { name: 'stop', where: 'browser', description: "Stop live audio playback. Only on the user's request.", parameters: obj({}) },
 
     // ---- repository files ----

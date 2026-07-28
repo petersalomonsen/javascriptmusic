@@ -4,6 +4,7 @@ import {
     setupServiceWorker,
     clearOPFS,
     waitForAppReady,
+    waitForStudioAgentTools,
     pushBaseline,
 } from './near-git-helpers.js';
 
@@ -422,6 +423,7 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         await pushBaseline(page, repoName, '// empty\n');
         await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
         await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
 
         // Open agentrefresh.dsp in the editor (seeded with the stdfaust template).
         await page.locator('#fausteditortogglecheckbox').check();
@@ -459,6 +461,7 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         await pushBaseline(page, repoName, SONG_SOURCE);
         await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
         await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
 
         // Author instrument + wire synth + song entirely through agent tools.
         const writeResult = await page.evaluate((source) =>

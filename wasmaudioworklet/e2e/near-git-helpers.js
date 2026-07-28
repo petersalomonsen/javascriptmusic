@@ -62,6 +62,19 @@ export async function waitForAppReady(page) {
     }, { timeout: 60000 });
 }
 
+/**
+ * Wait for the studio-agent tool hook.
+ *
+ * initStudioAgent() installs window.studioAgentRunTool as its LAST step, after
+ * the editors and wasmgit-ui that waitForAppReady looks for — so a spec that
+ * calls a tool right after waitForAppReady can win the race and see
+ * "studioAgentRunTool is not a function". It only shows up on a loaded runner:
+ * the same test passes locally and passed in CI until the runners got slower.
+ */
+export async function waitForStudioAgentTools(page) {
+    await page.waitForFunction(() => typeof window.studioAgentRunTool === 'function', { timeout: 60000 });
+}
+
 /** Push a baseline commit via worker (fast, no UI). */
 export async function pushBaseline(page, repoName, content) {
     const creds = await fetchCredentials();

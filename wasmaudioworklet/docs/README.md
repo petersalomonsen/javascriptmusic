@@ -14,6 +14,12 @@ itself see the [app README](../README.md); for the monorepo overview see the
 
 ## Authoring a song
 
+- [Writing songs in JavaScript](writing-songs.md) — **start here.** A song is a
+  readable sequence of actions you follow top to bottom — do this, wait, do the
+  next thing — with loops to repeat a section and functions to name and reuse
+  one. Written for people who don't code, and it doubles as a genuine
+  programming tutorial: sequence, iteration, abstraction and concurrency, each
+  one something you can *hear*.
 - [Song API reference](song-api.md) — complete reference for writing songs in
   JavaScript: tracks, patterns, notes, timing, instruments, audio & video.
 - [Animating images & text](animations.md) — frame-by-frame animation, text

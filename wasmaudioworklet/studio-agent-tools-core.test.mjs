@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings } from './studio-agent-tools-core.js';
+import {
+  applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
+  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource
+} from './studio-agent-tools-core.js';
 
 test('applyEditToText: unique replace', () => {
   assert.deepEqual(applyEditToText('a b c', { old_string: 'b', new_string: 'X' }), { text: 'a X c', count: 1 });
@@ -66,4 +69,172 @@ test('songSourceWarnings: flags async function wrappers too', () => {
 test('songSourceWarnings: clean top-level await passes', () => {
   const good = `setBPM(120);\nawait createTrack(0).steps(4, [c2,, c2,,]);\nloopHere();\n`;
   assert.deepEqual(songSourceWarnings(good), []);
+});
+
+// ---- compiled-event analysis ------------------------------------------------
+// Times are ms; at 120 BPM a beat is 500ms and a bar (4 beats) is 2000ms.
+const BPM = 120;
+const beat = n => n * 500;
+const noteOn = (ch, note, b) => ({ time: beat(b), message: [0x90 + ch, note, 100] });
+const noteOff = (ch, note, b) => ({ time: beat(b), message: [0x80 + ch, note, 0] });
+const endAt = b => ({ time: beat(b), message: [-1] });
+
+test('summarizeSongEvents: layered parts share bars', () => {
+  // kick on every beat, hats on the offbeats — 4 beats, both in bar 1
+  const events = [];
+  for (let b = 0; b < 4; b++) {
+    events.push(noteOn(0, 36, b), noteOff(0, 36, b + 0.5));
+    events.push(noteOn(1, 42, b + 0.5), noteOff(1, 42, b + 1));
+  }
+  events.push(endAt(4));
+
+  const s = summarizeSongEvents(events, BPM);
+  assert.equal(s.totalNotes, 8);
+  assert.equal(s.sounding.length, 2);
+  assert.equal(s.lengthBeats, 4);
+  assert.deepEqual(s.disjointPairs, [], 'layered channels must not be reported as disjoint');
+  assert.deepEqual(songEventWarnings(s), []);
+});
+
+// The exact bug from the session log: kick for 4 beats, THEN hats.
+test('summarizeSongEvents: sequential parts are flagged as never overlapping', () => {
+  const events = [];
+  for (let b = 0; b < 4; b++) events.push(noteOn(0, 36, b), noteOff(0, 36, b + 0.5));
+  for (let b = 4; b < 8; b++) events.push(noteOn(1, 42, b), noteOff(1, 42, b + 0.5));
+  events.push(endAt(8));
+
+  const s = summarizeSongEvents(events, BPM);
+  assert.equal(s.disjointPairs.length, 1);
+  const [a, b] = s.disjointPairs[0];
+  assert.equal(a.channel, 0);
+  assert.equal(b.channel, 1);
+
+  const warnings = songEventWarnings(s);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /NEVER play at the same time/);
+  assert.match(warnings[0], /ch0 stops at beat 3 .* before ch1 starts at beat 4/);
+  assert.match(warnings[0], /await ONLY the pattern that keeps the beat/);
+});
+
+test('summarizeSongEvents: an empty song is reported as having no notes', () => {
+  const s = summarizeSongEvents([endAt(0)], BPM);
+  assert.equal(s.totalNotes, 0);
+  const warnings = songEventWarnings(s);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /NO notes/);
+  assert.match(warnings[0], /loopHere\(\) ended the song at beat 0/);
+});
+
+// A part that enters late still overlaps, and must stay quiet.
+test('summarizeSongEvents: a part entering later still counts as overlapping', () => {
+  const events = [];
+  for (let b = 0; b < 16; b++) events.push(noteOn(0, 36, b));        // drums throughout
+  for (let b = 8; b < 16; b++) events.push(noteOn(1, 40, b));        // bass from bar 3
+  events.push(endAt(16));
+
+  const s = summarizeSongEvents(events, BPM);
+  assert.deepEqual(s.disjointPairs, []);
+  assert.deepEqual(songEventWarnings(s), []);
+});
+
+// Regression: bar-by-bar comparison flagged examples/beachdrive/song.js, where
+// a guitar answers a lead — overlapping ranges, but never the same bar.
+test('summarizeSongEvents: instruments alternating bars are NOT flagged', () => {
+  const events = [];
+  for (let bar = 0; bar < 16; bar++) {
+    const ch = bar % 2 === 0 ? 4 : 6;          // call and response, bar by bar
+    events.push(noteOn(ch, 60, bar * 4), noteOn(ch, 64, bar * 4 + 2));
+  }
+  events.push(endAt(64));
+
+  const s = summarizeSongEvents(events, BPM);
+  assert.equal(s.sounding.length, 2);
+  assert.deepEqual(s.disjointPairs, [], 'alternating parts overlap in range and must stay quiet');
+  assert.deepEqual(songEventWarnings(s), []);
+});
+
+test('summarizeSongEvents: control changes are counted but do not make a channel sound', () => {
+  const s = summarizeSongEvents([
+    { time: 0, message: [0xb0, 99, 1] },
+    { time: 0, message: [0xb0, 98, 2] },
+    endAt(0)
+  ], BPM);
+  assert.equal(s.sounding.length, 0);
+  assert.equal(s.channels[0].ccs, 2);
+  assert.equal(s.channels[0].notes, 0);
+});
+
+// A chord tone held into the next chord that repeats the same pitch: the synth
+// gets note-on then note-off for one sounding note, and the new note is cut.
+test('summarizeSongEvents: a held note re-attacked at its own note-off is flagged', () => {
+  const held = (ch, note, from, to) => [noteOn(ch, note, from), noteOff(ch, note, to)];
+  const events = [
+    ...held(0, 70, 0, 2.5),      // as4 in A#maj7
+    ...held(0, 65, 0, 2.5),      // f5  held...
+    ...held(0, 65, 2.5, 3.5),    // ...and repeated in F at the exact note-off
+    endAt(4)
+  ];
+  const s = summarizeSongEvents(events, BPM);
+  assert.equal(s.noteCollisions.length, 1);
+  assert.equal(s.noteCollisions[0].name, 'f5');
+  assert.equal(s.noteCollisions[0].onBeat, 2.5);
+
+  const warning = songEventWarnings(s).find(w => /CUT by/.test(w));
+  assert.ok(warning, 'a collision must produce a warning');
+  assert.match(warning, /f5 at beat 2\.5/);
+  assert.match(warning, /SHORTENING the earlier note's duration/);
+});
+
+test('summarizeSongEvents: trimming the held note clears the collision', () => {
+  const events = [
+    noteOn(0, 65, 0), noteOff(0, 65, 2.45),   // released just before the next attack
+    noteOn(0, 65, 2.5), noteOff(0, 65, 3.45),
+    endAt(4)
+  ];
+  assert.deepEqual(summarizeSongEvents(events, BPM).noteCollisions, []);
+});
+
+// Every note in a step grid lasts exactly one step, so repeated drum hits always
+// coincide. beachdrive has 209 of them and sounds fine — percussive retriggers
+// are the idiom, not a bug.
+test('summarizeSongEvents: repeated short drum hits are NOT flagged', () => {
+  const events = [];
+  for (let b = 0; b < 8; b += 0.5) {
+    events.push(noteOn(9, 42, b), noteOff(9, 42, b + 0.5));   // hats, note-off meets next note-on
+  }
+  events.push(endAt(8));
+  assert.deepEqual(summarizeSongEvents(events, BPM).noteCollisions, []);
+  assert.deepEqual(songEventWarnings(summarizeSongEvents(events, BPM)), []);
+});
+
+// Recorded playing overlaps by ragged amounts; only durations written to land
+// exactly on the next onset are an authoring artefact worth reporting.
+test('summarizeSongEvents: a ragged recorded overlap is NOT flagged', () => {
+  const events = [
+    noteOn(1, 64, 0), noteOff(1, 64, 4.06),   // held 0.06 beats past the next attack
+    noteOn(1, 64, 4), noteOff(1, 64, 8),
+    endAt(8)
+  ];
+  assert.deepEqual(summarizeSongEvents(events, BPM).noteCollisions, []);
+});
+
+test('formatSongSummary: compact digest names channels, bars and the overlap failure', () => {
+  const events = [];
+  for (let b = 0; b < 4; b++) events.push(noteOn(0, 36, b));
+  for (let b = 4; b < 8; b++) events.push(noteOn(1, 42, b));
+  events.push(endAt(8));
+
+  const text = formatSongSummary(summarizeSongEvents(events, BPM));
+  assert.match(text, /8 beats \(2 bars\) at 120 BPM/);
+  assert.match(text, /ch0: 4 notes, beats 0-3, bar 1/);
+  assert.match(text, /ch1: 4 notes, beats 4-7, bar 2/);
+  assert.match(text, /ch0 and ch1 NEVER overlap/);
+  assert.ok(text.split('\n').length < 8, 'digest must stay compact');
+});
+
+test('songBpmFromSource: reads setBPM, falls back when absent', () => {
+  assert.equal(songBpmFromSource('setBPM(125);\nawait t.steps(1,[c2]);'), 125);
+  assert.equal(songBpmFromSource('setBPM( 93.5 )'), 93.5);
+  assert.equal(songBpmFromSource('no tempo here'), 110);
+  assert.equal(songBpmFromSource(''), 110);
 });
