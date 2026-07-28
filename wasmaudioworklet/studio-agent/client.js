@@ -5,17 +5,17 @@
 // editors, the compiler, the audio worklet) and send the result back. This is
 // the "full in-app" path: tool calls operate on the browser, not on disk.
 
-import { songsourceeditor, synthsourceeditor, shadersourceeditor } from './editorcontroller.js';
-import { transpileDspSource } from './faust/faust-rs-transpile.js';
-import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from './wasmgit/wasmgitclient.js';
+import { songsourceeditor, synthsourceeditor, shadersourceeditor } from '../editorcontroller.js';
+import { transpileDspSource } from '../faust/faust-rs-transpile.js';
+import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from '../wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments
-} from './studio-agent-tools-core.js';
-import { probeNote, probeNotes, probeWarnings } from './instrumentprobe.js';
-import { parseNote, noteName } from './audioanalysis.js';
-import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';
-import { SYSTEM_PROMPT } from './studio-agent-prompt.js';
+} from './tools-core.js';
+import { probeNote, probeNotes, probeWarnings } from '../audioprobe/instrumentprobe.js';
+import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
+import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './nearai-core.js';
+import { SYSTEM_PROMPT } from './prompt.js';
 
 const DEFAULT_PORT = 17891;
 const FAUST_DIR = 'faust/';
@@ -54,7 +54,7 @@ async function loadSession() {
   } catch (e) { /* no saved session yet */ }
 }
 
-// Editor wrappers around the pure logic in studio-agent-tools-core.js.
+// Editor wrappers around the pure logic in tools-core.js.
 function applyEdit(editor, args) {
   const r = applyEditToText(editor.doc.getValue(), args);
   if (r.error) return { __error: r.error };
@@ -315,7 +315,7 @@ function songEventAnomalies() {
   }
 }
 
-// Faust file helpers (normDsp is imported from studio-agent-tools-core.js)
+// Faust file helpers (normDsp is imported from tools-core.js)
 function faustUnavailable(e) {
   const msg = String(e?.message || e);
   return { __error: `Faust/OPFS not available (${msg}). The app must be opened with a ?gitrepo=… URL so the OPFS git working tree exists.` };

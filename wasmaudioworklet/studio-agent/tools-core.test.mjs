@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments
-} from './studio-agent-tools-core.js';
-import { spectrum, measureNote, parseNote, noteName } from './audioanalysis.js';
-import { probeWarnings } from './instrumentprobe.js';
+} from './tools-core.js';
+import { spectrum, measureNote, parseNote, noteName } from '../audioprobe/audioanalysis.js';
+import { probeWarnings } from '../audioprobe/instrumentprobe.js';
 
 test('applyEditToText: unique replace', () => {
   assert.deepEqual(applyEditToText('a b c', { old_string: 'b', new_string: 'X' }), { text: 'a X c', count: 1 });

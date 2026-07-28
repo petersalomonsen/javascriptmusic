@@ -1,5 +1,5 @@
 // Pure, browser-free logic behind the studio-agent tools, split out so it can be
-// unit-tested in Node. The browser client (studio-agent-client.js) wraps these
+// unit-tested in Node. The browser client (client.js) wraps these
 // for CodeMirror editors / OPFS.
 
 // Surgical find-and-replace (mirrors the Edit tool). Returns { text, count } on

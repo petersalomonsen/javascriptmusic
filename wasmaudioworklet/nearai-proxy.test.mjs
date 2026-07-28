@@ -4,8 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { onRequest, ALLOWED_MODELS } from './functions/nearai/[[path]].js';
-import { resolveDefaultBaseUrl, DEFAULT_BASE_URL, DEFAULT_MODEL, toOpenAiTools } from './studio-agent-nearai-core.js';
-import { SYSTEM_PROMPT } from './studio-agent-prompt.js';
+import { resolveDefaultBaseUrl, DEFAULT_BASE_URL, DEFAULT_MODEL, toOpenAiTools } from './studio-agent/nearai-core.js';
+import { SYSTEM_PROMPT } from './studio-agent/prompt.js';
 
 const APP = 'https://webassemblymusic.pages.dev';
 const ENV = { NEARAI_API_KEY: 'SERVER_KEY' };

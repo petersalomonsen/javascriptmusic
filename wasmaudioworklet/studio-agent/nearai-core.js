@@ -4,7 +4,7 @@
 //
 // This is the "serverless" provider tier: the model + tool loop run without
 // the local studio-agent process. The tools themselves are the same browser
-// registry the WS agent uses (studio-agent-client.js) plus a few repo-file
+// registry the WS agent uses (studio-agent/client.js) plus a few repo-file
 // tools backed by the jsDelivr CDN instead of local disk.
 
 export const DEFAULT_BASE_URL = 'https://cloud-api.near.ai/v1';
@@ -19,12 +19,12 @@ export function resolveDefaultBaseUrl(hostname) {
     : '/nearai/v1';
 }
 
-// The tool set is declared once in studio-agent-tools-def.js and shared with
+// The tool set is declared once in tools-def.js and shared with
 // the local Agent SDK path; here it is only reshaped into OpenAI
 // function-calling format. Serverless mode gets every tool including the
 // repo-file readers (there is no built-in Read here).
-export { TOOL_DEFS } from './studio-agent-tools-def.js';
-import { TOOL_DEFS as SHARED_TOOL_DEFS } from './studio-agent-tools-def.js';
+export { TOOL_DEFS } from './tools-def.js';
+import { TOOL_DEFS as SHARED_TOOL_DEFS } from './tools-def.js';
 
 export function toOpenAiTools(defs = SHARED_TOOL_DEFS) {
   return defs.map((d) => ({ type: 'function', function: { name: d.name, description: d.description, parameters: d.parameters } }));

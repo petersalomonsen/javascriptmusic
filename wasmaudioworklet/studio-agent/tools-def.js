@@ -3,17 +3,17 @@
 // Two provider paths consume this:
 //   • the local Agent SDK process (tools/studio-agent/server.mjs) turns each
 //     def into an in-process MCP tool (JSON Schema -> zod there);
-//   • the in-browser NEAR AI loop (studio-agent-nearai-core.js) sends them as
+//   • the in-browser NEAR AI loop (nearai-core.js) sends them as
 //     OpenAI function-calling definitions — and the Pages Function proxy
 //     (functions/nearai/[[path]].js) injects that same list server-side.
 //
 // It used to be two hand-maintained lists with a "keep them in sync" comment;
 // they drifted the first time a tool was added (the shader tools reached the
 // SDK path only). Pure data, no imports, so both Node and the browser can read
-// it, and studio-agent-tools-def.test.mjs checks it stays coherent.
+// it, and tools-def.test.mjs checks it stays coherent.
 //
 // `where` says who executes the call:
-//   'browser'  — proxied to the browser tool registry (studio-agent-client.js)
+//   'browser'  — proxied to the browser tool registry (client.js)
 //   'loadfile' — reads a repo file and pushes it into an editor: server-side
 //                from disk in the SDK path, via the jsDelivr CDN in the browser
 //   'repofile' — reads a repo reference file for the model. Serverless ONLY;

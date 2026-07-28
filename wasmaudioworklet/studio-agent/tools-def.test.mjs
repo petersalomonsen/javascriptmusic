@@ -7,8 +7,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { TOOL_DEFS, browserToolNames, sdkToolNames, toolDefsFor } from './studio-agent-tools-def.js';
-import { toOpenAiTools } from './studio-agent-nearai-core.js';
+import { TOOL_DEFS, browserToolNames, sdkToolNames, toolDefsFor } from './tools-def.js';
+import { toOpenAiTools } from './nearai-core.js';
 
 test('every tool is declared once, with a description and an object schema', () => {
     const names = TOOL_DEFS.map((d) => d.name);

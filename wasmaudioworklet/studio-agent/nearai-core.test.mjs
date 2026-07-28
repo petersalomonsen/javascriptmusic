@@ -2,7 +2,7 @@
 // loop (NEAR AI serverless provider). fetch is injected, so no network.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { runAgentTurn, toOpenAiTools, TOOL_DEFS } from './studio-agent-nearai-core.js';
+import { runAgentTurn, toOpenAiTools, TOOL_DEFS } from './nearai-core.js';
 
 const ok = (payload) => ({ ok: true, json: async () => payload });
 const completion = (message, usage) => ok({ choices: [{ message }], usage });

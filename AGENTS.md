@@ -33,7 +33,7 @@ You can't see the canvas or hear the audio, so lean on the headless checks:
   truth for what it actually plays, and checkable without hearing it. Whether
   two instruments play together is a fact there: compile and compare note
   ranges per channel (the studio agent gets this as `song_summary`; see
-  `summarizeSongEvents` in `wasmaudioworklet/studio-agent-tools-core.js`).
+  `summarizeSongEvents` in `wasmaudioworklet/studio-agent/tools-core.js`).
   It's ESM with top-level `await`, so a quick
   `node --check` catches syntax errors before loading in the app. Timing follows
   one model — calling a pattern schedules it at the playhead, `await` is the only

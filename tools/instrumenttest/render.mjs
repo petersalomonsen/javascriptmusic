@@ -45,10 +45,10 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..');
-// Shared with the in-app probe (wasmaudioworklet/instrumentprobe.js) so the
+// Shared with the in-app probe (wasmaudioworklet/audioprobe/instrumentprobe.js) so the
 // harness and the agent's tool report the same numbers.
 const { rms, peak, spectrum, noteName, midiToFreq, parseNote } =
-    await import(path.join(REPO, 'wasmaudioworklet', 'audioanalysis.js'));
+    await import(path.join(REPO, 'wasmaudioworklet', 'audioprobe', 'audioanalysis.js'));
 const ASSEMBLY = path.join(REPO, 'wasmaudioworklet', 'synth1', 'assembly');
 const FAUST2AS = path.join(REPO, 'tools', 'faust2as', 'faust2as.js');
 
