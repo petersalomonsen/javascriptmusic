@@ -32,6 +32,15 @@ attack = hslider("attack", 0.01, 0.001, 1.0, 0.001);
 process = os.sawtooth(freq) * gain * en.adsr(attack, 0.1, 0.7, 0.2, gate) <: _, _;
 `;
 
+// The shape of the real mistake: an envelope driven by a button of the DSP's own
+// naming instead of `gate`. Nothing ever presses it, so this is silent — while
+// transpiling, registering and compiling without a single complaint.
+const SILENT_FAUST_SOURCE = `import("stdfaust.lib");
+kick_gate = button("kick");
+kick_freq = hslider("kick_freq", 60, 30, 150, 0.1);
+process = os.osc(kick_freq) * en.adsr(0.001, 0.05, 0.3, 0.1, kick_gate);
+`;
+
 // Mix file referenced from the synth editor. Pulls in the transpiled module
 // from the wasm-git repo's faust/ folder via `'../faust/<basename>'`.
 // The literal string "midichannels" must appear in the source for the compiler
@@ -486,6 +495,48 @@ test.describe('Faust editor — create, transpile, import, compile', () => {
         // …but did NOT start audio.
         const audioStarted = await page.evaluate(() => !!window.audioworkletnode);
         expect(audioStarted).toBe(false);
+
+        // The instrument really is audible — probe_instrument renders it offline.
+        const probe = await page.evaluate(() =>
+            window.studioAgentRunTool('probe_instrument', { channel: 0, notes: 'c4' }));
+        expect(String(probe)).toMatch(/ch0 c4: peak /);
+        expect(String(probe)).not.toMatch(/SILENT/);
+    });
+
+    // The failure this whole probe exists for, reproduced from a real NEAR AI
+    // session: a .dsp with no `gate`, driving its envelope from a button of its
+    // own naming. It transpiles, registers and compiles perfectly — and is
+    // silent. compile must say so, so the agent cannot report it as ready.
+    test('a gate-less instrument compiles clean but is reported SILENT', async ({ page }) => {
+        await page.goto('http://localhost:8080');
+        await setupServiceWorker(page);
+        await pushBaseline(page, repoName, SONG_SOURCE);
+        await page.goto(`http://localhost:8080/?gitrepo=${NEAR_REPO_CONTRACT}`);
+        await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
+
+        const writeResult = await page.evaluate((source) =>
+            window.studioAgentRunTool('write_faust', { path: 'silentdrum', source }),
+            SILENT_FAUST_SOURCE);
+        expect(String(writeResult)).toContain('transpiled OK');
+        await page.evaluate((source) =>
+            window.studioAgentRunTool('set_synth', { source }),
+            SYNTH_MIX_SOURCE('silentdrum'));
+        await page.evaluate((source) =>
+            window.studioAgentRunTool('set_song', { source }),
+            SONG_SOURCE);
+
+        // It compiles — nothing in the toolchain objects.
+        const compileResult = String(await page.evaluate(() =>
+            window.studioAgentRunTool('compile')));
+        expect(compileResult).toContain('compiled OK');
+        // …but compile now also reports that nothing can be heard.
+        expect(compileResult).toContain('NO SOUND');
+        expect(compileResult).toContain('do NOT report this as ready');
+
+        const probe = String(await page.evaluate(() =>
+            window.studioAgentRunTool('probe_instrument', { channel: 0, notes: 'c4' })));
+        expect(probe).toContain('SILENT');
     });
 
     test('sub-folder layout: faust/<dir>/<dir>/main.dsp transpile + import works', async ({ page }) => {

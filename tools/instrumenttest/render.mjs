@@ -45,95 +45,16 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..');
+// Shared with the in-app probe (wasmaudioworklet/instrumentprobe.js) so the
+// harness and the agent's tool report the same numbers.
+const { rms, peak, spectrum, noteName, midiToFreq, parseNote } =
+    await import(path.join(REPO, 'wasmaudioworklet', 'audioanalysis.js'));
 const ASSEMBLY = path.join(REPO, 'wasmaudioworklet', 'synth1', 'assembly');
 const FAUST2AS = path.join(REPO, 'tools', 'faust2as', 'faust2as.js');
 
 const SAMPLERATE = 44100;
 const FRAMES = 128;                 // samplebuffer frames per fillSampleBuffer call
 const RIGHT_OFFSET_BYTES = FRAMES * 4;
-
-// ---- note names ------------------------------------------------------------
-// Matches the sequencer's convention: note 60 is c5 (name + floor(n/12)).
-const NOTE_NAMES = ['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'];
-const noteName = (n) => NOTE_NAMES[n % 12] + Math.floor(n / 12);
-function parseNote(token) {
-    const t = String(token).trim();
-    if (/^\d+$/.test(t)) return Number(t);
-    const m = /^([a-g]s?)(\d{1,2})$/i.exec(t);
-    if (!m) throw new Error(`unrecognised note "${token}" (use c3, fs3, or a MIDI number)`);
-    const ndx = NOTE_NAMES.indexOf(m[1].toLowerCase());
-    if (ndx < 0) throw new Error(`unrecognised note name "${m[1]}"`);
-    return ndx + Number(m[2]) * 12;
-}
-const midiToFreq = (n) => 440 * Math.pow(2, (n - 69) / 12);
-
-// ---- analysis --------------------------------------------------------------
-function rms(samples) {
-    let sum = 0;
-    for (const s of samples) sum += s * s;
-    return Math.sqrt(sum / (samples.length || 1));
-}
-function peak(samples) {
-    let p = 0;
-    for (const s of samples) { const a = Math.abs(s); if (a > p) p = a; }
-    return p;
-}
-
-/** In-place iterative radix-2 FFT. re/im are Float64Array of length 2^k. */
-function fft(re, im) {
-    const n = re.length;
-    for (let i = 1, j = 0; i < n; i++) {
-        let bit = n >> 1;
-        for (; j & bit; bit >>= 1) j ^= bit;
-        j ^= bit;
-        if (i < j) {
-            [re[i], re[j]] = [re[j], re[i]];
-            [im[i], im[j]] = [im[j], im[i]];
-        }
-    }
-    for (let len = 2; len <= n; len <<= 1) {
-        const ang = -2 * Math.PI / len;
-        const wr = Math.cos(ang), wi = Math.sin(ang);
-        for (let i = 0; i < n; i += len) {
-            let cr = 1, ci = 0;
-            for (let k = 0; k < len / 2; k++) {
-                const ur = re[i + k], ui = im[i + k];
-                const vr = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci;
-                const vi = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr;
-                re[i + k] = ur + vr; im[i + k] = ui + vi;
-                re[i + k + len / 2] = ur - vr; im[i + k + len / 2] = ui - vi;
-                const ncr = cr * wr - ci * wi;
-                ci = cr * wi + ci * wr; cr = ncr;
-            }
-        }
-    }
-}
-
-/**
- * Dominant frequency and spectral centroid of a window, via FFT with a Hann
- * window. The centroid is a cheap "how bright is it" number: a kick sits low,
- * a hi-hat sits high — enough to tell drums apart without listening.
- */
-function spectrum(samples, sampleRate = SAMPLERATE) {
-    let size = 1;
-    while (size * 2 <= samples.length && size < 16384) size *= 2;
-    if (size < 64) return { dominantHz: 0, centroidHz: 0 };
-    const re = new Float64Array(size);
-    const im = new Float64Array(size);
-    for (let i = 0; i < size; i++) {
-        re[i] = samples[i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / (size - 1)));  // Hann
-    }
-    fft(re, im);
-    let best = 0, bestMag = 0, magSum = 0, weighted = 0;
-    for (let k = 1; k < size / 2; k++) {
-        const mag = Math.hypot(re[k], im[k]);
-        const hz = k * sampleRate / size;
-        if (mag > bestMag) { bestMag = mag; best = hz; }
-        magSum += mag;
-        weighted += mag * hz;
-    }
-    return { dominantHz: best, centroidHz: magSum > 0 ? weighted / magSum : 0 };
-}
 
 // ---- build -----------------------------------------------------------------
 /**

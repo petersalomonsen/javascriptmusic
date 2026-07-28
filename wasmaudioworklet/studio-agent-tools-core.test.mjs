@@ -4,6 +4,8 @@ import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource
 } from './studio-agent-tools-core.js';
+import { spectrum, measureNote, parseNote, noteName } from './audioanalysis.js';
+import { probeWarnings } from './instrumentprobe.js';
 
 test('applyEditToText: unique replace', () => {
   assert.deepEqual(applyEditToText('a b c', { old_string: 'b', new_string: 'X' }), { text: 'a X c', count: 1 });
@@ -237,4 +239,65 @@ test('songBpmFromSource: reads setBPM, falls back when absent', () => {
   assert.equal(songBpmFromSource('setBPM( 93.5 )'), 93.5);
   assert.equal(songBpmFromSource('no tempo here'), 110);
   assert.equal(songBpmFromSource(''), 110);
+});
+
+// ---- audio analysis (shared by the in-app probe and tools/instrumenttest) ----
+test('spectrum: finds the dominant frequency of a sine', () => {
+  const sr = 44100, hz = 440;
+  const buf = new Float32Array(8192);
+  for (let i = 0; i < buf.length; i++) buf[i] = Math.sin(2 * Math.PI * hz * i / sr);
+  const { dominantHz, centroidHz } = spectrum(buf, sr);
+  assert.ok(Math.abs(dominantHz - hz) < 15, `dominant ${dominantHz} should be ~${hz}`);
+  assert.ok(Math.abs(centroidHz - hz) < 100, 'a pure sine centroid sits at its own frequency');
+});
+
+test('spectrum: a bright source has a far higher centroid than a low sine', () => {
+  const sr = 44100;
+  const low = new Float32Array(8192);
+  const high = new Float32Array(8192);
+  for (let i = 0; i < low.length; i++) {
+    low[i] = Math.sin(2 * Math.PI * 60 * i / sr);       // kick-ish
+    high[i] = Math.sin(2 * Math.PI * 12000 * i / sr);   // hat-ish
+  }
+  // This gap is what distinguishes drums without listening.
+  assert.ok(spectrum(high, sr).centroidHz > spectrum(low, sr).centroidHz * 10);
+});
+
+test('measureNote: silence is reported as silent, not merely quiet', () => {
+  const quiet = new Float32Array(4096);   // all zeros
+  const m = measureNote(quiet, quiet, { note: 36 });
+  assert.equal(m.silent, true);
+  assert.equal(m.peak, 0);
+  assert.equal(m.name, 'c3');
+});
+
+test('measureNote: an audible note is not silent and carries its expected pitch', () => {
+  const sr = 44100;
+  const buf = new Float32Array(8192);
+  for (let i = 0; i < buf.length; i++) buf[i] = 0.5 * Math.sin(2 * Math.PI * 65.4 * i / sr);
+  const m = measureNote(buf, new Float32Array(512), { note: 36, sampleRate: sr });
+  assert.equal(m.silent, false);
+  assert.ok(m.peak > 0.4);
+  assert.ok(Math.abs(m.expectedHz - 65.4) < 0.5, 'c3 is ~65.4Hz');
+});
+
+test('parseNote: names and numbers, matching the sequencer convention', () => {
+  assert.equal(parseNote('c3'), 36);
+  assert.equal(parseNote('fs3'), 42);
+  assert.equal(parseNote('60'), 60);
+  assert.equal(noteName(60), 'c5');
+  assert.throws(() => parseNote('h9'), /unrecognised note/);
+});
+
+test('probeWarnings: a fully silent channel must not be reported as ready', () => {
+  const silent = [{ channel: 0, name: 'c3', silent: true }, { channel: 0, name: 'fs3', silent: true }];
+  const w = probeWarnings(silent);
+  assert.equal(w.length, 1);
+  assert.match(w[0], /NO SOUND/);
+  assert.match(w[0], /do NOT report this as ready/);
+  assert.match(w[0], /`gate`/);
+});
+
+test('probeWarnings: audible notes produce no warning', () => {
+  assert.deepEqual(probeWarnings([{ channel: 0, name: 'c3', silent: false }]), []);
 });

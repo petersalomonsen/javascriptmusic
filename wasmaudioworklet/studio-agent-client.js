@@ -12,6 +12,8 @@ import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource
 } from './studio-agent-tools-core.js';
+import { probeNote, probeNotes, probeWarnings } from './instrumentprobe.js';
+import { parseNote, noteName } from './audioanalysis.js';
 import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './studio-agent-nearai-core.js';
 import { SYSTEM_PROMPT } from './studio-agent-prompt.js';
 
@@ -194,16 +196,54 @@ const registry = {
     // instruments that never overlap) are the only signal that a song is
     // structurally wrong despite compiling cleanly.
     const events = songEventAnomalies();
-    if (!err) return ['compiled OK', ...visual, ...events].join('\n');
+    // Whether anything is actually AUDIBLE. A Faust voice with no `gate`
+    // compiles, registers and plays silence, and the agent cannot hear that —
+    // so probe the channels the song really plays before it reports success.
+    const audio = await silentChannelWarnings();
+    if (!err) return ['compiled OK', ...visual, ...events, ...audio].join('\n');
     // The panel also surfaces NON-fatal AssemblyScript warnings (AS233/AS235…)
     // after a successful build — reporting those as an error makes models
     // "fix" working code. Only real ERROR lines fail the tool.
     const text = err.replace(/^Error:\s*/, '');
     const onlyWarnings = /^WARNING/i.test(text) && !/(^|\n)\s*ERROR/.test(text);
     if (onlyWarnings) {
-      return ['compiled OK (non-fatal AssemblyScript warnings in the panel — ignore them)', ...visual, ...events].join('\n');
+      return ['compiled OK (non-fatal AssemblyScript warnings in the panel — ignore them)', ...visual, ...events, ...audio].join('\n');
     }
     return { __error: err };
+  },
+  probe_instrument: async ({ channel = 0, notes, hold, velocity } = {}) => {
+    const bytes = window.WASM_SYNTH_BYTES;
+    if (!bytes) return { __error: 'No compiled synth yet — call compile first.' };
+    let noteNumbers;
+    try {
+      noteNumbers = (notes ? String(notes).split(',') : ['c3', 'c4', 'c5'])
+        .map((n) => n.trim()).filter(Boolean).map(parseNote);
+    } catch (e) {
+      return { __error: String(e.message || e) };
+    }
+    if (!noteNumbers.length) return { __error: 'no notes to probe' };
+    let results;
+    try {
+      results = await probeNotes(bytes, noteNumbers, {
+        channel: Number(channel) || 0,
+        holdSeconds: hold > 0 ? Number(hold) : 0.4,
+        velocity: velocity > 0 ? Number(velocity) : 100,
+      });
+    } catch (e) {
+      return { __error: `probe failed: ${e.message || e}` };
+    }
+    const lines = results.map((r) => r.silent
+      ? `ch${r.channel} ${r.name}: SILENT — no audio produced`
+      : `ch${r.channel} ${r.name}: peak ${r.peak.toFixed(3)}, rms ${r.rms.toFixed(4)}, `
+        + `dominant ${r.dominantHz.toFixed(1)}Hz (note is ${r.expectedHz.toFixed(1)}Hz), `
+        + `centroid ${r.centroidHz.toFixed(0)}Hz`);
+    const audible = results.filter((r) => !r.silent);
+    const distinct = new Set(audible.map((r) => `${Math.round(r.dominantHz)}:${Math.round(r.centroidHz / 20)}`));
+    if (audible.length > 1 && distinct.size === 1) {
+      lines.push('All notes rendered the SAME audio — the instrument ignores the note number. '
+        + 'Correct for a fixed-pitch drum; a bug for a pitched voice (declare `freq`) or for a kit meant to map notes to drums.');
+    }
+    return [...lines, ...probeWarnings(results)].join('\n');
   },
   song_summary: async () => {
     const summary = analyzeCompiledSong();
@@ -223,6 +263,45 @@ function analyzeCompiledSong() {
   const eventlist = window.lastCompiledEventList;
   if (!eventlist || !eventlist.length) return null;
   return summarizeSongEvents(eventlist, songBpmFromSource(songsourceeditor.doc.getValue()));
+}
+
+// Probe every channel the song actually plays, using a note it really uses, and
+// report the ones that make no sound. Cheap: rendering is far faster than
+// realtime and only a fraction of a second per channel is needed.
+async function silentChannelWarnings() {
+  try {
+    const bytes = window.WASM_SYNTH_BYTES;
+    const summary = analyzeCompiledSong();
+    if (!bytes || !summary || !summary.sounding.length) return [];
+    const warnings = [];
+    for (const channel of summary.sounding) {
+      const note = firstNoteOnChannel(channel.channel);
+      if (note === null) continue;
+      const result = await probeNote(bytes, { channel: channel.channel, note, holdSeconds: 0.3, tailSeconds: 0.2 });
+      if (result.silent) {
+        warnings.push(
+          `WARNING: channel ${channel.channel} plays ${channel.notes} note(s) but produces NO SOUND `
+          + `(probed ${noteName(note)}). It compiled and registered — do NOT report this as ready. `
+          + 'A Faust voice is triggered ONLY by `gate`: an instrument that declares none, or drives its envelope from a '
+          + 'control of its own naming, is silent however good the DSP is. Fix the .dsp, compile, and probe again.'
+        );
+      }
+    }
+    return warnings;
+  } catch (e) {
+    console.error('instrument probe failed', e);
+    return [];
+  }
+}
+
+function firstNoteOnChannel(channel) {
+  const eventlist = window.lastCompiledEventList || [];
+  for (const evt of eventlist) {
+    const [status, note, velocity] = evt.message || [];
+    if (status === undefined) continue;
+    if ((status & 0xf0) === 0x90 && velocity > 0 && (status & 0x0f) === channel) return note;
+  }
+  return null;
 }
 
 function songEventAnomalies() {
