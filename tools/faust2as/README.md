@@ -121,7 +121,20 @@ This is the standard Faust convention for post-processing effects like reverb th
 
 **Generated code doesn't compile**: Run `npm run fastbuild` in the `wasmaudioworklet` directory to check for AssemblyScript errors. The most common issue is unsupported Faust features (like `soundfile`).
 
-**No sound**: Verify the instrument uses `freq`/`gain`/`gate` parameters. The transpiler maps `gate` to note-on/note-off, `freq` to MIDI note frequency, and `gain` to velocity.
+**No sound**: don't guess — measure it:
+
+```sh
+cd wasmaudioworklet
+node ../tools/instrumenttest/render.mjs faust/kick.dsp --notes c3,fs3
+```
+
+[`tools/instrumenttest/render.mjs`](../instrumenttest/render.mjs) transpiles the
+`.dsp`, compiles it into the real midisynth, sends MIDI notes to the wasm and
+reports peak/RMS and spectrum per note (exit 1 if any note is silent). It also
+shows whether different notes produce different sounds, which is how you verify
+a drum mapping.
+
+Verify the instrument uses `freq`/`gain`/`gate` parameters. The transpiler maps `gate` to note-on/note-off, `freq` to MIDI note frequency, and `gain` to velocity.
 
 A note carries *only* those three things into the DSP. A control of your own
 naming is a channel parameter, not a note trigger — `button("kick")` is never

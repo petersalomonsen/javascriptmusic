@@ -15,6 +15,15 @@ Humans: see [README.md](README.md) and [wasmaudioworklet/docs](wasmaudioworklet/
 
 ## Use the feedback loops (don't guess — verify)
 You can't see the canvas or hear the audio, so lean on the headless checks:
+- **Faust instruments**: render one headlessly and measure it with
+  `tools/instrumenttest/render.mjs` — it transpiles the `.dsp`, compiles it into
+  the real midisynth, sends actual MIDI notes to the wasm and reports peak/RMS
+  and spectrum per note (exit 1 if anything is silent):
+  `cd wasmaudioworklet && node ../tools/instrumenttest/render.mjs faust/kick.dsp --notes c3,fs3`.
+  This is the only check that catches the worst Faust mistake — an instrument
+  that transpiles, registers and compiles perfectly and makes **no sound**
+  (usually a missing `gate`). It also answers whether notes map to different
+  drums: same spectrum for every note means there is no mapping.
 - **Visualizer shaders**: compile + render frames headlessly with
   `tools/shadertest/render.mjs` — see
   [docs/shaders.md](wasmaudioworklet/docs/shaders.md). Always compile-check after
