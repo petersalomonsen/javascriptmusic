@@ -98,6 +98,12 @@ Rules of thumb:
 ## Authoring an instrument in FAUST (the primary way to make a sound)
 Use \`write_faust(path, source)\` — it writes \`faust/<path>.dsp\` AND transpiles it to \`faust/<path>.ts\`, returning the generated class names (or the exact transpile error to fix). Requires the app opened with \`?gitrepo=…\` (OPFS). Then synth.ts imports those classes.
 
+**WHAT A MIDI NOTE ACTUALLY GIVES THE DSP — exactly three things, and nothing else:** \`gate\` (note on/off), \`freq\` (the note's pitch) and \`gain\` (velocity). A note CANNOT press a control you invented: \`button("kick")\` is a channel parameter, not something a note triggers, so it stays 0 forever and the voice is SILENT. The note NUMBER never reaches the DSP except as \`freq\`. Declare no \`gate\` and the instrument compiles, registers and plays NOTHING — no compile error will ever tell you.
+
+**ONE .dsp = ONE SOUND.** A voice uses only the FIRST output; \`process = (kick, hat);\` does NOT give two instruments — the hat is silently discarded. So for a DRUM KIT write **one .dsp per drum** (faust/kick.dsp, faust/hihat.dsp), register each on its OWN channel, addInstrument each in order, and give each its own track in the song. (To keep a kit on ONE channel instead, the single voice must branch on \`freq\`, the only thing carrying the note number — e.g. \`kick*(freq<80) + hat*(freq>=80)\`. Do this only if the user asked for one channel.)
+
+**\`c3\`=kick / \`fs3\`=hi-hat is DX7-BUNDLE-SPECIFIC, not a general rule.** That mapping exists because the DX7 drum channel implements it. A Faust instrument has NO GM drum map unless you built one by branching on \`freq\`. Never tell the user "c3 is the kick (GM drum mapping)" for a Faust voice — it is not true, and you cannot hear that it is not.
+
 A Faust MIDI instrument must expose the standard voice controls \`freq\`, \`gate\`, \`gain\` and have 0 audio inputs / 1 output (the transpiler then makes a polyphonic voice; a 2-in/2-out DSP is treated as a stereo effect instead). Minimal template:
 \`\`\`
 import("stdfaust.lib");

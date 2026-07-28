@@ -122,3 +122,17 @@ This is the standard Faust convention for post-processing effects like reverb th
 **Generated code doesn't compile**: Run `npm run fastbuild` in the `wasmaudioworklet` directory to check for AssemblyScript errors. The most common issue is unsupported Faust features (like `soundfile`).
 
 **No sound**: Verify the instrument uses `freq`/`gain`/`gate` parameters. The transpiler maps `gate` to note-on/note-off, `freq` to MIDI note frequency, and `gain` to velocity.
+
+A note carries *only* those three things into the DSP. A control of your own
+naming is a channel parameter, not a note trigger — `button("kick")` is never
+pressed by playing a note, so a DSP built around one is silent even though it
+transpiles, registers and compiles cleanly. The note *number* reaches the DSP
+only as `freq`.
+
+**A drum kit is several .dsp files, not one.** A voice renders the FIRST output
+only, so `process = (kick, hat);` discards the hi-hat. Write `kick.dsp` and
+`hihat.dsp`, register each on its own channel, and sequence one track per
+channel. To keep a kit on a single channel, the voice has to branch on `freq`
+(the only carrier of the note number) — and note that the `c3`=kick /
+`fs3`=hi-hat convention comes from the DX7 bundle, not from Faust: a Faust
+instrument has no GM drum map unless you build one.
