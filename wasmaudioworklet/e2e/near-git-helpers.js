@@ -41,6 +41,35 @@ export async function setupServiceWorker(page) {
     });
 }
 
+/**
+ * An isolated, purely LOCAL repo for one spec file — PREFER THIS FOR NEW SPECS.
+ *
+ * A `?gitrepo=` name the sandbox cannot clone falls back to a persistent local
+ * OPFS repo keyed on that name (see local-repo-persistence.spec.js), so a name
+ * nobody else uses gives complete isolation with no setup, no sandbox and no
+ * remote. Everything that needs `?gitrepo=` mode — the faust/ folder, the studio
+ * agent's OPFS tools, git history — works exactly as it does against the real
+ * remote.
+ *
+ *   await page.goto(`http://localhost:8080/?gitrepo=${specRepo('my-feature')}`);
+ *
+ * Why it matters: the shared sandbox repo (NEAR_REPO_CONTRACT) is mutated by
+ * every spec that touches it and is only recreated once per CI job. clearOPFS
+ * does NOT undo that — it clears the browser copy, and the app then re-clones
+ * from the sandbox. So a test killed part-way (a CI retry, an interrupted local
+ * run) leaves broken state that fails whichever spec runs next: a
+ * deliberately-broken faust fixture from faust-editor.spec.js surfaced as
+ * "missing `process` definition" inside studio-agent-mock.spec.js, which shares
+ * none of its code. Reproduced locally — an interrupted run failed 4 tests, and
+ * recreating the sandbox container restored all 12.
+ *
+ * Use the shared sandbox repo ONLY when the test genuinely exercises the NEAR
+ * remote: cloning, commit & sync, push, or delete-local behaviour.
+ */
+export function specRepo(specName) {
+    return `spec-${specName}.local`;
+}
+
 export async function clearOPFS(page, repoName) {
     await page.evaluate(async (name) => {
         try {

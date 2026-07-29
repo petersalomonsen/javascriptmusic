@@ -267,18 +267,40 @@ function analyzeCompiledSong() {
 }
 
 // Probe every channel the song actually plays, using a note it really uses, and
-// report the ones that make no sound. Cheap: rendering is far faster than
-// realtime and only a fraction of a second per channel is needed.
+// report the ones that make no sound.
+//
+// STRICTLY BUDGETED. Rendering is synchronous and blocks the main thread, and
+// `compile` is already the slowest tool there is (a full asc build). On a loaded
+// CI runner the two together blew the agent harness's 30s tool timeout — the
+// tool queue is serialized, so a slow compile stalls everything behind it.
+// So: a short render (an envelope opens within milliseconds — 0.2s is ample to
+// tell sound from silence), a cap on channels, a wall-clock budget, and a yield
+// between probes so the socket keeps pumping. Verification must never be the
+// reason a compile appears to hang.
+const PROBE_BUDGET_MS = 2000;
+const PROBE_MAX_CHANNELS = 4;
+
+const yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 async function silentChannelWarnings() {
   try {
     const bytes = window.WASM_SYNTH_BYTES;
     const summary = analyzeCompiledSong();
     if (!bytes || !summary || !summary.sounding.length) return [];
     const warnings = [];
+    const deadline = Date.now() + PROBE_BUDGET_MS;
+    let probed = 0;
     for (const channel of summary.sounding) {
+      if (probed >= PROBE_MAX_CHANNELS || Date.now() > deadline) {
+        warnings.push(`(audio probe stopped after ${probed} channel(s) to keep compile responsive — `
+          + 'run probe_instrument on the rest if you need to check them)');
+        break;
+      }
       const note = firstNoteOnChannel(channel.channel);
       if (note === null) continue;
-      const result = await probeNote(bytes, { channel: channel.channel, note, holdSeconds: 0.3, tailSeconds: 0.2 });
+      await yieldToEventLoop();
+      probed++;
+      const result = await probeNote(bytes, { channel: channel.channel, note, holdSeconds: 0.2, tailSeconds: 0.15 });
       if (result.silent) {
         warnings.push(
           `WARNING: channel ${channel.channel} plays ${channel.notes} note(s) but produces NO SOUND `
