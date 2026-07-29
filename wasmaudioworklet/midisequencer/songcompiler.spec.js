@@ -84,6 +84,38 @@ loopHere();
             [1, beatTime(3.5)]
         ]);
     });
+    // Documents the chord form in docs/song-api.md ("Chords - a step slot that is
+    // an array"): every note inside one step slot starts on that step, so a chord
+    // is written as a nested array - not as one awaited call per tone, which would
+    // arpeggiate it.
+    it('should start every note of a nested step array at the same time', async () => {
+        const bpm = 120;
+        const beatTime = beatNo => Math.floor((beatNo / bpm) * 60 * 1000);
+
+        const eventlist = await compileSong(`
+setBPM(${bpm});
+
+await createTrack(0).steps(2, [
+    [d5(0.25), f5(0.25), a5(0.25)],
+    [d5(0.25), f5(0.25), a5(0.25)],
+    [d5(0.25), f5(0.25), as5(0.25)],
+    ,
+]);
+
+loopHere();
+`);
+        const chordsByTime = {};
+        eventlist.filter(evt => (evt.message[0] & 0xf0) === 0x90 && evt.message[2] > 0)
+            .forEach(evt => (chordsByTime[evt.time] = chordsByTime[evt.time] ?? []).push(evt.message[1]));
+        Object.values(chordsByTime).forEach(notes => notes.sort((a, b) => a - b));
+
+        // three hits of three tones each - Dm twice, then d5/f5/as5 - none arpeggiated
+        assert.deepEqual(chordsByTime, {
+            [beatTime(0)]: [62, 65, 69],
+            [beatTime(0.5)]: [62, 65, 69],
+            [beatTime(1)]: [62, 65, 70]
+        });
+    });
     // `.repeat(n)` appends n FURTHER copies, so the result is n+1 — unlike
     // String.prototype.repeat. Pinned here with the exact numbers the docs and
     // the studio-agent prompt quote, because getting it backwards makes a part
