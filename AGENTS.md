@@ -44,6 +44,14 @@ You can't see the canvas or hear the audio, so lean on the headless checks:
   are all consequences of it.
 - **Faust / AssemblyScript / near-git**: Playwright suites under
   `wasmaudioworklet/e2e` (`npm run test-faust`, `test-near-git`, etc.).
+  **New specs should take their own repo**: `?gitrepo=${specRepo('my-feature')}`
+  gives an isolated local OPFS repo — a name the sandbox can't clone falls back
+  to a persistent local one, and everything needing `?gitrepo=` mode (faust/,
+  the agent's OPFS tools, git history) still works. The shared sandbox repo is
+  mutated by every spec that uses it, and since CI retries failed tests, a
+  half-finished attempt can strand state that breaks an unrelated spec later in
+  the run. Use the shared repo only to exercise the real remote (clone, commit
+  & sync, push).
 
 ## Key guides
 - [Song API](wasmaudioworklet/docs/song-api.md), [Animations](wasmaudioworklet/docs/animations.md),

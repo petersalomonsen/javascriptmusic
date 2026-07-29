@@ -20,6 +20,16 @@ import {
 
 const repoName = NEAR_REPO_CONTRACT + '.git';
 
+// Shares the NEAR sandbox repo with every other spec. afterEach wipes OPFS, but
+// that only clears the BROWSER copy — the app re-clones from the sandbox, so
+// anything already pushed there outlives the wipe. A test killed part-way (a CI
+// retry, or an interrupted local run) can leave that shared repo broken, and it
+// then breaks whichever spec runs next: this file's deliberately-broken .dsp
+// ("source survives a failed transpile") surfaced inside studio-agent-mock.spec.js
+// as "missing `process` definition". Confirmed locally — an interrupted run left
+// other specs' fixtures behind and failed 4 tests here; recreating the sandbox
+// container restored all 12. New specs should not share this repo — see specRepo().
+
 // A trivial sawtooth voice-synth that maps freq/gain/gate to MIDI notes.
 // The "attack" slider is a regular UI param — it becomes a module-level
 // global with a name prefixed by the .dsp basename, so it doubles as a
