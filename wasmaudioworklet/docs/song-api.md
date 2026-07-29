@@ -103,6 +103,12 @@ part longer than it keeps running into whatever comes next, and anything past
 `Promise.all([...])` also works and is equivalent when the parts are the same
 length, but it is noisier — prefer awaiting the beat-keeper.
 
+The same rule applies *within* one track: notes that must sound together are
+notes placed at the same position, so a chord is a nested array in one
+`steps()` slot (or several notes in one `play()` row) — never one awaited call
+per chord tone, which arpeggiates them. See
+[Chords](#chords--a-step-slot-that-is-an-array).
+
 ### If nothing is awaited, the song is empty
 
 The playhead never moves, so `loopHere()` marks the end of the song at beat 0
@@ -556,7 +562,8 @@ Plays a sequence of events at regular intervals.
 
 **Parameters:**
 - `stepsperbeat` (number): Number of steps per beat
-- `events` (array): Array of note functions or arrays of note functions
+- `events` (array): Array of note functions, or arrays of note functions
+  (a nested array = a chord, see below). An empty slot is a rest.
 
 **Example:**
 ```javascript
@@ -572,6 +579,43 @@ the clock to the end of the pattern. Omit the `await` to have this part play
 alongside another one — see
 [Playing tracks at the same time](#playing-tracks-at-the-same-time).
 
+#### Chords — a step slot that is an array
+
+Everything inside a nested array fires **together** on that step. This is the
+normal way to write chords on a grid; you do not need `play()` for it, and you
+must not give each chord tone its own awaited call (that would advance the
+playhead between tones and arpeggiate the chord).
+
+```javascript
+const piano = createTrack(0, 4, 100);
+
+// Dm (twice), then A#maj / first inversion — three tones per hit, struck staccato
+await piano.steps(2, [
+    [d5(0.25), f5(0.25), a5(0.25)],
+    [d5(0.25), f5(0.25), a5(0.25)],
+    [d5(0.25), f5(0.25), as5(0.25)],
+    ,                                  // rest
+]);
+```
+
+Durations and velocities work per note, empty slots are still rests, and
+`.repeat(n)` applies to the whole grid as usual. A step array may also carry
+automation alongside the notes:
+
+```javascript
+rhodes.steps(2, [
+    [c5(2), e5(2), controlchange(7, 110)],   // chord + volume CC on the same step
+    , , ,
+    [d5(2), fs5(2)],
+]);
+```
+
+(see `songs/upbeat.js` for this in a real song).
+
+To check a chord part landed as chords rather than as an arpeggio, compile and
+read the note count from the compiled MIDI events: it should be
+*number of hits × tones per chord* (e.g. 16 hits of a triad = 48 notes).
+
 ### `play(rows, rowbeatcolumnmode)`
 Plays events with custom timing.
 
@@ -584,9 +628,14 @@ Plays events with custom timing.
 await track.play([
     [0, c4],
     [0.5, e4],
-    [1, g4, c5]  // Multiple notes at beat 1
+    [1, g4, c5]  // Multiple notes at beat 1 — a chord
 ]);
 ```
+
+Several notes in one row form a chord at that beat, same as a nested array in
+`steps()`. Use `play()` when the timing is off-grid; prefer
+[`steps()` with chord arrays](#chords--a-step-slot-that-is-an-array) for
+anything on a regular grid.
 
 ---
 

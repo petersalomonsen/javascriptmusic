@@ -58,7 +58,12 @@ Musically: every statement starts a part; \`await\` means "wait for that part to
 - **Instruments / structure:** \`addInstrument('name')\` — the Nth call is channel N (0-based); order MUST match the synth's midichannels[]. \`definePartStart('name')\` / \`definePartEnd('name')\`.
 - **Tracks:** \`const t = createTrack(channel, stepsPerBeat?, defaultVelocity?)\`. Then:
   - \`t.steps(stepsPerBeat, [ ...notes ])\` — step grid; empty slot = rest; \`[...].repeat(n)\` (see the repeat rule below).
-  - \`t.play([ [beat, note(...), ...], ... ])\` — absolute-beat placement; append \`.quantize(stepsPerBeat, pct?)\` to snap timing.
+  - **CHORDS in a step grid: a step slot that is an ARRAY fires everything in it TOGETHER on that step.** This is the normal way to write chords — do NOT switch to \`play()\` and do NOT give each chord tone its own awaited call (that arpeggiates them, the #1 "my chords play one note at a time" bug):
+    \`\`\`javascript
+    piano.steps(4, [ [d5,f5,a5], , [d5,f5,a5], , [d5,f5,as5], , , ]);  // Dm hits, then A#/D-F-A#
+    \`\`\`
+    Empty slots are still rests, \`.repeat(n)\` still applies, and durations/velocities work per note (\`[c5(2), e5(2), g5(2)]\`). A step-array may also carry automation alongside the notes — \`[c5(2), e5(2), controlchange(7, 110)]\` (see songs/upbeat.js). Chord count is checkable: song_summary's note count = hits × tones per chord.
+  - \`t.play([ [beat, note(...), ...], ... ])\` — absolute-beat placement, several notes in one row = a chord at that beat; append \`.quantize(stepsPerBeat, pct?)\` to snap timing. Prefer \`steps()\` with chord-arrays for anything on a grid.
   - \`t.setChannel(ch)\`, \`t.waitForBeat(b)\`, \`t.waitForStep(s)\`, \`t.waitDuration(d)\`, \`t.note(midiNo, dur)\`, \`t.playNote('c4', dur)\`.
 
 - **A HELD note must END BEFORE the next note of the SAME pitch on that channel starts.** If a note-off lands at exactly the next note-on, the synth gets attack-then-release for one sounding note and the NEW note is CUT — audible as a chord tone dropping out. This bites when a chord is held into the next chord that shares a pitch (e.g. A#maj7 → F both contain f5 and a5). So when chords change on beats 0 / 2.5 / 3.5, do NOT write durations 2.5 / 1 that meet the next chord exactly — **trim each by a hair** (2.45 / 0.95; ~0.05 beat). Applies to sustained/chordal parts; short percussive steps in a grid retrigger normally and need no gap. compile reports these as "notes CUT by the previous note's note-off".
