@@ -78,11 +78,16 @@ on:
   # TEMPORARY — bootstrap trigger, remove before merging.
   #
   # A workflow_dispatch workflow can only be run from the default branch, so
-  # until this file is on master there is no way to exercise it. Pushing a
-  # commit whose message contains `[build-module]` to the branch below runs it
-  # with the fallback parameters in the job's env block. Push-triggered runs are
-  # forced to dry_run: they build, validate and upload the tarball, and can
-  # never publish.
+  # until this file is on master there is no way to exercise it — including the
+  # OIDC publish, the one step a dry run cannot cover. Pushing to the branch
+  # below with a marker in the commit message runs it with the fallback
+  # parameters in the job's env block:
+  #
+  #   [build-module]    build, validate, pack, upload the tarball — no publish
+  #   [publish-module]  the same, then actually publish via trusted publishing
+  #
+  # Anything without a marker is ignored: the compiler build is far too
+  # expensive to fire on every push.
   # -------------------------------------------------------------------------
   push:
     branches: [faust-compiler-module-publish]
@@ -100,7 +105,7 @@ jobs:
   build-and-publish:
     # Push-triggered runs are opt-in per commit; the compiler build is far too
     # expensive to fire on every push to the bootstrap branch.
-    if: ${{ github.event_name != 'push' || contains(github.event.head_commit.message, '[build-module]') }}
+    if: ${{ github.event_name != 'push' || contains(github.event.head_commit.message, '[build-module]') || contains(github.event.head_commit.message, '[publish-module]') }}
     runs-on: ubuntu-latest
     # The faust-rs workspace is a compiler: a cold cargo build is the long pole.
     timeout-minutes: 120
@@ -108,14 +113,14 @@ jobs:
       PACKAGE: '@psalomo/wasm-music-faust'
       # Inputs are empty on push events; the fallbacks are the bootstrap
       # parameters and go away with the push trigger above.
-      VERSION: ${{ inputs.version || '0.1.0' }}
+      VERSION: ${{ inputs.version || '0.1.1' }}
       FAUST_RS_REF: ${{ inputs.faust_compiler_ref || 'main' }}
       FAUSTLIBRARIES_REF: ${{ inputs.faustlibraries_ref || 'master' }}
       E2E_REF: ${{ inputs.e2e_ref || 'faust-rich-diagnostics' }}
       RUN_E2E: ${{ github.event_name == 'push' && 'true' || inputs.run_e2e }}
-      # `A && B || C`: on push this is 'true'; on dispatch it is the input,
-      # including an explicit false.
-      DRY_RUN: ${{ github.event_name == 'push' && 'true' || inputs.dry_run }}
+      # On push, only a `[publish-module]` commit publishes; on dispatch this is
+      # the input, including an explicit false.
+      DRY_RUN: ${{ github.event_name == 'push' && (contains(github.event.head_commit.message, '[publish-module]') && 'false' || 'true') || inputs.dry_run }}
 
     steps:
       # ---------------------------------------------------------------------
