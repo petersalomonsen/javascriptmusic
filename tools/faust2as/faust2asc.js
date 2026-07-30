@@ -14,7 +14,7 @@
 // Compiler module resolution order:
 //   1. $FAUST_RS_COMPILER_MODULE            (explicit path, developer builds)
 //   2. wasmaudioworklet/faust/faust_wasm_ffi.wasm  (gitignored local drop)
-//   3. @psalomo/faustwasm/faust-compiler-module.wasm (npm package)
+//   3. @psalomo/wasm-music-faust/faust-compiler-module.wasm (npm package)
 
 import fs from 'fs';
 import path from 'path';
@@ -99,10 +99,10 @@ function resolveCompilerModulePath() {
     }
     candidates.push(path.resolve(__dirname, '..', '..', 'wasmaudioworklet', 'faust', 'faust_wasm_ffi.wasm'));
     try {
-        const faustwasmDir = path.dirname(
-            fileURLToPath(import.meta.resolve('@psalomo/faustwasm/package.json'))
+        const packageDir = path.dirname(
+            fileURLToPath(import.meta.resolve('@psalomo/wasm-music-faust/package.json'))
         );
-        candidates.push(path.join(faustwasmDir, 'faust-compiler-module.wasm'));
+        candidates.push(path.join(packageDir, 'faust-compiler-module.wasm'));
     } catch (_) { /* package not installed */ }
     for (const candidate of candidates) {
         if (fs.existsSync(candidate)) return candidate;

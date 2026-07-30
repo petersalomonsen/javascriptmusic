@@ -26,11 +26,13 @@ import { formatDiagnosticsForHumans } from './faust-diagnostics.js';
 // next to this file), CDN-published binary as the fallback for deployments
 // where the gitignored local artifact doesn't exist.
 const WASM_URL = new URL('./faust_wasm_ffi.wasm', import.meta.url);
-// 0.16.1-asc.4: adds the structured diagnostics-v2 exports on compile
-// failures (faust_wasm_text_result_diagnostics_ptr/len). 0.16.1-asc.3 was
-// the first module honoring the `--ec --os` execution options.
-const COMPILER_MODULE_VERSION = '0.16.1-asc.4';
-const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/faustwasm@${COMPILER_MODULE_VERSION}/faust-compiler-module.wasm`;
+// Built and published from this repo by
+// .github/workflows/publish-faust-compiler-module.yml, which refuses to
+// release a module missing the structured diagnostics-v2 exports this file
+// reads (faust_wasm_text_result_diagnostics_ptr/len) or the `--ec --os`
+// execution options the transpiler depends on.
+const COMPILER_MODULE_VERSION = '0.1.1';
+const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/wasm-music-faust@${COMPILER_MODULE_VERSION}/faust-compiler-module.wasm`;
 
 let modulePromise = null;
 
