@@ -26,6 +26,7 @@ import {
     assembleSingleFile,
     assembleBundle,
 } from '../../wasmaudioworklet/faust/transpile-core.js';
+import { formatDiagnosticsForHumans } from '../../wasmaudioworklet/faust/faust-diagnostics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -146,9 +147,24 @@ function generateAuxFiles(name, source, args) {
     const ptr = wasmExports.faust_wasm_text_result_ptr(handle);
     const len = wasmExports.faust_wasm_text_result_len(handle);
     const text = textDecoder.decode(wasmMem().slice(ptr, ptr + len));
+    // Structured diagnostics-v2 report retained by compiler failures
+    // (modules >= 0.16.1-asc.4; older modules lack the exports).
+    let diagnostics = null;
+    if (!ok && typeof wasmExports.faust_wasm_text_result_diagnostics_len === 'function') {
+        const dlen = wasmExports.faust_wasm_text_result_diagnostics_len(handle);
+        if (dlen > 0) {
+            const dptr = wasmExports.faust_wasm_text_result_diagnostics_ptr(handle);
+            try {
+                diagnostics = JSON.parse(textDecoder.decode(wasmMem().slice(dptr, dptr + dlen)));
+            } catch (err) { /* malformed payload — keep the message */ }
+        }
+    }
     wasmExports.faust_wasm_text_result_free(handle);
     if (!ok) {
-        throw new Error('faust: ' + (text || 'compilation failed'));
+        const human = diagnostics ? formatDiagnosticsForHumans(diagnostics, source) : '';
+        const error = new Error('faust: ' + (human || text || 'compilation failed'));
+        error.faustDiagnostics = diagnostics;
+        throw error;
     }
     const files = JSON.parse(text);
     const file = files.find(f => !f.binary);
