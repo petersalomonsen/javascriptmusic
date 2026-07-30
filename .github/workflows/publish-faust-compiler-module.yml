@@ -13,7 +13,8 @@
 # Publishing: npm trusted publishing (OIDC), no token
 # ---------------------------------------------------------------------------
 # This workflow authenticates to npm with a short-lived OIDC token from GitHub,
-# so there is no NPM_TOKEN secret to leak or rotate. It requires, once:
+# so there is no NPM_TOKEN secret to leak or rotate. Already configured for this
+# package; what it took, should it ever need redoing:
 #
 #   1. The package must already exist on npm — a trusted publisher cannot be
 #      configured for a name that has never been published. Bootstrap it by
@@ -26,6 +27,10 @@
 #        Workflow filename:     publish-faust-compiler-module.yml
 #      All fields are case-sensitive, and npm does not validate them on save —
 #      a typo only surfaces as a failed publish.
+#
+# The publisher is not restricted to a branch (no environment is configured),
+# so a run started from any ref publishes — which is how 0.1.1 was released
+# from the PR branch, before this workflow was on master.
 #
 # A package may have exactly ONE trusted publisher, which is why this publishes
 # its own package rather than reusing the @psalomo/faustwasm fork: that name's
@@ -74,24 +79,6 @@ on:
         default: ''
         type: string
 
-  # -------------------------------------------------------------------------
-  # TEMPORARY — bootstrap trigger, remove before merging.
-  #
-  # A workflow_dispatch workflow can only be run from the default branch, so
-  # until this file is on master there is no way to exercise it — including the
-  # OIDC publish, the one step a dry run cannot cover. Pushing to the branch
-  # below with a marker in the commit message runs it with the fallback
-  # parameters in the job's env block:
-  #
-  #   [build-module]    build, validate, pack, upload the tarball — no publish
-  #   [publish-module]  the same, then actually publish via trusted publishing
-  #
-  # Anything without a marker is ignored: the compiler build is far too
-  # expensive to fire on every push.
-  # -------------------------------------------------------------------------
-  push:
-    branches: [faust-compiler-module-publish]
-
 permissions:
   contents: read
   id-token: write   # npm trusted publishing (OIDC)
@@ -103,24 +90,19 @@ concurrency:
 
 jobs:
   build-and-publish:
-    # Push-triggered runs are opt-in per commit; the compiler build is far too
-    # expensive to fire on every push to the bootstrap branch.
-    if: ${{ github.event_name != 'push' || contains(github.event.head_commit.message, '[build-module]') || contains(github.event.head_commit.message, '[publish-module]') }}
     runs-on: ubuntu-latest
     # The faust-rs workspace is a compiler: a cold cargo build is the long pole.
     timeout-minutes: 120
+    # Free-text inputs reach the shell as environment variables, never
+    # interpolated into a script body.
     env:
       PACKAGE: '@psalomo/wasm-music-faust'
-      # Inputs are empty on push events; the fallbacks are the bootstrap
-      # parameters and go away with the push trigger above.
-      VERSION: ${{ inputs.version || '0.1.1' }}
-      FAUST_RS_REF: ${{ inputs.faust_compiler_ref || 'main' }}
-      FAUSTLIBRARIES_REF: ${{ inputs.faustlibraries_ref || 'master' }}
-      E2E_REF: ${{ inputs.e2e_ref || 'faust-rich-diagnostics' }}
-      RUN_E2E: ${{ github.event_name == 'push' && 'true' || inputs.run_e2e }}
-      # On push, only a `[publish-module]` commit publishes; on dispatch this is
-      # the input, including an explicit false.
-      DRY_RUN: ${{ github.event_name == 'push' && (contains(github.event.head_commit.message, '[publish-module]') && 'false' || 'true') || inputs.dry_run }}
+      VERSION: ${{ inputs.version }}
+      FAUST_RS_REF: ${{ inputs.faust_compiler_ref }}
+      FAUSTLIBRARIES_REF: ${{ inputs.faustlibraries_ref }}
+      E2E_REF: ${{ inputs.e2e_ref }}
+      RUN_E2E: ${{ inputs.run_e2e }}
+      DRY_RUN: ${{ inputs.dry_run }}
 
     steps:
       # ---------------------------------------------------------------------
@@ -152,7 +134,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: grame-cncm/faust-rs
-          ref: ${{ inputs.faust_compiler_ref || 'main' }}
+          ref: ${{ inputs.faust_compiler_ref }}
           path: faust-rs
 
       # Note: faust-rs's own CI does not track faustlibraries@master — it pins
@@ -166,7 +148,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: grame-cncm/faustlibraries
-          ref: ${{ inputs.faustlibraries_ref || 'master' }}
+          ref: ${{ inputs.faustlibraries_ref }}
           path: faustlibraries
 
       - name: Use Node.js 20.x
