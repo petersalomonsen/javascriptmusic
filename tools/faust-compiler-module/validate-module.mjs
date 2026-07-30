@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // validate-module.mjs — gate a freshly built faust-rs compiler module before
-// it is repackaged as @psalomo/faustwasm and published.
+// it is packaged as @psalomo/wasm-music-faust and published.
 //
 //   node tools/faust-compiler-module/validate-module.mjs <faust-compiler-module.wasm>
 //
