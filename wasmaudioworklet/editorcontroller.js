@@ -11,6 +11,7 @@ import { readfile, writefileandstage, unlinkfile, initWASMGitClient, addRemoteSy
 import { transpileDspSource } from './faust/faust-rs-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal, modalPrompt, modalAlert } from './common/ui/modal.js';
+import { zipRepo, downloadBlob } from './wasmgit/repozip.js';
 import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
@@ -527,6 +528,7 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDIPARTS_JSON}">MIDI parts as JSON</label><br />
                                     <label><input type="radio" name="exporttype" value="pngsources">source code as PNG image</label><br />
                                     <label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />
+                                    <label><input type="radio" name="exporttype" value="repozip">Project repository as ZIP (with git history)</label><br />
                                 </form>
                             </p>
                             <button onclick="getRootNode().result(null)">Cancel</button>
@@ -536,6 +538,36 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                         `);
 
                         toggleSpinner(true);
+                        if (exportProject === 'repozip') {
+                            // The whole OPFS repo, history included, as a file
+                            // on disk — a project that lives only in a browser's
+                            // origin-private storage is one you can lose.
+                            if (!gitrepoconfig) {
+                                toggleSpinner(false);
+                                await modalAlert('No repository',
+                                    'This project is not backed by a git repository, so there is nothing to zip. '
+                                    + 'Open the app with ?gitrepo=<name> to get one.');
+                                return;
+                            }
+                            try {
+                                const { blob, fileCount, unreadable } = await zipRepo({ listfiles, readfile });
+                                // The ?gitrepo= name is the repo's identity in
+                                // OPFS, so it is the honest filename here.
+                                const name = (new URLSearchParams(location.search).get('gitrepo')
+                                    || 'wasm-music-project').replace(/[^\w.-]+/g, '-');
+                                downloadBlob(blob, `${name}.zip`);
+                                toggleSpinner(false);
+                                if (unreadable.length) {
+                                    await modalAlert('Exported with omissions',
+                                        `${fileCount} files zipped. These could not be read and were left out:\n\n`
+                                        + unreadable.slice(0, 10).join('\n'));
+                                }
+                            } catch (e) {
+                                toggleSpinner(false);
+                                await modalAlert('Export failed', String(e?.message || e));
+                            }
+                            return;
+                        }
                         if (exportProject === 'wav' || exportProject === 'wav48k') {
                             const exportSampleRate = exportProject === 'wav48k' ? 48000 : 44100;
                             const wasmBytes = await compileWebAssemblySynth(

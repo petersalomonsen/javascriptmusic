@@ -356,6 +356,15 @@ onmessage = async (msg) => {
     try {
       ensureChdir(currentRepoDir);
       const prefix = msg.data.prefix || '';
+      // `.git` is skipped by default — callers want the working tree. The zip
+      // export opts in, because a repo without its history is not a repo you
+      // can push from later.
+      const includeGit = !!msg.data.includeGit;
+      // Directories are normally uninteresting, but an archive that omits the
+      // EMPTY ones is not a faithful copy: a fresh repo's `.git/refs` has no
+      // files in it, and without that directory git does not recognise the
+      // result as a repository at all. Reported with a trailing slash.
+      const includeDirs = !!msg.data.includeDirs;
       // Standard Unix mode bitmask — Emscripten's FS exposes `mode` from
       // FS.stat() but FS.isDir() isn't always available on the helper.
       const S_IFMT = 0o170000;
@@ -365,12 +374,16 @@ onmessage = async (msg) => {
         let entries;
         try { entries = FS.readdir(virtBase); } catch (e) { return; }
         for (const entry of entries) {
-          if (entry === '.' || entry === '..' || entry === '.git') continue;
+          if (entry === '.' || entry === '..') continue;
+          if (entry === '.git' && !includeGit) continue;
           const childVirt = virtBase === '.' ? entry : virtBase + '/' + entry;
           const childRel = relBase ? relBase + '/' + entry : entry;
           let stat;
           try { stat = FS.stat(childVirt); } catch (e) { continue; }
           if ((stat.mode & S_IFMT) === S_IFDIR) {
+            if (includeDirs && (!prefix || childRel.indexOf(prefix) === 0)) {
+              result.push(childRel + '/');
+            }
             walk(childVirt, childRel);
           } else {
             if (!prefix || childRel.indexOf(prefix) === 0) {

@@ -36,6 +36,9 @@ jobs:
           npm run test-agent-tools
           npm run test-gitproxy
           npm run test-quickjs-sandbox
+          # Zip writer for the repo export — pure bytes, and checked against
+          # the system `unzip` when it is available (it is, on ubuntu-latest).
+          npm run test-repozip
   web-test-runner:
     name: Web Test Runner
     runs-on: ubuntu-latest

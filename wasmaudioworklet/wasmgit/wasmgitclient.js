@@ -471,10 +471,15 @@ export async function listSongs() {
     return await getConfig().then(c => c.allsongs);
 }
 
-export async function listfiles(prefix = '') {
+// `includeDirs` appends directory paths with a trailing slash, so a caller that
+// must reproduce the tree faithfully (the zip export) does not silently drop
+// empty directories — `.git/refs` in a fresh repo being the one that matters.
+export async function listfiles(prefix = '', { includeGit = false, includeDirs = false } = {}) {
     const result = await callAndWaitForWorker({
         command: 'listfiles',
         prefix,
+        includeGit,
+        includeDirs,
     });
     return result.files || [];
 }
