@@ -96,9 +96,11 @@ function loadTools() {
         tools[ord] = { ord, name: o.name.replace('mcp__studio__', ''), args: o.input };
         ord++;
     }
-    // The song the session started from is whatever get_song first returned.
+    // The song the session started from is whatever get_song first returned —
+    // which only works if the session opened by reading an existing song. A cut
+    // whose session started from an empty repo states START_SONG itself.
     const gi = lines.findIndex((o) => o.kind === 'tool_use' && o.name === 'mcp__studio__get_song');
-    const startSong = lines.slice(gi + 1).find((o) => o.kind === 'tool_result')?.text ?? '';
+    const startSong = gi < 0 ? '' : (lines.slice(gi + 1).find((o) => o.kind === 'tool_result')?.text ?? '');
     return { tools, startSong };
 }
 
@@ -191,9 +193,22 @@ async function streamText(mock, text, msPerChunk = 14, chunk = 3) {
 }
 
 // ---- main -------------------------------------------------------------------
-const { tools, startSong } = loadTools();
-if (!startSong) throw new Error('could not recover the starting song from the session log');
-log(`loaded ${tools.filter(Boolean).length} tool calls; starting song ${startSong.length} bytes`);
+const { tools, startSong: songFromLog } = loadTools();
+// A cut may state the starting song itself: `null` keeps whatever the app boots
+// with, which is what a session that began from an EMPTY repo started from.
+const startSong = 'START_SONG' in cut ? cut.START_SONG : songFromLog;
+if (startSong === undefined || (startSong === '' && !('START_SONG' in cut))) {
+    throw new Error('could not recover the starting song from the session log — '
+        + 'set START_SONG in the cut (null keeps the app default)');
+}
+// Session logs cap tool results at 1000 chars, so a longer starting song comes
+// back mangled and would seed a syntax error rather than a song.
+if (startSong && /…\[\+\d+ chars\]$/.test(startSong.trimEnd())) {
+    throw new Error('the starting song recovered from the session log is TRUNCATED — '
+        + 'set START_SONG in the cut with the real source');
+}
+log(`loaded ${tools.filter(Boolean).length} tool calls; starting song `
+    + (startSong ? `${startSong.length} bytes` : '(app default)'));
 
 const mock = startMockServer();
 log('mock agent server on port', mock.port());
@@ -232,12 +247,17 @@ await page.evaluate((css) => {
     sr.appendChild(s);
 }, RECORDING_CSS);
 
-// Seed the exact song the session started from (NEAR AI's arpeggiated version)
-await page.evaluate((text) => {
-    document.querySelector('app-javascriptmusic').shadowRoot
-        .querySelector('#editor .CodeMirror').CodeMirror.setValue(text);
-}, startSong);
-log('seeded starting song');
+// Seed the exact song the session started from, unless the cut says the session
+// began from the app's own default (an empty repo).
+if (startSong) {
+    await page.evaluate((text) => {
+        document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror.setValue(text);
+    }, startSong);
+    log('seeded starting song');
+} else {
+    log('no starting song seeded — using the app default');
+}
 
 await mock.waitForClient();
 log('agent client connected');
