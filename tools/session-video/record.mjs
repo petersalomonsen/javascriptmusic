@@ -96,9 +96,11 @@ function loadTools() {
         tools[ord] = { ord, name: o.name.replace('mcp__studio__', ''), args: o.input };
         ord++;
     }
-    // The song the session started from is whatever get_song first returned.
+    // The song the session started from is whatever get_song first returned —
+    // which only works if the session opened by reading an existing song. A cut
+    // whose session started from an empty repo states START_SONG itself.
     const gi = lines.findIndex((o) => o.kind === 'tool_use' && o.name === 'mcp__studio__get_song');
-    const startSong = lines.slice(gi + 1).find((o) => o.kind === 'tool_result')?.text ?? '';
+    const startSong = gi < 0 ? '' : (lines.slice(gi + 1).find((o) => o.kind === 'tool_result')?.text ?? '');
     return { tools, startSong };
 }
 
@@ -191,9 +193,22 @@ async function streamText(mock, text, msPerChunk = 14, chunk = 3) {
 }
 
 // ---- main -------------------------------------------------------------------
-const { tools, startSong } = loadTools();
-if (!startSong) throw new Error('could not recover the starting song from the session log');
-log(`loaded ${tools.filter(Boolean).length} tool calls; starting song ${startSong.length} bytes`);
+const { tools, startSong: songFromLog } = loadTools();
+// A cut may state the starting song itself: `null` keeps whatever the app boots
+// with, which is what a session that began from an EMPTY repo started from.
+const startSong = 'START_SONG' in cut ? cut.START_SONG : songFromLog;
+if (startSong === undefined || (startSong === '' && !('START_SONG' in cut))) {
+    throw new Error('could not recover the starting song from the session log — '
+        + 'set START_SONG in the cut (null keeps the app default)');
+}
+// Session logs cap tool results at 1000 chars, so a longer starting song comes
+// back mangled and would seed a syntax error rather than a song.
+if (startSong && /…\[\+\d+ chars\]$/.test(startSong.trimEnd())) {
+    throw new Error('the starting song recovered from the session log is TRUNCATED — '
+        + 'set START_SONG in the cut with the real source');
+}
+log(`loaded ${tools.filter(Boolean).length} tool calls; starting song `
+    + (startSong ? `${startSong.length} bytes` : '(app default)'));
 
 const mock = startMockServer();
 log('mock agent server on port', mock.port());
@@ -232,12 +247,17 @@ await page.evaluate((css) => {
     sr.appendChild(s);
 }, RECORDING_CSS);
 
-// Seed the exact song the session started from (NEAR AI's arpeggiated version)
-await page.evaluate((text) => {
-    document.querySelector('app-javascriptmusic').shadowRoot
-        .querySelector('#editor .CodeMirror').CodeMirror.setValue(text);
-}, startSong);
-log('seeded starting song');
+// Seed the exact song the session started from, unless the cut says the session
+// began from the app's own default (an empty repo).
+if (startSong) {
+    await page.evaluate((text) => {
+        document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror.setValue(text);
+    }, startSong);
+    log('seeded starting song');
+} else {
+    log('no starting song seeded — using the app default');
+}
 
 await mock.waitForClient();
 log('agent client connected');
@@ -249,6 +269,18 @@ await page.evaluate(() => {
 await page.waitForFunction(() => !!window.audioworkletnode, { timeout: 180000 });
 await page.waitForFunction(() => window.WASM_SYNTH_BYTES != null, { timeout: 180000 });
 log('audio running');
+// The audio graph has to be live before capture can tap it, but the SEQUENCER
+// does not. A cut that opens on an empty project pauses it here and starts the
+// transport from a beat, so the video does not open on the default song.
+if (cut.START_PAUSED) {
+    await page.evaluate(() => {
+        window.toggleSongPlay(false);
+        const box = document.querySelector('app-javascriptmusic').shadowRoot
+            .getElementById('toggleSongPlayCheckbox');
+        if (box) box.checked = false;
+    });
+    log('sequencer paused — waiting for a beat to exist');
+}
 await sleep(2000);
 
 // ---- start capture: tab video + synth audio into ONE recorder ---------------
@@ -302,9 +334,17 @@ const drainTimer = setInterval(drain, 5000);
 let currentView = null;
 const setView = async (v) => { if (v !== currentView) { await showOnly(page, v); currentView = v; } };
 
-async function runTool(ord) {
+// `quick` runs the call without the deliberate look-at-the-code pauses — for a
+// jump cut, where the point is the RESULT rather than watching each edit land.
+async function runTool(ord, { quick = false } = {}) {
     const t = tools[ord];
     if (!t) throw new Error(`no tool #${ord} in the log`);
+    if (quick) {
+        mock.send({ t: 'tool', name: t.name });
+        const res = await mock.callTool(t.name, t.args);
+        log(`  #${ord} ${t.name} → ${res.ok ? 'ok' : 'ERROR'} (quick)`);
+        return res;
+    }
     // Watch the document being edited; stay put through the compile that applies it.
     const want = VIEW_FOR_TOOL[t.name];
     if (want) { await setView(want); await sleep(600); }
@@ -316,6 +356,126 @@ async function runTool(ord) {
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
     log(`  #${ord} ${t.name} → ${res.ok ? 'ok' : 'ERROR'} (${secs}s)`);
     if (want) await sleep(1400); // let the edit be read on screen
+    return res;
+}
+
+// ---- live actions: things the PLAYER does, which no log can replay ----------
+// A session log holds the agent's tool calls, not the human's. Playing a take
+// and pasting it are the player's half of the loop, so they are re-enacted here
+// against the running app rather than replayed.
+
+const CM = () => document.querySelector('app-javascriptmusic').shadowRoot
+    .querySelector('#editor .CodeMirror').CodeMirror;
+
+// Play a phrase through the app's live-input path — the same `processNoteMessage`
+// the virtual keyboard and a real MIDI keyboard both reach — so the sequencer
+// captures it exactly as it would a human performance.
+async function performPhrase({ instrument, notes, bpm, syncToBeats }) {
+    await setView('song');
+    if (instrument) {
+        await page.evaluate((name) => {
+            const root = document.querySelector('app-javascriptmusic').shadowRoot;
+            const sel = root.getElementById('midichannelmappingselection');
+            sel.value = name;
+            window.currentMidiChannelMapping = name;
+            sel.dispatchEvent(new Event('change'));
+            root.getElementById('vkeyboardinputelement').focus();
+        }, instrument);
+        log(`  instrument → ${instrument}`);
+        await sleep(600);
+    }
+    // Wait for the sequencer's playhead to reach a beat boundary before the
+    // first note. Without this the phrase starts wherever the loop happens to
+    // be, and every captured time carries that arbitrary offset — so a take
+    // played exactly on the grid still pastes as ragged numbers.
+    if (syncToBeats) {
+        await page.evaluate(async ({ unitSeconds }) => {
+            const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+            const now = window.songTimeSeconds();
+            if (typeof now !== 'number') return;
+            const next = Math.ceil((now + 0.08) / unitSeconds) * unitSeconds;
+            await nap((next - now) * 1000);
+        }, { unitSeconds: (60 / bpm) * syncToBeats });
+    }
+    const t0 = Date.now();
+    await page.evaluate(async ({ notes, msPerBeat }) => {
+        const root = document.querySelector('app-javascriptmusic').shadowRoot;
+        const vk = root.getElementById('vkeyboardinputelement');
+        const names = new Array(128).fill(null).map((v, n) =>
+            ['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'][n % 12] + Math.floor(n / 12));
+        const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+        const held = new Set();
+        const show = () => { vk.value = [...held].map((n) => names[n]).join(','); };
+        const start = performance.now();
+        await Promise.all(notes.map(async ([beat, note, durBeats, vel]) => {
+            await nap(Math.max(0, start + beat * msPerBeat - performance.now()));
+            window.playNoteMessage(note, vel);
+            held.add(note); show();
+            await nap(durBeats * msPerBeat);
+            window.playNoteMessage(note, 0);
+            held.delete(note); show();
+        }));
+        vk.value = '';
+    }, { notes, msPerBeat: 60000 / bpm });
+    log(`  performed ${notes.length} notes in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+}
+
+// An AUTHORED edit: a real edit_song/edit_synth executed in the browser, whose
+// arguments are written for the video rather than replayed from the log. Use it
+// only for structure the session never asked about — the cut's value is that
+// the music is the session's actual output, so say why in the cut when you do.
+async function runEdit({ tool = 'edit_song', old_string, new_string, replace_all = false }) {
+    await setView(tool === 'edit_synth' ? 'synth' : 'song');
+    mock.send({ t: 'tool', name: tool });
+    const res = await mock.callTool(tool, { old_string, new_string, replace_all });
+    log(`  authored ${tool} → ${res.ok ? 'ok' : 'ERROR'}`);
+    if (!res.ok) throw new Error(`authored ${tool} failed: ${res.result}`);
+    return res;
+}
+
+// The app's insert-recording button: turns the captured take into song source.
+// Put the cursor inside the recording markers first, where a player would.
+async function pasteRecording({ quantize } = {}) {
+    await setView('song');
+    await page.evaluate(() => {
+        const cm = document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror;
+        const line = cm.getValue().split('\n').findIndex((l) => l.includes('startRecording()'));
+        cm.setCursor({ line: line < 0 ? 0 : line + 1, ch: 0 });
+    });
+    await sleep(400);
+    await page.evaluate((q) => window.insertRecording(q), quantize);
+    log(`  pasted the recorded take into the song${quantize ? ` (quantized to 1/${quantize} beat)` : ''}`);
+    await sleep(1600);
+}
+
+// Quantize the take that was just pasted. This is a REAL edit_song tool call —
+// only its arguments are computed here, because they have to anchor on notes
+// that did not exist until the take was played.
+async function quantizeTake(stepsPerBeat) {
+    const tail = await page.evaluate(() => {
+        const cm = document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror;
+        const lines = cm.getValue().split('\n');
+        const i = lines.findIndex((l) => l.includes('.play([') && l.includes('createTrack('));
+        if (i < 0) return null;
+        for (let j = i; j < lines.length; j++) if (lines[j].trimEnd().endsWith(']);')) return lines[j];
+        return null;
+    });
+    if (!tail) {
+        // Losing the last beat should not throw away the whole render — the
+        // usual cause is an empty take, which the log above makes obvious.
+        log('  WARNING: no recorded take found to quantize — skipping');
+        return null;
+    }
+    await setView('song');
+    mock.send({ t: 'tool', name: 'edit_song' });
+    const res = await mock.callTool('edit_song', {
+        old_string: tail,
+        new_string: tail.replace(/\]\);\s*$/, `].quantize(${stepsPerBeat}));`),
+    });
+    log(`  quantize(${stepsPerBeat}) → ${res.ok ? 'ok' : 'ERROR'}`);
+    await sleep(1400);
     return res;
 }
 
@@ -332,23 +492,47 @@ for (const [n, beat] of beats.entries()) {
     await sleep(700);
 
     for (const line of beat.say ?? []) { await streamText(mock, line + '\n\n'); await sleep(250); }
-    for (const ord of beat.tools ?? []) await runTool(ord);
+    for (const ord of beat.tools ?? []) await runTool(ord, { quick: beat.quick });
+    // Authored structural edits, then a compile so they are audible.
+    if (beat.edits?.length) {
+        for (const e of beat.edits) await runEdit(e);
+        mock.send({ t: 'tool', name: 'compile' });
+        const res = await mock.callTool('compile', {});
+        log(`  compile after authored edits → ${res.ok ? 'ok' : 'ERROR'}`);
+    }
+    // Start the transport only once there is something to hear.
+    if (beat.startPlayback) {
+        await page.evaluate(() => {
+            window.toggleSongPlay(true);
+            const box = document.querySelector('app-javascriptmusic').shadowRoot
+                .getElementById('toggleSongPlayCheckbox');
+            if (box) box.checked = true;
+        });
+        log('  transport started');
+    }
+    // Jump cut: after a quick run, land on the result and let it play.
+    if (beat.quick && beat.showAfter) { await setView(beat.showAfter); await sleep(beat.showMs ?? 3000); }
 
     for (const line of beat.sayThen ?? []) { await setView('agent'); await streamText(mock, line + '\n\n'); await sleep(250); }
-    for (const ord of beat.thenTools ?? []) await runTool(ord);
+    for (const ord of beat.thenTools ?? []) await runTool(ord, { quick: beat.quick });
 
     for (const line of beat.sayAfterFail ?? []) { await setView('agent'); await streamText(mock, line + '\n\n'); await sleep(250); }
     for (const ord of beat.failFixTools ?? []) await runTool(ord);
 
+    // The player's half of the loop: perform, paste, quantize.
+    if (beat.perform) await performPhrase(beat.perform);
+    if (beat.pasteRecording) await pasteRecording(beat.pasteRecording === true ? {} : beat.pasteRecording);
+    if (beat.quantizeTake) await quantizeTake(beat.quantizeTake);
+
     if (beat.outro) { await setView('agent'); await streamText(mock, beat.outro + '\n'); }
     mock.send({ t: 'done' });
-    await sleep(1800);
+    await sleep(beat.holdMs ?? 1800);
 }
 
 // Play the finished track out over the song
 log('outro');
 await setView('song');
-await sleep(12000);
+await sleep(cut.OUTRO_MS ?? 12000);
 
 // ---- stop + mux --------------------------------------------------------------
 clearInterval(drainTimer);

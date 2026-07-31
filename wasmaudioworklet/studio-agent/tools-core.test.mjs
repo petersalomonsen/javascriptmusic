@@ -341,3 +341,53 @@ addInstrument('hihat');`;
   assert.deepEqual(declaredInstruments(src), ['piano', 'kick', 'hihat']);
   assert.deepEqual(declaredInstruments(''), []);
 });
+
+test('faustRegistrationHint reports the public wrapper, not the native <Name>Dsp class', () => {
+  // What the in-browser transpiler actually emits: the native Faust class
+  // compiled as <Name>Dsp plus the thin public wrapper.
+  const ts = 'export class KickDsp {\n}\nexport class Kick extends MidiVoice {\n}\n';
+  const hint = faustRegistrationHint(ts, 'kick');
+  assert.deepEqual(hint.classes, ['Kick']);
+  assert.equal(hint.voice, 'Kick');
+  assert.ok(!hint.message.includes('KickDsp'), 'must not name the internal class');
+});
+
+test('faustRegistrationHint keeps a <Name>Channel and drops the effect internals', () => {
+  const ts = 'export class BassDsp {\n}\nexport class BassEffectDsp {\n}\n'
+    + 'export class Bass extends MidiVoice {\n}\nexport class BassChannel extends MidiChannel {\n}\n';
+  const hint = faustRegistrationHint(ts, 'bass');
+  assert.deepEqual(hint.classes, ['Bass', 'BassChannel']);
+  assert.equal(hint.voice, 'Bass');
+  assert.equal(hint.chan, 'BassChannel');
+});
+
+test('faustRegistrationHint keeps a genuine class whose name just ends in Dsp', () => {
+  // No `Mydsp` wrapper exported, so `MydspDsp` is not an internal to drop.
+  const ts = 'export class MydspDsp extends MidiVoice {\n}\n';
+  assert.deepEqual(faustRegistrationHint(ts, 'mydsp').classes, ['MydspDsp']);
+});
+
+test('summarizeSongEvents ignores sequencer control messages, not just the end marker', () => {
+  // startRecording/stopRecording are single-byte -2/-3. Read as MIDI they are
+  // `& 0x0f` = 14 and 13, which used to appear as phantom "no notes" channels.
+  const events = [
+    { time: 0, message: [-2] },              // startRecording
+    { time: 0, message: [0x90, 60, 100] },   // ch0 note on
+    { time: 500, message: [0x80, 60, 0] },
+    { time: 1000, message: [-4] },           // broadcastSend
+    { time: 1000, message: [-5] },           // broadcastWait
+    { time: 2000, message: [-3] },           // stopRecording
+    { time: 2000, message: [-1] },           // end of song
+  ];
+  const s = summarizeSongEvents(events, 120, { instruments: ['kick'] });
+  assert.deepEqual(s.channels.map((c) => c.channel), [0], 'only the real channel');
+  assert.equal(s.channels[0].notes, 1);
+});
+
+test('summarizeSongEvents still takes song length from the end marker', () => {
+  const events = [
+    { time: 0, message: [0x90, 60, 100] },
+    { time: 4000, message: [-1] }, // end marker at beat 8 @120bpm
+  ];
+  assert.equal(Math.round(summarizeSongEvents(events, 120).lengthBeats), 8);
+});

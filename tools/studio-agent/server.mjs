@@ -37,6 +37,12 @@ const HEAVY_TOOLS = new Set(['write_faust', 'compile']);
 // Optional model override for speed/depth tradeoff, e.g. STUDIO_AGENT_MODEL=sonnet
 // (faster) vs opus (deeper). Unset = the SDK/Claude Code default.
 const MODEL = process.env.STUDIO_AGENT_MODEL || undefined;
+// Reasoning effort. Turn latency here is dominated by the NUMBER of model
+// round-trips, not by thinking depth, and lower effort buys fewer and more
+// consolidated tool calls plus less preamble — so it is the cheapest latency
+// win available. 'medium' keeps musical judgement while trimming the tail;
+// raise to 'high'/'xhigh' for gnarlier work, drop to 'low' for a rehearsed set.
+const EFFORT = process.env.STUDIO_AGENT_EFFORT || 'medium';
 // Proactive compaction threshold (tokens of per-call context). The SDK only
 // auto-compacts near the model's context LIMIT (~1M on opus) — far beyond the
 // point where every turn is already slow and expensive (a ~570k-token session
@@ -172,6 +178,11 @@ function makeStudioServer(ws) {
   return createSdkMcpServer({
     name: 'studio',
     version: '1.0.0',
+    // Pin the studio tool schemas into the turn-1 prompt instead of letting
+    // them sit behind tool search. Deferred schemas cost an extra ToolSearch
+    // round-trip before the agent can act at all — measured at ~1.4x the
+    // median turn and a much worse tail on real sessions.
+    alwaysLoad: true,
     tools: [
       ...toolDefsFor('browser').map((d) => proxy(d.name, d.description, zodShape(d.parameters))),
       ...toolDefsFor('loadfile').map((d) => loadInto(d)),
@@ -183,13 +194,29 @@ function makeStudioServer(ws) {
 const t0 = () => new Date().toISOString().slice(11, 23);
 const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 
-async function handleChat(ws, { text, sessionId, summary }, isRetry = false) {
+// The project's kit (its AGENT.md, or the shipped default) arrives from the
+// browser — the server has no view of OPFS. It goes into the SYSTEM PROMPT so
+// the model has the project's instruments and conventions from turn 0 instead
+// of spending a round-trip discovering them. Identical text every turn keeps
+// the cached prefix intact; a changed kit costs one cold turn, as it should.
+function systemPromptWith(kit) {
+  if (!kit || !kit.trim()) return SYSTEM_PROMPT;
+  return `${SYSTEM_PROMPT}\n\n## Project kit (from the project's AGENT.md)\n\n` +
+    `These are the user's instructions for THIS project — instrument sources, ` +
+    `channel layout and conventions. Prefer them over generic defaults, and use ` +
+    `them directly instead of searching the repository for the same information.` +
+    `\n\n${kit}`;
+}
+
+async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false) {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
   const studio = makeStudioServer(ws);
+  const systemPrompt = systemPromptWith(kit);
   let sid = sessionId || null;
   let contextTokens = 0; // last model call's input size (fresh + cached)
-  dlog('chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)');
-  logEvent({ kind: 'chat', sessionId: sid, resumed: !!sessionId, text });
+  dlog('chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)',
+    kit ? `kit ${kit.length} chars` : 'NO KIT');
+  logEvent({ kind: 'chat', sessionId: sid, resumed: !!sessionId, text, kitChars: kit ? kit.length : 0 });
 
   try {
     for await (const m of query({
@@ -197,8 +224,9 @@ async function handleChat(ws, { text, sessionId, summary }, isRetry = false) {
       options: {
         resume: sessionId || undefined,
         model: MODEL,
+        effort: EFFORT,
         cwd: REPO_ROOT,
-        systemPrompt: SYSTEM_PROMPT,
+        systemPrompt,
         mcpServers: { studio },
         allowedTools: [...ALLOWED],
         disallowedTools: DISALLOWED,
@@ -251,7 +279,7 @@ async function handleChat(ws, { text, sessionId, summary }, isRetry = false) {
     }
     dlog('query loop ended');
     if (sid && contextTokens > COMPACT_THRESHOLD) {
-      await autoCompact(send, sid, contextTokens);
+      await autoCompact(send, sid, contextTokens, systemPrompt);
     }
   } catch (e) {
     const emsg = String(e?.message || e);
@@ -265,7 +293,7 @@ async function handleChat(ws, { text, sessionId, summary }, isRetry = false) {
       const prompt = summary
         ? `A previous session (possibly on another machine) was compacted to this summary:\n\n${summary}\n\n---\nContinue from that context. The user's request:\n${text}`
         : text;
-      return handleChat(ws, { text: prompt, sessionId: null }, true);
+      return handleChat(ws, { text: prompt, sessionId: null, kit }, true);
     }
     dlog('EXCEPTION', emsg);
     logEvent({ kind: 'error', sessionId: sid, error: emsg });
@@ -306,14 +334,16 @@ async function sendCompactSummary(send, sid) {
 
 // Run /compact on the session between turns (chats are serialized through
 // chatChain, so a message the user sends meanwhile simply waits for this).
-async function autoCompact(send, sid, contextTokens) {
+async function autoCompact(send, sid, contextTokens, systemPrompt = SYSTEM_PROMPT) {
   dlog(`auto-compact: context ~${Math.round(contextTokens / 1000)}k tokens > ${Math.round(COMPACT_THRESHOLD / 1000)}k threshold`);
   send({ t: 'compacting', tokens: contextTokens });
   logEvent({ kind: 'autocompact', sessionId: sid, contextTokens });
   try {
     for await (const m of query({
       prompt: '/compact',
-      options: { resume: sid, model: MODEL, cwd: REPO_ROOT, systemPrompt: SYSTEM_PROMPT, maxTurns: 2 },
+      // Same system prompt as the chat turns — a different one here would
+      // invalidate the cached prefix for the whole session.
+      options: { resume: sid, model: MODEL, effort: EFFORT, cwd: REPO_ROOT, systemPrompt, maxTurns: 2 },
     })) {
       if (m.type === 'system' && m.subtype === 'compact_boundary') {
         dlog('context compacted', JSON.stringify(m.compact_metadata || {}));
@@ -357,4 +387,5 @@ wss.on('connection', (ws) => {
 console.log(`\n  studio-agent → ws://localhost:${PORT}`);
 console.log(`  repo root:     ${REPO_ROOT}`);
 console.log(`  model:         ${MODEL || '(default)'}`);
+console.log(`  effort:        ${EFFORT}`);
 console.log('  auth:          Claude Code subscription login (no API key)\n');

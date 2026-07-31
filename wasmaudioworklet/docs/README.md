@@ -12,6 +12,13 @@ itself see the [app README](../README.md); for the monorepo overview see the
   finished example lives at
   [petersalomonsen/wasm-music-2026](https://github.com/petersalomonsen/wasm-music-2026).)
 
+## Talks & performances
+
+- [Agentic Composition, Live](presentation/is2-2026-performance-plan.md) — plan
+  for the 12-minute set proposed to IEEE IS² 2026 (Cannes, October 2026): a
+  track built from silence by talking to the agent, with the music never
+  stopping, and the finished piece pushed to a repo the audience can open.
+
 ## Authoring a song
 
 - [Writing songs in JavaScript](writing-songs.md) — **start here.** A song is a
