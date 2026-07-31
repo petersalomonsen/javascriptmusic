@@ -19,7 +19,7 @@ test('saxophony.dsp transpiles in the browser via the faust-rs module', async ({
     page.on('pageerror', (e) => consoleMessages.push(`[pageerror] ${e.message}`));
 
     // Just need an origin that serves faust-rs-transpile.js — no repo flow.
-    await page.goto('http://localhost:8080');
+    await page.goto('/');
 
     const result = await page.evaluate(async (dspSource) => {
         try {

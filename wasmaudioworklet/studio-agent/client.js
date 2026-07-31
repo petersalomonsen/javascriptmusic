@@ -7,6 +7,7 @@
 
 import { songsourceeditor, synthsourceeditor, shadersourceeditor } from '../editorcontroller.js';
 import { transpileDspSource } from '../faust/faust-rs-transpile.js';
+import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from '../wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
@@ -160,7 +161,14 @@ const registry = {
       try {
         ({ ts } = await transpileDspSource(source, rel, {}));
       } catch (e) {
-        return { __error: `Faust transpile failed for ${rel}: ${e?.message || e}` };
+        // Structured compiler diagnostics (error-model v2): give the agent
+        // the typed projection — stable code, category, exact location,
+        // facts and fixes — instead of one flattened message.
+        const structured = e?.faustDiagnostics
+          ? formatDiagnosticsForAgent(e.faustDiagnostics, e.faustSource ?? source)
+          : '';
+        const detail = structured || e?.message || String(e);
+        return { __error: `Faust transpile failed for ${rel}:\n${detail}` };
       }
       mark('transpile');
       await writefileandstage(FAUST_DIR + stem + '.ts', ts);

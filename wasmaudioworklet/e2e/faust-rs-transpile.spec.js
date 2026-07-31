@@ -36,6 +36,51 @@ h = library("helper.dsp");
 effect = h.mono2stereo(h.wet);
 `;
 
+test('compile failure carries structured diagnostics-v2 to the browser host', async ({ page }) => {
+
+    await page.goto('/');
+
+    const result = await page.evaluate(async () => {
+        const origDefine = customElements.define.bind(customElements);
+        customElements.define = (name, ctor, opts) => {
+            try { origDefine(name, ctor, opts); } catch (e) { /* already defined */ }
+        };
+        const m = await import('/faust/faust-rs-transpile.js');
+        const fmt = await import('/faust/faust-diagnostics.js');
+        const source = 'import("stdfaust.lib");\ncutoff = hslider("cutoff", 1000, 50, 10000, 1);\nprocess = fi.lowpass(1, cutof);\n';
+        try {
+            await m.transpileDspSource(source, 'broken.dsp', {});
+            return { failed: false };
+        } catch (e) {
+            const d = e.faustDiagnostics?.diagnostics?.[0];
+            return {
+                failed: true,
+                message: e.message,
+                code: d?.code,
+                category: d?.category,
+                span: d?.labels?.[0]?.compatibility_span,
+                agentText: e.faustDiagnostics
+                    ? fmt.formatDiagnosticsForAgent(e.faustDiagnostics, source)
+                    : null,
+            };
+        }
+    });
+
+    expect(result.failed).toBe(true);
+    // Typed payload: stable code, ownership category, exact location.
+    expect(result.code).toBe('FRS-EVAL-0002');
+    expect(result.category).toBe('user_code');
+    expect(result.span?.line).toBe(3);
+    expect(result.span?.col).toBe(25);
+    // The human message is the rendered diagnostic, not the flat string.
+    expect(result.message).toContain('undefined symbol `cutof`');
+    expect(result.message).toContain('^^^^^');
+    // The agent projection includes typed facts and the category guidance.
+    expect(result.agentText).toContain('category: user_code');
+    expect(result.agentText).toContain('suggested_symbols=["cutoff"]');
+    expect(result.agentText).toContain('Guidance: category=user_code');
+});
+
 test('faust-rs wasm module transpiles voice + library() sibling + effect=', async ({ page }) => {
 
     await page.goto('/');

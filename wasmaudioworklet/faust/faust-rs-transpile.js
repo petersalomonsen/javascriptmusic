@@ -20,16 +20,19 @@ import {
     toClassName,
 } from './transpile-core.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
+import { formatDiagnosticsForHumans } from './faust-diagnostics.js';
 
 // Local build first (developer workflow: drop a fresh faust_wasm_ffi.wasm
 // next to this file), CDN-published binary as the fallback for deployments
 // where the gitignored local artifact doesn't exist.
 const WASM_URL = new URL('./faust_wasm_ffi.wasm', import.meta.url);
-// 0.16.1-asc.3: first module honoring the `--ec --os` execution options in
-// generateAuxFiles argv (native control()/frame() output) — older modules
-// silently ignore the flags and emit the classic block-compute class.
-const COMPILER_MODULE_VERSION = '0.16.1-asc.3';
-const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/faustwasm@${COMPILER_MODULE_VERSION}/faust-compiler-module.wasm`;
+// Built and published from this repo by
+// .github/workflows/publish-faust-compiler-module.yml, which refuses to
+// release a module missing the structured diagnostics-v2 exports this file
+// reads (faust_wasm_text_result_diagnostics_ptr/len) or the `--ec --os`
+// execution options the transpiler depends on.
+const COMPILER_MODULE_VERSION = '0.1.1';
+const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/wasm-music-faust@${COMPILER_MODULE_VERSION}/faust-compiler-module.wasm`;
 
 let modulePromise = null;
 
@@ -92,14 +95,28 @@ async function getFaustRs() {
             const ptr = e.faust_wasm_text_result_ptr(handle);
             const len = e.faust_wasm_text_result_len(handle);
             const text = dec.decode(mem().slice(ptr, ptr + len));
+            // Structured diagnostics-v2 report retained by compiler failures
+            // (modules >= 0.16.1-asc.4; older modules lack the exports).
+            let diagnostics = null;
+            if (!ok && typeof e.faust_wasm_text_result_diagnostics_len === 'function') {
+                const dlen = e.faust_wasm_text_result_diagnostics_len(handle);
+                if (dlen > 0) {
+                    const dptr = e.faust_wasm_text_result_diagnostics_ptr(handle);
+                    try {
+                        diagnostics = JSON.parse(dec.decode(mem().slice(dptr, dptr + dlen)));
+                    } catch (err) { /* malformed payload — keep the message */ }
+                }
+            }
             e.faust_wasm_text_result_free(handle);
-            return { ok, text };
+            return { ok, text, diagnostics };
         };
 
         // generateAuxFiles(name, source, args) → generated AS text; throws
         // with the compiler's error message on failure. Uses the JSON-array
         // export (each artifact base64-encoded) and returns the first
-        // textual artifact.
+        // textual artifact. On failure the thrown Error carries the complete
+        // diagnostics-v2 payload as `error.faustDiagnostics` (see
+        // faust-diagnostics.js for renderers).
         const generateAuxFiles = (name, source, args) => {
             const [np, nl] = writeStr(name);
             const [sp, sl] = writeStr(source);
@@ -115,9 +132,13 @@ async function getFaustRs() {
                 e.faust_wasm_dealloc(sp, sl);
                 e.faust_wasm_dealloc(ap, al);
             }
-            const { ok, text } = readTextResult(handle);
+            const { ok, text, diagnostics } = readTextResult(handle);
             if (!ok) {
-                throw new Error('faust: ' + (text || 'compilation failed'));
+                const human = diagnostics ? formatDiagnosticsForHumans(diagnostics, source) : '';
+                const error = new Error('faust: ' + (human || text || 'compilation failed'));
+                error.faustDiagnostics = diagnostics;
+                error.faustSource = source;
+                throw error;
             }
             const files = JSON.parse(text);
             const file = files.find(f => !f.binary);
