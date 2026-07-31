@@ -420,6 +420,19 @@ async function performPhrase({ instrument, notes, bpm, syncToBeats }) {
     log(`  performed ${notes.length} notes in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 
+// An AUTHORED edit: a real edit_song/edit_synth executed in the browser, whose
+// arguments are written for the video rather than replayed from the log. Use it
+// only for structure the session never asked about — the cut's value is that
+// the music is the session's actual output, so say why in the cut when you do.
+async function runEdit({ tool = 'edit_song', old_string, new_string, replace_all = false }) {
+    await setView(tool === 'edit_synth' ? 'synth' : 'song');
+    mock.send({ t: 'tool', name: tool });
+    const res = await mock.callTool(tool, { old_string, new_string, replace_all });
+    log(`  authored ${tool} → ${res.ok ? 'ok' : 'ERROR'}`);
+    if (!res.ok) throw new Error(`authored ${tool} failed: ${res.result}`);
+    return res;
+}
+
 // The app's insert-recording button: turns the captured take into song source.
 // Put the cursor inside the recording markers first, where a player would.
 async function pasteRecording({ quantize } = {}) {
@@ -480,6 +493,13 @@ for (const [n, beat] of beats.entries()) {
 
     for (const line of beat.say ?? []) { await streamText(mock, line + '\n\n'); await sleep(250); }
     for (const ord of beat.tools ?? []) await runTool(ord, { quick: beat.quick });
+    // Authored structural edits, then a compile so they are audible.
+    if (beat.edits?.length) {
+        for (const e of beat.edits) await runEdit(e);
+        mock.send({ t: 'tool', name: 'compile' });
+        const res = await mock.callTool('compile', {});
+        log(`  compile after authored edits → ${res.ok ? 'ok' : 'ERROR'}`);
+    }
     // Start the transport only once there is something to hear.
     if (beat.startPlayback) {
         await page.evaluate(() => {
