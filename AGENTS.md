@@ -7,7 +7,8 @@ Humans: see [README.md](README.md) and [wasmaudioworklet/docs](wasmaudioworklet/
 - `wasmaudioworklet/` — the app (synth engine, sequencer, visualizer, web UI).
 - `wasmaudioworklet/docs/` — authoring & dev guides (start at its README).
 - `tools/` — dev tooling: `faust2as` (Faust→AssemblyScript), `claude-bridge`
-  (connect an agent to the app's editors), `shadertest` (shader harness).
+  (connect an agent to the app's editors), `shadertest` (shader harness),
+  `faust-compiler-module` (build/validate/publish the Faust compiler wasm).
 - Songs/visuals are usually authored in separate NEAR-backed git repos loaded
   via `?gitrepo=` (see [git-hosting](wasmaudioworklet/docs/git-hosting.md)); a
   song project holds `song.js`, `synth.ts`, `shaders/`, `images/` and
