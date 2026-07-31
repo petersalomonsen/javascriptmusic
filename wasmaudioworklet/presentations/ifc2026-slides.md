@@ -185,7 +185,7 @@ Both emit the same shape. Different starting languages.
 
 | | `faust2as.js` (the abstract) | `faust2asc.js` (post-abstract) |
 | --- | --- | --- |
-| Faust output stage | `faust -lang c` | `faust -lang asc` (via `@psalomo/faustwasm`) |
+| Faust output stage | `faust -lang c` | `faust -lang asc` (via `@psalomo/wasm-music-faust`) |
 | Where it runs | Node CLI, offline | Node CLI **and in the browser** |
 | Live-coding workflow | Save .dsp → re-run CLI → reload | Save .dsp in the editor → DSP recompiles and hot-swaps |
 
@@ -270,7 +270,7 @@ Speaker notes:
 What changed since the abstract was submitted.
 
 ```
-your_dsp.dsp  →  faust -lang asc (via @psalomo/faustwasm)
+your_dsp.dsp  →  faust -lang asc (via @psalomo/wasm-music-faust)
               ↓     (runs in the browser, no host install)
               ↓  transpile-core.js parses & restructures
               ↓
@@ -285,9 +285,12 @@ running synth — no Node CLI, no separate build step.
 
 <!--
 Speaker notes:
-  - The `@psalomo/faustwasm` fork bundles the Faust compiler itself
-    as wasm (~3 MB one-time download). After that, transpilation is
-    pure browser work.
+  - The `@psalomo/wasm-music-faust` package *is* the Faust compiler
+    itself as wasm — ~2 MB one-time download (10 MB unpacked). After
+    that, transpilation is pure browser work.
+  - It is built and published from this repo by CI, straight from the
+    faust-rs sources, so the compiler in the browser is traceable to a
+    commit rather than to someone's laptop.
   - Live-coding workflow loop time: from save → hear is ~1-2 seconds
     typical, ~3-5s with heavy DSPs like master_me.
 -->
