@@ -2,7 +2,9 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 
-const PORT = 8080;
+// PORT env override: lets a second checkout/worktree run its own server
+// beside the default one on 8080.
+const PORT = Number(process.env.PORT) || 8080;
 const STATIC_ROOT = new URL('.', import.meta.url).pathname;
 const WASM_GIT_UNPKG = 'https://unpkg.com/wasm-git@0.0.17/';
 

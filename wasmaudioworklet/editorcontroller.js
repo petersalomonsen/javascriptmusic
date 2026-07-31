@@ -166,6 +166,10 @@ export async function initEditor(componentRoot) {
     const errorMessagesElement = componentRoot.querySelector('#errormessages');
     const errorMessagesContentElement = errorMessagesElement.querySelector('span');
     const displayFaustError = (err) => {
+        // Compiler diagnostics are multi-line with caret-aligned source
+        // excerpts — render them preformatted so the carets line up.
+        errorMessagesContentElement.style.whiteSpace = 'pre-wrap';
+        errorMessagesContentElement.style.fontFamily = 'ui-monospace, monospace';
         errorMessagesContentElement.innerText = err;
         errorMessagesElement.style.display = 'block';
     };

@@ -11,7 +11,7 @@ export default defineConfig({
   // run in parallel (CI already passes --workers=1; make local runs match).
   workers: 1,
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL: `http://localhost:${process.env.PORT || 8080}`,
     video: 'on',
     permissions: ['midi'],
     launchOptions: {
@@ -20,7 +20,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'node devserver.js',
-    port: 8080,
+    port: Number(process.env.PORT) || 8080,
     reuseExistingServer: true
   }
 });
