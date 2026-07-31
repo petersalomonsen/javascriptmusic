@@ -185,6 +185,13 @@ export function initAudioWorkletNode(componentRoot) {
         componentRoot.getElementById('stopaudiobutton').style.display = 'none';
     }
 
+    // Automation hook for e2e specs and tools/session-video: play a note through
+    // exactly the path the virtual keyboard and a real MIDI keyboard both take,
+    // so a scripted performance reaches the synth, the visualizer AND the
+    // recorder the same way a human's does. Honours the selected instrument
+    // (window.currentMidiChannelMapping) like any other live input.
+    window.playNoteMessage = (note, velocity) => processNoteMessage(note, velocity);
+
     window.toggleSongPlay = (status) => {
         if (audioworkletnode) {
             audioworkletnode.port.postMessage({ toggleSongPlay: status });

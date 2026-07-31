@@ -322,9 +322,17 @@ const drainTimer = setInterval(drain, 5000);
 let currentView = null;
 const setView = async (v) => { if (v !== currentView) { await showOnly(page, v); currentView = v; } };
 
-async function runTool(ord) {
+// `quick` runs the call without the deliberate look-at-the-code pauses — for a
+// jump cut, where the point is the RESULT rather than watching each edit land.
+async function runTool(ord, { quick = false } = {}) {
     const t = tools[ord];
     if (!t) throw new Error(`no tool #${ord} in the log`);
+    if (quick) {
+        mock.send({ t: 'tool', name: t.name });
+        const res = await mock.callTool(t.name, t.args);
+        log(`  #${ord} ${t.name} → ${res.ok ? 'ok' : 'ERROR'} (quick)`);
+        return res;
+    }
     // Watch the document being edited; stay put through the compile that applies it.
     const want = VIEW_FOR_TOOL[t.name];
     if (want) { await setView(want); await sleep(600); }
@@ -336,6 +344,100 @@ async function runTool(ord) {
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
     log(`  #${ord} ${t.name} → ${res.ok ? 'ok' : 'ERROR'} (${secs}s)`);
     if (want) await sleep(1400); // let the edit be read on screen
+    return res;
+}
+
+// ---- live actions: things the PLAYER does, which no log can replay ----------
+// A session log holds the agent's tool calls, not the human's. Playing a take
+// and pasting it are the player's half of the loop, so they are re-enacted here
+// against the running app rather than replayed.
+
+const CM = () => document.querySelector('app-javascriptmusic').shadowRoot
+    .querySelector('#editor .CodeMirror').CodeMirror;
+
+// Play a phrase through the app's live-input path — the same `processNoteMessage`
+// the virtual keyboard and a real MIDI keyboard both reach — so the sequencer
+// captures it exactly as it would a human performance.
+async function performPhrase({ instrument, notes, bpm }) {
+    await setView('song');
+    if (instrument) {
+        await page.evaluate((name) => {
+            const root = document.querySelector('app-javascriptmusic').shadowRoot;
+            const sel = root.getElementById('midichannelmappingselection');
+            sel.value = name;
+            window.currentMidiChannelMapping = name;
+            sel.dispatchEvent(new Event('change'));
+            root.getElementById('vkeyboardinputelement').focus();
+        }, instrument);
+        log(`  instrument → ${instrument}`);
+        await sleep(600);
+    }
+    const t0 = Date.now();
+    await page.evaluate(async ({ notes, msPerBeat }) => {
+        const root = document.querySelector('app-javascriptmusic').shadowRoot;
+        const vk = root.getElementById('vkeyboardinputelement');
+        const names = new Array(128).fill(null).map((v, n) =>
+            ['c', 'cs', 'd', 'ds', 'e', 'f', 'fs', 'g', 'gs', 'a', 'as', 'b'][n % 12] + Math.floor(n / 12));
+        const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+        const held = new Set();
+        const show = () => { vk.value = [...held].map((n) => names[n]).join(','); };
+        const start = performance.now();
+        await Promise.all(notes.map(async ([beat, note, durBeats, vel]) => {
+            await nap(Math.max(0, start + beat * msPerBeat - performance.now()));
+            window.playNoteMessage(note, vel);
+            held.add(note); show();
+            await nap(durBeats * msPerBeat);
+            window.playNoteMessage(note, 0);
+            held.delete(note); show();
+        }));
+        vk.value = '';
+    }, { notes, msPerBeat: 60000 / bpm });
+    log(`  performed ${notes.length} notes in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+}
+
+// The app's insert-recording button: turns the captured take into song source.
+// Put the cursor inside the recording markers first, where a player would.
+async function pasteRecording() {
+    await setView('song');
+    await page.evaluate(() => {
+        const cm = document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror;
+        const line = cm.getValue().split('\n').findIndex((l) => l.includes('startRecording()'));
+        cm.setCursor({ line: line < 0 ? 0 : line + 1, ch: 0 });
+    });
+    await sleep(400);
+    await page.evaluate(() => window.insertRecording());
+    log('  pasted the recorded take into the song');
+    await sleep(1600);
+}
+
+// Quantize the take that was just pasted. This is a REAL edit_song tool call —
+// only its arguments are computed here, because they have to anchor on notes
+// that did not exist until the take was played.
+async function quantizeTake(stepsPerBeat) {
+    const tail = await page.evaluate(() => {
+        const cm = document.querySelector('app-javascriptmusic').shadowRoot
+            .querySelector('#editor .CodeMirror').CodeMirror;
+        const lines = cm.getValue().split('\n');
+        const i = lines.findIndex((l) => l.includes('.play([') && l.includes('createTrack('));
+        if (i < 0) return null;
+        for (let j = i; j < lines.length; j++) if (lines[j].trimEnd().endsWith(']);')) return lines[j];
+        return null;
+    });
+    if (!tail) {
+        // Losing the last beat should not throw away the whole render — the
+        // usual cause is an empty take, which the log above makes obvious.
+        log('  WARNING: no recorded take found to quantize — skipping');
+        return null;
+    }
+    await setView('song');
+    mock.send({ t: 'tool', name: 'edit_song' });
+    const res = await mock.callTool('edit_song', {
+        old_string: tail,
+        new_string: tail.replace(/\]\);\s*$/, `].quantize(${stepsPerBeat}));`),
+    });
+    log(`  quantize(${stepsPerBeat}) → ${res.ok ? 'ok' : 'ERROR'}`);
+    await sleep(1400);
     return res;
 }
 
@@ -352,23 +454,30 @@ for (const [n, beat] of beats.entries()) {
     await sleep(700);
 
     for (const line of beat.say ?? []) { await streamText(mock, line + '\n\n'); await sleep(250); }
-    for (const ord of beat.tools ?? []) await runTool(ord);
+    for (const ord of beat.tools ?? []) await runTool(ord, { quick: beat.quick });
+    // Jump cut: after a quick run, land on the result and let it play.
+    if (beat.quick && beat.showAfter) { await setView(beat.showAfter); await sleep(beat.showMs ?? 3000); }
 
     for (const line of beat.sayThen ?? []) { await setView('agent'); await streamText(mock, line + '\n\n'); await sleep(250); }
-    for (const ord of beat.thenTools ?? []) await runTool(ord);
+    for (const ord of beat.thenTools ?? []) await runTool(ord, { quick: beat.quick });
 
     for (const line of beat.sayAfterFail ?? []) { await setView('agent'); await streamText(mock, line + '\n\n'); await sleep(250); }
     for (const ord of beat.failFixTools ?? []) await runTool(ord);
 
+    // The player's half of the loop: perform, paste, quantize.
+    if (beat.perform) await performPhrase(beat.perform);
+    if (beat.pasteRecording) await pasteRecording();
+    if (beat.quantizeTake) await quantizeTake(beat.quantizeTake);
+
     if (beat.outro) { await setView('agent'); await streamText(mock, beat.outro + '\n'); }
     mock.send({ t: 'done' });
-    await sleep(1800);
+    await sleep(beat.holdMs ?? 1800);
 }
 
 // Play the finished track out over the song
 log('outro');
 await setView('song');
-await sleep(12000);
+await sleep(cut.OUTRO_MS ?? 12000);
 
 // ---- stop + mux --------------------------------------------------------------
 clearInterval(drainTimer);
