@@ -101,6 +101,8 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
       <textarea id="studioagentinput" rows="2"
         placeholder="Ask the studio agent…  e.g. 'make a song with a four-on-the-floor beat and a bassline'"></textarea>
       <button type="submit" id="studioagentsend">Send</button>
+      <button type="button" id="studioagentstop" style="display: none"
+        title="stop the current turn — the music keeps playing">Stop</button>
     </form>
   </div>
 

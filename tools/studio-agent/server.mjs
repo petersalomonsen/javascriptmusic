@@ -92,9 +92,24 @@ function safeResolve(p) {
 }
 
 // ---- WebSocket plumbing: one browser at a time -----------------------------
-let pending = new Map();   // id -> { resolve }
+let pending = new Map();   // id -> { resolve, started, fail }
 let nextId = 1;
 let chatChain = Promise.resolve(); // serialize chat turns (and post-turn auto-compact)
+// The turn currently in flight, so the browser's stop button can end it. A live
+// set cannot wait out a turn that has gone wrong: the SDK's own interrupt() is
+// streaming-input only, but Options.abortController works with a plain prompt.
+let currentTurn = null;    // { controller, aborted }
+
+// Abort the running turn: tear down the query, then settle every tool call
+// still waiting on the browser. Without that second half the SDK's tool handler
+// keeps awaiting a promise that will never resolve.
+function abortCurrentTurn() {
+  if (!currentTurn || currentTurn.aborted) return false;
+  currentTurn.aborted = true;
+  try { currentTurn.controller.abort(); } catch { /* already torn down */ }
+  for (const entry of [...pending.values()]) entry.fail('turn stopped by the user');
+  return true;
+}
 
 function callBrowser(ws, name, args) {
   return new Promise((resolveCall, rejectCall) => {
@@ -107,6 +122,7 @@ function callBrowser(ws, name, args) {
       rejectCall(new Error(msg));
     };
     const entry = {
+      fail: (msg) => { if (timer) clearTimeout(timer); fail(msg); },
       resolve: (res) => { if (timer) clearTimeout(timer); pending.delete(id); resolveCall(res); },
       // Browser acked that execution began (the serial queue reached this call):
       // swap the queue-wait timer for the per-tool run timer.
@@ -218,10 +234,16 @@ async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false
     kit ? `kit ${kit.length} chars` : 'NO KIT');
   logEvent({ kind: 'chat', sessionId: sid, resumed: !!sessionId, text, kitChars: kit ? kit.length : 0 });
 
+  // One controller per turn; the stop button aborts through it. A retry reuses
+  // the same slot, so an abort during the retry still lands.
+  const controller = new AbortController();
+  currentTurn = { controller, aborted: false };
+
   try {
     for await (const m of query({
       prompt: text,
       options: {
+        abortController: controller,
         resume: sessionId || undefined,
         model: MODEL,
         effort: EFFORT,
@@ -278,11 +300,26 @@ async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false
       }
     }
     dlog('query loop ended');
+    // An aborted query can simply END rather than throw, so the stopped case is
+    // handled here as well as in the catch below.
+    if (currentTurn?.aborted) {
+      dlog('turn stopped by the user');
+      send({ t: 'stopped', sessionId: sid });
+      return;
+    }
     if (sid && contextTokens > COMPACT_THRESHOLD) {
       await autoCompact(send, sid, contextTokens, systemPrompt);
     }
   } catch (e) {
     const emsg = String(e?.message || e);
+    // A stop is not a failure: report it as one and the agent looks broken, and
+    // the chat fills with an error the user deliberately caused.
+    if (currentTurn?.aborted) {
+      dlog('turn stopped by the user (query threw:', emsg.slice(0, 60), ')');
+      logEvent({ kind: 'stopped', sessionId: sid });
+      send({ t: 'stopped', sessionId: sid });
+      return;
+    }
     // SDK sessions are per-machine: a repo opened on another machine carries a
     // sessionId this machine has never seen. Start FRESH, seeded with the
     // compact summary the browser keeps in the repo (studioagent-session.json).
@@ -298,6 +335,9 @@ async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false
     dlog('EXCEPTION', emsg);
     logEvent({ kind: 'error', sessionId: sid, error: emsg });
     send({ t: 'error', error: emsg });
+  } finally {
+    // Only clear the slot if this turn still owns it — a retry replaced it.
+    if (currentTurn?.controller === controller) currentTurn = null;
   }
 }
 
@@ -379,6 +419,11 @@ wss.on('connection', (ws) => {
       if (p && typeof p.started === 'function') p.started();
     } else if (msg.t === 'chat') {
       chatChain = chatChain.then(() => handleChat(ws, msg));
+    } else if (msg.t === 'abort') {
+      const stopped = abortCurrentTurn();
+      dlog(stopped ? 'ABORT requested by user' : 'abort requested but no turn is running');
+      logEvent({ kind: 'abort', requested: true, stopped });
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'aborted', stopped }));
     }
   });
   ws.on('close', () => { clearInterval(keepalive); console.log('  browser disconnected'); });
