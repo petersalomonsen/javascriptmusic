@@ -1,0 +1,380 @@
+# Build the Faust compiler module from source and publish it as
+# `@psalomo/wasm-music-faust` — so a compiler release no longer depends on one
+# developer's laptop.
+#
+# The package holds exactly one artifact: `faust-compiler-module.wasm`, the
+# faust-rs (Rust) Faust compiler built for wasm32-unknown-unknown with the
+# AssemblyScript backend and the Faust standard libraries embedded. The app
+# loads it with a bare `WebAssembly.instantiate(bytes, {})`
+# (wasmaudioworklet/faust/faust-rs-transpile.js, tools/faust2as/faust2asc.js),
+# and jsDelivr serves it straight out of the published package.
+#
+# ---------------------------------------------------------------------------
+# Publishing: npm trusted publishing (OIDC), no token
+# ---------------------------------------------------------------------------
+# This workflow authenticates to npm with a short-lived OIDC token from GitHub,
+# so there is no NPM_TOKEN secret to leak or rotate. Already configured for this
+# package; what it took, should it ever need redoing:
+#
+#   1. The package must already exist on npm — a trusted publisher cannot be
+#      configured for a name that has never been published. Bootstrap it by
+#      running this workflow with dry_run, downloading the tarball artifact,
+#      and publishing that exact file by hand:
+#        npm publish <tarball> --access public
+#   2. npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions:
+#        Organization or user:  petersalomonsen
+#        Repository:            javascriptmusic
+#        Workflow filename:     publish-faust-compiler-module.yml
+#      All fields are case-sensitive, and npm does not validate them on save —
+#      a typo only surfaces as a failed publish.
+#
+# The publisher is not restricted to a branch (no environment is configured),
+# so a run started from any ref publishes — which is how 0.1.1 was released
+# from the PR branch, before this workflow was on master.
+#
+# A package may have exactly ONE trusted publisher, which is why this publishes
+# its own package rather than reusing the @psalomo/faustwasm fork: that name's
+# publisher slot belongs to petersalomonsen/faustwasm's own workflow.
+#
+# Provenance is generated automatically for trusted publishes, and requires
+# package.json's `repository` field to match this repository exactly — which is
+# why build-package.mjs sets it to petersalomonsen/javascriptmusic and
+# verify-package.mjs asserts it.
+#
+# Trusted publishing needs npm >= 11.5.1 on Node >= 22, newer than the runner
+# default, so the publish step sets that up for itself.
+
+name: Publish faust compiler module
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New package version, e.g. 0.1.1'
+        required: true
+        type: string
+      faust_compiler_ref:
+        description: 'git ref of grame-cncm/faust-rs to build'
+        required: true
+        default: 'main'
+        type: string
+      faustlibraries_ref:
+        description: 'git ref of grame-cncm/faustlibraries to embed (faust-rs CI pins an exact SHA — see the note below)'
+        required: true
+        default: 'master'
+        type: string
+      dry_run:
+        description: 'Do everything except npm publish (the tarball is uploaded as an artifact either way)'
+        required: true
+        default: true
+        type: boolean
+      run_e2e:
+        description: 'Also run the in-browser Playwright transpile spec against the fresh module'
+        required: true
+        default: true
+        type: boolean
+      e2e_ref:
+        description: 'Branch of THIS repo to run that spec from (blank = the ref this run was started from). Point it at the PR that consumes the new module.'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  id-token: write   # npm trusted publishing (OIDC)
+
+# Two runs must never race to publish.
+concurrency:
+  group: publish-faust-compiler-module
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    # The faust-rs workspace is a compiler: a cold cargo build is the long pole.
+    timeout-minutes: 120
+    # Free-text inputs reach the shell as environment variables, never
+    # interpolated into a script body.
+    env:
+      PACKAGE: '@psalomo/wasm-music-faust'
+      VERSION: ${{ inputs.version }}
+      FAUST_RS_REF: ${{ inputs.faust_compiler_ref }}
+      FAUSTLIBRARIES_REF: ${{ inputs.faustlibraries_ref }}
+      E2E_REF: ${{ inputs.e2e_ref }}
+      RUN_E2E: ${{ inputs.run_e2e }}
+      DRY_RUN: ${{ inputs.dry_run }}
+
+    steps:
+      # ---------------------------------------------------------------------
+      # Cheap gates first — never spend an hour of compiler build on a version
+      # string that was going to be rejected at the end.
+      # ---------------------------------------------------------------------
+      - name: Validate the requested version
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$VERSION' is not a semver version."
+            exit 1
+          fi
+
+          if npm view "$PACKAGE@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::$PACKAGE@$VERSION is already published — pick a new version."
+            exit 1
+          fi
+
+          # Absent on the very first release; that is expected, not an error.
+          PREVIOUS="$(npm view "$PACKAGE" version 2>/dev/null || true)"
+          echo "PREVIOUS=${PREVIOUS:-none}" >> "$GITHUB_ENV"
+          echo "Building $PACKAGE $VERSION (previous: ${PREVIOUS:-none}, dry run: $DRY_RUN)"
+
+      - name: Checkout javascriptmusic
+        uses: actions/checkout@v4
+
+      - name: Checkout faust-rs (compiler source)
+        uses: actions/checkout@v4
+        with:
+          repository: grame-cncm/faust-rs
+          ref: ${{ inputs.faust_compiler_ref }}
+          path: faust-rs
+
+      # Note: faust-rs's own CI does not track faustlibraries@master — it pins
+      # an exact revision (ecf2fdc238148c44c18352102333a1229ca7a8d3 as of
+      # 2026-07-30), after a lagging standard library broke its dx7_alg5
+      # compile-budget job by not providing `dx.algorithm`. `master` is the
+      # default here; pass the pinned SHA when you want exactly the standard
+      # library the compiler was tested against. Either way the resolved SHA is
+      # recorded in the published package and in the run summary.
+      - name: Checkout faustlibraries (embedded .lib files)
+        uses: actions/checkout@v4
+        with:
+          repository: grame-cncm/faustlibraries
+          ref: ${{ inputs.faustlibraries_ref }}
+          path: faustlibraries
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Record the source revisions
+        run: |
+          set -euo pipefail
+          echo "FAUST_RS_SHA=$(git -C faust-rs rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "FAUSTLIBRARIES_SHA=$(git -C faustlibraries rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Set up the Rust wasm32 target
+        working-directory: faust-rs
+        run: |
+          set -euo pipefail
+          # Run from the workspace so faust-rs's rust-toolchain.toml (channel =
+          # stable) selects the toolchain the target gets added to.
+          rustup show active-toolchain || rustup toolchain install stable --profile minimal --no-self-update
+          rustup target add wasm32-unknown-unknown
+          rustc --version
+          cargo --version
+
+      # A cold build of the compiler workspace is the long pole of this run.
+      # The target dir is large — if these entries start crowding the
+      # repository's 10 GB cache budget, drop `faust-rs/target` from the list
+      # and keep only the registry.
+      - name: Cache cargo registry and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            faust-rs/target
+          key: faust-rs-cargo-${{ runner.os }}-${{ hashFiles('faust-rs/Cargo.lock') }}
+          restore-keys: |
+            faust-rs-cargo-${{ runner.os }}-
+
+      # ---------------------------------------------------------------------
+      # Build
+      # ---------------------------------------------------------------------
+      - name: Build the compiler module
+        working-directory: faust-rs
+        env:
+          # Without this the module still builds, but the Faust standard
+          # libraries are not embedded and `import("stdfaust.lib")` fails at
+          # runtime. Validation check 2 below is what catches that.
+          FAUST_RS_EMBEDDED_LIB_ROOT: ${{ github.workspace }}/faustlibraries
+        run: |
+          set -euo pipefail
+          # crates/wasm-ffi/build.rs embeds the .lib files but only declares
+          # `rerun-if-env-changed` for the root — never `rerun-if-changed` on
+          # the files themselves. With a restored target dir and an unchanged
+          # root *path*, cargo would consider the build script fresh and keep a
+          # module embedding a stale copy of the standard libraries, even
+          # though the faustlibraries checkout moved. Clean that one crate so
+          # the embed is always regenerated; every dependency stays cached.
+          cargo clean -p wasm-ffi
+          cargo run --release -p xtask -- build-faustwasm-compiler-module
+
+      - name: Locate the built module
+        run: |
+          set -euo pipefail
+          RELEASE_DIR="faust-rs/target/wasm32-unknown-unknown/release"
+          MODULE=""
+          # xtask renames cargo's crate-derived `faust_wasm_ffi.wasm` to the
+          # distribution name `libfaust-rs.wasm`; accept either, newest
+          # spelling first, so a change on that side does not break the run.
+          for candidate in "$RELEASE_DIR/libfaust-rs.wasm" "$RELEASE_DIR/faust_wasm_ffi.wasm"; do
+            if [ -f "$candidate" ]; then MODULE="$candidate"; break; fi
+          done
+          if [ -z "$MODULE" ]; then
+            # Exactly one .wasm in the release dir is still unambiguous.
+            mapfile -t found < <(find "$RELEASE_DIR" -maxdepth 1 -name '*.wasm' 2>/dev/null)
+            if [ "${#found[@]}" -eq 1 ]; then MODULE="${found[0]}"; fi
+          fi
+          if [ -z "$MODULE" ]; then
+            echo "::error::No compiler module found in $RELEASE_DIR"
+            ls -la "$RELEASE_DIR" || true
+            exit 1
+          fi
+          echo "MODULE_PATH=${{ github.workspace }}/$MODULE" >> "$GITHUB_ENV"
+          echo "MODULE_SHA256=$(sha256sum "$MODULE" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "MODULE_BYTES=$(stat -c%s "$MODULE")" >> "$GITHUB_ENV"
+          ls -la "$MODULE"
+
+      # ---------------------------------------------------------------------
+      # Mandatory validation — runs in dry runs too. See the script header for
+      # what each check protects against.
+      # ---------------------------------------------------------------------
+      - name: Validate the module
+        run: node tools/faust-compiler-module/validate-module.mjs "$MODULE_PATH"
+
+      # A branch that is waiting on this module can be validated against it
+      # before it is published: the spec runs from `e2e_ref`, against the build
+      # from above. The local module drop outranks the CDN, so the version that
+      # branch pins does not have to exist on npm yet.
+      - name: Check out the branch to run the e2e from
+        if: ${{ env.RUN_E2E == 'true' && env.E2E_REF != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.E2E_REF }}
+          path: e2e-repo
+
+      - name: Repo e2e against the fresh module
+        if: ${{ env.RUN_E2E == 'true' }}
+        run: |
+          set -euo pipefail
+          APP_DIR="wasmaudioworklet"
+          if [ -n "$E2E_REF" ]; then APP_DIR="e2e-repo/wasmaudioworklet"; fi
+          echo "Running the transpile spec from ${E2E_REF:-the ref this run started from} in $APP_DIR"
+          # The gitignored local drop takes precedence over the CDN fallback,
+          # so the app under test loads exactly the module built above.
+          cp "$MODULE_PATH" "$APP_DIR/faust/faust_wasm_ffi.wasm"
+          cd "$APP_DIR"
+          yarn install
+          yarn playwright install --with-deps chromium
+          npx playwright test e2e/faust-rs-transpile.spec.js
+
+      - name: Upload Playwright artifacts on failure
+        if: ${{ failure() && env.RUN_E2E == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: |
+            wasmaudioworklet/test-results/
+            e2e-repo/wasmaudioworklet/test-results/
+          if-no-files-found: ignore
+
+      # ---------------------------------------------------------------------
+      # Package
+      # ---------------------------------------------------------------------
+      - name: Build the package
+        run: |
+          set -euo pipefail
+          node tools/faust-compiler-module/build-package.mjs \
+            --module "$MODULE_PATH" \
+            --license faust-rs/LICENSE \
+            --out staging/package \
+            --version "$VERSION" \
+            --faust-rs-commit "$FAUST_RS_SHA" \
+            --faustlibraries-commit "$FAUSTLIBRARIES_SHA"
+
+          # Pack, then verify the *tarball* — what ships is what gets checked,
+          # not the directory it was built from.
+          mkdir -p staging/out staging/repacked
+          (cd staging/package && npm pack --ignore-scripts --pack-destination ../out >/dev/null)
+          TARBALL="$(ls staging/out/*.tgz)"
+          tar -xzf "$TARBALL" -C staging/repacked
+          echo "TARBALL=${{ github.workspace }}/$TARBALL" >> "$GITHUB_ENV"
+          ls -la "$TARBALL"
+
+      - name: Verify the tarball
+        run: |
+          node tools/faust-compiler-module/verify-package.mjs \
+            staging/repacked/package "$VERSION" "$MODULE_PATH"
+
+      - name: Upload the tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-music-faust-${{ env.VERSION }}-tarball
+          path: ${{ env.TARBALL }}
+
+      # ---------------------------------------------------------------------
+      # Publish
+      # ---------------------------------------------------------------------
+      - name: Set up Node.js 22 and npm for trusted publishing
+        if: ${{ env.DRY_RUN != 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm
+        if: ${{ env.DRY_RUN != 'true' }}
+        run: |
+          set -euo pipefail
+          # Trusted publishing needs npm >= 11.5.1; Node 22 still ships npm 10.
+          npm install -g npm@latest
+          npm --version
+          # No NODE_AUTH_TOKEN: auth is the OIDC token from `id-token: write`.
+          # Provenance is automatic for trusted publishes; --provenance makes
+          # the intent explicit and fails loudly if OIDC did not take effect.
+          npm publish "$TARBALL" --access public --provenance
+
+      - name: Report the dry run
+        if: ${{ env.DRY_RUN == 'true' }}
+        run: |
+          set -euo pipefail
+          echo "Dry run: nothing published. The tarball is attached to this run as an artifact."
+          echo "To publish it by hand (this is how the first release is bootstrapped):"
+          echo "  npm publish <downloaded tarball> --access public"
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## $PACKAGE $VERSION"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "| mode | dry run — tarball attached, nothing published |"
+            else
+              echo "| mode | published to npm (trusted publishing, with provenance) |"
+            fi
+            echo "| previous | \`${PREVIOUS:-none}\` |"
+            echo "| faust-rs | \`$FAUST_RS_REF\` @ \`${FAUST_RS_SHA:-unknown}\` |"
+            echo "| faustlibraries | \`$FAUSTLIBRARIES_REF\` @ \`${FAUSTLIBRARIES_SHA:-unknown}\` |"
+            echo "| module | ${MODULE_BYTES:-?} bytes, sha256 \`${MODULE_SHA256:-unknown}\` |"
+            if [ "$RUN_E2E" = "true" ]; then
+              echo "| e2e | ran from \`${E2E_REF:-the ref this run started from}\` |"
+            else
+              echo "| e2e | skipped |"
+            fi
+            echo ""
+            if [ "$DRY_RUN" != "true" ] && [ "${{ job.status }}" = "success" ]; then
+              echo "### Manual follow-ups"
+              echo ""
+              echo "1. Bump \`COMPILER_MODULE_VERSION\` to \`$VERSION\` in"
+              echo "   \`wasmaudioworklet/faust/faust-rs-transpile.js\` (the CDN fallback URL is derived from it)."
+              echo "2. Bump the \`$PACKAGE\` dependency in \`tools/faust2as/package.json\`."
+              echo "3. Verify the CDN serves the new file (jsDelivr lags the publish by a few minutes):"
+              echo "   \`https://cdn.jsdelivr.net/npm/$PACKAGE@$VERSION/faust-compiler-module.wasm\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
