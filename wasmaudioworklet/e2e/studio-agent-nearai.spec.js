@@ -87,7 +87,12 @@ test('proxy mode (/nearai on): no key, no system prompt, no tools sent — serve
     expect(requests[0].headers.authorization).toBeUndefined();      // server holds the key
     expect(requests[0].body.tools).toBeUndefined();                  // server injects tools
     expect(requests[0].body.messages.some((m) => m.role === 'system')).toBe(false); // server injects the prompt
-    expect(requests[0].body.messages.at(-1)).toEqual({ role: 'user', content: 'hello there' });
+    // The project kit rides in on the FIRST user turn, never as a system message:
+    // the proxy strips those, and repo content carries user authority anyway.
+    const last = requests[0].body.messages.at(-1);
+    expect(last.role).toBe('user');
+    expect(last.content.endsWith('hello there')).toBe(true);
+    expect(last.content).toContain('Performance kit');
 });
 
 test('API errors surface in the chat and /nearai off restores the local agent path', async ({ page }) => {
