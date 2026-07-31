@@ -428,6 +428,20 @@ async function onMessage(msg) {
     case 'freshsession': // resume failed (e.g. repo opened on another machine)
       addLine('tool', '— previous session not on this machine; started fresh from the saved summary —');
       break;
+    case 'aborted': // the server acknowledged the stop request
+      if (!msg.stopped) addLine('tool', '— nothing was running —');
+      break;
+    case 'stopped': { // the turn actually ended because it was stopped
+      // Keep whatever the agent had already said: the work it completed before
+      // the stop is real, and losing it would make Stop feel destructive.
+      const partial = agentMsgEl ? agentMsgEl.textContent : '';
+      if (partial) { conversation.push({ role: 'agent', text: partial }); saveSession(); }
+      addLine('tool', '— stopped —');
+      finishAgentMessage();
+      stopActivity('stopped');
+      setBusy(false);
+      break;
+    }
     case 'error':
       addLine('error', `⚠ ${msg.error}`);
       finishAgentMessage();
@@ -605,9 +619,11 @@ async function runNearaiServerlessTool(name, args) {
 }
 
 let nearaiMessages = null; // model-visible history (in-memory for iteration 1)
+let nearaiAbort = null;    // AbortController for the turn in flight
 
 async function runNearaiTurn(text) {
   const cfg = nearaiConfig();
+  nearaiAbort = new AbortController();
   let content = text;
   if (!nearaiMessages) {
     // In proxy mode the server injects the system prompt (and tools) —
@@ -624,7 +640,9 @@ async function runNearaiTurn(text) {
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
   try {
     const { usage } = await runAgentTurn({
-      fetchFn: (...a) => fetch(...a),
+      // The signal rides on every request of the turn, so Stop lands mid-loop
+      // rather than only between tool calls.
+      fetchFn: (url, init) => fetch(url, { ...init, signal: nearaiAbort.signal }),
       baseUrl: cfg.baseUrl,
       apiKey: cfg.apiKey,
       model: cfg.model,
@@ -647,10 +665,18 @@ async function runNearaiTurn(text) {
     finishAgentMessage();
     stopActivity(`done ✓ (${usage?.total_tokens ?? '?'} tokens)`);
   } catch (e) {
-    addLine('error', `⚠ ${e?.message || e}`);
-    finishAgentMessage();
-    stopActivity('error ✗');
+    // A user-requested stop is not a failure — don't report it as one.
+    if (e?.name === 'AbortError' || nearaiAbort?.signal.aborted) {
+      addLine('tool', '— stopped —');
+      finishAgentMessage();
+      stopActivity('stopped');
+    } else {
+      addLine('error', `⚠ ${e?.message || e}`);
+      finishAgentMessage();
+      stopActivity('error ✗');
+    }
   }
+  nearaiAbort = null;
   setBusy(false);
 }
 
@@ -662,6 +688,24 @@ function setStatus(s) { const e = el('studioagentstatus'); if (e) e.textContent 
 function setBusy(b) {
   const send = el('studioagentsend');
   if (send) { send.disabled = b; send.textContent = b ? '…' : 'Send'; }
+  // Stop is only offered while a turn is actually running.
+  const stop = el('studioagentstop');
+  if (stop) { stop.style.display = b ? '' : 'none'; stop.disabled = false; stop.textContent = 'Stop'; }
+}
+
+// Stop the running turn. The audio graph is untouched — whatever is playing
+// keeps playing; only the agent's turn ends. That is the whole point on stage:
+// a turn that has gone wrong costs a bar of vamping, not the performance.
+function abortTurn() {
+  const stop = el('studioagentstop');
+  if (stop) { stop.disabled = true; stop.textContent = 'stopping…'; }
+  if (nearaiConfig()) {
+    if (nearaiAbort) nearaiAbort.abort();
+    return;
+  }
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ t: 'abort' }));
+  }
 }
 
 function addLine(kind, text) {
@@ -737,7 +781,11 @@ export function initStudioAgent(shadowRoot) {
   });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+    // Escape stops a running turn without reaching for the mouse — the one
+    // interaction worth having a shortcut for when a set is in progress.
+    if (e.key === 'Escape') { e.preventDefault(); abortTurn(); }
   });
+  el('studioagentstop').addEventListener('click', abortTurn);
 
   loadSession(); // restore prior conversation from the OPFS repo (if any)
   connect();
