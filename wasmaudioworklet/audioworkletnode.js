@@ -1,6 +1,6 @@
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
 import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi, setBroadcastUiHandlers, releaseAudioWorklet } from './synth1/audioworklet/midisynthaudioworklet.js';
-import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer } from './visualizer/defaultvisualizer.js';
+import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer, getCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
 import { attachSeek, detachSeek } from './app.js';
 import { recordAudioNode, startVideoRecording, stopVideoRecording } from './screenrecorder/screenrecorder.js';
@@ -191,6 +191,10 @@ export function initAudioWorkletNode(componentRoot) {
     // recorder the same way a human's does. Honours the selected instrument
     // (window.currentMidiChannelMapping) like any other live input.
     window.playNoteMessage = (note, velocity) => processNoteMessage(note, velocity);
+    // Where the sequencer's playhead is, in seconds — lets a scripted take start
+    // on a beat boundary, so the captured notes land on the grid rather than
+    // wherever in the loop the script happened to begin.
+    window.songTimeSeconds = () => getCurrentTimeSeconds();
 
     window.toggleSongPlay = (status) => {
         if (audioworkletnode) {

@@ -269,6 +269,18 @@ await page.evaluate(() => {
 await page.waitForFunction(() => !!window.audioworkletnode, { timeout: 180000 });
 await page.waitForFunction(() => window.WASM_SYNTH_BYTES != null, { timeout: 180000 });
 log('audio running');
+// The audio graph has to be live before capture can tap it, but the SEQUENCER
+// does not. A cut that opens on an empty project pauses it here and starts the
+// transport from a beat, so the video does not open on the default song.
+if (cut.START_PAUSED) {
+    await page.evaluate(() => {
+        window.toggleSongPlay(false);
+        const box = document.querySelector('app-javascriptmusic').shadowRoot
+            .getElementById('toggleSongPlayCheckbox');
+        if (box) box.checked = false;
+    });
+    log('sequencer paused — waiting for a beat to exist');
+}
 await sleep(2000);
 
 // ---- start capture: tab video + synth audio into ONE recorder ---------------
@@ -358,7 +370,7 @@ const CM = () => document.querySelector('app-javascriptmusic').shadowRoot
 // Play a phrase through the app's live-input path — the same `processNoteMessage`
 // the virtual keyboard and a real MIDI keyboard both reach — so the sequencer
 // captures it exactly as it would a human performance.
-async function performPhrase({ instrument, notes, bpm }) {
+async function performPhrase({ instrument, notes, bpm, syncToBeats }) {
     await setView('song');
     if (instrument) {
         await page.evaluate((name) => {
@@ -371,6 +383,19 @@ async function performPhrase({ instrument, notes, bpm }) {
         }, instrument);
         log(`  instrument → ${instrument}`);
         await sleep(600);
+    }
+    // Wait for the sequencer's playhead to reach a beat boundary before the
+    // first note. Without this the phrase starts wherever the loop happens to
+    // be, and every captured time carries that arbitrary offset — so a take
+    // played exactly on the grid still pastes as ragged numbers.
+    if (syncToBeats) {
+        await page.evaluate(async ({ unitSeconds }) => {
+            const nap = (ms) => new Promise((r) => setTimeout(r, ms));
+            const now = window.songTimeSeconds();
+            if (typeof now !== 'number') return;
+            const next = Math.ceil((now + 0.08) / unitSeconds) * unitSeconds;
+            await nap((next - now) * 1000);
+        }, { unitSeconds: (60 / bpm) * syncToBeats });
     }
     const t0 = Date.now();
     await page.evaluate(async ({ notes, msPerBeat }) => {
@@ -397,7 +422,7 @@ async function performPhrase({ instrument, notes, bpm }) {
 
 // The app's insert-recording button: turns the captured take into song source.
 // Put the cursor inside the recording markers first, where a player would.
-async function pasteRecording() {
+async function pasteRecording({ quantize } = {}) {
     await setView('song');
     await page.evaluate(() => {
         const cm = document.querySelector('app-javascriptmusic').shadowRoot
@@ -406,8 +431,8 @@ async function pasteRecording() {
         cm.setCursor({ line: line < 0 ? 0 : line + 1, ch: 0 });
     });
     await sleep(400);
-    await page.evaluate(() => window.insertRecording());
-    log('  pasted the recorded take into the song');
+    await page.evaluate((q) => window.insertRecording(q), quantize);
+    log(`  pasted the recorded take into the song${quantize ? ` (quantized to 1/${quantize} beat)` : ''}`);
     await sleep(1600);
 }
 
@@ -455,6 +480,16 @@ for (const [n, beat] of beats.entries()) {
 
     for (const line of beat.say ?? []) { await streamText(mock, line + '\n\n'); await sleep(250); }
     for (const ord of beat.tools ?? []) await runTool(ord, { quick: beat.quick });
+    // Start the transport only once there is something to hear.
+    if (beat.startPlayback) {
+        await page.evaluate(() => {
+            window.toggleSongPlay(true);
+            const box = document.querySelector('app-javascriptmusic').shadowRoot
+                .getElementById('toggleSongPlayCheckbox');
+            if (box) box.checked = true;
+        });
+        log('  transport started');
+    }
     // Jump cut: after a quick run, land on the result and let it play.
     if (beat.quick && beat.showAfter) { await setView(beat.showAfter); await sleep(beat.showMs ?? 3000); }
 
@@ -466,7 +501,7 @@ for (const [n, beat] of beats.entries()) {
 
     // The player's half of the loop: perform, paste, quantize.
     if (beat.perform) await performPhrase(beat.perform);
-    if (beat.pasteRecording) await pasteRecording();
+    if (beat.pasteRecording) await pasteRecording(beat.pasteRecording === true ? {} : beat.pasteRecording);
     if (beat.quantizeTake) await quantizeTake(beat.quantizeTake);
 
     if (beat.outro) { await setView('agent'); await streamText(mock, beat.outro + '\n'); }

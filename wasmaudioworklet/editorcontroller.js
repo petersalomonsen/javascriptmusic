@@ -475,7 +475,10 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                 toggleEditors('presetsui', true);
                 componentRoot.querySelector('#preseteditortogglecheckbox').checked = true;
             }
-            window.insertRecording = () => insertMidiRecording(insertStringIntoEditor);
+            // Optional arg: steps-per-beat to snap the take to on the way in
+            // (the toolbar button passes nothing, keeping the raw timing).
+            window.insertRecording = (quantizeStepsPerBeat) =>
+                insertMidiRecording(insertStringIntoEditor, quantizeStepsPerBeat);
             try {
                 const eventlist = await compileMidiSong(songsource);
                 if (midiInstrumentNames.length > 0) {
