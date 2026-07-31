@@ -111,7 +111,7 @@ both and contrast them.
 | ~4 min | **Intro — What is WebAssembly Music + why** (see §1.1) | architecture in one slide, 4klang quote, why AS for live coding, where Faust fits |
 | ~2 min | Why source-to-source vs runtime linking for Faust specifically | one wasm module, shared voice allocation, MidiVoice/MidiChannel integration, tiny binaries preserved |
 | ~5 min | **`faust2as` — C-backend approach** (the abstract) | `faust -lang c` → AS reshape; offline only (Node CLI) |
-| ~5 min | **`faust2asc` + `transpile-core` — ASC-backend approach** (post-abstract work) | `faust -lang asc` via `@psalomo/faustwasm` in the browser → in-place reshape; **no host install needed**; closes the live-coding loop entirely inside the browser |
+| ~5 min | **`faust2asc` + `transpile-core` — ASC-backend approach** (post-abstract work) | `faust -lang asc` via `@psalomo/wasm-music-faust` in the browser → in-place reshape; **no host install needed**; closes the live-coding loop entirely inside the browser |
 | ~1 min | What we get for free in both: typed channel fields with doc comments, CC/NRPN auto-mapping, `transpileEffect` standalone-effect path | |
 | ~10 min | Live demo (see §1.5) | |
 | ~3 min | Q&A | |
@@ -120,7 +120,7 @@ both and contrast them.
 
 | | `faust2as.js` (C backend) | `faust2asc.js` + `transpile-core.js` (ASC backend) |
 | --- | --- | --- |
-| Input | C from `faust -lang c` | AssemblyScript from `faust -lang asc` (via faustwasm `@psalomo/faustwasm`) |
+| Input | C from `faust -lang c` | AssemblyScript from `faust -lang asc` (via `@psalomo/wasm-music-faust`) |
 | Where it runs | Node CLI (offline) | Node CLI **and** in-browser (`wasmaudioworklet/faust/browser-transpile.js`) |
 | Reshape work | Parse C, rewrite to AS (`dsp->` → `this.`, `fminf` → `Mathf.min`, `(float)` casts, etc.) | Parse AS, restructure fields & methods to fit `MidiVoice`/`MidiChannel`/`Effect` |
 | UI metadata source | C `buildUserInterface` calls (`ui_interface->declare(...)` for `[symbol:foo]`) | `getJSON()` embedded in the AS output |
