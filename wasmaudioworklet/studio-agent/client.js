@@ -17,6 +17,7 @@ import { probeNote, probeNotes, probeWarnings } from '../audioprobe/instrumentpr
 import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
 import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './nearai-core.js';
 import { SYSTEM_PROMPT } from './prompt.js';
+import { loadKit, formatKit } from './kit.js';
 
 const DEFAULT_PORT = 17891;
 const FAUST_DIR = 'faust/';
@@ -482,7 +483,7 @@ function reply(id, ok, result) {
   }
 }
 
-function sendChat(text) {
+async function sendChat(text) {
   // /nearai provider commands are handled locally and never enter the
   // conversation (the API key must not be persisted into the OPFS repo).
   if (text.startsWith('/nearai')) { handleNearaiCommand(text); return; }
@@ -505,9 +506,13 @@ function sendChat(text) {
   startAgentMessage();
   setBusy(true);
   startActivity();
+  // The server has no view of OPFS, so the project's kit has to travel from
+  // here. It rides on EVERY turn: the server builds the system prompt per
+  // query, and an unchanged prompt keeps the cached prefix intact.
+  const kit = (await loadKit()).text;
   // summary rides along so the server can seed a FRESH session from it when
   // the sessionId can't be resumed (SDK sessions are per-machine).
-  socket.send(JSON.stringify({ t: 'chat', text, sessionId, summary: sessionSummary }));
+  socket.send(JSON.stringify({ t: 'chat', text, sessionId, summary: sessionSummary, kit }));
 }
 
 // ---- NEAR AI serverless provider (no local studio-agent process) ------------
@@ -603,12 +608,19 @@ let nearaiMessages = null; // model-visible history (in-memory for iteration 1)
 
 async function runNearaiTurn(text) {
   const cfg = nearaiConfig();
+  let content = text;
   if (!nearaiMessages) {
     // In proxy mode the server injects the system prompt (and tools) —
     // sending them from here would be stripped anyway.
     nearaiMessages = cfg.proxy ? [] : [{ role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX }];
+    // ...and that includes a system message carrying the project kit, so the
+    // kit rides in as part of the FIRST user turn instead. That is its honest
+    // authority level anyway (repo content is the user talking), and merging
+    // it into the turn keeps the history strictly alternating.
+    const kit = formatKit((await loadKit()).text);
+    if (kit) content = `${kit}\n\n---\n\n${text}`;
   }
-  nearaiMessages.push({ role: 'user', content: text });
+  nearaiMessages.push({ role: 'user', content });
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
   try {
     const { usage } = await runAgentTurn({
