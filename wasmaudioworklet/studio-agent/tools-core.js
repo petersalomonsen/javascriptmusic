@@ -68,6 +68,13 @@ export function songSourceWarnings(source) {
 const NOTE_ON = 0x90;
 const CONTROL_CHANGE = 0xb0;
 const END_OF_SONG = -1;
+// The sequencer encodes its own control messages as NEGATIVE single-byte
+// statuses: -1 loop/end, -2 startRecording, -3 stopRecording, -4 broadcastSend,
+// -5 broadcastWait (midisequencer/audioworkletprocessorsequencer.js). They are
+// not MIDI, so `status & 0x0f` on them mints phantom channels — a song with
+// recording markers reported ch13 and ch14 "no notes" (-3 & 0x0f = 13,
+// -2 & 0x0f = 14), and broadcast sync would add ch11/ch12.
+const isSequencerControl = (status) => status < 0;
 
 // eventlist: [{ time (ms), message: [status, data1, data2] }], as returned by
 // compileSong. bpm is needed to express times in beats; song BPM lives inside
@@ -83,7 +90,8 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, ins
     if (status === undefined) continue;
     const beat = toBeat(evt.time);
     lengthBeats = Math.max(lengthBeats, beat);
-    if (status === END_OF_SONG) continue;
+    // Control messages still extend the song's length, but must not become channels.
+    if (isSequencerControl(status)) continue;
 
     const channel = status & 0x0f;
     let c = byChannel.get(channel);
@@ -164,7 +172,7 @@ function findNoteCollisions(eventlist, toBeat, minHeldBeats = 1) {
   const byKey = new Map();
   for (const evt of eventlist) {
     const [status, note, velocity] = evt.message || [];
-    if (status === undefined || status === END_OF_SONG) continue;
+    if (status === undefined || isSequencerControl(status)) continue;
     const type = status & 0xf0;
     const isOn = type === NOTE_ON && velocity > 0;
     const isOff = type === 0x80 || (type === NOTE_ON && velocity === 0);
@@ -302,7 +310,19 @@ export function songBpmFromSource(source, fallback = 110) {
 // import and how to register the channel. Uses the base MidiChannel when no
 // <Name>Channel was generated (fixes the recurring "no exported member" error).
 export function faustRegistrationHint(ts, stem) {
-  const classes = [...ts.matchAll(/export class (\w+)/g)].map((m) => m[1]);
+  const exported = [...ts.matchAll(/export class (\w+)/g)].map((m) => m[1]);
+  // The transpiler compiles the native Faust class as `<Name>Dsp` (and
+  // `<Name>EffectDsp`) so the thin wrappers can keep the public names
+  // `<Name>`/`<Name>Channel` — see faust/transpile-core.js. Both are exported,
+  // but only the wrappers are the API. Reporting the internal one first made
+  // the agent register `new KickDsp(channel)`, which fails to compile with
+  // "TS2554: Expected 0 arguments, but got 1". Drop a `*Dsp` name only when
+  // its public wrapper is actually present, so an instrument genuinely called
+  // e.g. "mydsp" still reports its own class.
+  const classes = exported.filter((c) => {
+    const m = /^(\w+?)(?:Effect)?Dsp$/.exec(c);
+    return !(m && exported.includes(m[1]));
+  });
   const voice = classes.find((c) => !/Channel$/.test(c)) || 'Xxx';
   const chan = classes.find((c) => /Channel$/.test(c));
   const reg = chan
