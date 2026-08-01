@@ -38,23 +38,22 @@
         "test-repozip": "node --test wasmgit/repozip.test.mjs"
     },
     "resolutions": {
-        "playwright": "1.59.1"
+        "playwright": "1.59.1",
+        "errorstacks": "2.4.1"
     },
     "devDependencies": {
-        "@as-pect/cli": "^8.1.0",
+        "@as-pect/cli": "^9.0.0",
         "@esm-bundle/chai": "^4.3.4-fix.0",
-        "@playwright/test": "^1.59.1",
-        "@rollup/plugin-terser": "^0.4.4",
+        "@playwright/test": "1.59.1",
+        "@rollup/plugin-terser": "^1.0.0",
         "@web/rollup-plugin-html": "^2.0.1",
         "@web/test-runner": "^0.20.0",
         "@web/test-runner-playwright": "^0.11.0",
-        "assemblyscript": "^0.28.9",
+        "assemblyscript": "^0.28.20",
         "chai": "^4.3.7",
         "http-server": "^14.1.1",
-        "mocha": "^10.2.0",
         "quickjs-wasm": "0.0.5",
         "rollup": "^4.1.5",
-        "rollup-plugin-terser": "^7.0.2",
         "ws": "^7.5.10"
     }
 }
