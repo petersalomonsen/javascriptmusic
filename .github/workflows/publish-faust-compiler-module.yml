@@ -151,10 +151,10 @@ jobs:
           ref: ${{ inputs.faustlibraries_ref }}
           path: faustlibraries
 
-      - name: Use Node.js 20.x
+      - name: Use Node.js 24.x
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Record the source revisions

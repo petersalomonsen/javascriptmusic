@@ -1421,10 +1421,10 @@ entities@^4.4.0:
   resolved "https://registry.yarnpkg.com/entities/-/entities-4.5.0.tgz#5d268ea5e7113ec74c4d033b79ea5a35a488fb48"
   integrity sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==
 
-errorstacks@2.4.1, errorstacks@^2.4.1:
-  version "2.4.1"
-  resolved "https://registry.yarnpkg.com/errorstacks/-/errorstacks-2.4.1.tgz#05adf6de1f5b04a66f2c12cc0593e1be2b18cd0f"
-  integrity sha512-jE4i0SMYevwu/xxAuzhly/KTwtj0xDhbzB6m1xPImxTkw8wcCbgarOQPfCVMi5JKVyW7in29pNJCCJrry3Ynnw==
+errorstacks@^2.4.1:
+  version "2.4.2"
+  resolved "https://registry.yarnpkg.com/errorstacks/-/errorstacks-2.4.2.tgz#19cc65d0d049abbd7fc3a5fd2a01054609ae0647"
+  integrity sha512-aQAkABfX+AsCxWtvh1KGIDkTiYyABsTtZkBb8cd9FWxNnEdrcFEsTxUfi9sc0Jc1mgHC2kW3UtJVadqSuMm/uQ==
 
 es-define-property@^1.0.1:
   version "1.0.1"

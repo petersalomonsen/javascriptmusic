@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Run node:test unit suites
         run: |
           # Pure-logic unit tests — no browser (studio-agent tool core,
@@ -44,10 +44,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Web Test Runner
         run: |
           sudo apt update
@@ -64,10 +64,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Assemblyscript synth
         run: |
           cd wasmaudioworklet
@@ -78,10 +78,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
-        - name: Use Node.js 20.x
-          uses: actions/setup-node@v3
+        - name: Use Node.js 24.x
+          uses: actions/setup-node@v4
           with:
-            node-version: '20'
+            node-version: '24'
         - name: Bundle pianorolldemo
           run: |
             cd wasmaudioworklet
@@ -92,10 +92,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
-        - name: Use Node.js 20.x
-          uses: actions/setup-node@v3
+        - name: Use Node.js 24.x
+          uses: actions/setup-node@v4
           with:
-            node-version: '20'
+            node-version: '24'
         - name: Bundle songcompiler
           run: |
             cd wasmaudioworklet
@@ -106,10 +106,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js 20.x
-        uses: actions/setup-node@v3
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Install dependencies and Playwright
         run: |
           cd wasmaudioworklet
