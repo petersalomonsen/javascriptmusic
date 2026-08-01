@@ -227,12 +227,12 @@
   resolved "https://registry.yarnpkg.com/@pkgjs/parseargs/-/parseargs-0.11.0.tgz#a77ea742fab25775145434eb1d2328cf5013ac33"
   integrity sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==
 
-"@playwright/test@^1.59.1":
-  version "1.62.1"
-  resolved "https://registry.yarnpkg.com/@playwright/test/-/test-1.62.1.tgz#68e1aaf6e480e1923936dee6c66fae1921d3a65a"
-  integrity sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==
+"@playwright/test@1.59.1":
+  version "1.59.1"
+  resolved "https://registry.yarnpkg.com/@playwright/test/-/test-1.59.1.tgz#5c4d38eac84a61527af466602ae20277685a02d6"
+  integrity sha512-PG6q63nQg5c9rIi4/Z5lR5IVF7yU5MqmKaPOe0HSc0O2cX1fPi96sUQu5j7eo4gKCkB2AnNGoWt7y4/Xx3Kcqg==
   dependencies:
-    playwright "1.62.1"
+    playwright "1.59.1"
 
 "@puppeteer/browsers@2.13.2":
   version "2.13.2"
@@ -1421,10 +1421,10 @@ entities@^4.4.0:
   resolved "https://registry.yarnpkg.com/entities/-/entities-4.5.0.tgz#5d268ea5e7113ec74c4d033b79ea5a35a488fb48"
   integrity sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==
 
-errorstacks@^2.4.1:
-  version "2.4.2"
-  resolved "https://registry.yarnpkg.com/errorstacks/-/errorstacks-2.4.2.tgz#19cc65d0d049abbd7fc3a5fd2a01054609ae0647"
-  integrity sha512-aQAkABfX+AsCxWtvh1KGIDkTiYyABsTtZkBb8cd9FWxNnEdrcFEsTxUfi9sc0Jc1mgHC2kW3UtJVadqSuMm/uQ==
+errorstacks@2.4.1, errorstacks@^2.4.1:
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/errorstacks/-/errorstacks-2.4.1.tgz#05adf6de1f5b04a66f2c12cc0593e1be2b18cd0f"
+  integrity sha512-jE4i0SMYevwu/xxAuzhly/KTwtj0xDhbzB6m1xPImxTkw8wcCbgarOQPfCVMi5JKVyW7in29pNJCCJrry3Ynnw==
 
 es-define-property@^1.0.1:
   version "1.0.1"
@@ -2624,7 +2624,7 @@ playwright-core@1.59.1:
   resolved "https://registry.yarnpkg.com/playwright-core/-/playwright-core-1.59.1.tgz#d8a2b28bcb8f2bd08ef3df93b02ae83c813244b2"
   integrity sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg==
 
-playwright@1.59.1, playwright@1.62.1, playwright@^1.53.0:
+playwright@1.59.1, playwright@^1.53.0:
   version "1.59.1"
   resolved "https://registry.yarnpkg.com/playwright/-/playwright-1.59.1.tgz#f7b0ca61637ae25264cec370df671bbe1f368a4a"
   integrity sha512-C8oWjPR3F81yljW9o5OxcWzfh6avkVwDD2VYdwIGqTkl+OGFISgypqzfu7dOe4QNLL2aqcWBmI3PMtLIK233lw==

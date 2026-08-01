@@ -38,12 +38,13 @@
         "test-repozip": "node --test wasmgit/repozip.test.mjs"
     },
     "resolutions": {
-        "playwright": "1.59.1"
+        "playwright": "1.59.1",
+        "errorstacks": "2.4.1"
     },
     "devDependencies": {
         "@as-pect/cli": "^9.0.0",
         "@esm-bundle/chai": "^4.3.4-fix.0",
-        "@playwright/test": "^1.59.1",
+        "@playwright/test": "1.59.1",
         "@rollup/plugin-terser": "^1.0.0",
         "@web/rollup-plugin-html": "^2.0.1",
         "@web/test-runner": "^0.20.0",
