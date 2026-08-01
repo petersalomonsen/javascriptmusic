@@ -1,0 +1,9 @@
+{
+  "extends": "assemblyscript/std/assembly.json",
+  "compilerOptions": {
+    // AssemblyScript zero-initialises fields, so TS2564 on every uninitialised
+    // `x: f32` is noise rather than a finding.
+    "strictPropertyInitialization": false
+  },
+  "include": ["./**/*.ts"]
+}

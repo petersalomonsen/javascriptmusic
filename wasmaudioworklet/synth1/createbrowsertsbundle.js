@@ -15,7 +15,10 @@ function walkSync(dir, filelist) {
     if (fs.statSync(dir + file).isDirectory()) {
       filelist = walkSync(dir + file + '/', filelist);
     }
-    else {
+    else if (file.endsWith('.ts')) {
+      // Sources only. assembly/tsconfig.json exists purely so editors resolve
+      // the AssemblyScript globals, and has no business in the bundle the
+      // in-browser compiler fetches.
       filelist.push(dir + file);
     }
   });

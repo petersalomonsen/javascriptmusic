@@ -136,7 +136,11 @@ export function setPatternsPtr(ptr: usize): void {
 }
 
 export function allocatePatterns(numpatterns: i32): usize {
-  patternsPtr = __new(numpatterns << PATTERN_SIZE_SHIFT, idof<Array<u32>>());
+  // The shift is lifted out of the argument list because TypeScript's parser
+  // mis-reads `idof<Array<u32>>()` as chained comparisons when a `<<` appears
+  // alongside it in the same call, which lit up editors on this one line.
+  const size = numpatterns << PATTERN_SIZE_SHIFT;
+  patternsPtr = __new(size, idof<Array<u32>>());
   return patternsPtr;
 }
 
