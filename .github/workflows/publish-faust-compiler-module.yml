@@ -151,10 +151,10 @@ jobs:
           ref: ${{ inputs.faustlibraries_ref }}
           path: faustlibraries
 
-      - name: Use Node.js 20.x
+      - name: Use Node.js 24.x
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Record the source revisions
@@ -317,19 +317,20 @@ jobs:
       # ---------------------------------------------------------------------
       # Publish
       # ---------------------------------------------------------------------
-      - name: Set up Node.js 22 and npm for trusted publishing
+      - name: Set up Node.js 24 for trusted publishing
         if: ${{ env.DRY_RUN != 'true' }}
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish to npm
         if: ${{ env.DRY_RUN != 'true' }}
         run: |
           set -euo pipefail
-          # Trusted publishing needs npm >= 11.5.1; Node 22 still ships npm 10.
-          npm install -g npm@latest
+          # Trusted publishing needs npm >= 11.5.1. Node 24 ships npm 11.16+,
+          # so the npm bundled with the runtime is used as-is rather than
+          # installing npm@latest into the publish step.
           npm --version
           # No NODE_AUTH_TOKEN: auth is the OIDC token from `id-token: write`.
           # Provenance is automatic for trusted publishes; --provenance makes

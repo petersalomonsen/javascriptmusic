@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Use Node.js 20.x
-      uses: actions/setup-node@v3
+    - name: Use Node.js 24.x
+      uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '24'
         registry-url: 'https://registry.npmjs.org'
     - run: |
         cd wasmaudioworklet
@@ -26,7 +26,12 @@ jobs:
         BRANCH="$(git rev-parse --abbrev-ref HEAD)"
         if [[ "$VERSION" = "$NEWVERSION" || "$BRANCH" != "master" ]]; then
           echo "version change is $VERSION->$NEWVERSION, branch is $BRANCH, not publishing, only dry-run"
-          npm publish --dry-run
+          # npm 11 (shipped with Node 24) makes `publish --dry-run` validate
+          # against the registry, so it fails with "cannot publish over the
+          # previously published versions" on exactly the reruns this branch is
+          # meant to allow. `pack --dry-run` builds and reports the same tarball
+          # without the registry round trip.
+          npm pack --dry-run
         else
           npm publish
         fi
