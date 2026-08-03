@@ -91,6 +91,12 @@ export function x402Config(env = {}) {
     // only ever claim ONE product — the day we sell a second thing, one
     // payment must not be redeemable for both.
     purpose: env.X402_PURPOSE || 'studio-day-pass',
+    // Used only to render the amount inside the transfer memo. Wallets show
+    // the memo but not always the decoded ft_transfer amount, so this is often
+    // the only place the payer sees what they are actually paying.
+    assetSymbol: env.X402_ASSET_SYMBOL || 'USDC',
+    assetDecimals: Number(env.X402_ASSET_DECIMALS || 6),
+    productName: env.X402_PRODUCT_NAME || 'WebAssembly Music studio AI day pass',
     // Which settlement paths this deployment offers, in preference order.
     // Both can be advertised at once: browsers take `near-tx` (any wallet, no
     // relayer), x402 SDK clients take `exact` if a facilitator is configured.
@@ -154,6 +160,33 @@ export function paymentRequirements(cfg) {
 //      for the on-chain nonce that makes the `exact` scheme one-shot.
 
 export const MEMO_PREFIX = 'wam:';
+export const COMMITMENT_PLACEHOLDER = '{commitment}';
+
+/** Atomic units -> a decimal string, without floating point. */
+export function formatAmount(atomic, decimals) {
+  const s = String(atomic).padStart(decimals + 1, '0');
+  const whole = s.slice(0, s.length - decimals) || '0';
+  const frac = decimals ? s.slice(s.length - decimals).replace(/0+$/, '') : '';
+  return frac ? `${whole}.${frac}` : whole;
+}
+
+/**
+ * The exact memo the transfer must carry, with {commitment} left for the client
+ * to fill in.
+ *
+ * The leading text is not decoration. NEAR Mobile (and others) show that an
+ * `ft_transfer` is being called but do not decode its arguments, so the payer
+ * is asked to approve a contract call without seeing the amount. Putting the
+ * product and price in the memo gives wallets something human-readable to show.
+ *
+ * The SERVER dictates the whole template so both sides produce byte-identical
+ * strings — the client only substitutes the commitment, and nothing depends on
+ * two implementations formatting a decimal the same way.
+ */
+export function memoTemplate(cfg) {
+  const price = `${formatAmount(cfg.amount, cfg.assetDecimals)} ${cfg.assetSymbol}`;
+  return `${cfg.productName} — ${price} | ${MEMO_PREFIX}${cfg.purpose}:${COMMITMENT_PLACEHOLDER}`;
+}
 
 export function nearTxRequirements(cfg) {
   return {
@@ -170,9 +203,11 @@ export function nearTxRequirements(cfg) {
       proof: 'nep413',
       authRecipient: cfg.authRecipient,
       purpose: cfg.purpose,
-      // Fallback for wallets that cannot signMessage: commit to a secret in
-      // the memo instead. Must be decided before sending, hence advertised.
-      memoPrefix: MEMO_PREFIX,
+      // The commitment path: the memo carries SHA-256(secret) alongside text
+      // the payer can actually read. One wallet prompt instead of two, and it
+      // needs no signMessage support — but the memo must be decided before
+      // paying, so the template is advertised here.
+      memoTemplate: memoTemplate(cfg),
       commitment: 'sha256',
       maxAgeSeconds: Math.floor(cfg.txMaxAgeMs / 1000),
     },
@@ -182,11 +217,16 @@ export function nearTxRequirements(cfg) {
 const b64urlOf = (bytes) => btoa(String.fromCharCode(...bytes))
   .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-export async function commitmentFor(secretB64url, purpose = '') {
+/** SHA-256 of the payer's secret, base64url — the value that goes in the memo. */
+export async function commitmentFor(secretB64url) {
   const raw = b64urlToBytes(secretB64url);
   if (raw.length < 16) throw new Error('commitment secret is too short');
-  const digest = b64urlOf(new Uint8Array(await crypto.subtle.digest('SHA-256', raw)));
-  return purpose ? `${MEMO_PREFIX}${purpose}:${digest}` : MEMO_PREFIX + digest;
+  return b64urlOf(new Uint8Array(await crypto.subtle.digest('SHA-256', raw)));
+}
+
+/** The full memo for a given secret: the server's template, filled in. */
+export async function memoFor(cfg, secretB64url) {
+  return memoTemplate(cfg).replace(COMMITMENT_PLACEHOLDER, await commitmentFor(secretB64url));
 }
 
 /**
@@ -276,7 +316,7 @@ export async function verifyNearTxPayment(cfg, { txHash, secret, auth, accountId
     }
     provenAccountId = verified.accountId;
   } else {
-    expectedMemo = await commitmentFor(secret, cfg.purpose);
+    expectedMemo = await memoFor(cfg, secret);
   }
 
   const result = await nearRpc(cfg.rpcUrls, 'tx', {

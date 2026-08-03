@@ -164,23 +164,29 @@ export async function signPaymentProof(wallet, { txHash, accountId, recipient, p
 }
 
 export async function payWithTransaction(wallet, requirements, { accountId, proof = 'auto' } = {}) {
-  // With a signed proof we need no memo at all — the transfer is a plain
-  // ft_transfer. Fall back to the commitment memo only if the wallet cannot
-  // sign messages, since that has to be decided BEFORE sending.
-  const useSignature = proof === 'signature'
-    || (proof === 'auto' && walletCanSignMessage(wallet));
+  // `commitment` is the default, and it is the better trade for a payment made
+  // inside the app:
+  //   * ONE wallet prompt, not two — a signed proof has to name the
+  //     transaction, so it cannot be signed until after the transfer lands.
+  //   * the memo carries the product and price as text, which is often the
+  //     only place the payer sees what they are paying: wallets show that
+  //     `ft_transfer` is being called without decoding its arguments.
+  //   * needs no signMessage support, so it works in every wallet.
+  // `signature` remains for payments that did NOT originate here, where no
+  // memo could have been planned in advance.
+  const useSignature = proof === 'signature';
 
   let secret = null;
   let memo;
   if (useSignature) {
-    memo = requirements.extra?.memoNote || undefined;
+    memo = undefined;
   } else {
     const secretBytes = crypto.getRandomValues(new Uint8Array(32));
     secret = b64url(secretBytes);
     const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', secretBytes));
-    const purpose = requirements.extra?.purpose;
-    memo = (requirements.extra?.memoPrefix || 'wam:')
-      + (purpose ? `${purpose}:` : '') + b64url(digest);
+    const template = requirements.extra?.memoTemplate;
+    if (!template) throw new Error('server did not advertise a memo template');
+    memo = template.replace('{commitment}', b64url(digest));
   }
 
   const outcome = await wallet.signAndSendTransaction({

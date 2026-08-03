@@ -4,7 +4,7 @@ import {
   buildDelegateAction, selectRequirements, walletCanPay, payWithTransaction,
   encodeHeader, decodeHeader, passRemainingSeconds, passKey,
 } from './x402-client.js';
-import { paymentRequirements, nearTxRequirements, commitmentFor, x402Config, encodeHeader as srvEncode } from '../functions/_x402.js';
+import { paymentRequirements, nearTxRequirements, memoFor, x402Config, encodeHeader as srvEncode } from '../functions/_x402.js';
 
 const CFG = x402Config({ PASS_SECRET: 'x' });
 const REQ = paymentRequirements(CFG);
@@ -61,9 +61,12 @@ const mockWallet = (over = {}) => ({
   ...over,
 });
 
-test('near-tx payment: plain ft_transfer + a signed proof naming the tx', async () => {
+test('near-tx payment: ONE prompt, memo shows the price, secret stays off-chain', async () => {
   let sent;
-  const wallet = mockWallet({ signAndSendTransaction: async (tx) => { sent = tx; return { transaction: { hash: 'TX1' } }; } });
+  const wallet = mockWallet({
+    signAndSendTransaction: async (tx) => { sent = tx; return { transaction: { hash: 'TX1' } }; },
+    signMessage: async () => { throw new Error('must not be called — one prompt only'); },
+  });
   const payload = await payWithTransaction(wallet, NEARTX, { accountId: 'psalomo.near' });
 
   assert.equal(sent.receiverId, NEARTX.asset);
@@ -74,45 +77,49 @@ test('near-tx payment: plain ft_transfer + a signed proof naming the tx', async 
   assert.equal(p.args.receiver_id, NEARTX.payTo);
   assert.equal(p.args.amount, NEARTX.amount);
 
-  // With a signed proof there is NO memo at all — a plain transfer.
-  assert.equal(p.args.memo, undefined, 'no memo needed when a proof is signed');
+  // The memo is what the payer reads in the wallet, since wallets show that
+  // `ft_transfer` is being called without decoding its arguments.
+  assert.ok(p.args.memo.startsWith('WebAssembly Music studio AI day pass — 0.01 USDC'),
+    `payer would see: ${p.args.memo}`);
+  assert.equal(p.args.memo, await memoFor(CFG, payload.payload.secret));
+  assert.ok(!JSON.stringify(sent).includes(payload.payload.secret), 'secret must not be on-chain');
+
   assert.equal(payload.payload.txHash, 'TX1');
   assert.equal(payload.accepted.scheme, 'near-tx');
-  assert.ok(payload.payload.auth, 'must carry the signed proof');
-  assert.equal(payload.payload.secret, undefined, 'no commitment secret in this mode');
+  assert.equal(payload.payload.auth, undefined, 'the default path signs no second message');
+});
 
-  // The proof must name the transaction, or it could claim a different one.
+test('near-tx: signed-proof mode is still available on request', async () => {
+  const payload = await payWithTransaction(mockWallet(), NEARTX,
+    { accountId: 'psalomo.near', proof: 'signature' });
+  assert.ok(payload.payload.auth, 'explicit opt-in still signs a proof');
+  assert.equal(payload.payload.secret, undefined);
   const proof = JSON.parse(Buffer.from(payload.payload.auth, 'base64url').toString());
   assert.equal(JSON.parse(proof.message).txHash, 'TX1');
-  assert.equal(JSON.parse(proof.message).purpose, NEARTX.extra.purpose, 'proof must name what it buys');
+  assert.equal(JSON.parse(proof.message).purpose, NEARTX.extra.purpose);
   assert.equal(proof.recipient, NEARTX.extra.authRecipient);
 });
 
-test('near-tx: a wallet without signMessage falls back to the memo commitment', async () => {
-  let sent;
+test('near-tx: works in a wallet that cannot signMessage at all', async () => {
   const wallet = {
     manifest: { name: 'Trezu', features: { signMessage: false } },
-    signAndSendTransaction: async (tx) => { sent = tx; return { transaction: { hash: 'TX2' } }; },
+    signAndSendTransaction: async () => ({ transaction: { hash: 'TX2' } }),
   };
   const payload = await payWithTransaction(wallet, NEARTX, { accountId: 'psalomo.near' });
-  assert.ok(payload.payload.secret, 'falls back to a commitment');
-  assert.equal(sent.actions[0].params.args.memo, await commitmentFor(payload.payload.secret, NEARTX.extra.purpose));
-  assert.ok(!JSON.stringify(sent).includes(payload.payload.secret), 'secret must not be on-chain');
+  assert.ok(payload.payload.secret);
 });
 
-test('near-tx: if the proof is refused AFTER paying, the hash survives in the error', async () => {
-  // The money is already gone at that point; losing the hash would lose it.
+test('near-tx: if a signed proof is refused AFTER paying, the hash survives', async () => {
+  // Only reachable in `signature` mode; the money is already gone at that
+  // point, so losing the hash would lose it.
   const wallet = mockWallet({ signMessage: async () => { throw new Error('user rejected'); } });
   await assert.rejects(
-    payWithTransaction(wallet, NEARTX, { accountId: 'psalomo.near' }),
+    payWithTransaction(wallet, NEARTX, { accountId: 'psalomo.near', proof: 'signature' }),
     (e) => e.unclaimed === true && e.txHash === 'TX1' && /not lost/.test(e.message));
 });
 
-test('near-tx: each fallback payment uses a fresh secret', async () => {
-  const wallet = {
-    manifest: { features: { signMessage: false } },
-    signAndSendTransaction: async () => ({ transaction: { hash: 'T' } }),
-  };
+test('near-tx: each payment uses a fresh secret', async () => {
+  const wallet = mockWallet({ signAndSendTransaction: async () => ({ transaction: { hash: 'T' } }) });
   const a = await payWithTransaction(wallet, NEARTX, {});
   const b = await payWithTransaction(wallet, NEARTX, {});
   assert.notEqual(a.payload.secret, b.payload.secret);

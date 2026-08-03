@@ -187,7 +187,7 @@ test('nested facilitator errors are rendered, never "[object Object]"', () => {
 // Every assertion here is a hole someone could otherwise walk a free pass
 // through, so each check gets its own test.
 
-import { verifyNearTxPayment, commitmentFor, nearTxRequirements, acceptedRequirements, MEMO_PREFIX } from './functions/_x402.js';
+import { verifyNearTxPayment, commitmentFor, memoFor, memoTemplate, formatAmount, nearTxRequirements, acceptedRequirements, MEMO_PREFIX } from './functions/_x402.js';
 
 const SECRET = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64url');
 const TXCFG = x402Config({ PASS_SECRET: 'test-secret' });
@@ -197,7 +197,7 @@ const b64json = (o) => Buffer.from(JSON.stringify(o)).toString('base64');
 async function chainWith({ memo, receiverId, methodName = 'ft_transfer', amount = '10000',
                            payTo = 'webassemblymusic.near', success = true, ageMs = 0,
                            actions, signer = 'psalomo.near' } = {}) {
-  const m = memo === undefined ? await commitmentFor(SECRET, TXCFG.purpose) : memo;
+  const m = memo === undefined ? await memoFor(TXCFG, SECRET) : memo;
   return async (_url, opts) => {
     const { method, params } = JSON.parse(opts.body);
     if (method === 'tx') {
@@ -313,7 +313,7 @@ test('the 402 advertises near-tx by default, and both when configured', () => {
   assert.deepEqual(acceptedRequirements(TXCFG).map((r) => r.scheme), ['near-tx']);
   const both = x402Config({ PASS_SECRET: 's', X402_SCHEMES: 'near-tx,exact' });
   assert.deepEqual(acceptedRequirements(both).map((r) => r.scheme), ['near-tx', 'exact']);
-  assert.equal(nearTxRequirements(TXCFG).extra.memoPrefix, MEMO_PREFIX);
+  assert.ok(nearTxRequirements(TXCFG).extra.memoTemplate.includes(MEMO_PREFIX));
 });
 
 // --- proof by NEP-413 signature (preferred over the memo commitment) ---------
@@ -422,9 +422,10 @@ test('proof: presenting neither proof nor secret fails closed', async () => {
 
 test('the 402 tells the client both proof modes', () => {
   const extra = nearTxRequirements(AUTHCFG).extra;
-  assert.equal(extra.proof, 'nep413');
+  assert.equal(extra.proof, 'nep413');           // for out-of-band payments
   assert.equal(extra.authRecipient, AUTHCFG.authRecipient);
-  assert.equal(extra.memoPrefix, MEMO_PREFIX); // fallback still advertised
+  assert.ok(extra.memoTemplate.includes(MEMO_PREFIX)); // the default, in-app
+  assert.equal(extra.commitment, 'sha256');
 });
 
 // --- replay is worthless, not merely time-limited ----------------------------
@@ -494,13 +495,49 @@ test('purpose: a proof that omits the purpose is refused', async () => {
   } finally { restore(); }
 });
 
-test('purpose: the commitment memo carries it too', async () => {
-  const memo = await commitmentFor(SECRET, TXCFG.purpose);
-  assert.match(memo, /^wam:studio-day-pass:/);
-  // A commitment made for a different product does not match this one.
-  const other = await commitmentFor(SECRET, 'other-product');
+test('purpose: the memo carries it too', async () => {
+  const memo = await memoFor(TXCFG, SECRET);
+  assert.match(memo, /wam:studio-day-pass:/);
+  // A memo built for a different product does not satisfy this one.
+  const other = await memoFor(x402Config({ PASS_SECRET: 's', X402_PURPOSE: 'other-product' }), SECRET);
   assert.notEqual(other, memo);
   const restore = await onChain({ memo: other });
+  try { await assert.rejects(verify(), /does not match the transfer memo/); } finally { restore(); }
+});
+
+// --- the memo the payer actually sees ----------------------------------------
+// Wallets show that `ft_transfer` is being called but do not decode its
+// arguments, so for many payers the memo is the ONLY place the price appears.
+
+test('memo: leads with the product and price in readable form', async () => {
+  const memo = await memoFor(TXCFG, SECRET);
+  assert.ok(memo.startsWith('WebAssembly Music studio AI day pass — 0.01 USDC'),
+    `payer would see: ${memo}`);
+});
+
+test('memo: amounts format exactly, with no floating point', () => {
+  assert.equal(formatAmount('10000', 6), '0.01');
+  assert.equal(formatAmount('3000000', 6), '3');
+  assert.equal(formatAmount('1', 6), '0.000001');
+  assert.equal(formatAmount('0', 6), '0');
+  assert.equal(formatAmount('123456789', 6), '123.456789');
+  assert.equal(formatAmount('1000000000000000000000000', 24), '1'); // 1 NEAR
+});
+
+test('memo: the server dictates the template, the client only fills the blank', async () => {
+  // Both sides must produce byte-identical strings; the client never formats
+  // a decimal itself, so the two cannot drift.
+  const template = memoTemplate(TXCFG);
+  assert.ok(template.includes('{commitment}'));
+  const filled = template.replace('{commitment}', await commitmentFor(SECRET));
+  assert.equal(filled, await memoFor(TXCFG, SECRET));
+  const restore = await onChain({ memo: filled });
+  try { assert.equal((await verify()).accountId, 'psalomo.near'); } finally { restore(); }
+});
+
+test('memo: a template with the price altered is refused', async () => {
+  const tampered = (await memoFor(TXCFG, SECRET)).replace('0.01 USDC', '0.00001 USDC');
+  const restore = await onChain({ memo: tampered });
   try { await assert.rejects(verify(), /does not match the transfer memo/); } finally { restore(); }
 });
 
@@ -519,7 +556,7 @@ test('rpc: NEAR_RPC_URL overrides the list (comma-separated)', () => {
 
 test('rpc: a dead first endpoint falls through to a working one', async () => {
   const cfg = x402Config({ PASS_SECRET: 'test-secret', NEAR_RPC_URL: 'https://dead.example,https://alive.example' });
-  const chain = await chainWith({ memo: await commitmentFor(SECRET, cfg.purpose) });
+  const chain = await chainWith({ memo: await memoFor(cfg, SECRET) });
   const real = globalThis.fetch;
   const tried = [];
   globalThis.fetch = async (url, init) => {
