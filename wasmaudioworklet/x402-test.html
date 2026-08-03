@@ -70,7 +70,7 @@ const BODY = JSON.stringify({ messages: [{ role: 'user', content: 'say OK' }] })
 let connector, wallet, accountId;
 
 function refreshPass() {
-  const p = loadPass(accountId);
+  const p = loadPass();
   const secs = passRemainingSeconds(p);
   set('pass', p ? `valid ${Math.floor(secs / 3600)}h ${Math.floor(secs % 3600 / 60)}m` : 'none');
   document.getElementById('use').disabled = !p;
@@ -163,14 +163,14 @@ document.getElementById('pay').onclick = async () => {
 document.getElementById('use').onclick = async () => {
   const res = await fetch(ENDPOINT, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', [HEADER_PASS]: loadPass(accountId) },
+    headers: { 'content-type': 'application/json', [HEADER_PASS]: loadPass() },
     body: BODY,
   });
   log(`with stored pass → ${res.status} (402 would mean the pass was rejected)`, res.status === 402 ? 'err' : 'ok');
   log((await res.text()).slice(0, 400));
 };
 
-document.getElementById('forget').onclick = () => { clearPass(accountId); refreshPass(); log('pass cleared', 'info'); };
+document.getElementById('forget').onclick = () => { clearPass(); refreshPass(); log('pass cleared', 'info'); };
 
 refreshPass();
 log('ready — connect any NEAR wallet (near-tx needs no delegate signing)', 'info');

@@ -18,7 +18,11 @@ export const HEADER_SIGNATURE = 'PAYMENT-SIGNATURE';
 export const HEADER_RESPONSE = 'PAYMENT-RESPONSE';
 export const HEADER_PASS = 'X-Studio-Pass';
 
-const PASS_STORAGE_PREFIX = 'studio-pass:';
+// One active pass per browser, under one key. It was briefly keyed by account,
+// but only the payment page ever knows which account paid — the app itself has
+// no wallet connection (COOP; see pay.html). The JWT records the payer in `sub`
+// anyway, so keying by account bought nothing and hid the pass from the app.
+const PASS_STORAGE_KEY = 'studio-pass';
 // ft_transfer is cheap; this is the delegated inner call's budget, prepaid by
 // the relayer. 30 TGas is the conventional amount for a NEP-141 transfer.
 const FT_TRANSFER_GAS = '30000000000000';
@@ -41,28 +45,40 @@ export function encodeHeader(obj) {
 // data loses the remainder of the day. Keyed by account so switching wallets
 // doesn't silently reuse someone else's pass.
 
-export const passKey = (accountId) => PASS_STORAGE_PREFIX + (accountId || 'anonymous');
+export const passKey = () => PASS_STORAGE_KEY;
 
-export function loadPass(accountId) {
-  try { return localStorage.getItem(passKey(accountId)); } catch { return null; }
+export function loadPass() {
+  try { return localStorage.getItem(PASS_STORAGE_KEY); } catch { return null; }
 }
 
-export function storePass(accountId, pass) {
-  try { localStorage.setItem(passKey(accountId), pass); } catch { /* private mode */ }
+export function storePass(pass) {
+  try { localStorage.setItem(PASS_STORAGE_KEY, pass); } catch { /* private mode */ }
 }
 
-export function clearPass(accountId) {
-  try { localStorage.removeItem(passKey(accountId)); } catch { /* private mode */ }
+export function clearPass() {
+  try { localStorage.removeItem(PASS_STORAGE_KEY); } catch { /* private mode */ }
+}
+
+/** Claim from a pass without verifying it — for display only. */
+function passClaims(pass) {
+  try { return JSON.parse(atob(String(pass).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); }
+  catch { return null; }
+}
+
+/** Which account paid for this pass. Display only; the server is authoritative. */
+export const passAccountId = (pass) => passClaims(pass)?.sub || null;
+
+/** Is there a pass that has not expired? Cheap check before bothering the user. */
+export function hasValidPass(now = Date.now()) {
+  return passRemainingSeconds(loadPass(), now) > 0;
 }
 
 /** Seconds until the pass expires; 0 if absent or expired. Not a security check
  *  — the server re-verifies — just enough to render "expires in 6h". */
 export function passRemainingSeconds(pass, now = Date.now()) {
-  if (!pass) return 0;
-  try {
-    const claims = JSON.parse(atob(pass.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return Math.max(0, Math.floor((claims.exp * 1000 - now) / 1000));
-  } catch { return 0; }
+  const claims = pass && passClaims(pass);
+  if (!claims || typeof claims.exp !== 'number') return 0;
+  return Math.max(0, Math.floor((claims.exp * 1000 - now) / 1000));
 }
 
 // ---- wallet capability -----------------------------------------------------
@@ -299,7 +315,7 @@ export function createPaymentFetch({
 } = {}) {
   return async function paymentFetch(url, options = {}) {
     const withPass = (init) => {
-      const pass = loadPass(accountId);
+      const pass = loadPass();
       if (!pass) return init;
       const headers = new Headers(init.headers || {});
       headers.set(HEADER_PASS, pass);
@@ -315,7 +331,7 @@ export function createPaymentFetch({
     if (!header) return response; // a 402 we don't know how to satisfy
 
     // An expired/rejected pass is dead weight — drop it before re-paying.
-    clearPass(accountId);
+    clearPass();
 
     let required;
     try { required = decodeHeader(header); } catch { return response; }
@@ -334,7 +350,7 @@ export function createPaymentFetch({
 
     const minted = response.headers.get(HEADER_PASS);
     if (minted) {
-      storePass(accountId, minted);
+      storePass(minted);
       onStatus('paid');
     } else if (response.status === 402) {
       // Settlement was refused — surface the facilitator's reason, which is the

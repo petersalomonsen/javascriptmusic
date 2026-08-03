@@ -16,6 +16,11 @@ import {
 import { probeNote, probeNotes, probeWarnings } from '../audioprobe/instrumentprobe.js';
 import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
 import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './nearai-core.js';
+import { loadPass, clearPass, passRemainingSeconds, HEADER_PASS } from '../near/x402-client.js';
+
+// The same-origin Pages Function. Works in production and, since devserver.js
+// runs the Functions too, on localhost.
+const PROXY_BASE_URL = '/nearai/v1';
 import { SYSTEM_PROMPT } from './prompt.js';
 import { loadKit, formatKit } from './kit.js';
 
@@ -564,23 +569,26 @@ function handleNearaiCommand(text) {
   if (parts[0] === 'off') {
     localStorage.removeItem('nearai-api-key');
     localStorage.removeItem('nearai-enabled');
+    localStorage.removeItem('nearai-base-url');
     addLine('tool', '— NEAR AI mode off; using the local studio-agent —');
     if (!socket) connect();
   } else if (parts[0] === 'model' && parts[1]) {
     localStorage.setItem('nearai-model', parts[1]);
     addLine('tool', `— NEAR AI model set to ${parts[1]} —`);
   } else if (parts[0] === 'on') {
-    // Key-free proxy mode — needs the same-origin Pages Function, which does
-    // not exist on a plain localhost devserver (use /nearai <key> there).
+    // Key-free mode: go through the same-origin Pages Function, which carries
+    // the server key and charges for it. Say so explicitly rather than infer
+    // it from the hostname — devserver.js now serves the Functions locally, so
+    // "am I on localhost" stopped being the same question as "is there a proxy".
     localStorage.setItem('nearai-enabled', '1');
-    if (!nearaiConfig()) {
-      localStorage.removeItem('nearai-enabled');
-      addLine('tool', `— no proxy on this host: on localhost use '/nearai <api-key>' (direct API) —`);
-      return;
-    }
+    localStorage.setItem('nearai-base-url', PROXY_BASE_URL);
+    localStorage.removeItem('nearai-api-key'); // proxy mode ignores it anyway
     activate();
   } else if (parts[0]) {
+    // A user's own key talks to the API directly, so drop any proxy base URL a
+    // previous `/nearai on` left behind — otherwise the key is silently ignored.
     localStorage.setItem('nearai-api-key', parts[0]);
+    localStorage.removeItem('nearai-base-url');
     if (parts[1]) localStorage.setItem('nearai-model', parts[1]);
     activate();
   } else {
@@ -621,6 +629,77 @@ async function runNearaiServerlessTool(name, args) {
 let nearaiMessages = null; // model-visible history (in-memory for iteration 1)
 let nearaiAbort = null;    // AbortController for the turn in flight
 
+// ---- the day pass -----------------------------------------------------------
+//
+// Inference runs on OUR NEAR AI credits, so the proxy charges for it. The app
+// only ever ATTACHES a pass — it never pays. Paying needs a wallet, and this
+// document sets COOP (for SharedArrayBuffer), which severs window.opener and
+// breaks wallet popups. So payment happens on /pay.html, exactly as sign-in
+// already happens on /login.html.
+
+/** Add the pass to a request, if we have one. */
+function withPass(init = {}) {
+  const pass = loadPass();
+  if (!pass) return init;
+  const headers = new Headers(init.headers || {});
+  headers.set(HEADER_PASS, pass);
+  return { ...init, headers };
+}
+
+let payWindow = null;
+
+/** Open the payment page and resolve once a pass shows up (or the user gives up). */
+function buyPass() {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (pass) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('message', onMessage);
+      clearInterval(poll);
+      resolve(pass || null);
+    };
+    const check = () => { const p = loadPass(); if (passRemainingSeconds(p) > 0) finish(p); };
+    const onStorage = (e) => { if (e.key === 'studio-pass') check(); };
+    // `storage` fires in OTHER tabs only, and COOP may have severed opener, so
+    // postMessage is a hint rather than the mechanism — poll as the backstop.
+    const onMessage = (e) => { if (e.origin === location.origin && e.data?.type === 'studio-pass') check(); };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('message', onMessage);
+    const poll = setInterval(() => {
+      check();
+      if (payWindow && payWindow.closed) { check(); finish(loadPass()); }
+    }, 700);
+
+    payWindow = window.open('/pay.html', 'studio-pass', 'width=460,height=640');
+    if (!payWindow) { finish(null); }
+  });
+}
+
+/** Render the paywall as an offer with a button, not as an error. */
+function offerPass(onBought) {
+  const line = addLine('tool', '');
+  line.textContent = '— the studio AI needs a day pass — ';
+  const btn = document.createElement('button');
+  btn.textContent = 'Get a day pass';
+  btn.style.cssText = 'font:inherit;padding:.2rem .6rem;border-radius:.3rem;border:1px solid #4a4;background:#1a2a1a;color:#8f8;cursor:pointer';
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = 'waiting for payment…';
+    const pass = await buyPass();
+    if (passRemainingSeconds(pass) > 0) {
+      line.textContent = '— day pass active —';
+      onBought();
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Get a day pass';
+    }
+  };
+  line.appendChild(btn);
+  return line;
+}
+
 async function runNearaiTurn(text) {
   const cfg = nearaiConfig();
   nearaiAbort = new AbortController();
@@ -642,7 +721,18 @@ async function runNearaiTurn(text) {
     const { usage } = await runAgentTurn({
       // The signal rides on every request of the turn, so Stop lands mid-loop
       // rather than only between tool calls.
-      fetchFn: (url, init) => fetch(url, { ...init, signal: nearaiAbort.signal }),
+      // The pass rides on every request of the turn; a 402 mid-turn (expiry,
+      // or spending it in another tab) is caught below and offered, not thrown.
+      fetchFn: async (url, init) => {
+        const res = await fetch(url, { ...withPass(init), signal: nearaiAbort.signal });
+        if (res.status === 402) {
+          // The server is the authority on validity, so a rejected pass is
+          // dead weight — drop it rather than resend it on every retry.
+          clearPass();
+          throw Object.assign(new Error('payment required'), { paymentRequired: true });
+        }
+        return res;
+      },
       baseUrl: cfg.baseUrl,
       apiKey: cfg.apiKey,
       model: cfg.model,
@@ -670,6 +760,15 @@ async function runNearaiTurn(text) {
       addLine('tool', '— stopped —');
       finishAgentMessage();
       stopActivity('stopped');
+    } else if (e?.paymentRequired) {
+      // Not an error either: the turn is simply waiting to be paid for. The
+      // typed message is kept so buying a pass resumes it instead of losing it.
+      nearaiMessages.pop();
+      finishAgentMessage();
+      stopActivity('needs a day pass');
+      offerPass(() => { setBusy(true); runNearaiTurn(text); });
+      nearaiAbort = null;
+      return;
     } else {
       addLine('error', `⚠ ${e?.message || e}`);
       finishAgentMessage();

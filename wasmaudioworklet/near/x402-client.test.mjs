@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildDelegateAction, selectRequirements, walletCanPay, payWithTransaction,
+  buildDelegateAction, selectRequirements, walletCanPay, payWithTransaction, passAccountId,
   encodeHeader, decodeHeader, passRemainingSeconds, passKey,
 } from './x402-client.js';
 import { paymentRequirements, nearTxRequirements, memoFor, x402Config, encodeHeader as srvEncode } from '../functions/_x402.js';
@@ -146,6 +146,11 @@ test('pass expiry is read from the JWT claims', () => {
   assert.equal(passRemainingSeconds('garbage'), 0, 'never throws on junk');
 });
 
-test('pass storage is namespaced per account', () => {
-  assert.notEqual(passKey('alice.near'), passKey('bob.near'));
+test('one pass per browser, and it says who paid', () => {
+  // Keyed once, not per account: only the payment page knows the account, and
+  // the app that needs to READ the pass has no wallet connection at all.
+  assert.equal(passKey(), 'studio-pass');
+  const claims = (sub, exp) => 'h.' + Buffer.from(JSON.stringify({ sub, exp })).toString('base64url') + '.s';
+  assert.equal(passAccountId(claims('alice.near', 2 ** 31)), 'alice.near');
+  assert.equal(passAccountId('rubbish'), null);
 });
