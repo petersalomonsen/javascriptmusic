@@ -3,7 +3,7 @@
 // tools, model allowlist, and the x402 paywall. NOT an open relay, and not free.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onRequest, ALLOWED_MODELS } from './functions/nearai/[[path]].js';
+import { onRequest, MODEL, modelFor } from './functions/nearai/[[path]].js';
 import { resolveDefaultBaseUrl, DEFAULT_BASE_URL, DEFAULT_MODEL, toOpenAiTools } from './studio-agent/nearai-core.js';
 import { SYSTEM_PROMPT } from './studio-agent/prompt.js';
 import { x402Config, mintPass, HEADER_PASS } from './functions/_x402.js';
@@ -97,38 +97,56 @@ test('tools are enforced server-side; client tools ignored', async () => {
   assert.ok(!JSON.stringify(captured.body.tools).includes('evil_tool'));
 });
 
-test('model allowlist: unknown/expensive model forced to the default', async () => {
+test('the client cannot choose the model — we pay, so we choose', async () => {
   const captured = captureFetch();
+  // Not even a cheap, plausible one: the proxy offers OUR model or nothing.
   await onRequest(chat({ model: 'openai/gpt-5.5', messages: [{ role: 'user', content: 'hi' }] }));
-  assert.equal(captured.body.model, DEFAULT_MODEL);
+  assert.equal(captured.body.model, MODEL);
+  await onRequest(chat({ model: 'deepseek-ai/DeepSeek-V4-Flash', messages: [{ role: 'user', content: 'hi' }] }));
+  assert.equal(captured.body.model, MODEL);
 });
 
-test('model allowlist: allowed TEE model passes through', async () => {
+test('the deployment can pick the model without a code change', async () => {
   const captured = captureFetch();
-  const model = [...ALLOWED_MODELS][1];
-  await onRequest(chat({ model, messages: [{ role: 'user', content: 'hi' }] }));
-  assert.equal(captured.body.model, model);
+  await onRequest(ctx('POST', '/nearai/v1/chat/completions',
+    { Origin: APP, 'Content-Type': 'application/json', [HEADER_PASS]: PASS },
+    JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+    { ...ENV, NEARAI_MODEL: 'openai/gpt-oss-120b' }));
+  assert.equal(captured.body.model, 'openai/gpt-oss-120b');
+  assert.equal(modelFor({ NEARAI_MODEL: 'x' }), 'x');
+  assert.equal(modelFor({}), MODEL);
 });
 
-test('oversized conversation → 413', async () => {
-  const res = await onRequest(chat({
-    model: DEFAULT_MODEL,
-    messages: [{ role: 'user', content: 'x'.repeat(400000) }],
-  }));
+test('completion length is capped — output is the expensive half', async () => {
+  const captured = captureFetch();
+  await onRequest(chat({ messages: [{ role: 'user', content: 'hi' }] }));
+  assert.equal(typeof captured.body.max_tokens, 'number');
+  assert.ok(captured.body.max_tokens > 0 && captured.body.max_tokens <= 4000,
+    `unbounded or absurd max_tokens: ${captured.body.max_tokens}`);
+});
+
+test('the conversation cap is near real usage, not at the context limit', async () => {
+  // 300k chars (~75k tokens) let a single turn cost ~$1. Real turns are far
+  // below this, so the cap should bind on abuse, not on normal work.
+  const res = await onRequest(chat({ messages: [{ role: 'user', content: 'x'.repeat(70000) }] }));
   assert.equal(res.status, 413);
+  const ok = captureFetch();
+  await onRequest(chat({ messages: [{ role: 'user', content: 'x'.repeat(20000) }] }));
+  assert.ok(ok.url, 'a normal-sized turn must still go through');
 });
 
-test('GET /v1/models allowed (read-only, server key)', async () => {
-  const captured = captureFetch(new Response('{"data":[]}', { status: 200 }));
+test('the model catalog is no longer proxied — nothing to choose from', async () => {
+  // It existed so a client could pick a model, and spent a request on our key
+  // doing it.
   const res = await onRequest(ctx('GET', '/nearai/v1/models', { Origin: APP }));
-  assert.equal(res.status, 200);
-  assert.equal(captured.opts.headers.Authorization, 'Bearer SERVER_KEY');
+  assert.equal(res.status, 403);
 });
 
 test('any other path/method → 403', async () => {
   assert.equal((await onRequest(ctx('POST', '/nearai/v1/embeddings', { Origin: APP }, '{}'))).status, 403);
   assert.equal((await onRequest(ctx('GET', '/nearai/v1/chat/completions', { Origin: APP }))).status, 403);
   assert.equal((await onRequest(ctx('DELETE', '/nearai/v1/models', { Origin: APP }))).status, 403);
+  assert.equal((await onRequest(ctx('GET', '/nearai/v1/models', { Origin: APP }))).status, 403);
 });
 
 test('foreign origin → 403 (no piggybacking on the server key)', async () => {

@@ -10,9 +10,9 @@
 //     the same modules the app uses (single source of truth, deployed
 //     together). Client-sent system messages are stripped; client tools are
 //     ignored. The proxy only forwards the user/assistant/tool conversation.
-//   • the model must be on a curated allowlist of cheap TEE-hosted models
-//     (the catalog also proxies gpt-5/claude/gemini — NOT on our key);
-//   • origin-allowlisted; request size capped.
+//   • ONE model, chosen here — the client cannot pick, because we pay;
+//   • origin-allowlisted; request and completion size capped;
+//   • and it is NOT free: an x402 day pass is required (see _x402.js).
 //
 // The key comes from the NEARAI_API_KEY secret (dashboard: Settings →
 // Variables and Secrets → add Secret; or `wrangler pages secret put`).
@@ -28,18 +28,23 @@ import {
 
 export const UPSTREAM = 'https://cloud-api.near.ai';
 
-// Cheap TEE-hosted, tools-capable models only.
-export const ALLOWED_MODELS = new Set([
-  'Qwen/Qwen3.5-122B-A10B',
-  'deepseek-ai/DeepSeek-V4-Flash',
-  'moonshotai/kimi-k2.6',
-  'openai/gpt-oss-120b',
-  'zai-org/GLM-5.1-FP8',
-]);
+// ONE model, chosen by us, on our credits. Not an allowlist: an allowlist
+// implies the client picks, and this proxy offers our model with our prompt or
+// nothing. A user who wants a different model runs their own proxy — the local
+// studio-agent, or `/nearai <their-key>` straight to NEAR AI. Our terms here,
+// their terms there, one code path each.
+export const MODEL = (typeof globalThis.NEARAI_MODEL === 'string' && globalThis.NEARAI_MODEL) || DEFAULT_MODEL;
+export const modelFor = (env = {}) => env.NEARAI_MODEL || MODEL;
 
-// Conversation size cap (chars of serialized messages) — bounds per-request
-// input cost; the app's own turns stay far below this.
-const MAX_MESSAGES_CHARS = 300000;
+// Conversation size cap (chars of serialized messages). The app's own turns run
+// far below this; it exists to bound what a single request can cost us, so it
+// is set near real usage rather than at the context limit. 60k chars ~ 15k
+// tokens, on top of a ~11.6k-token system prompt and tool schemas.
+const MAX_MESSAGES_CHARS = 60000;
+
+// Bounds the expensive half of a request. Output costs several times input on
+// every model we would consider, and was previously unbounded.
+const MAX_COMPLETION_TOKENS = 2000;
 
 export const ALLOWED_ORIGINS = [
   /^https:\/\/([a-z0-9-]+\.)?webassemblymusic\.pages\.dev$/, // prod + preview deploys
@@ -77,18 +82,6 @@ export async function onRequest(context) {
     { status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) } });
 
   const upstreamPath = url.pathname.replace(/^\/nearai\//, '');
-
-  // Read-only model catalog (for display; the model used is enforced below).
-  if (request.method === 'GET' && upstreamPath === 'v1/models') {
-    if (!apiKey) return notConfigured();
-    const upstreamResponse = await fetch(`${UPSTREAM}/v1/models`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    return new Response(upstreamResponse.body, {
-      status: upstreamResponse.status,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) },
-    });
-  }
 
   if (request.method !== 'POST' || upstreamPath !== 'v1/chat/completions') {
     return new Response('not allowed', { status: 403, headers: corsHeaders(origin) });
@@ -128,7 +121,9 @@ export async function onRequest(context) {
   }
 
   const upstreamBody = {
-    model: ALLOWED_MODELS.has(body.model) ? body.model : DEFAULT_MODEL,
+    // The client's `model` is ignored: we pay, so we choose.
+    model: modelFor(env || {}),
+    max_tokens: MAX_COMPLETION_TOKENS,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX },
       ...conversation,
