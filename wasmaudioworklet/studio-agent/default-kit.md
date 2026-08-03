@@ -43,18 +43,17 @@ Expose timing as an `hslider` rather than hard-coding the BPM: sliders become
 channel parameters the song can set, so a tempo change does not mean re-writing
 the DSP.
 
-## Saturation — read this before writing any DSP
+## Saturation
 
-Use this soft clipper:
+Two saturators both work end to end — pick by taste:
 
-```
-sat(x) = x / (1.0 + abs(x));
-```
+- `ma.tanh` — a true tanh soft clipper. The transpiler emits `Mathf.tanh`, which
+  AssemblyScript compiles natively, so `write_faust` → `compile` succeeds.
+- `sat(x) = x / (1.0 + abs(x));` — a cheaper soft clipper (one divide, no
+  transcendental). This is what the kick/bass/lead below use.
 
-**Do NOT use `tanh` or `ma.tanh`.** Bare `tanh` is not a Faust primitive
-(`undefined symbol`), and `ma.tanh` passes Faust but emits `tanhf`, which the
-AssemblyScript backend has no name for — so it fails at `compile` with
-`TS2304: Cannot find name 'tanhf'` *after* `write_faust` reported success.
+Write `ma.tanh`, **not bare `tanh`** — `tanh` on its own is not a Faust
+primitive and fails with `undefined symbol`.
 
 ## Instruments (write these verbatim with `write_faust`)
 

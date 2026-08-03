@@ -110,9 +110,10 @@ test.describe('studio-agent project kit', () => {
         }
         expect(kit).toContain('import("stdfaust.lib")');
         expect(kit).toContain('initializeMidiSynth');
-        // Hard-won gotchas that cost real compile round-trips when missing.
-        expect(kit, 'must warn against ma.tanh').toContain('ma.tanh');
-        expect(kit, 'must state the sat() replacement').toContain('sat(x) = x / (1.0 + abs(x))');
+        // Saturation options the agent should have without a lookup: ma.tanh
+        // (transpiles to Mathf.tanh) and the cheaper sat() soft clipper.
+        expect(kit, 'must document ma.tanh as a saturator').toContain('ma.tanh');
+        expect(kit, 'must document the sat() soft clipper').toContain('sat(x) = x / (1.0 + abs(x))');
     });
 
     test('every turn carries the kit, not just the first', async ({ page }) => {
