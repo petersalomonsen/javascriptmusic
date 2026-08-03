@@ -12,3 +12,12 @@ resources
 .claude/
 .wrangler/
 test-results/
+
+# Local secrets. `.dev.vars` is the Cloudflare Pages convention for them, so the
+# same file works with `wrangler pages dev` as with our devserver. Never commit:
+# PASS_SECRET forges day passes, NEARAI_API_KEY spends real money.
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+!.env.example

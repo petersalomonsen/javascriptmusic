@@ -29,8 +29,14 @@
         async function run() {
             statusEl.textContent = 'Loading wallet connector...';
             const { NearConnector } = await import('https://cdn.jsdelivr.net/npm/@hot-labs/near-connect@0.11.1/+esm');
-            const network = params.get('network') || 'testnet';
-            const connector = new NearConnector({ network });
+            // The contract id decides the network; ?network= only breaks ties
+            // for ids that don't carry one (implicit 64-hex accounts).
+            const { networkById, networkIdForAccountId, isNetworkId } = await import('./near/network.js');
+            const requested = params.get('network');
+            const networkId = networkIdForAccountId(contractId, isNetworkId(requested) ? requested : undefined);
+            // near-connect only knows mainnet/testnet — the local sandbox has
+            // no wallet, so it borrows testnet's.
+            const connector = new NearConnector({ network: networkById(networkId).walletNetworkId });
 
             // Generate ed25519 keypair for function call access key
             statusEl.textContent = 'Generating access key...';

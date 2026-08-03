@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>x402 day pass — test bench</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #111; color: #ddd; margin: 0; padding: 2rem; }
+    main { max-width: 46rem; margin: 0 auto; }
+    h1 { font-size: 1.3rem; }
+    button { font: inherit; padding: .6rem 1rem; border-radius: .4rem; border: 1px solid #4a4;
+             background: #1a2a1a; color: #8f8; cursor: pointer; margin-right: .5rem; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    #log { background: #000; border: 1px solid #333; border-radius: .4rem; padding: 1rem;
+           white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: .8rem;
+           line-height: 1.5; max-height: 26rem; overflow: auto; }
+    .ok { color: #6f6; } .err { color: #f77; } .info { color: #79f; } .warn { color: #fc6; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; font-size: .9rem; }
+    dt { color: #888; } dd { margin: 0; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>x402 day pass — test bench</h1>
+  <p style="color:#999;font-size:.9rem">
+    Exercises the payment loop against the local Pages Function, isolated from the
+    agent UI. Run <code>npm run serve-dev</code> (reads <code>.dev.vars</code>).
+    Payment is <strong>real mainnet USDC</strong> at whatever <code>X402_AMOUNT</code> the
+    server is configured for. With the <code>near-tx</code> scheme you send the transfer
+    yourself and pay your own (tiny) gas &mdash; no facilitator, and <em>any</em> wallet works.
+  </p>
+
+  <dl>
+    <dt>wallet</dt><dd id="wallet">—</dd>
+    <dt>account</dt><dd id="account">—</dd>
+    <dt>can sign delegates</dt><dd id="candelegate">—</dd>
+    <dt>scheme offered</dt><dd id="scheme">—</dd>
+    <dt>USDC balance</dt><dd id="usdc">—</dd>
+    <dt>stored pass</dt><dd id="pass">none</dd>
+  </dl>
+
+  <p>
+    <button id="connect">1. Connect wallet</button>
+    <button id="probe" disabled>2. Ask for terms (402)</button>
+    <button id="pay" disabled>3. Pay &amp; get pass</button>
+    <button id="use" disabled>4. Use the pass</button>
+    <button id="forget">Forget pass</button>
+  </p>
+
+  <div id="log"></div>
+</main>
+
+<script type="module">
+import {
+  createPaymentFetch, loadPass, clearPass, passRemainingSeconds,
+  walletCanPay, selectRequirements, decodeHeader, HEADER_PASS,
+} from './near/x402-client.js';
+
+const logEl = document.getElementById('log');
+const log = (msg, cls = '') => {
+  const t = new Date().toISOString().slice(11, 19);
+  logEl.innerHTML += `<span class="${cls}">[${t}] ${msg}</span>\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+};
+const set = (id, v) => { document.getElementById(id).textContent = v; };
+
+const USDC = '17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
+const ENDPOINT = '/nearai/v1/chat/completions';
+const BODY = JSON.stringify({ messages: [{ role: 'user', content: 'say OK' }] });
+
+let connector, wallet, accountId;
+
+function refreshPass() {
+  const p = loadPass(accountId);
+  const secs = passRemainingSeconds(p);
+  set('pass', p ? `valid ${Math.floor(secs / 3600)}h ${Math.floor(secs % 3600 / 60)}m` : 'none');
+  document.getElementById('use').disabled = !p;
+}
+
+async function usdcBalance(id) {
+  const res = await fetch('https://rpc.mainnet.fastnear.com', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'query',
+      params: {
+        request_type: 'call_function', finality: 'final', account_id: USDC,
+        method_name: 'ft_balance_of',
+        args_base64: btoa(JSON.stringify({ account_id: id })),
+      },
+    }),
+  });
+  const j = await res.json();
+  if (!j.result?.result) return null;
+  const raw = JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
+  return Number(raw) / 1e6;
+}
+
+document.getElementById('connect').onclick = async () => {
+  try {
+    log('loading wallet connector…', 'info');
+    const { NearConnector } = await import('https://cdn.jsdelivr.net/npm/@hot-labs/near-connect@0.11.1/+esm');
+    connector = new NearConnector({ network: 'mainnet' });
+    connector.on('wallet:signIn', async (event) => {
+      wallet = event.wallet || await connector.wallet();
+      accountId = event.accounts?.[0]?.accountId;
+      set('wallet', wallet?.manifest?.name || '?');
+      set('account', accountId || '?');
+      const can = walletCanPay(wallet);
+      set('candelegate', can ? 'yes' : 'no');
+      log(`connected as ${accountId} via ${wallet?.manifest?.name}`, 'ok');
+      if (!can) log('No delegate support — fine for near-tx, which is what the server offers by default.', 'info');
+      const bal = await usdcBalance(accountId).catch(() => null);
+      set('usdc', bal === null ? '?' : `$${bal.toFixed(6)}`);
+      if (bal === 0) log('This account holds no USDC — settlement will be refused at preflight.', 'warn');
+      document.getElementById('probe').disabled = false;
+      document.getElementById('pay').disabled = false; // near-tx needs no delegate support
+      refreshPass();
+    });
+    await connector.connect();
+  } catch (e) { log('connect failed: ' + e.message, 'err'); }
+};
+
+document.getElementById('probe').onclick = async () => {
+  const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'content-type': 'application/json' }, body: BODY });
+  log(`server said ${res.status}`, res.status === 402 ? 'info' : 'warn');
+  const header = res.headers.get('PAYMENT-REQUIRED');
+  if (!header) { log('no PAYMENT-REQUIRED header — is PASS_SECRET set on the server?', 'err'); return; }
+  const required = decodeHeader(header);
+  log(`server offers: ${required.accepts.map(a => a.scheme).join(', ')}`, 'info');
+  const r = selectRequirements(required, { wallet });
+  set('scheme', r.scheme);
+  log(`chose "${r.scheme}": ${Number(r.amount) / 1e6} of ${r.asset.slice(0, 10)}… → ${r.payTo} on ${r.network}`, 'ok');
+  if (r.scheme === 'near-tx') {
+    log(`you send the transfer; redeem within ${Math.floor(r.extra.maxAgeSeconds / 60)} min`, 'info');
+  }
+};
+
+document.getElementById('pay').onclick = async () => {
+  const payFetch = createPaymentFetch({
+    wallet, accountId,
+    confirm: async (r) => window.confirm(
+      `Pay ${Number(r.amount) / 1e6} USDC to ${r.payTo}?\n\n`
+      + `Scheme: ${r.scheme}${r.scheme === 'near-tx' ? ' (you send it, you pay ~0.0003 NEAR gas)' : ''}\n`
+      + 'This is REAL mainnet money.'),
+    onStatus: (s, detail) => log(`status: ${s}${detail ? ' — ' + detail : ''}`, s === 'paid' ? 'ok' : s === 'failed' ? 'err' : 'info'),
+    // Mirror what the client actually chose, so the field is filled even when
+    // step 2 was skipped.
+    onScheme: (name) => set('scheme', name),
+  });
+  try {
+    const res = await payFetch(ENDPOINT, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: BODY,
+    });
+    log(`final status ${res.status}`, res.status < 400 ? 'ok' : 'warn');
+    if (res.headers.get('PAYMENT-RESPONSE')) {
+      const settle = decodeHeader(res.headers.get('PAYMENT-RESPONSE'));
+      log(`settled: tx ${settle.transaction} payer ${settle.payer}`, 'ok');
+    }
+    log((await res.text()).slice(0, 400));
+    refreshPass();
+  } catch (e) { log('pay failed: ' + e.message, 'err'); }
+};
+
+document.getElementById('use').onclick = async () => {
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', [HEADER_PASS]: loadPass(accountId) },
+    body: BODY,
+  });
+  log(`with stored pass → ${res.status} (402 would mean the pass was rejected)`, res.status === 402 ? 'err' : 'ok');
+  log((await res.text()).slice(0, 400));
+};
+
+document.getElementById('forget').onclick = () => { clearPass(accountId); refreshPass(); log('pass cleared', 'info'); };
+
+refreshPass();
+log('ready — connect any NEAR wallet (near-tx needs no delegate signing)', 'info');
+</script>
+</body>
+</html>

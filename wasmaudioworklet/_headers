@@ -5,3 +5,9 @@
 /login
   ! Cross-Origin-Opener-Policy
   ! Cross-Origin-Embedder-Policy
+
+# Same reason as /login: this page opens a wallet popup, and COOP would cut
+# window.opener on the cross-origin hop (Meteor reports "User closed the window").
+/x402-test.html
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy

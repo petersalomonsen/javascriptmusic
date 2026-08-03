@@ -78,10 +78,13 @@ async function handleStatic(req, res) {
     const ext = extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-    // Mirror the production _headers exemption: /login* must not set COOP,
-    // otherwise the wallet popup's window.opener gets neutered on cross-origin
-    // navigation and Meteor's web wallet throws "User closed the window".
-    const headers = urlPath.startsWith('/login')
+    // Mirror the production _headers exemption: any page that opens a WALLET
+    // must not set COOP, otherwise the popup's window.opener gets neutered on
+    // cross-origin navigation and Meteor's web wallet throws "User closed the
+    // window". That is why login lives on its own page rather than inside the
+    // app — the app itself needs COOP/COEP.
+    const opensWallet = urlPath.startsWith('/login') || urlPath.startsWith('/x402-test');
+    const headers = opensWallet
       ? { 'Content-Type': contentType }
       : { 'Content-Type': contentType, ...CROSS_ORIGIN_HEADERS };
 
@@ -93,8 +96,65 @@ async function handleStatic(req, res) {
   }
 }
 
+// --- Cloudflare Pages Functions, locally -----------------------------------
+//
+// In production `functions/<name>/[[path]].js` is executed by the Workers
+// runtime. Without this, /nearai/* and /gitproxy/* simply 404 in dev, so a
+// paywall living in the proxy would be invisible locally — the very thing you
+// most want to try before deploying.
+//
+// The functions are plain ESM written against web APIs (Request, Response,
+// crypto.subtle, fetch) that Node has natively, so running them is a matter of
+// translating node req/res at the edges. `env` comes from process.env, which is
+// how the real secrets (NEARAI_API_KEY, PASS_SECRET, X402_*) arrive in dev.
+const FUNCTION_ROUTES = ['/nearai/', '/gitproxy/'];
+
+async function handleFunction(req, res, routePrefix) {
+  const name = routePrefix.replace(/\//g, '');
+  const url = `http://localhost:${PORT}${req.url}`;
+
+  const body = req.method === 'GET' || req.method === 'HEAD'
+    ? undefined
+    : await new Promise((resolve, reject) => {
+        const chunks = [];
+        req.on('data', (c) => chunks.push(c));
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
+      });
+
+  try {
+    const mod = await import(`./functions/${name}/[[path]].js`);
+    const response = await mod.onRequest({
+      request: new Request(url, { method: req.method, headers: req.headers, body }),
+      env: process.env,
+    });
+
+    const headers = {};
+    for (const [k, v] of response.headers) headers[k] = v;
+    res.writeHead(response.status, headers);
+    if (response.body) {
+      // Stream it: chat completions can be long, and buffering would hide
+      // streaming bugs that only show up in production.
+      const reader = response.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(Buffer.from(value));
+      }
+    }
+    res.end();
+  } catch (e) {
+    console.error(`[function ${name}]`, e);
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end(`function error: ${e.message}`);
+  }
+}
+
 const server = createServer((req, res) => {
-  if (req.url.startsWith('/wasm-git/')) {
+  const route = FUNCTION_ROUTES.find((p) => req.url.startsWith(p));
+  if (route) {
+    handleFunction(req, res, route);
+  } else if (req.url.startsWith('/wasm-git/')) {
     handleWasmGitProxy(req, res);
   } else {
     handleStatic(req, res);
@@ -105,4 +165,7 @@ server.listen(PORT, () => {
   console.log(`Dev server running at http://localhost:${PORT}/`);
   console.log(`wasm-git proxy: /wasm-git/* -> unpkg.com`);
   console.log(`NEAR git: handled by service worker (/near-repo/*)`);
+  console.log(`Pages Functions: ${FUNCTION_ROUTES.join(', ')} -> functions/*/[[path]].js`);
+  const missing = ['NEARAI_API_KEY', 'PASS_SECRET'].filter((k) => !process.env[k]);
+  if (missing.length) console.log(`  (unset: ${missing.join(', ')} — /nearai will 503 or refuse to mint passes)`);
 });

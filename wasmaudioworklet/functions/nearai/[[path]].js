@@ -21,6 +21,10 @@
 
 import { SYSTEM_PROMPT } from '../../studio-agent/prompt.js';
 import { toOpenAiTools, SERVERLESS_PROMPT_SUFFIX, DEFAULT_MODEL } from '../../studio-agent/nearai-core.js';
+import {
+  x402Config, requirePass, settlementHeaders,
+  HEADER_PASS, HEADER_SIGNATURE, HEADER_REQUIRED, HEADER_RESPONSE,
+} from '../_x402.js';
 
 export const UPSTREAM = 'https://cloud-api.near.ai';
 
@@ -47,7 +51,10 @@ const isOriginAllowed = (origin) => !origin || ALLOWED_ORIGINS.some((re) => re.t
 const corsHeaders = (origin) => ({
   'Access-Control-Allow-Origin': origin || '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Accept',
+  'Access-Control-Allow-Headers': `Content-Type, Accept, ${HEADER_PASS}, ${HEADER_SIGNATURE}`,
+  // The browser cannot read a response header it was not told about, and the
+  // whole payment loop depends on the client reading these back.
+  'Access-Control-Expose-Headers': `${HEADER_REQUIRED}, ${HEADER_RESPONSE}, ${HEADER_PASS}`,
   'Access-Control-Max-Age': '600',
   'Vary': 'Origin',
 });
@@ -65,15 +72,15 @@ export async function onRequest(context) {
   }
 
   const apiKey = env && env.NEARAI_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'NEARAI_API_KEY secret is not configured on the server' }),
-      { status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) } });
-  }
+  const notConfigured = () => new Response(
+    JSON.stringify({ error: 'NEARAI_API_KEY secret is not configured on the server' }),
+    { status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) } });
 
   const upstreamPath = url.pathname.replace(/^\/nearai\//, '');
 
   // Read-only model catalog (for display; the model used is enforced below).
   if (request.method === 'GET' && upstreamPath === 'v1/models') {
+    if (!apiKey) return notConfigured();
     const upstreamResponse = await fetch(`${UPSTREAM}/v1/models`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
@@ -86,6 +93,24 @@ export async function onRequest(context) {
   if (request.method !== 'POST' || upstreamPath !== 'v1/chat/completions') {
     return new Response('not allowed', { status: 403, headers: corsHeaders(origin) });
   }
+
+  // ---- the paywall -------------------------------------------------------
+  // Inference runs on OUR credits, so it is never free and never relayed on
+  // someone else's key. Exactly two outcomes: a valid pass, or a 402. There is
+  // deliberately no third branch that could fall through to the server key.
+  const x402 = x402Config(env || {});
+  const gate = await requirePass(x402, request, {
+    url: url.toString(),
+    description: 'WebAssembly Music — studio AI day pass',
+    extraHeaders: corsHeaders(origin),
+  });
+  if (!gate.ok) return gate.response;
+  const paidHeaders = settlementHeaders(gate);
+
+  // Deliberately AFTER the paywall: an unpaid caller gets a 402 and learns
+  // nothing about how this server is configured. It also means the paywall can
+  // be exercised end-to-end without a NEAR AI key at all.
+  if (!apiKey) return notConfigured();
 
   let body;
   try {
@@ -124,6 +149,9 @@ export async function onRequest(context) {
     headers: {
       'Content-Type': upstreamResponse.headers.get('Content-Type') || 'application/json',
       ...corsHeaders(origin),
+      // Present only when a payment settled on THIS request, so the client can
+      // store the freshly minted pass and stop paying per call.
+      ...paidHeaders,
     },
   });
 }
