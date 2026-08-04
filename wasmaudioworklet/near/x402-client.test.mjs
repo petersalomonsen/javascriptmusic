@@ -79,7 +79,7 @@ test('near-tx payment: ONE prompt, memo shows the price, secret stays off-chain'
 
   // The memo is what the payer reads in the wallet, since wallets show that
   // `ft_transfer` is being called without decoding its arguments.
-  assert.ok(p.args.memo.startsWith('WebAssembly Music studio AI day pass — 0.01 USDC'),
+  assert.ok(p.args.memo.startsWith('WebAssembly Music studio AI session pass — 0.01 USDC'),
     `payer would see: ${p.args.memo}`);
   assert.equal(p.args.memo, await memoFor(CFG, payload.payload.secret));
   assert.ok(!JSON.stringify(sent).includes(payload.payload.secret), 'secret must not be on-chain');

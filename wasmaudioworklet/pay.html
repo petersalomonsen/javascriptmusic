@@ -41,7 +41,7 @@
   <div id="details" style="margin-top:1rem"></div>
 
   <button id="connect">Connect NEAR wallet</button>
-  <button id="claim" disabled style="display:none">Claim your sponsor pass</button>
+  <button id="claim" disabled style="display:none">Claim your session pass</button>
   <button id="pay" disabled style="display:none">Pay</button>
   <button id="close" class="secondary" style="display:none">Back to the studio</button>
 
@@ -105,14 +105,14 @@ async function loadTerms() {
   if (paid) {
     const human = (Number(paid.amount) / 1e6).toFixed(2).replace(/\.00$/, '');
     $('price').firstChild.textContent = `$${human} `;
-    $('pricenote').textContent = 'in USDC on NEAR · 24 hours';
+    $('pricenote').textContent = 'in USDC on NEAR · 30 minutes';
     detail('you pay', `${human} USDC`);
     detail('to', paid.payTo);
     terms = paid;
     $('pay').style.display = '';
   } else if (sponsorship) {
     $('price').firstChild.textContent = 'Free ';
-    $('pricenote').textContent = 'for people who have funded this project · 24 hours';
+    $('pricenote').textContent = 'for people who have funded this project · 30 minutes';
     detail('open to', `sponsors of ${sponsorship.recipient}`);
     detail('checked against', sponsorship.contract);
     $('claim').style.display = '';

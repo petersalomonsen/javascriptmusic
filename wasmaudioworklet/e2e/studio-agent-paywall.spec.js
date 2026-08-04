@@ -73,9 +73,9 @@ test('an unpaid turn offers a day pass instead of failing', async ({ page }) => 
     await sendChat(page, 'make a kick drum');
 
     // The offer, with a button — not a red error line.
-    const offer = chatLog(page).locator('text=needs a day pass');
+    const offer = chatLog(page).locator('text=needs a session pass');
     await expect(offer).toBeVisible({ timeout: 15000 });
-    await expect(chatLog(page).getByRole('button', { name: /day pass/i })).toBeVisible();
+    await expect(chatLog(page).getByRole('button', { name: /session pass/i })).toBeVisible();
     await expect(chatLog(page).locator('.sa-msg-error')).toHaveCount(0);
 
     expect(seen.length).toBeGreaterThan(0);
@@ -95,7 +95,7 @@ test('a stored pass is attached, and the turn just runs', async ({ page }) => {
     await sendChat(page, 'make a kick drum');
 
     await expect(chatLog(page).locator('text=Kick drum added.')).toBeVisible({ timeout: 15000 });
-    await expect(chatLog(page).locator('text=needs a day pass')).toHaveCount(0);
+    await expect(chatLog(page).locator('text=needs a session pass')).toHaveCount(0);
     expect(seen[0].pass).toBeTruthy();
 });
 
@@ -113,7 +113,7 @@ test('an expired pass is treated as no pass, and re-offered', async ({ page }) =
     await sendChat(page, '/nearai on');
     await sendChat(page, 'make a kick drum');
 
-    await expect(chatLog(page).locator('text=needs a day pass')).toBeVisible({ timeout: 15000 });
+    await expect(chatLog(page).locator('text=needs a session pass')).toBeVisible({ timeout: 15000 });
     await expect(chatLog(page).locator('.sa-msg-error')).toHaveCount(0);
 });
 
@@ -128,9 +128,9 @@ test('buying a pass resumes the message that was typed', async ({ page }) => {
 
     await sendChat(page, '/nearai on');
     await sendChat(page, 'make a kick drum');
-    await expect(chatLog(page).locator('text=needs a day pass')).toBeVisible({ timeout: 15000 });
+    await expect(chatLog(page).locator('text=needs a session pass')).toBeVisible({ timeout: 15000 });
 
-    await chatLog(page).getByRole('button', { name: /day pass/i }).click();
+    await chatLog(page).getByRole('button', { name: /session pass/i }).click();
     // The payment page would write this; here we simulate it landing.
     await page.evaluate((pass) => localStorage.setItem('studio-pass', pass), makePass(3600));
 
@@ -149,7 +149,7 @@ test('a pass arriving from another tab retires the offer button', async ({ page 
 
     await sendChat(page, '/nearai on');
     await sendChat(page, 'make a kick drum');
-    await expect(chatLog(page).getByRole('button', { name: /day pass/i })).toBeVisible({ timeout: 15000 });
+    await expect(chatLog(page).getByRole('button', { name: /session pass/i })).toBeVisible({ timeout: 15000 });
 
     // Simulate the claim landing in a DIFFERENT tab: `storage` fires here, and
     // the button was never clicked.
@@ -158,8 +158,8 @@ test('a pass arriving from another tab retires the offer button', async ({ page 
         window.dispatchEvent(new StorageEvent('storage', { key: 'studio-pass', newValue: pass }));
     }, makePass(3600));
 
-    await expect(chatLog(page).locator('text=day pass active')).toBeVisible({ timeout: 10000 });
-    await expect(chatLog(page).getByRole('button', { name: /Get a day pass/i })).toHaveCount(0);
+    await expect(chatLog(page).locator('text=session pass active')).toBeVisible({ timeout: 10000 });
+    await expect(chatLog(page).getByRole('button', { name: /Get a session pass/i })).toHaveCount(0);
     // …and the turn that was waiting goes through on its own.
     await expect(chatLog(page).locator('text=Answered after the claim.')).toBeVisible({ timeout: 20000 });
     expect(seen.some((r) => r.pass)).toBe(true);

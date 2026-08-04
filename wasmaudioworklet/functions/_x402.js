@@ -45,7 +45,11 @@ export const USDC_NEAR_MAINNET =
 // (relayer x402-relayer2.mike.near). x402.org and PayAI carry no NEAR at all.
 export const DEFAULT_FACILITATOR = 'https://x402.mikedotexe.com';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+// A pass is deliberately SHORT. Credits are the scarce resource — staking
+// yields about $1 of credit per 100 NEAR per month, against roughly $0.15 for a
+// working session — so a 24-hour pass would hand one person a month of supply.
+// Thirty minutes costs another signature now and then, and bounds the damage.
+const PASS_TTL_MS = 30 * 60 * 1000;
 
 /**
  * Everything the gate needs, all overridable per deployment so the price can be
@@ -73,7 +77,7 @@ export function x402Config(env = {}) {
     // miss until the first real payment. Credentials are issued per network,
     // asset, payee and resource-server instance.
     facilitatorApiKey: env.X402_FACILITATOR_API_KEY || '',
-    passTtlMs: Number(env.X402_PASS_TTL_MS || DAY_MS),
+    passTtlMs: Number(env.X402_PASS_TTL_MS || PASS_TTL_MS),
     passSecret: env.PASS_SECRET || '',
     // `near-tx` settlement: we read the payment off the chain ourselves.
     // Several endpoints, run by different operators, tried in order — taking
@@ -92,13 +96,13 @@ export function x402Config(env = {}) {
     // What this payment buys. Bound into the proof so a single transfer can
     // only ever claim ONE product — the day we sell a second thing, one
     // payment must not be redeemable for both.
-    purpose: env.X402_PURPOSE || 'studio-day-pass',
+    purpose: env.X402_PURPOSE || 'studio-session-pass',
     // Used only to render the amount inside the transfer memo. Wallets show
     // the memo but not always the decoded ft_transfer amount, so this is often
     // the only place the payer sees what they are actually paying.
     assetSymbol: env.X402_ASSET_SYMBOL || 'USDC',
     assetDecimals: Number(env.X402_ASSET_DECIMALS || 6),
-    productName: env.X402_PRODUCT_NAME || 'WebAssembly Music studio AI day pass',
+    productName: env.X402_PRODUCT_NAME || 'WebAssembly Music studio AI session pass',
     // Which settlement paths this deployment offers, in preference order.
     // Both can be advertised at once: browsers take `near-tx` (any wallet, no
     // relayer), x402 SDK clients take `exact` if a facilitator is configured.
@@ -400,7 +404,7 @@ export function paymentRequired(cfg, { url, description, error } = {}) {
     x402Version: X402_VERSION,
     resource: {
       url: url || '',
-      description: description || 'WebAssembly Music — studio AI day pass',
+      description: description || 'WebAssembly Music — studio AI session pass',
       mimeType: 'application/json',
     },
     accepts: acceptedRequirements(cfg),
@@ -414,7 +418,7 @@ export function paymentRequired(cfg, { url, description, error } = {}) {
       authRecipient: cfg.authRecipient,
       purpose: cfg.purpose,
       hint: `The studio AI is currently for people who have funded ${cfg.sponsors.recipient}. `
-        + 'Sign in with that NEAR account to claim a day pass.',
+        + 'Sign in with that NEAR account to claim a session pass.',
     };
   }
   if (error) body.error = error;

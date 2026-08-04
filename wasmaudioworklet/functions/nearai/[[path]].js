@@ -114,7 +114,7 @@ export async function onRequest(context) {
   // deliberately no third branch that could fall through to the server key.
   const gate = await requirePass(x402, request, {
     url: url.toString(),
-    description: 'WebAssembly Music — studio AI day pass',
+    description: 'WebAssembly Music — studio AI session pass',
     extraHeaders: corsHeaders(origin),
   });
   if (!gate.ok) return gate.response;

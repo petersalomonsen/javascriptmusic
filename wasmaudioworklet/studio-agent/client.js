@@ -679,7 +679,7 @@ function buyPass() {
 
 // Offers still on screen waiting for a pass. A pass can arrive by routes an
 // individual offer knows nothing about — another tab, a direct visit to
-// /pay.html, a second window — and a button that still says "Get a day pass"
+// /pay.html, a second window — and a button that still says "Get a session pass"
 // after you have one is worse than useless: it invites you to buy twice.
 const pendingOffers = new Set();
 
@@ -698,9 +698,9 @@ window.addEventListener('focus', passArrived);
 /** Render the gate as an offer with a button, not as an error. */
 function offerPass(onBought) {
   const line = addLine('tool', '');
-  line.textContent = '— the studio AI needs a day pass — ';
+  line.textContent = '— the studio AI needs a session pass — ';
   const btn = document.createElement('button');
-  btn.textContent = 'Get a day pass';
+  btn.textContent = 'Get a session pass';
   btn.style.cssText = 'font:inherit;padding:.2rem .6rem;border-radius:.3rem;border:1px solid #4a4;background:#1a2a1a;color:#8f8;cursor:pointer';
 
   let settled = false;
@@ -709,7 +709,7 @@ function offerPass(onBought) {
       if (settled) return;          // the button and `storage` can both fire
       settled = true;
       pendingOffers.delete(offer);
-      line.textContent = '— day pass active —';   // replaces the button too
+      line.textContent = '— session pass active —';   // replaces the button too
       onBought();
     },
   };
@@ -720,7 +720,7 @@ function offerPass(onBought) {
     btn.textContent = 'waiting…';
     await buyPass();
     if (passRemainingSeconds(loadPass()) > 0) offer.settle();
-    else if (!settled) { btn.disabled = false; btn.textContent = 'Get a day pass'; }
+    else if (!settled) { btn.disabled = false; btn.textContent = 'Get a session pass'; }
   };
   line.appendChild(btn);
   return line;
@@ -791,7 +791,7 @@ async function runNearaiTurn(text) {
       // typed message is kept so buying a pass resumes it instead of losing it.
       nearaiMessages.pop();
       finishAgentMessage();
-      stopActivity('needs a day pass');
+      stopActivity('needs a session pass');
       offerPass(() => { setBusy(true); runNearaiTurn(text); });
       nearaiAbort = null;
       return;

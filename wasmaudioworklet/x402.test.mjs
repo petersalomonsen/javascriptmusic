@@ -27,7 +27,7 @@ test('header codec round-trips (base64 of JSON, as @x402/core does it)', () => {
   const obj = { x402Version: 2, accepts: [{ scheme: 'exact', amount: '10000' }] };
   assert.deepEqual(decodeHeader(encodeHeader(obj)), obj);
   // Non-ASCII must survive — our description contains an em dash.
-  const uni = { description: 'WebAssembly Music — studio AI day pass' };
+  const uni = { description: 'WebAssembly Music — studio AI session pass' };
   assert.deepEqual(decodeHeader(encodeHeader(uni)), uni);
 });
 
@@ -256,10 +256,10 @@ test('near-tx: someone else cannot redeem your payment (commitment)', async () =
 });
 
 test('near-tx: a payment from within the period is still redeemable', async () => {
-  // Replay is neutralised by dating the pass from the payment (see below), so
-  // this no longer needs a tight window — an hour-old payment is fine, it just
-  // buys an hour less.
-  const restore = await onChain({ ageMs: 60 * 60 * 1000 });
+  // Replay is neutralised by dating the pass from the payment, so this needs no
+  // tight window of its own — a payment part-way through the period is fine, it
+  // just buys the remainder.
+  const restore = await onChain({ ageMs: 10 * 60 * 1000 });
   try {
     assert.equal((await verify()).accountId, 'psalomo.near');
   } finally { restore(); }
@@ -448,16 +448,16 @@ test('replay: redeeming the same payment twice yields the SAME expiry', async ()
   assert.equal(expOf(first), Math.floor(paidAtMs / 1000) + TXCFG.passTtlMs / 1000);
 });
 
-test('replay: a payment redeemed late gives only the remainder, not a fresh day', async () => {
-  const paidAtMs = NOW - 23 * 60 * 60 * 1000; // 23h ago, pass is 24h
+test('replay: a payment redeemed late gives only the remainder, not a fresh period', async () => {
+  const paidAtMs = NOW - 25 * 60 * 1000; // 25 min ago, the period is 30
   const pass = await mintPass(TXCFG, { accountId: 'a.near', txHash: 'T', paidAtMs });
   const exp = JSON.parse(Buffer.from(pass.split('.')[1], 'base64url')).exp;
-  const remainingHours = (exp * 1000 - NOW) / 3600000;
-  assert.ok(remainingHours > 0.5 && remainingHours < 1.5, `expected ~1h left, got ${remainingHours}h`);
+  const remainingMin = (exp * 1000 - NOW) / 60000;
+  assert.ok(remainingMin > 3 && remainingMin < 7, `expected ~5 min left, got ${remainingMin}`);
 });
 
 test('replay: a payment older than a whole period is refused outright', async () => {
-  const restore = await onChain({ ageMs: 25 * 60 * 60 * 1000 });
+  const restore = await onChain({ ageMs: 45 * 60 * 1000 });
   try {
     await assert.rejects(verify(), /pass period has already elapsed/);
   } finally { restore(); }
@@ -485,7 +485,7 @@ test('purpose: a proof for another product cannot claim this one', async () => {
   const restore = await onChainWithKey(publicKey, { memo: 'x' });
   try {
     await assert.rejects(verifyNearTxPayment(AUTHCFG, { txHash: 'TXHASH', auth }, { now: NOW }),
-      /is for "some-other-product", not "studio-day-pass"/);
+      /is for "some-other-product", not "studio-session-pass"/);
   } finally { restore(); }
 });
 
@@ -496,13 +496,13 @@ test('purpose: a proof that omits the purpose is refused', async () => {
   const restore = await onChainWithKey(publicKey, { memo: 'x' });
   try {
     await assert.rejects(verifyNearTxPayment(AUTHCFG, { txHash: 'TXHASH', auth }, { now: NOW }),
-      /not "studio-day-pass"/);
+      /not "studio-session-pass"/);
   } finally { restore(); }
 });
 
 test('purpose: the memo carries it too', async () => {
   const memo = await memoFor(TXCFG, SECRET);
-  assert.match(memo, /wam:studio-day-pass:/);
+  assert.match(memo, /wam:studio-session-pass:/);
   // A memo built for a different product does not satisfy this one.
   const other = await memoFor(x402Config({ PASS_SECRET: 's', X402_PURPOSE: 'other-product' }), SECRET);
   assert.notEqual(other, memo);
@@ -516,7 +516,7 @@ test('purpose: the memo carries it too', async () => {
 
 test('memo: leads with the product and price in readable form', async () => {
   const memo = await memoFor(TXCFG, SECRET);
-  assert.ok(memo.startsWith('WebAssembly Music studio AI day pass — 0.01 USDC'),
+  assert.ok(memo.startsWith('WebAssembly Music studio AI session pass — 0.01 USDC'),
     `payer would see: ${memo}`);
 });
 
