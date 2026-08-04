@@ -751,6 +751,14 @@ async function runNearaiTurn(text) {
       // or spending it in another tab) is caught below and offered, not thrown.
       fetchFn: async (url, init) => {
         const res = await fetch(url, { ...withPass(init), signal: nearaiAbort.signal });
+        // 503 out_of_credits is the shared pool running dry, NOT a pass problem —
+        // keep the pass and say so, rather than sending them to claim again.
+        if (res.status === 503) {
+          const body = await res.clone().json().catch(() => ({}));
+          if (body.error === 'out_of_credits') {
+            throw Object.assign(new Error(body.message), { outOfCredits: true });
+          }
+        }
         if (res.status === 402) {
           // The server is the authority on validity, so a rejected pass is
           // dead weight — drop it rather than resend it on every retry.
@@ -786,6 +794,12 @@ async function runNearaiTurn(text) {
       addLine('tool', '— stopped —');
       finishAgentMessage();
       stopActivity('stopped');
+    } else if (e?.outOfCredits) {
+      addLine('tool', `— ${e.message} —`);
+      finishAgentMessage();
+      stopActivity('out of credits');
+      nearaiAbort = null;
+      return;
     } else if (e?.paymentRequired) {
       // Not an error either: the turn is simply waiting to be paid for. The
       // typed message is kept so buying a pass resumes it instead of losing it.

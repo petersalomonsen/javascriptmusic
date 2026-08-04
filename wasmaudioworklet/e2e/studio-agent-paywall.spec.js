@@ -165,6 +165,25 @@ test('a pass arriving from another tab retires the offer button', async ({ page 
     expect(seen.some((r) => r.pass)).toBe(true);
 });
 
+test('an empty credit pool keeps the pass and says so', async ({ page }) => {
+    page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+    await page.route('**/nearai/v1/chat/completions', (route) => route.fulfill({
+        status: 503,
+        json: { error: 'out_of_credits', message: 'The shared pool of AI credits has run out. It refills as NEAR is staked — your pass is still valid, so try again later.' },
+    }));
+    await bootApp(page);
+    const pass = makePass(3600);
+    await page.evaluate((p) => { localStorage.setItem('studio-pass', p); localStorage.setItem('nearai-enabled', '1'); }, pass);
+
+    await sendChat(page, '/nearai on');
+    await sendChat(page, 'make a kick drum');
+
+    await expect(chatLog(page).locator('text=credits has run out')).toBeVisible({ timeout: 15000 });
+    // The pass must survive: it is not the reason this failed.
+    expect(await page.evaluate(() => localStorage.getItem('studio-pass'))).toBe(pass);
+    await expect(chatLog(page).getByRole('button', { name: /session pass/i })).toHaveCount(0);
+});
+
 test('the payment page is exempt from COOP, or the wallet popup would break', async ({ page }) => {
     // This is why payment lives on its own page rather than inside the app.
     const pay = await page.request.get('/pay.html');

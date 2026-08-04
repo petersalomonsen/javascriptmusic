@@ -159,6 +159,23 @@ export async function onRequest(context) {
     body: JSON.stringify(upstreamBody),
   });
 
+  // NEAR AI answers 402 when the credits behind our key are exhausted. Passing
+  // that through would collide with OUR 402, which means "you need a pass" — the
+  // client would throw away a perfectly good pass and offer another one that
+  // could not help. Different problem, different status.
+  if (upstreamResponse.status === 402) {
+    const detail = await upstreamResponse.text().catch(() => '');
+    return new Response(JSON.stringify({
+      error: 'out_of_credits',
+      message: 'The shared pool of AI credits has run out. It refills as NEAR is staked — '
+        + 'your pass is still valid, so try again later.',
+      upstream: detail.slice(0, 300),
+    }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders(origin), ...paidHeaders },
+    });
+  }
+
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,
     headers: {

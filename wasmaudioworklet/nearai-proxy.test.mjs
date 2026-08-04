@@ -197,3 +197,15 @@ test('CORS exposes the payment headers, or the browser cannot complete the loop'
   assert.match(expose, /X-Studio-Pass/);
   assert.match(res.headers.get('access-control-allow-headers') || '', /X-Studio-Pass/);
 });
+
+test('an exhausted credit pool is NOT reported as "you need a pass"', async () => {
+  // NEAR AI answers 402 when our credits run out. Passing that through would
+  // collide with our own 402 and make the client discard a valid pass.
+  captureFetch(new Response('{"error":{"message":"insufficient credits"}}', { status: 402 }));
+  const res = await onRequest(chat({ messages: [{ role: 'user', content: 'hi' }] }));
+  assert.notEqual(res.status, 402, 'must not look like a paywall response');
+  assert.equal(res.status, 503);
+  const body = await res.json();
+  assert.equal(body.error, 'out_of_credits');
+  assert.match(body.message, /still valid/, 'the user should keep their pass');
+});
