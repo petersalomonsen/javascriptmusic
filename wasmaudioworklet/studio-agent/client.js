@@ -677,6 +677,24 @@ function buyPass() {
   });
 }
 
+// Offers still on screen waiting for a pass. A pass can arrive by routes an
+// individual offer knows nothing about — another tab, a direct visit to
+// /pay.html, a second window — and a button that still says "Get a day pass"
+// after you have one is worse than useless: it invites you to buy twice.
+const pendingOffers = new Set();
+
+/** A pass turned up from somewhere: settle every offer waiting on one. */
+function passArrived() {
+  if (!(passRemainingSeconds(loadPass()) > 0)) return;
+  for (const offer of [...pendingOffers]) offer.settle();
+}
+
+// `storage` fires in the OTHER tabs, which is exactly the case the offer's own
+// polling cannot see.
+window.addEventListener('storage', (e) => { if (e.key === 'studio-pass') passArrived(); });
+// …and a claim made in a window this tab never opened only shows up on return.
+window.addEventListener('focus', passArrived);
+
 /** Render the gate as an offer with a button, not as an error. */
 function offerPass(onBought) {
   const line = addLine('tool', '');
@@ -684,17 +702,25 @@ function offerPass(onBought) {
   const btn = document.createElement('button');
   btn.textContent = 'Get a day pass';
   btn.style.cssText = 'font:inherit;padding:.2rem .6rem;border-radius:.3rem;border:1px solid #4a4;background:#1a2a1a;color:#8f8;cursor:pointer';
+
+  let settled = false;
+  const offer = {
+    settle() {
+      if (settled) return;          // the button and `storage` can both fire
+      settled = true;
+      pendingOffers.delete(offer);
+      line.textContent = '— day pass active —';   // replaces the button too
+      onBought();
+    },
+  };
+  pendingOffers.add(offer);
+
   btn.onclick = async () => {
     btn.disabled = true;
-    btn.textContent = 'waiting for payment…';
-    const pass = await buyPass();
-    if (passRemainingSeconds(pass) > 0) {
-      line.textContent = '— day pass active —';
-      onBought();
-    } else {
-      btn.disabled = false;
-      btn.textContent = 'Get a day pass';
-    }
+    btn.textContent = 'waiting…';
+    await buyPass();
+    if (passRemainingSeconds(loadPass()) > 0) offer.settle();
+    else if (!settled) { btn.disabled = false; btn.textContent = 'Get a day pass'; }
   };
   line.appendChild(btn);
   return line;

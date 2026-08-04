@@ -139,6 +139,32 @@ test('buying a pass resumes the message that was typed', async ({ page }) => {
     expect(seen.some((r) => r.pass)).toBe(true);
 });
 
+test('a pass arriving from another tab retires the offer button', async ({ page }) => {
+    // The button knows nothing about a claim made elsewhere — a stale "Get a day
+    // pass" after you already have one invites paying twice.
+    page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+    const seen = await mockPaidProxy(page, { reply: 'Answered after the claim.' });
+    await bootApp(page);
+    await page.evaluate(() => { localStorage.removeItem('studio-pass'); localStorage.setItem('nearai-enabled', '1'); });
+
+    await sendChat(page, '/nearai on');
+    await sendChat(page, 'make a kick drum');
+    await expect(chatLog(page).getByRole('button', { name: /day pass/i })).toBeVisible({ timeout: 15000 });
+
+    // Simulate the claim landing in a DIFFERENT tab: `storage` fires here, and
+    // the button was never clicked.
+    await page.evaluate((pass) => {
+        localStorage.setItem('studio-pass', pass);
+        window.dispatchEvent(new StorageEvent('storage', { key: 'studio-pass', newValue: pass }));
+    }, makePass(3600));
+
+    await expect(chatLog(page).locator('text=day pass active')).toBeVisible({ timeout: 10000 });
+    await expect(chatLog(page).getByRole('button', { name: /Get a day pass/i })).toHaveCount(0);
+    // …and the turn that was waiting goes through on its own.
+    await expect(chatLog(page).locator('text=Answered after the claim.')).toBeVisible({ timeout: 20000 });
+    expect(seen.some((r) => r.pass)).toBe(true);
+});
+
 test('the payment page is exempt from COOP, or the wallet popup would break', async ({ page }) => {
     // This is why payment lives on its own page rather than inside the app.
     const pay = await page.request.get('/pay.html');
