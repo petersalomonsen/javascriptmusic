@@ -17,6 +17,8 @@ export const HEADER_REQUIRED = 'PAYMENT-REQUIRED';
 export const HEADER_SIGNATURE = 'PAYMENT-SIGNATURE';
 export const HEADER_RESPONSE = 'PAYMENT-RESPONSE';
 export const HEADER_PASS = 'X-Studio-Pass';
+export const HEADER_SPONSOR = 'X-Sponsor-Auth';
+export const PASS_ENDPOINT = '/nearai/pass';
 
 // One active pass per browser, under one key. It was briefly keyed by account,
 // but only the payment page ever knows which account paid — the app itself has
@@ -177,6 +179,39 @@ export async function signPaymentProof(wallet, { txHash, accountId, recipient, p
     nonce: btoa(String.fromCharCode(...nonce)),
     recipient,
   })));
+}
+
+/**
+ * Claim a free pass by proving control of a sponsoring NEAR account.
+ *
+ * One wallet prompt, no money, no chain write — just a NEP-413 signature the
+ * server checks against PotLock's on-chain donation records.
+ */
+export async function claimSponsorPass(wallet, sponsorship, { accountId, fetchFn = fetch } = {}) {
+  if (!walletCanSignMessage(wallet)) {
+    throw new Error(`${wallet?.manifest?.name || 'This wallet'} cannot sign messages, which is how sponsorship is proven.`);
+  }
+  const nonce = crypto.getRandomValues(new Uint8Array(32));
+  const message = JSON.stringify({ purpose: sponsorship.purpose, issuedAt: Date.now() });
+  const signed = await wallet.signMessage({
+    message, recipient: sponsorship.authRecipient, nonce: Array.from(nonce),
+  });
+  const auth = b64url(new TextEncoder().encode(JSON.stringify({
+    accountId: signed.accountId || accountId,
+    publicKey: signed.publicKey,
+    signature: signed.signature,
+    message,
+    nonce: btoa(String.fromCharCode(...nonce)),
+    recipient: sponsorship.authRecipient,
+  })));
+
+  const res = await fetchFn(PASS_ENDPOINT, { method: 'POST', headers: { [HEADER_SPONSOR]: auth } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.pass) {
+    throw new Error(body.error || `could not claim a pass (${res.status})`);
+  }
+  storePass(body.pass);
+  return body;
 }
 
 export async function payWithTransaction(wallet, requirements, { accountId, proof = 'auto' } = {}) {

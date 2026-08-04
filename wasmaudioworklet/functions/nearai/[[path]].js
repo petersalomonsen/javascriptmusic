@@ -22,8 +22,8 @@
 import { SYSTEM_PROMPT } from '../../studio-agent/prompt.js';
 import { toOpenAiTools, SERVERLESS_PROMPT_SUFFIX, DEFAULT_MODEL } from '../../studio-agent/nearai-core.js';
 import {
-  x402Config, requirePass, settlementHeaders,
-  HEADER_PASS, HEADER_SIGNATURE, HEADER_REQUIRED, HEADER_RESPONSE,
+  x402Config, requirePass, settlementHeaders, passRemainingSeconds,
+  HEADER_PASS, HEADER_SIGNATURE, HEADER_REQUIRED, HEADER_RESPONSE, HEADER_SPONSOR,
 } from '../_x402.js';
 
 export const UPSTREAM = 'https://cloud-api.near.ai';
@@ -56,7 +56,7 @@ const isOriginAllowed = (origin) => !origin || ALLOWED_ORIGINS.some((re) => re.t
 const corsHeaders = (origin) => ({
   'Access-Control-Allow-Origin': origin || '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': `Content-Type, Accept, ${HEADER_PASS}, ${HEADER_SIGNATURE}`,
+  'Access-Control-Allow-Headers': `Content-Type, Accept, ${HEADER_PASS}, ${HEADER_SIGNATURE}, ${HEADER_SPONSOR}`,
   // The browser cannot read a response header it was not told about, and the
   // whole payment loop depends on the client reading these back.
   'Access-Control-Expose-Headers': `${HEADER_REQUIRED}, ${HEADER_RESPONSE}, ${HEADER_PASS}`,
@@ -82,6 +82,27 @@ export async function onRequest(context) {
     { status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) } });
 
   const upstreamPath = url.pathname.replace(/^\/nearai\//, '');
+  const x402 = x402Config(env || {});
+
+  // Claim a pass without spending anything. Running the gate against a real
+  // completion would burn inference just to find out whether you are allowed
+  // any — and for a sponsor claim, which costs nothing, that is absurd.
+  if (request.method === 'POST' && upstreamPath === 'pass') {
+    const claim = await requirePass(x402, request, {
+      url: url.toString(), extraHeaders: corsHeaders(origin),
+    });
+    if (!claim.ok) return claim.response;
+    const pass = claim.minted || (request.headers.get(HEADER_PASS) || '').replace(/^Bearer\s+/i, '').trim();
+    return new Response(JSON.stringify({
+      pass,
+      accountId: claim.pass?.sub || null,
+      expiresAt: claim.pass?.exp ? new Date(claim.pass.exp * 1000).toISOString() : null,
+      secondsRemaining: passRemainingSeconds(pass),
+      sponsor: Boolean(claim.settle?.sponsor),
+    }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders(origin), ...settlementHeaders(claim) },
+    });
+  }
 
   if (request.method !== 'POST' || upstreamPath !== 'v1/chat/completions') {
     return new Response('not allowed', { status: 403, headers: corsHeaders(origin) });
@@ -91,7 +112,6 @@ export async function onRequest(context) {
   // Inference runs on OUR credits, so it is never free and never relayed on
   // someone else's key. Exactly two outcomes: a valid pass, or a 402. There is
   // deliberately no third branch that could fall through to the server key.
-  const x402 = x402Config(env || {});
   const gate = await requirePass(x402, request, {
     url: url.toString(),
     description: 'WebAssembly Music — studio AI day pass',

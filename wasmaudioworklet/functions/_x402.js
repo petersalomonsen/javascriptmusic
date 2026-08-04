@@ -28,12 +28,14 @@
 
 import { networkById, rpcUrlsFor } from '../near/network.js';
 import { verifyNep413Crypto, accountHasKey } from './_nep413.js';
+import { sponsorConfig, isSponsor } from './_sponsors.js';
 
 export const X402_VERSION = 2;
 export const HEADER_REQUIRED = 'PAYMENT-REQUIRED';
 export const HEADER_SIGNATURE = 'PAYMENT-SIGNATURE';
 export const HEADER_RESPONSE = 'PAYMENT-RESPONSE';
 export const HEADER_PASS = 'X-Studio-Pass';
+export const HEADER_SPONSOR = 'X-Sponsor-Auth';
 
 // Circle-native USDC on NEAR mainnet, 6 decimals (verified via ft_metadata).
 export const USDC_NEAR_MAINNET =
@@ -100,7 +102,11 @@ export function x402Config(env = {}) {
     // Which settlement paths this deployment offers, in preference order.
     // Both can be advertised at once: browsers take `near-tx` (any wallet, no
     // relayer), x402 SDK clients take `exact` if a facilitator is configured.
-    schemes: String(env.X402_SCHEMES || 'near-tx').split(',').map((s) => s.trim()).filter(Boolean),
+    // Empty by default: the first iteration gives passes to project sponsors
+    // rather than selling them, so nothing is for sale yet. Set X402_SCHEMES to
+    // turn payment back on — the whole rail is built and tested.
+    schemes: String(env.X402_SCHEMES || '').split(',').map((s) => s.trim()).filter(Boolean),
+    sponsors: sponsorConfig(env),
   };
 }
 
@@ -386,8 +392,7 @@ export async function verifyNearTxPayment(cfg, { txHash, secret, auth, accountId
 /** Everything this deployment will accept, in preference order. */
 export function acceptedRequirements(cfg) {
   const byScheme = { 'near-tx': nearTxRequirements, exact: paymentRequirements };
-  const list = cfg.schemes.map((s) => byScheme[s]).filter(Boolean).map((f) => f(cfg));
-  return list.length ? list : [nearTxRequirements(cfg)];
+  return cfg.schemes.map((s) => byScheme[s]).filter(Boolean).map((f) => f(cfg));
 }
 
 export function paymentRequired(cfg, { url, description, error } = {}) {
@@ -400,6 +405,18 @@ export function paymentRequired(cfg, { url, description, error } = {}) {
     },
     accepts: acceptedRequirements(cfg),
   };
+  // With nothing for sale, `accepts` is empty and a client would be left
+  // guessing. Say who can get in, and how.
+  if (cfg.sponsors.enabled) {
+    body.sponsorship = {
+      recipient: cfg.sponsors.recipient,
+      contract: cfg.sponsors.contract,
+      authRecipient: cfg.authRecipient,
+      purpose: cfg.purpose,
+      hint: `The studio AI is currently for people who have funded ${cfg.sponsors.recipient}. `
+        + 'Sign in with that NEAR account to claim a day pass.',
+    };
+  }
   if (error) body.error = error;
   return body;
 }
@@ -524,6 +541,14 @@ export async function mintPass(cfg, { accountId, txHash, paidAtMs }) {
   }, cfg.passSecret);
 }
 
+/** Seconds left on a pass, read without verifying. Display only. */
+export function passRemainingSeconds(pass, now = Date.now()) {
+  try {
+    const c = JSON.parse(new TextDecoder().decode(b64urlToBytes(String(pass).split('.')[1])));
+    return Math.max(0, Math.floor((c.exp * 1000 - now) / 1000));
+  } catch { return 0; }
+}
+
 export async function verifyPass(cfg, token) {
   return jwtVerify(token, cfg.passSecret);
 }
@@ -534,6 +559,30 @@ export async function verifyPass(cfg, token) {
  *   { ok: true, pass, minted, settle } — payment settled just now
  *   { ok: false, response }            — a 402 the caller should return
  */
+/**
+ * Claim a free pass by proving control of a sponsoring account.
+ *
+ * The proof is the same NEP-413 signature the git proxy uses — one wallet
+ * prompt, no money, no chain writes.
+ */
+export async function claimSponsorPass(cfg, auth, { now = Date.now() } = {}) {
+  const verified = await verifyNep413Crypto(auth, {
+    recipient: cfg.authRecipient, now, maxAgeMs: cfg.txMaxAgeMs,
+  });
+  if (verified.claims?.purpose !== cfg.purpose) {
+    throw new Error(`the signed proof is for "${verified.claims?.purpose}", not "${cfg.purpose}"`);
+  }
+  if (!(await accountHasKey(verified.accountId, verified.publicKey, {
+    networkId: String(cfg.network).split(':')[1] || 'mainnet', rpcUrl: cfg.rpcUrls[0], now,
+  }))) {
+    throw new Error('the signing key is not on that account');
+  }
+  if (!(await isSponsor(verified.accountId, cfg.sponsors, cfg.rpcUrls, { now }))) {
+    throw new Error(`${verified.accountId} has not funded ${cfg.sponsors.recipient}`);
+  }
+  return { accountId: verified.accountId };
+}
+
 export async function requirePass(cfg, request, { extraHeaders = {}, url, description } = {}) {
   const presented = request.headers.get(HEADER_PASS);
   if (presented) {
@@ -542,6 +591,26 @@ export async function requirePass(cfg, request, { extraHeaders = {}, url, descri
     } catch (e) {
       // Fall through to 402 — an expired or forged pass is not an error state,
       // it is an invitation to pay.
+      return {
+        ok: false,
+        response: paymentRequiredResponse(cfg, { url, description, error: e.message, extraHeaders }),
+      };
+    }
+  }
+
+  // A sponsor proves who they are and gets a pass; no payment involved.
+  const sponsorAuth = (request.headers.get(HEADER_SPONSOR) || '').replace(/^Bearer\s+/i, '').trim();
+  if (sponsorAuth) {
+    try {
+      const { accountId } = await claimSponsorPass(cfg, sponsorAuth);
+      const pass = await mintPass(cfg, { accountId });
+      return {
+        ok: true,
+        minted: pass,
+        settle: { success: true, payer: accountId, sponsor: true, network: cfg.network },
+        pass: await verifyPass(cfg, pass),
+      };
+    } catch (e) {
       return {
         ok: false,
         response: paymentRequiredResponse(cfg, { url, description, error: e.message, extraHeaders }),

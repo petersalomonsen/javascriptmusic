@@ -677,7 +677,7 @@ function buyPass() {
   });
 }
 
-/** Render the paywall as an offer with a button, not as an error. */
+/** Render the gate as an offer with a button, not as an error. */
 function offerPass(onBought) {
   const line = addLine('tool', '');
   line.textContent = '— the studio AI needs a day pass — ';

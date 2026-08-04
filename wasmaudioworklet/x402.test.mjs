@@ -40,19 +40,24 @@ test('PaymentRequirements matches the NEAR exact scheme shape', () => {
   assert.equal(typeof r.amount, 'string', 'amount must be a decimal STRING in atomic units');
 });
 
-test('PaymentRequired declares v2 and exactly one way to pay', () => {
+test('PaymentRequired declares v2, and offers exactly what is configured', () => {
   const p = paymentRequired(CFG, { url: 'https://app.example/x' });
   assert.equal(p.x402Version, X402_VERSION);
-  assert.equal(p.accepts.length, 1);
   assert.equal(p.resource.url, 'https://app.example/x');
+  assert.deepEqual(p.accepts, [], 'nothing for sale unless X402_SCHEMES says so');
+  const selling = x402Config({ PASS_SECRET: 's', X402_SCHEMES: 'near-tx' });
+  assert.equal(paymentRequired(selling, {}).accepts.length, 1);
 });
 
-test('no pass and no signature → 402 carrying PAYMENT-REQUIRED', async () => {
+test('no pass and no proof → 402 saying how to get in', async () => {
   const gate = await requirePass(CFG, req());
   assert.equal(gate.ok, false);
   assert.equal(gate.response.status, 402);
   const decoded = decodeHeader(gate.response.headers.get(HEADER_REQUIRED));
-  assert.equal(decoded.accepts[0].payTo, 'webassemblymusic.near');
+  assert.equal(decoded.sponsorship.recipient, 'webassemblymusic.near');
+  const selling = x402Config({ PASS_SECRET: 'test-secret', X402_SCHEMES: 'near-tx' });
+  const paidGate = await requirePass(selling, req());
+  assert.equal(decodeHeader(paidGate.response.headers.get(HEADER_REQUIRED)).accepts[0].payTo, 'webassemblymusic.near');
 });
 
 test('a valid pass opens the gate', async () => {
@@ -309,8 +314,8 @@ test('near-tx: missing hash or proof fails closed before any RPC', async () => {
   await assert.rejects(verify({ secret: '' }), /missing proof of ownership/);
 });
 
-test('the 402 advertises near-tx by default, and both when configured', () => {
-  assert.deepEqual(acceptedRequirements(TXCFG).map((r) => r.scheme), ['near-tx']);
+test('schemes are opt-in, in the order configured', () => {
+  assert.deepEqual(acceptedRequirements(TXCFG).map((r) => r.scheme), []);
   const both = x402Config({ PASS_SECRET: 's', X402_SCHEMES: 'near-tx,exact' });
   assert.deepEqual(acceptedRequirements(both).map((r) => r.scheme), ['near-tx', 'exact']);
   assert.ok(nearTxRequirements(TXCFG).extra.memoTemplate.includes(MEMO_PREFIX));
@@ -595,4 +600,78 @@ test('rpc: total timeout is shared, so N endpoints cannot multiply the wait', as
     await assert.rejects(verifyNearTxPayment(cfg, { txHash: 'T', secret: SECRET }, { now: NOW }), /within 0s|within 1s/);
     assert.ok(Date.now() - started < 1500, `took ${Date.now() - started}ms — budget must be shared, not per-endpoint`);
   } finally { globalThis.fetch = real; }
+});
+
+// --- sponsor claim: a free pass for people who funded the project ------------
+
+import { claimSponsorPass, HEADER_SPONSOR } from './functions/_x402.js';
+import { clearSponsorCache } from './functions/_sponsors.js';
+
+const sponsorChain = (donors, publicKey) => {
+  const real = globalThis.fetch;
+  globalThis.fetch = async (_url, init) => {
+    const { params } = JSON.parse(init.body);
+    const reply = (v) => Response.json({ result: { result: [...new TextEncoder().encode(JSON.stringify(v))] } });
+    if (params?.request_type === 'view_access_key_list') return Response.json({ result: { keys: [{ public_key: publicKey }] } });
+    if (params?.method_name === 'get_donations_for_recipient') return reply(donors.map((d) => ({ donor_id: d, ft_id: 'near', total_amount: '1' })));
+    if (params?.method_name === 'get_pots') return reply([]);
+    return reply([]);
+  };
+  clearKeyCache(); clearSponsorCache();
+  return () => { globalThis.fetch = real; clearKeyCache(); clearSponsorCache(); };
+};
+
+test('claim: a sponsor gets a pass with no payment at all', async () => {
+  const { auth, publicKey, accountId } = await makeProof({ txHash: undefined, issuedAt: Date.now() });
+  const restore = sponsorChain([accountId], publicKey);
+  try {
+    const gate = await requirePass(AUTHCFG, req({ [HEADER_SPONSOR]: auth }));
+    assert.equal(gate.ok, true);
+    assert.equal(gate.pass.sub, accountId);
+    assert.equal(gate.settle.sponsor, true);
+    assert.ok(gate.minted, 'a pass must be issued');
+  } finally { restore(); }
+});
+
+test('claim: a non-sponsor is refused, and told why', async () => {
+  const { auth, publicKey } = await makeProof({ accountId: 'freeloader.near', txHash: undefined, issuedAt: Date.now() });
+  const restore = sponsorChain(['someone-else.near'], publicKey);
+  try {
+    const gate = await requirePass(AUTHCFG, req({ [HEADER_SPONSOR]: auth }));
+    assert.equal(gate.ok, false);
+    assert.match(decodeHeader(gate.response.headers.get(HEADER_REQUIRED)).error, /has not funded/);
+  } finally { restore(); }
+});
+
+test('claim: a signature from a key not on the account is refused', async () => {
+  const { auth, accountId } = await makeProof({ txHash: undefined, issuedAt: Date.now() });
+  const restore = sponsorChain([accountId], 'ed25519:SOMEONE_ELSES_KEY');
+  try {
+    const gate = await requirePass(AUTHCFG, req({ [HEADER_SPONSOR]: auth }));
+    assert.equal(gate.ok, false);
+    assert.match(decodeHeader(gate.response.headers.get(HEADER_REQUIRED)).error, /not on that account/);
+  } finally { restore(); }
+});
+
+test('claim: a proof signed for another app is refused', async () => {
+  const { auth, publicKey, accountId } = await makeProof({ recipient: 'other.near', txHash: undefined, issuedAt: Date.now() });
+  const restore = sponsorChain([accountId], publicKey);
+  try {
+    const gate = await requirePass(AUTHCFG, req({ [HEADER_SPONSOR]: auth }));
+    assert.equal(gate.ok, false);
+    assert.match(decodeHeader(gate.response.headers.get(HEADER_REQUIRED)).error, /recipient mismatch/);
+  } finally { restore(); }
+});
+
+test('nothing is for sale by default — the 402 explains sponsorship instead', () => {
+  const cfg = x402Config({ PASS_SECRET: 's' });
+  const pr = paymentRequired(cfg, { url: 'https://app.example/x' });
+  assert.deepEqual(pr.accepts, [], 'no payment offered in the first iteration');
+  assert.equal(pr.sponsorship.recipient, 'webassemblymusic.near');
+  assert.match(pr.sponsorship.hint, /funded webassemblymusic\.near/);
+});
+
+test('payment can be switched back on without touching code', () => {
+  const cfg = x402Config({ PASS_SECRET: 's', X402_SCHEMES: 'near-tx' });
+  assert.deepEqual(paymentRequired(cfg, {}).accepts.map((a) => a.scheme), ['near-tx']);
 });
