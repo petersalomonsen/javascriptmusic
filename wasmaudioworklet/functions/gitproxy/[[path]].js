@@ -17,14 +17,6 @@
 // Route:  /gitproxy/<host>/<path…>   →   https://<host>/<path…>
 // Remote: https://<origin>/gitproxy/github.com/<user>/<repo>.git
 
-import { networkById, isNetworkId } from '../../near/network.js';
-// NEP-413 verification lives in _nep413.js so the payment gate can share it —
-// proving "I am alice.near" is the same problem in both places.
-import {
-  NEP413_TAG, base58Decode, base58Encode, serializeNep413Payload,
-  verifyNep413Crypto, accountHasKey as nep413AccountHasKey, b64ToBytes,
-} from '../_nep413.js';
-
 export const ALLOWED_HOSTS = new Set([
   'github.com',
   'gist.github.com', // gists are git repos: https://gist.github.com/<id>.git
@@ -66,56 +58,103 @@ const GIT_ENDPOINT = /\/(info\/refs|git-upload-pack|git-receive-pack)$/;
 // caches only, so NO KV / Durable Object is required. Enforcement is behind a
 // flag until the app sends the X-Near-Auth header.
 // ============================================================================
-export { NEP413_TAG, base58Decode, base58Encode, serializeNep413Payload, verifyNep413Crypto };
-
+export const NEP413_TAG = 2147484061;            // 2^31 + 413
 const AUTH_RECIPIENT = 'webassemblymusic.near';  // NEP-413 recipient the client signs for
+const NFT_CONTRACT = 'webassemblymusic.near';    // NFT ownership grants proxy access
+const NEAR_RPC = 'https://rpc.mainnet.fastnear.com';
+const AUTH_MAX_AGE_MS = 60 * 60 * 1000;          // 1h signed-message validity
 const REQUIRE_NEAR_AUTH = false;                 // flip on once the client sends X-Near-Auth
 
-// The gate runs on ONE network: the key-on-account check and the NFT-ownership
-// check must agree, or "alice.testnet owns the mainnet NFT" would pass. Default
-// is mainnet (where webassemblymusic.near lives); a self-hosted or testnet
-// deployment overrides both with NEAR_NETWORK + NFT_CONTRACT.
-export const DEFAULT_AUTH_NETWORK = 'mainnet';
-export const DEFAULT_NFT_CONTRACT = 'webassemblymusic.near';
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+export function base58Decode(s) {
+  const map = {}; for (let i = 0; i < B58.length; i++) map[B58[i]] = i;
+  const bytes = [0];
+  for (const ch of s) {
+    const val = map[ch]; if (val === undefined) throw new Error('bad base58');
+    let carry = val;
+    for (let j = 0; j < bytes.length; j++) { carry += bytes[j] * 58; bytes[j] = carry & 0xff; carry >>= 8; }
+    while (carry) { bytes.push(carry & 0xff); carry >>= 8; }
+  }
+  for (let k = 0; k < s.length && s[k] === '1'; k++) bytes.push(0);
+  return new Uint8Array(bytes.reverse());
+}
+export function base58Encode(bytes) {
+  const digits = [0];
+  for (const byte of bytes) {
+    let carry = byte;
+    for (let j = 0; j < digits.length; j++) { carry += digits[j] << 8; digits[j] = carry % 58; carry = (carry / 58) | 0; }
+    while (carry) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+  }
+  let str = '';
+  for (let k = 0; k < bytes.length && bytes[k] === 0; k++) str += '1';
+  for (let q = digits.length - 1; q >= 0; q--) str += B58[digits[q]];
+  return str;
+}
+const b64ToBytes = (b64) => { const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+const u32le = (n) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n, true); return b; };
+const concatBytes = (chunks) => { const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0)); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; } return out; };
 
-export function authConfig(env = {}) {
-  const networkId = isNetworkId(env.NEAR_NETWORK) ? env.NEAR_NETWORK : DEFAULT_AUTH_NETWORK;
-  return {
-    networkId,
-    rpcUrl: env.NEAR_RPC_URL || networkById(networkId).nodeUrl,
-    nftContract: env.NFT_CONTRACT || DEFAULT_NFT_CONTRACT,
-    recipient: env.NEAR_AUTH_RECIPIENT || AUTH_RECIPIENT,
-  };
+export function serializeNep413Payload({ message, nonce, recipient, callbackUrl = null }) {
+  if (!(nonce instanceof Uint8Array) || nonce.length !== 32) throw new Error('nonce must be 32 bytes');
+  const enc = new TextEncoder();
+  const str = (s) => { const b = enc.encode(s); return [u32le(b.length), b]; };
+  const chunks = [u32le(NEP413_TAG), ...str(message), nonce, ...str(recipient),
+    callbackUrl == null ? new Uint8Array([0]) : new Uint8Array([1])];
+  if (callbackUrl != null) chunks.push(...str(callbackUrl));
+  return concatBytes(chunks);
 }
 
-async function nearQuery(params, rpcUrl) {
-  const res = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' },
+// Verify the CRYPTO + freshness of a NEP-413 bearer token (base64 JSON). Returns
+// { accountId, publicKey } or throws. Account/NFT RPC checks are done separately.
+export async function verifyNep413Crypto(token, { recipient, now = Date.now(), maxAgeMs = AUTH_MAX_AGE_MS } = {}) {
+  let payload;
+  try { payload = JSON.parse(new TextDecoder().decode(b64ToBytes(token))); }
+  catch { throw new Error('failed to parse token'); }
+  const { accountId, publicKey, signature, message, nonce, recipient: rcpt, callbackUrl } = payload;
+  if (!accountId || !publicKey || !signature || !message || !nonce || !rcpt) throw new Error('incomplete token');
+  if (rcpt !== recipient) throw new Error('recipient mismatch');
+  let issuedAt; try { issuedAt = JSON.parse(message).issuedAt; } catch { throw new Error('bad message'); }
+  if (!(typeof issuedAt === 'number' && issuedAt <= now && issuedAt > now - maxAgeMs)) throw new Error('token expired');
+  const serialized = serializeNep413Payload({ message, nonce: b64ToBytes(nonce), recipient: rcpt, callbackUrl: callbackUrl ?? null });
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', serialized));
+  const rawPub = base58Decode(publicKey.replace(/^ed25519:/, ''));
+  const key = await crypto.subtle.importKey('raw', rawPub, { name: 'Ed25519' }, false, ['verify']);
+  if (!(await crypto.subtle.verify('Ed25519', key, b64ToBytes(signature), digest))) throw new Error('invalid signature');
+  return { accountId, publicKey };
+}
+
+async function nearQuery(params) {
+  const res = await fetch(NEAR_RPC, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 'gitproxy', method: 'query', params }) });
   const j = await res.json();
   if (j.error) throw new Error('rpc error: ' + JSON.stringify(j.error));
   return j.result;
 }
-const accountHasKey = (accountId, publicKey, cfg) => nep413AccountHasKey(accountId, publicKey, cfg);
+const keyCache = new Map();
+async function accountHasKey(accountId, publicKey) {
+  const c = keyCache.get(accountId);
+  let keys = c && c.exp > Date.now() ? c.keys : null;
+  if (!keys) { const r = await nearQuery({ request_type: 'view_access_key_list', finality: 'final', account_id: accountId }); keys = r.keys || []; keyCache.set(accountId, { keys, exp: Date.now() + 60000 }); }
+  return keys.some((k) => k.public_key === publicKey);
+}
 const nftCache = new Map();
-async function ownsNft(accountId, { networkId, rpcUrl, nftContract }) {
-  const cacheKey = `${networkId}:${nftContract}:${accountId}`;
-  const c = nftCache.get(cacheKey);
+async function ownsNft(accountId) {
+  const c = nftCache.get(accountId);
   if (c && c.exp > Date.now()) return c.owns;
   const args = btoa(JSON.stringify({ account_id: accountId, from_index: '0', limit: 1 }));
-  const r = await nearQuery({ request_type: 'call_function', finality: 'final', account_id: nftContract, method_name: 'nft_tokens_for_owner', args_base64: args }, rpcUrl);
+  const r = await nearQuery({ request_type: 'call_function', finality: 'final', account_id: NFT_CONTRACT, method_name: 'nft_tokens_for_owner', args_base64: args });
   let owns = false;
   try { const arr = JSON.parse(new TextDecoder().decode(new Uint8Array(r.result))); owns = Array.isArray(arr) && arr.length > 0; } catch { owns = false; }
-  nftCache.set(cacheKey, { owns, exp: Date.now() + 300000 });
+  nftCache.set(accountId, { owns, exp: Date.now() + 300000 });
   return owns;
 }
 
 // Full gate: token crypto → key bound to account → account owns the NFT.
-export async function authorizeNearNft(token, env = {}) {
-  const cfg = authConfig(env);
-  const { accountId, publicKey } = await verifyNep413Crypto(token, { recipient: cfg.recipient });
-  if (!(await accountHasKey(accountId, publicKey, cfg))) throw new Error('public key not on account');
-  if (!(await ownsNft(accountId, cfg))) throw new Error(`account ${accountId} owns no ${cfg.nftContract} NFT`);
-  return { accountId, networkId: cfg.networkId };
+export async function authorizeNearNft(token) {
+  const { accountId, publicKey } = await verifyNep413Crypto(token, { recipient: AUTH_RECIPIENT });
+  if (!(await accountHasKey(accountId, publicKey))) throw new Error('public key not on account');
+  if (!(await ownsNft(accountId))) throw new Error(`account ${accountId} owns no ${NFT_CONTRACT} NFT`);
+  return { accountId };
 }
 
 // ---- Session JWT (HS256) — issued by /gittoken after NEP-413+NFT verification,
@@ -147,7 +186,7 @@ export async function jwtVerify(token, secret, { maxAgeMs = JWT_MAX_AGE_MS, now 
 }
 
 export async function onRequest(context) {
-  const { request, env } = context;
+  const { request } = context;
   const origin = request.headers.get('Origin');
   const CORS = corsHeaders(origin);
 
@@ -162,7 +201,7 @@ export async function onRequest(context) {
   if (REQUIRE_NEAR_AUTH) {
     const token = (request.headers.get('X-Near-Auth') || '').replace(/^Bearer\s+/i, '').trim();
     if (!token) return new Response('git-cors-proxy: X-Near-Auth (NEP-413) required', { status: 401, headers: CORS });
-    try { await authorizeNearNft(token, env); }
+    try { await authorizeNearNft(token); }
     catch (e) { return new Response('git-cors-proxy: NEAR auth failed: ' + e.message, { status: 401, headers: CORS }); }
   }
 

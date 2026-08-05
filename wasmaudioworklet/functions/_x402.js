@@ -1,7 +1,10 @@
 // x402 v2 payment gate — shared by the Pages Functions.
 //
-// Sells access to a feature of THIS app for a fixed time ("a day pass"), never
-// AI access as a commodity (see docs/near-auth-and-payments-plan.md §5.11).
+// Grants access to a feature of THIS app for a fixed time ("a session pass") —
+// never AI access as a commodity. NEAR AI's terms permit making the service
+// available to end users "as integrated into or through the Customer
+// Application", but not selling or transferring the service itself, so no user
+// ever receives a NEAR AI credential.
 //
 // Flow:
 //   1. request with no pass          → 402 + PAYMENT-REQUIRED header

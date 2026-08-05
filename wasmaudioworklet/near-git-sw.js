@@ -17,7 +17,6 @@ import init, {
     git_sha1,
     create_signed_transaction,
 } from './wasm-lib/wasm_lib.js';
-import { rpcUrlForAccountId } from './near/network.js';
 
 let wasmReady = false;
 
@@ -45,11 +44,16 @@ function extractAuth(request) {
     }
 }
 
-// Archival: git packs are read from blocks old enough that a regular node may
-// have pruned them. Network is derived from the contract id — see
-// near/network.js, which is shared with the app and the Pages Functions.
 function rpcUrlForContract(contractId) {
-    return rpcUrlForAccountId(contractId, { archival: true });
+    // .sandbox is a non-real suffix used by the e2e harness; route to the
+    // local docker sandbox RPC proxy so tests don't hit live networks.
+    if (contractId.endsWith('.sandbox')) {
+        return 'http://localhost:3030/near-rpc';
+    }
+    if (contractId.endsWith('.testnet') || contractId.endsWith('.test.near')) {
+        return 'https://archival-rpc.testnet.fastnear.com';
+    }
+    return 'https://rpc.mainnet.near.org';
 }
 
 self.addEventListener('install', () => self.skipWaiting());

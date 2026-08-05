@@ -5,19 +5,18 @@
 // (no CORS involved) AND carries the server-side API key — users need no key
 // of their own. That makes it a paid resource, so it is NOT an open relay:
 //
-//   • ONLY POST /nearai/v1/chat/completions (+ GET /v1/models for display);
+//   • ONLY POST /nearai/v1/chat/completions and POST /nearai/pass;
 //   • the SYSTEM PROMPT and TOOLS are enforced SERVER-SIDE — imported from
 //     the same modules the app uses (single source of truth, deployed
 //     together). Client-sent system messages are stripped; client tools are
 //     ignored. The proxy only forwards the user/assistant/tool conversation.
 //   • ONE model, chosen here — the client cannot pick, because we pay;
 //   • origin-allowlisted; request and completion size capped;
-//   • and it is NOT free: an x402 day pass is required (see _x402.js).
+//   • and it is NOT free: an x402 session pass is required (see _x402.js).
 //
 // The key comes from the NEARAI_API_KEY secret (dashboard: Settings →
 // Variables and Secrets → add Secret; or `wrangler pages secret put`).
 // Spending is additionally bounded by the key's own limit on cloud.near.ai.
-// Future billing/gating: the gitproxy's NEP-413 + NFT gate is ready to port.
 
 import { SYSTEM_PROMPT } from '../../studio-agent/prompt.js';
 import { toOpenAiTools, SERVERLESS_PROMPT_SUFFIX, DEFAULT_MODEL } from '../../studio-agent/nearai-core.js';

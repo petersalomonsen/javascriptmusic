@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Studio AI day pass</title>
+  <title>Studio AI session pass</title>
   <style>
     :root { color-scheme: dark; }
     body { font-family: system-ui, sans-serif; background: #111; color: #ddd;
@@ -33,7 +33,7 @@
 </head>
 <body>
 <main>
-  <h1>Studio AI day pass</h1>
+  <h1>Studio AI session pass</h1>
   <p class="sub">The AI assistant in WebAssembly Music. Everything else in the app stays free.</p>
 
   <div class="price" id="price">— <small id="pricenote">loading…</small></div>
@@ -164,7 +164,7 @@ $('pay').onclick = async () => {
     });
     const pass = loadPass();
     if (passRemainingSeconds(pass) > 0) {
-      say('Paid. Your pass is active for 24 hours — you can close this and carry on.', 'ok');
+      say('Paid. Your pass is active for 30 minutes — you can close this and carry on.', 'ok');
       $('pay').style.display = 'none';
       $('close').style.display = '';
       // The app is listening for this; `storage` does not fire in the tab that

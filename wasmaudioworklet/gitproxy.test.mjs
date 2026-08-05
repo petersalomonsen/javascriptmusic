@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onRequest, base58Encode, base58Decode, serializeNep413Payload, verifyNep413Crypto, jwtSign, jwtVerify, authConfig, DEFAULT_AUTH_NETWORK, DEFAULT_NFT_CONTRACT } from './functions/gitproxy/[[path]].js';
+import { onRequest, base58Encode, base58Decode, serializeNep413Payload, verifyNep413Crypto, jwtSign, jwtVerify } from './functions/gitproxy/[[path]].js';
 
 const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
 // Build a NEP-413 bearer token the way a NEAR wallet's signMessage would.
@@ -101,10 +101,7 @@ test('base58 round-trips (encode/decode)', () => {
 test('NEP-413: a valid signed token verifies (crypto round-trip)', async () => {
   const { token, accountId, publicKey } = await makeNep413Token();
   const res = await verifyNep413Crypto(token, { recipient: 'webassemblymusic.near' });
-  assert.equal(res.accountId, accountId);
-  assert.equal(res.publicKey, publicKey);
-  // `claims` is the parsed message — the payment gate reads the tx hash from it.
-  assert.equal(typeof res.claims.issuedAt, 'number');
+  assert.deepEqual(res, { accountId, publicKey });
 });
 
 test('NEP-413: expired token is rejected', async () => {
@@ -148,35 +145,4 @@ test('JWT: tampered payload is rejected', async () => {
 test('JWT: expired token is rejected (server-decided window)', async () => {
   const jwt = await jwtSign({ sub: 'alice.near' }, 'secret-key');
   await assert.rejects(jwtVerify(jwt, 'secret-key', { maxAgeMs: -1 }), /expired/);
-});
-
-// --- auth-gate network config (mainnet by default, overridable per deploy) ---
-test('auth gate defaults to mainnet and the mainnet NFT contract', () => {
-  const cfg = authConfig();
-  assert.equal(cfg.networkId, DEFAULT_AUTH_NETWORK);
-  assert.equal(cfg.networkId, 'mainnet');
-  assert.equal(cfg.nftContract, DEFAULT_NFT_CONTRACT);
-  assert.match(cfg.rpcUrl, /mainnet/);
-  assert.equal(cfg.recipient, 'webassemblymusic.near');
-});
-
-test('auth gate can be pointed at testnet (RPC follows the network)', () => {
-  const cfg = authConfig({ NEAR_NETWORK: 'testnet', NFT_CONTRACT: 'nft.testnet' });
-  assert.equal(cfg.networkId, 'testnet');
-  assert.equal(cfg.nftContract, 'nft.testnet');
-  assert.match(cfg.rpcUrl, /testnet/);
-  assert.doesNotMatch(cfg.rpcUrl, /^https:\/\/rpc\.mainnet/);
-});
-
-test('an unknown NEAR_NETWORK falls back to mainnet rather than a broken RPC', () => {
-  const cfg = authConfig({ NEAR_NETWORK: 'not-a-network' });
-  assert.equal(cfg.networkId, 'mainnet');
-  assert.match(cfg.rpcUrl, /mainnet/);
-});
-
-test('RPC URL and recipient can be overridden independently', () => {
-  const cfg = authConfig({ NEAR_RPC_URL: 'https://my-own-rpc.example', NEAR_AUTH_RECIPIENT: 'myapp.near' });
-  assert.equal(cfg.rpcUrl, 'https://my-own-rpc.example');
-  assert.equal(cfg.recipient, 'myapp.near');
-  assert.equal(cfg.networkId, 'mainnet'); // still the default network
 });

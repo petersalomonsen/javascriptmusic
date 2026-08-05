@@ -1,7 +1,7 @@
 // Browser half of the x402 payment loop.
 //
 // Turns a `402 Payment Required` from our own Pages Function into a wallet
-// signature and a stored day pass, then replays the original request so the
+// signature and a stored session pass, then replays the original request so the
 // purchase is invisible mid-conversation.
 //
 // Two ways to pay, chosen from what the server offers:
@@ -44,8 +44,7 @@ export function encodeHeader(obj) {
 // ---- pass storage ----------------------------------------------------------
 //
 // Per-browser, which is the known limitation of a stateless pass: clearing site
-// data loses the remainder of the day. Keyed by account so switching wallets
-// doesn't silently reuse someone else's pass.
+// data loses whatever is left of it.
 
 export const passKey = () => PASS_STORAGE_KEY;
 

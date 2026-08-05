@@ -629,7 +629,7 @@ async function runNearaiServerlessTool(name, args) {
 let nearaiMessages = null; // model-visible history (in-memory for iteration 1)
 let nearaiAbort = null;    // AbortController for the turn in flight
 
-// ---- the day pass -----------------------------------------------------------
+// ---- the session pass -----------------------------------------------------------
 //
 // Inference runs on OUR NEAR AI credits, so the proxy charges for it. The app
 // only ever ATTACHES a pass — it never pays. Paying needs a wallet, and this

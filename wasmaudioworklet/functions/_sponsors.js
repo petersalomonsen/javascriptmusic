@@ -1,4 +1,4 @@
-// Who gets a day pass for free: people who have funded this project.
+// Who gets a session pass for free: people who have funded this project.
 //
 // First iteration of paid AI, deliberately narrow. Rather than settle pricing,
 // per-user spend caps and the resale question all at once, the studio AI is
@@ -78,10 +78,7 @@ async function viewCall(rpcUrls, { contract, method, args, timeoutMs = 10000 }) 
   throw firstError || new Error('could not reach the donation contract');
 }
 
-/**
- * Everyone who has funded the project, with what they gave in total.
- * Returns a Map of accountId -> total yocto (native NEAR donations only).
- */
+/** Fold one contract's donations into the running per-account totals. */
 function tally(totals, donations) {
   for (const d of Array.isArray(donations) ? donations : []) {
     if (!d || !d.donor_id) continue;

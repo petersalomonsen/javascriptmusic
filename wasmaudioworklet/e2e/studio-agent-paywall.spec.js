@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// The day pass, from the app's side.
+// The session pass, from the app's side.
 //
 // The agent runs on OUR NEAR AI credits, so the proxy answers 402 until a pass
 // is presented. The app never pays — paying needs a wallet, and this document
@@ -63,7 +63,7 @@ async function mockPaidProxy(page, { reply = 'Done.' } = {}) {
     return seen;
 }
 
-test('an unpaid turn offers a day pass instead of failing', async ({ page }) => {
+test('an unpaid turn offers a session pass instead of failing', async ({ page }) => {
     page.on('pageerror', (e) => console.log('[browser-error]', e.message));
     const seen = await mockPaidProxy(page);
     await bootApp(page);
