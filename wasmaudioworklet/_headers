@@ -5,3 +5,11 @@
 /login
   ! Cross-Origin-Opener-Policy
   ! Cross-Origin-Embedder-Policy
+
+# Same reason as /login: these pages open a wallet, and COOP would cut
+# window.opener on the cross-origin hop (Meteor reports "User closed the
+# window"). It is why payment lives on its own page rather than in the app.
+/pay.html
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+

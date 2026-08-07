@@ -27,6 +27,7 @@
         "bundle-musicandshadervideoplayer": "(cd player/musicandshadervideoplayer && rollup -c rollup.config.js)",
         "patch-version": "npm --no-git-tag-version version patch",
         "serve": "node devserver.js",
+        "serve-dev": "node --env-file-if-exists=.dev.vars devserver.js",
         "test-e2e": "npx playwright test",
         "test-near-git": "npx playwright test e2e/near-git.spec.js",
         "test-claude-bridge": "npx playwright test e2e/claude-bridge.spec.js",
@@ -34,7 +35,7 @@
         "test-faust": "node ../tools/faust2as/generate-test-sources.js && npx playwright test e2e/faust2as-compilation.spec.js",
         "test-agent-tools": "node --test studio-agent/tools-core.test.mjs studio-agent/nearai-core.test.mjs studio-agent/tools-def.test.mjs",
         "test-quickjs-sandbox": "node --test quickjs-sandbox-poc.test.mjs",
-        "test-gitproxy": "node --test gitproxy.test.mjs nearai-proxy.test.mjs",
+        "test-gitproxy": "node --test gitproxy.test.mjs nearai-proxy.test.mjs near/network.test.mjs x402.test.mjs near/x402-client.test.mjs sponsors.test.mjs",
         "test-repozip": "node --test wasmgit/repozip.test.mjs"
     },
     "resolutions": {
