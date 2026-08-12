@@ -75,8 +75,21 @@
                     const keyData = { accountId, publicKey, privateKey };
                     localStorage.setItem('near-git-key:' + contractId, JSON.stringify(keyData));
 
-                    statusEl.textContent = 'Key created! Redirecting...';
-                    setTimeout(() => { location.href = returnUrl; }, 500);
+                    // Opened as a popup by the push path: close and let the
+                    // opener resume the sync it was in the middle of. The key
+                    // is already in localStorage, which is how it finds out —
+                    // postMessage is only a hint, since COOP may have severed
+                    // the opener link.
+                    if (params.get('popup')) {
+                        statusEl.textContent = 'Key created! You can close this window.';
+                        try {
+                            window.opener?.postMessage({ type: 'near-git-key', contractId }, location.origin);
+                        } catch (err) { /* opener severed by COOP — polling covers it */ }
+                        setTimeout(() => window.close(), 300);
+                    } else {
+                        statusEl.textContent = 'Key created! Redirecting...';
+                        setTimeout(() => { location.href = returnUrl; }, 500);
+                    }
                 } catch (err) {
                     statusEl.textContent = 'Error adding key: ' + err.message;
                 }
