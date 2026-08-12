@@ -17,6 +17,29 @@ test('first visit boots a workspace repo with the MIDI starter; work survives re
     // wasmgit-ui appearing proves the workspace repo mode engaged.
     await waitForAppReady(page);
 
+    // A workspace repo is OPFS-only: there is no contract to sign in to, so the
+    // toolbar must offer no wallet prompt at all. This is the case the old
+    // always-visible `login` button got wrong — it invited a first-time visitor
+    // to authenticate against nothing.
+    const toolbar = await page.evaluate(() => {
+        const ui = document.querySelector('app-javascriptmusic')
+            .shadowRoot.querySelector('wasmgit-ui');
+        return {
+            // Gone from the markup entirely, not merely hidden.
+            hasLoginButton: ui.shadowRoot.getElementById('loginButton') !== null,
+            visible: [...ui.shadowRoot.querySelectorAll('button')]
+                .filter((b) => b.style.display !== 'none')
+                .map((b) => b.textContent.trim()),
+            // Label is state-dependent ("Sync remote" until there are changes),
+            // so assert the control exists rather than what it currently says.
+            hasSyncButton: ui.shadowRoot.getElementById('syncRemoteButton') !== null,
+        };
+    });
+    expect(toolbar.hasLoginButton).toBe(false);
+    expect(toolbar.visible).not.toContain('login');
+    expect(toolbar.visible).not.toContain('logout');
+    expect(toolbar.hasSyncButton).toBe(true);
+
     // MIDI-sequencer starter in both editors (not the legacy pattern format).
     const song = await page.evaluate(() => document.querySelector('app-javascriptmusic')
         .shadowRoot.querySelector('#editor .CodeMirror').CodeMirror.getValue());

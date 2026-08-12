@@ -1,4 +1,4 @@
-import { initNear, authdata as nearAuthData, login as nearLogin, logout as nearLogout } from './nearacl.js';
+import { initNear, authdata as nearAuthData, ensureAuth as nearEnsureAuth, isNearRepo, logout as nearLogout } from './nearacl.js';
 import { toggleSpinner } from '../common/ui/progress-spinner.js';
 import { modal, modalPrompt } from '../common/ui/modal.js';
 
@@ -112,6 +112,29 @@ async function applyStoredGitToken(promptIfMissing) {
     return false;
 }
 
+/**
+ * Hand NEAR credentials to the git worker, which turns them into the
+ * Authorization header the repo contract's `push` expects. Called at init when
+ * a key is already stored, and again straight after a just-in-time sign-in.
+ */
+async function sendNearCredentials(auth) {
+    await new Promise(resolve => {
+        workerMessageListeners.push((msg) => {
+            if (msg.data.accessTokenConfigured) { resolve(); }
+            else { return true; }
+        });
+        worker.postMessage({
+            accessToken: JSON.stringify({
+                accountId: auth.username,
+                publicKey: auth.publicKey,
+                privateKey: auth.privateKey,
+            }),
+            username: auth.username,
+            useremail: auth.useremail || auth.username,
+        });
+    });
+}
+
 export async function initWASMGitClient(gitrepo, remoteUrl) {
     worker = new Worker(new URL('wasmgitworker.js', import.meta.url));
     worker.onmessage = (msg) => {
@@ -134,23 +157,12 @@ export async function initWASMGitClient(gitrepo, remoteUrl) {
     }
     await registerNearGitServiceWorker();
 
-    // Send NEAR credentials to the git worker so they're included as Authorization headers
+    // Send NEAR credentials to the git worker so they're included as
+    // Authorization headers. Only possible when a key already exists — a repo
+    // whose key is created later (at push time) delivers them via
+    // sendNearCredentials() from there.
     if (nearAuthData) {
-        await new Promise(resolve => {
-            workerMessageListeners.push((msg) => {
-                if (msg.data.accessTokenConfigured) { resolve(); }
-                else { return true; }
-            });
-            worker.postMessage({
-                accessToken: JSON.stringify({
-                    accountId: nearAuthData.username,
-                    publicKey: nearAuthData.publicKey,
-                    privateKey: nearAuthData.privateKey,
-                }),
-                username: nearAuthData.username,
-                useremail: nearAuthData.useremail || nearAuthData.username,
-            });
-        });
+        await sendNearCredentials(nearAuthData);
     }
 
     gitrepourl = `${location.origin}/near-repo/${gitrepo}.git`;
@@ -334,6 +346,19 @@ export async function pull() {
 }
 
 export async function commitAndSyncRemote(commitmessage) {
+    // Push is the ONLY operation that needs a NEAR key — clone, pull and the
+    // song list are view calls — so this is where we ask for one, rather than
+    // greeting every visitor with a sign-in button. A local `workspace` repo
+    // and a `remote=` host (which uses a PAT) both answer false to isNearRepo
+    // and are never prompted.
+    if (isNearRepo() && !nearAuthData) {
+        const auth = await nearEnsureAuth();
+        if (!auth) {
+            throw new Error('Sign-in required to push to this NEAR repository');
+        }
+        await sendNearCredentials(auth);
+    }
+
     const dircontents = await callAndWaitForWorker({
         command: 'commitpullpush',
         commitmessage: commitmessage
@@ -572,17 +597,17 @@ customElements.define('wasmgit-ui',
                     await changeCurrentSong(selectedSongNdx);                    
                 }
             });
+            // Identity is shown only once you HAVE signed in. There is nothing
+            // to click when you have not: the wallet opens from "Commit & Sync",
+            // which is the one action that actually needs a key.
             if (nearAuthData) {
                 this.shadowRoot.getElementById('loggedinuserspan').innerHTML = nearAuthData.username;
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'block';
                 this.shadowRoot.getElementById('logoutButton').style.display = 'block';
-                this.shadowRoot.getElementById('loginButton').style.display = 'none';
                 this.shadowRoot.getElementById('logoutButton').onclick = () => nearLogout();
             } else {
-                this.shadowRoot.getElementById('loginButton').style.display = 'block';
                 this.shadowRoot.getElementById('logoutButton').style.display = 'none';
                 this.shadowRoot.getElementById('loggedinuserspan').style.display = 'none';
-                this.shadowRoot.getElementById('loginButton').onclick = () => nearLogin();
             }
             updateCommitAndSyncButtonState(await repoHasChanges());
         }
