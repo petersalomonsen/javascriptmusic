@@ -69,7 +69,7 @@ export function initAudioWorkletNode(componentRoot) {
             }
         } else {
             if (song.modbytes) {
-                bytes = await fetch('https://unpkg.com/wasm-mod-player@0.0.3/wasm-mod-player.wasm')
+                bytes = await fetch('https://cdn.jsdelivr.net/npm/wasm-mod-player@0.0.3/wasm-mod-player.wasm')
                     .then(r => r.arrayBuffer());
 
                 await context.audioWorklet.addModule(new URL('modaudioworkletprocessor.js', import.meta.url));

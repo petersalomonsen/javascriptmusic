@@ -16,7 +16,7 @@ customElements.define('wam-preseteditor',
             const apphtml = await fetch('webaudiomodules/preseteditor.html').then(r => r.text());
             this.shadowRoot.innerHTML = apphtml;
 
-            const soundbanks = await fetch('https://unpkg.com/wasm-yoshimi@0.0.1/banks/root.json').then(r => r.json());
+            const soundbanks = await fetch('https://cdn.jsdelivr.net/npm/wasm-yoshimi@0.0.1/banks/root.json').then(r => r.json());
             
             const presetSelectTemplate = this.shadowRoot.getElementById('presetselecttemplate');
             const bankSelectElement = presetSelectTemplate.content.querySelector('#bankselect');
