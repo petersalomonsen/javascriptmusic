@@ -34,7 +34,7 @@ WAM.YOSHIMI = class YOSHIMI extends WAMController
     }
   }
   async loadpreset(channel, filename) {  
-    const url = `https://unpkg.com/wasm-yoshimi@0.0.1/banks/${filename}`;
+    const url = `https://cdn.jsdelivr.net/npm/wasm-yoshimi@0.0.1/banks/${filename}`;
     let xml;
     try {
       let data = await fetch(url).then(r => r.arrayBuffer());
@@ -51,11 +51,11 @@ WAM.YOSHIMI = class YOSHIMI extends WAMController
   // -- wasm and scripts need to be loaded first, and in order
   //
   static async importScripts (actx, prefix = "") {
-    YOSHIMI.wasm = await YOSHIMI.load("https://unpkg.com/wasm-yoshimi@0.0.1/worklet/yoshimi.wasm", "bin");    
-    YOSHIMI.js   = await YOSHIMI.load("https://unpkg.com/wasm-yoshimi@0.0.1/worklet/yoshimi.js", "text");    
+    YOSHIMI.wasm = await YOSHIMI.load("https://cdn.jsdelivr.net/npm/wasm-yoshimi@0.0.1/worklet/yoshimi.wasm", "bin");    
+    YOSHIMI.js   = await YOSHIMI.load("https://cdn.jsdelivr.net/npm/wasm-yoshimi@0.0.1/worklet/yoshimi.js", "text");    
     // YOSHIMI.wasm = await YOSHIMI.load("yoshimi.wasm", "bin");
     // YOSHIMI.js = await YOSHIMI.load("yoshimi.js", "text");
-    await actx.audioWorklet.addModule("https://unpkg.com/wasm-yoshimi@0.0.1/libs/wam-processor.js");
+    await actx.audioWorklet.addModule("https://cdn.jsdelivr.net/npm/wasm-yoshimi@0.0.1/libs/wam-processor.js");
     await actx.audioWorklet.addModule("./webaudiomodules/yoshimi-awp.js");
   }
 

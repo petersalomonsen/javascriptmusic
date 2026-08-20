@@ -18,8 +18,8 @@ export async function loadWAM() {
         return wamloaded;
     }
     wamloaded = new Promise(async resolve => {
-        await loadScript("https://unpkg.com/wasm-yoshimi@0.0.1/libs/wam-controller.js");
-        await loadScript("https://unpkg.com/wasm-yoshimi@0.0.1/libs/gunzip.js")
+        await loadScript("https://cdn.jsdelivr.net/npm/wasm-yoshimi@0.0.1/libs/wam-controller.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/wasm-yoshimi@0.0.1/libs/gunzip.js")
         await loadScript("webaudiomodules/yoshimi.js");
         resolve(true);
     });
