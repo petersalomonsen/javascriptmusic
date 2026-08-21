@@ -39,7 +39,8 @@
         "test-repozip": "node --test wasmgit/repozip.test.mjs"
     },
     "resolutions": {
-        "playwright": "1.59.1"
+        "playwright": "1.59.1",
+        "puppeteer-core": "^25.8.0"
     },
     "devDependencies": {
         "@as-pect/cli": "^9.0.0",
