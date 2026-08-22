@@ -61,7 +61,9 @@ export async function setupServiceWorker(page) {
  * deliberately-broken faust fixture from faust-editor.spec.js surfaced as
  * "missing `process` definition" inside studio-agent-mock.spec.js, which shares
  * none of its code. Reproduced locally — an interrupted run failed 4 tests, and
- * recreating the sandbox container restored all 12.
+ * recreating the sandbox container restored all 12. pushBaseline now wipes the
+ * tree before it pushes, which covers the specs that call it, but a spec that
+ * drives the worker itself still leaves its files behind for the next one.
  *
  * Use the shared sandbox repo ONLY when the test genuinely exercises the NEAR
  * remote: cloning, commit & sync, push, or delete-local behaviour.
@@ -104,7 +106,27 @@ export async function waitForStudioAgentTools(page) {
     await page.waitForFunction(() => typeof window.studioAgentRunTool === 'function', { timeout: 60000 });
 }
 
-/** Push a baseline commit via worker (fast, no UI). */
+/**
+ * Reset the shared sandbox repo to a known baseline and push it (fast, no UI).
+ *
+ * This is a RESET, not just a `song.js` write. The sandbox repo is recreated
+ * once per CI job and every spec that touches it commits into the same tree, so
+ * without a wipe a spec inherits whatever the previous one left: a `synth.ts`
+ * importing `../faust/<something>`, a half-written `faust/*.dsp`, a
+ * `shader.glsl`. That is not hypothetical — `studio-agent-mock.spec.js`'s
+ * shader test, which never calls `set_synth`, has failed with
+ * "missing `process` definition" because it cloned a Faust-backed `synth.ts`
+ * pushed by `faust-save-then-play-bug.spec.js` and `compile` then transpiled a
+ * dsp the test never set up.
+ *
+ * So: every file in the working tree is unlinked, and only `song.js` is written
+ * back. `synth.ts` intentionally does NOT survive — with no stored synth the
+ * app falls back to `synth1/assembly/mixes/emptymidi.mix.ts`, a plain
+ * AssemblyScript mix that compiles, and no `faust/` folder means the Faust
+ * editor has no file selected and `compile` skips the transpile entirely.
+ *
+ * Specs that do not need the NEAR remote should still prefer {@link specRepo}.
+ */
 export async function pushBaseline(page, repoName, content) {
     const creds = await fetchCredentials();
     const publicKey = creds.publicKey.replace('ed25519:', '');
@@ -135,6 +157,17 @@ export async function pushBaseline(page, repoName, content) {
         await next();
         worker.postMessage({ command: 'remote', args: ['add', 'origin', repoUrl], id: id++ });
         await next();
+
+        // Wipe whatever the previous spec left behind. `unlinkfile` only
+        // removes from the working tree; the deletion is staged at commit
+        // time by commitpullpush's `add --update .`, so it lands in the push.
+        worker.postMessage({ command: 'listfiles', id: id++ });
+        const listReply = await next();
+        for (const filename of (listReply.files || [])) {
+            if (filename === 'song.js') continue; // rewritten below anyway
+            worker.postMessage({ command: 'unlinkfile', filename });
+            await next();
+        }
 
         worker.postMessage({ command: 'writefileandstage', filename: 'song.js', contents: content });
         await next();
