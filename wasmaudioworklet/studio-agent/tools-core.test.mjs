@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
-  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments
+  stepPatternSpans, summarizeSongEvents, formatSongSummary, songEventWarnings,
+  trailingSilence, songBpmFromSource, declaredInstruments
 } from './tools-core.js';
 import { spectrum, measureNote, parseNote, noteName } from '../audioprobe/audioanalysis.js';
 import { probeWarnings } from '../audioprobe/instrumentprobe.js';
@@ -71,6 +72,113 @@ test('songSourceWarnings: flags async function wrappers too', () => {
 test('songSourceWarnings: clean top-level await passes', () => {
   const good = `setBPM(120);\nawait createTrack(0).steps(4, [c2,, c2,,]);\nloopHere();\n`;
   assert.deepEqual(songSourceWarnings(good), []);
+});
+
+// ---- step-pattern geometry --------------------------------------------------
+// The bug these come from: a drum song whose kick and snare patterns each ended
+// on a rest, so JavaScript dropped the trailing comma and made them 3 slots
+// instead of 4. Kick and snare ran 0.75 beats per copy against a 1-beat hi-hat,
+// the awaited kick ended the song at 6 beats, and the hi-hat's last 4 notes were
+// discarded at loopHere(). The compiled digest showed only "12 notes" — no cause.
+
+test('stepPatternSpans: counts slots the way JavaScript does', () => {
+  const spans = stepPatternSpans(`
+    a.steps(4, [c3, , , ]);
+    b.steps(4, [ , fs3, , fs3]);
+    c.steps(4, [c3, , , ,].repeat(7));
+  `);
+  assert.deepEqual(spans.map(s => s.slots), [3, 4, 4]);      // a lost its last slot
+  assert.deepEqual(spans.map(s => s.trailingEmpty), [true, false, true]);
+  assert.deepEqual(spans.map(s => s.beats), [0.75, 1, 8]);   // repeat(7) is EIGHT copies
+});
+
+test('songSourceWarnings: names the dropped trailing comma', () => {
+  const warnings = songSourceWarnings('await kickTrack.steps(4, [c3, , , ]);\nloopHere();');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /has 3 slots, not 4/);
+  assert.match(warnings[0], /ENDS ON AN EMPTY SLOT/);
+  assert.match(warnings[0], /add one more comma/);
+});
+
+test('songSourceWarnings: blames the SHORT part, not the one that outlasts it', () => {
+  // At one step per beat a 3-slot pattern is still "whole beats", so slot
+  // arithmetic alone says nothing — only the sibling patterns give it away.
+  // Reporting this as "the hi-hat is too long" makes a model shorten the hi-hat
+  // and lock in a 3-beat bar, which is how a Haiku bench run failed.
+  const song = [
+    'hihat.steps(1, [ , fs3, , fs3].repeat(3));',   // 4 slots -> 16 beats
+    'snare.steps(1, [ , , d3, ].repeat(3));',       // 3 slots -> 12 beats
+    'await kick.steps(1, [c3, , , ].repeat(3));'    // 3 slots -> 12 beats
+  ].join('\n');
+  const warnings = songSourceWarnings(song);
+  assert.equal(warnings.length, 2);
+  assert.ok(warnings.every(w => /has 3 slots, not 4/.test(w)), 'both short parts named');
+  assert.ok(warnings.some(w => w.startsWith('WARNING: kick.steps(')));
+  assert.ok(warnings.some(w => w.startsWith('WARNING: snare.steps(')));
+  assert.ok(!warnings.some(w => /hihat/.test(w)), 'the long part must not be blamed');
+  assert.ok(warnings.every(w => /spans 12 beats where 16 was clearly meant/.test(w)));
+});
+
+test('songSourceWarnings: siblings are compared even when no pattern is awaited', () => {
+  // A Haiku bench run moved the playhead with `await waitDuration(32)` rather
+  // than by awaiting a pattern. Nothing closed the group, so the short kick and
+  // snare went unreported and the beat came out in 3.
+  const song = [
+    'kick.steps(1, [c3, , , ].repeat(7));',
+    'hihat.steps(1, [ , fs3, , fs3].repeat(7));',
+    'snare.steps(1, [ , , d3, ].repeat(7));',
+    'await waitDuration(32);'
+  ].join('\n');
+  const warnings = songSourceWarnings(song);
+  assert.equal(warnings.length, 2);
+  assert.ok(warnings.some(w => w.startsWith('WARNING: kick.steps(')));
+  assert.ok(warnings.some(w => w.startsWith('WARNING: snare.steps(')));
+  assert.ok(warnings.every(w => /spans 24 beats where 32 was clearly meant/.test(w)));
+});
+
+test('songSourceWarnings: a genuine overrun with no dropped comma still reports', () => {
+  const song = 'hats.steps(1, [fs3,fs3,fs3,fs3].repeat(7));\nawait kick.steps(1, [c3,,,,].repeat(3));';
+  const warnings = songSourceWarnings(song);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /hats\.steps spans 32 beats/);
+  assert.match(warnings[0], /DISCARDED at loopHere/);
+});
+
+test('songSourceWarnings: a layered part outlasting the beat-keeper is named', () => {
+  const song = [
+    'hihatTrack.steps(4, [ , fs3, , fs3].repeat(7));',   // 8 beats
+    'await kickTrack.steps(4, [c3, , , ,].repeat(5));',  // 6 beats — ends the song
+    'loopHere();'
+  ].join('\n');
+  const warnings = songSourceWarnings(song);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /hihatTrack\.steps spans 8 beats/);
+  assert.match(warnings[0], /kickTrack\.steps spans only 6/);
+  assert.match(warnings[0], /DISCARDED at loopHere/);
+});
+
+test('songSourceWarnings: a pattern ending on a NOTE is left alone', () => {
+  // songs/yoshimibrowsertest.js writes 15-slot bars on purpose — the implied
+  // final rest is fine, and the part is shorter than the beat-keeper anyway.
+  const song = 'base.steps(4, [d3,,d4,,f3,,a4,,a2,,a3,,c3,,c4]);\nawait drums.steps(4, [c3,,,,c3,,,,c3,,,,c3,,,,]);';
+  assert.deepEqual(songSourceWarnings(song), []);
+});
+
+test('songSourceWarnings: parts rescheduled by a loop or callback are not compared', () => {
+  // examples/textoverlay/song.js layers a 26-beat visual track over a 4-beat
+  // await that a for-loop runs seven times. Statically that reads as a part
+  // outlasting its beat-keeper; musically it is correct.
+  const song = [
+    'createTrack(15).steps(1, [ () => showText("hi"), ,,,, () => hideText(), ,,,, ]);',
+    'for (let n = 0; n < 7; n++) {',
+    '  await createTrack(0).steps(0.25, [chords[n % 4]]);',
+    '}'
+  ].join('\n');
+  assert.deepEqual(songSourceWarnings(song), []);
+});
+
+test('songSourceWarnings: patterns held in variables are skipped, not guessed at', () => {
+  assert.deepEqual(songSourceWarnings('const p = [c3, , , ];\nawait t.steps(4, p);'), []);
 });
 
 // ---- compiled-event analysis ------------------------------------------------
@@ -232,6 +340,59 @@ test('formatSongSummary: compact digest names channels, bars and the overlap fai
   assert.match(text, /ch1: 4 notes, beats 4-7, bar 2/);
   assert.match(text, /ch0 and ch1 NEVER overlap/);
   assert.ok(text.split('\n').length < 8, 'digest must stay compact');
+});
+
+test('formatSongSummary: a length that is not a whole number of bars says so', () => {
+  // Rounding this to "2 bars" is what hid the bug: the digest looked healthy
+  // while the song ended a beat and a half short of the bar line.
+  const events = [noteOn(0, 36, 0), noteOn(0, 36, 3), endAt(6)];
+  const summary = summarizeSongEvents(events, BPM);
+
+  assert.match(formatSongSummary(summary), /6 beats \(1\.5 bars — NOT a whole number of bars\)/);
+  const warnings = songEventWarnings(summary);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /NOT a whole number of bars/);
+  assert.match(warnings[0], /AWAITED pattern first/);
+});
+
+test('formatSongSummary: whole-bar lengths stay plain, ms rounding included', () => {
+  assert.match(formatSongSummary(summarizeSongEvents([noteOn(0, 36, 0), endAt(8)], BPM)), /\(2 bars\)/);
+  // 110 BPM: a beat is 545.45ms, so event times drift by a fraction of a ms.
+  const drifted = [{ time: 0, message: [0x90, 36, 100] }, { time: 8727, message: [-1] }];
+  assert.match(formatSongSummary(summarizeSongEvents(drifted, 110)), /\(4 bars\)/);
+});
+
+test('formatSongSummary: dead air before the loop is reported', () => {
+  // What "4 slots at steps(4, …)" looks like from the outside: each part is ONE
+  // BEAT long, the playhead was advanced a bar's worth, and the rest is nothing.
+  // A Haiku bench run wrote exactly this after correctly fixing its commas.
+  const events = [
+    noteOn(0, 36, 0), noteOff(0, 36, 0.1),
+    noteOn(0, 36, 7.75), noteOff(0, 36, 7.85),
+    endAt(32)
+  ];
+  const s = summarizeSongEvents(events, BPM);
+  assert.equal(s.lastSoundBeat, 7.85);
+  assert.match(formatSongSummary(s), /last sound at beat 7\.85 — the remaining 24\.15 beats \(6\.04 bars\) are SILENT/);
+
+  const warnings = songEventWarnings(s).filter((w) => /SILENCE/.test(w));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /N slots is ONE BEAT, not one bar/);
+});
+
+test('formatSongSummary: a musical tail is not dead air', () => {
+  // examples/beachdrive/song.js releases its last note 5.4 beats before the end
+  // of a 250-beat song. A whole bar of gap only matters relative to the song.
+  const events = [noteOn(0, 36, 0), noteOn(0, 36, 240), noteOff(0, 36, 244.62), endAt(250)];
+  const s = summarizeSongEvents(events, BPM);
+  assert.equal(trailingSilence(s).significant, false);
+  assert.doesNotMatch(formatSongSummary(s), /SILENT/);
+  assert.deepEqual(songEventWarnings(s).filter((w) => /SILENCE/.test(w)), []);
+});
+
+test('formatSongSummary: a song that plays to its end says nothing about silence', () => {
+  const events = [noteOn(0, 36, 0), noteOn(0, 36, 7), noteOff(0, 36, 8), endAt(8)];
+  assert.doesNotMatch(formatSongSummary(summarizeSongEvents(events, BPM)), /SILENT/);
 });
 
 test('songBpmFromSource: reads setBPM, falls back when absent', () => {
