@@ -62,9 +62,12 @@ import { initializeMidiSynth, postprocess } from '../faust/${basename}';
 export { initializeMidiSynth, postprocess };
 `;
 
+// One BAR: eight slots at two steps per beat. The studio-agent compile test
+// below asserts its result is exactly "compiled OK", and compile reports a song
+// whose length does not land on a bar line.
 const SONG_SOURCE = `setBPM(120);
 
-await createTrack(0).steps(4, [
+await createTrack(0).steps(2, [
     c4,, e4,, g4,, c5,,
 ]);
 
