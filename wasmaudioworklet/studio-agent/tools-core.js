@@ -37,6 +37,212 @@ export function normDsp(path) {
   return rel;
 }
 
+// ---- step-pattern geometry (source lint) ------------------------------------
+//
+// Two step-array mistakes are invisible in the compiled digest, and together
+// they burned a whole live session:
+//
+//   1. `[c3, , , ]` is THREE slots, not four. JavaScript drops a single
+//      trailing comma, so a pattern written to end on a rest comes out short
+//      and drifts against every part that got its count right.
+//   2. A layered (non-awaited) part longer than the awaited beat-keeper has its
+//      tail DISCARDED at loopHere(). The digest then shows fewer notes than
+//      were written, with nothing to say why.
+//
+// Both are decidable from the source before compiling, so report them there.
+// The model should never have to do this arithmetic itself — it is exactly the
+// arithmetic it gets wrong, and it cannot hear the result.
+
+// Strip comments without disturbing string contents (a `//` inside a URL must
+// survive), so prose commas can never be counted as pattern slots.
+export function stripComments(source) {
+  const src = String(source || '');
+  let out = '';
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== ch) j += src[j] === '\\' ? 2 : 1;
+      out += src.slice(i, j + 1);
+      i = j;
+    } else if (ch === '/' && src[i + 1] === '/') {
+      while (i < src.length && src[i] !== '\n') i++;
+      out += '\n';
+    } else if (ch === '/' && src[i + 1] === '*') {
+      const end = src.indexOf('*/', i + 2);
+      i = end === -1 ? src.length : end + 1;
+      out += ' ';
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+// Walk a bracketed run from its opening char, skipping nested brackets and
+// strings. `onComma` sees only depth-1 commas. Returns the closing index.
+function scanBrackets(src, openIdx, onComma) {
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      i++;
+      while (i < src.length && src[i] !== ch) i += src[i] === '\\' ? 2 : 1;
+    } else if (ch === '[' || ch === '(' || ch === '{') {
+      depth++;
+    } else if (ch === ']' || ch === ')' || ch === '}') {
+      if (--depth === 0) return i;
+    } else if (ch === ',' && depth === 1) {
+      onComma(i);
+    }
+  }
+  return -1;
+}
+
+// Slot count of a step-array literal, counted the way JavaScript counts it:
+// holes are slots, but a single trailing comma is NOT a slot.
+function scanArrayLiteral(src, openIdx) {
+  let commas = 0;
+  let lastComma = -1;
+  const close = scanBrackets(src, openIdx, (i) => { commas++; lastComma = i; });
+  if (close === -1 || src[close] !== ']') return null;
+  if (!commas) return { close, slots: src.slice(openIdx + 1, close).trim() ? 1 : 0, trailingEmpty: false };
+  const trailingEmpty = !src.slice(lastComma + 1, close).trim();
+  return { close, slots: trailingEmpty ? commas : commas + 1, trailingEmpty };
+}
+
+// Every `.steps(stepsPerBeat, [ ... ])` written with literal arguments, with the
+// length it actually occupies. Calls whose count or pattern comes from a
+// variable are skipped rather than guessed at.
+export function stepPatternSpans(source) {
+  const src = stripComments(source);
+  const spans = [];
+  const re = /\.\s*steps\s*\(/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const open = re.lastIndex - 1;
+    let comma = -1;
+    scanBrackets(src, open, (i) => { if (comma === -1) comma = i; });
+    if (comma === -1) continue;
+    const stepsPerBeat = Number(src.slice(open + 1, comma).trim());
+    const tail = src.slice(comma + 1);
+    const lead = tail.length - tail.replace(/^\s+/, '').length;
+    if (tail[lead] !== '[') continue; // pattern held in a variable — nothing to count
+    const arr = scanArrayLiteral(src, comma + 1 + lead);
+    if (!arr) continue;
+
+    // `.repeat(n)` appends n FURTHER copies, so n + 1 in total.
+    const rep = src.slice(arr.close + 1).match(/^\s*\.\s*repeat\s*\(([^)]*)\)/);
+    let copies = 1;
+    if (rep) {
+      const n = rep[1].trim() === '' ? 1 : Number(rep[1].trim());
+      copies = Number.isFinite(n) ? n + 1 : NaN;
+    }
+
+    const stmtStart = 1 + Math.max(
+      src.lastIndexOf(';', m.index), src.lastIndexOf('\n', m.index),
+      src.lastIndexOf('{', m.index), src.lastIndexOf('}', m.index)
+    );
+    const head = src.slice(stmtStart, m.index);
+    const receiver = head.replace(/^\s*await\s+/, '').trim() || 'track';
+    spans.push({
+      label: `${receiver.slice(-40)}.steps`,
+      awaited: /\bawait\b/.test(head),
+      stepsPerBeat,
+      slots: arr.slots,
+      trailingEmpty: arr.trailingEmpty,
+      copies,
+      beats: (arr.slots / stepsPerBeat) * copies,
+      start: stmtStart,
+      end: arr.close
+    });
+  }
+  return spans;
+}
+
+// Parts scheduled at the same playhead position: a run of plain calls, normally
+// closed by the one awaited call that keeps the beat. A trailing run with
+// nothing awaited is still a group — its parts must agree with each other even
+// when the playhead is moved by something else (`await waitDuration(32)` is a
+// beat-keeper the slot arithmetic cannot see). It just has no length to be
+// measured against, so only the sibling comparison applies to it.
+function stepPatternGroups(spans) {
+  const groups = [];
+  let current = [];
+  for (const span of spans) {
+    current.push(span);
+    if (span.awaited) {
+      groups.push(current);
+      current = [];
+    }
+  }
+  if (current.length) groups.push(current);
+  return groups;
+}
+
+// Anything that makes the flat "layer, layer, await the beat-keeper" reading
+// unsound: a loop repeating the awaited part (examples/textoverlay/song.js
+// awaits 4 beats seven times), or patterns wrapped in callbacks scheduled
+// elsewhere (songs/upbeat.js drives steps() from play() rows).
+const RESCHEDULES = /\b(for|while|function)\b|=>/;
+
+const EPS = 1e-9;
+const droppedCommaWarning = (s, target) =>
+  `WARNING: ${s.label}(${s.stepsPerBeat}, [...]) has ${s.slots} slots, not ${s.slots + 1} — ` +
+  'the pattern ENDS ON AN EMPTY SLOT and JavaScript drops a single trailing comma, so `[c3, , , ]` is THREE slots. ' +
+  `It therefore spans ${round(s.beats)} beats where ${round(target)} was clearly meant, and drifts against every part that got its count right. ` +
+  'Write the last rest explicitly (`[c3, , , null]`) or add one more comma (`[c3, , , ,]`).';
+
+export function stepPatternWarnings(source) {
+  const src = stripComments(source);
+  const spans = stepPatternSpans(source);
+  const warnings = [];
+  const named = new Set(); // spans already reported as a dropped comma
+
+  // Parts layered at one playhead position must be the same length. When one is
+  // SHORT by exactly the slot a trailing comma would have eaten, that is the
+  // bug — and naming it beats naming the symptom: told only that the hi-hat
+  // overruns the kick, a model shortens the hi-hat and locks in a 3-beat bar.
+  for (const group of stepPatternGroups(spans)) {
+    const keeper = group[group.length - 1];
+    if (RESCHEDULES.test(src.slice(group[0].start, keeper.end))) continue;
+    const lengths = group.filter((s) => Number.isFinite(s.beats)).map((s) => s.beats);
+    if (!lengths.length) continue;
+    const longest = Math.max(...lengths);
+
+    for (const s of group) {
+      if (!s.trailingEmpty || !Number.isFinite(s.beats) || s.beats >= longest - EPS) continue;
+      if (Math.abs(((s.slots + 1) / s.stepsPerBeat) * s.copies - longest) > EPS) continue;
+      warnings.push(droppedCommaWarning(s, longest));
+      named.add(s);
+    }
+    // With the short part named, the overrun it caused needs no separate report.
+    if (group.some((s) => named.has(s))) continue;
+    // Measuring an overrun needs a beat-keeper of known length to overrun.
+    if (!keeper.awaited || !Number.isFinite(keeper.beats)) continue;
+
+    for (const s of group.slice(0, -1)) {
+      if (!Number.isFinite(s.beats) || s.beats <= keeper.beats + EPS) continue;
+      warnings.push(
+        `WARNING: ${s.label} spans ${round(s.beats)} beats but the awaited beat-keeper ${keeper.label} spans only ${round(keeper.beats)}. ` +
+          `The song ends where the beat-keeper ends, so the last ${round(s.beats - keeper.beats)} beats of ${s.label} are DISCARDED at loopHere() ` +
+          'and that part sounds truncated — it plays FEWER notes than written, which the compiled digest shows as a count you did not expect. ' +
+          'Await the LONGEST pattern of the group, or shorten the layered part to match.'
+      );
+    }
+  }
+
+  // A pattern with no sibling to measure against, whose slots do not even come
+  // out to whole beats. A deliberate 15-slot pattern ending on a NOTE is a real
+  // authoring style (songs/yoshimibrowsertest.js) and must stay quiet.
+  for (const s of spans) {
+    if (named.has(s) || !(s.stepsPerBeat > 0) || !s.slots || !s.trailingEmpty) continue;
+    if (s.slots % s.stepsPerBeat === 0) continue;
+    warnings.push(droppedCommaWarning(s, ((s.slots + 1) / s.stepsPerBeat) * s.copies));
+  }
+  return warnings;
+}
+
 // Lint a song source for known agent mistakes; returns warning strings to
 // append to set_song/edit_song tool results. The song runs as ONE top-level
 // async function, so an async IIFE wrapper is never needed — and because it
@@ -49,6 +255,7 @@ export function songSourceWarnings(source) {
       'WARNING: the song contains an async IIFE wrapper — it is NOT awaited, so loopHere()/code after it runs before the notes are scheduled and the song breaks. The song source is already one top-level async function: use plain top-level `await track.steps(...)` statements and remove the wrapper.'
     );
   }
+  warnings.push(...stepPatternWarnings(source));
   return warnings;
 }
 
@@ -66,6 +273,7 @@ export function songSourceWarnings(source) {
 // the USER asked for, which the agent did not author.
 
 const NOTE_ON = 0x90;
+const NOTE_OFF = 0x80;
 const CONTROL_CHANGE = 0xb0;
 const END_OF_SONG = -1;
 // The sequencer encodes its own control messages as NEGATIVE single-byte
@@ -84,6 +292,7 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, ins
   const toBeat = (ms) => ms / msPerBeat;
   const byChannel = new Map();
   let lengthBeats = 0;
+  let lastSoundBeat = 0;
 
   for (const evt of eventlist || []) {
     const [status, , velocity] = evt.message || [];
@@ -104,6 +313,11 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, ins
       c.firstBeat = Math.min(c.firstBeat, beat);
       c.lastBeat = Math.max(c.lastBeat, beat);
       c.bars.add(Math.floor(beat / beatsPerBar));
+      lastSoundBeat = Math.max(lastSoundBeat, beat);
+    } else if ((status & 0xf0) === NOTE_OFF || (status & 0xf0) === NOTE_ON) {
+      // A note-off is where sound actually STOPS — a song ending on a held
+      // chord is finished at its release, not at its last attack.
+      lastSoundBeat = Math.max(lastSoundBeat, beat);
     } else if ((status & 0xf0) === CONTROL_CHANGE) {
       c.ccs++;
     }
@@ -139,6 +353,7 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, ins
     bpm,
     beatsPerBar,
     lengthBeats,
+    lastSoundBeat,
     totalNotes: sounding.reduce((sum, c) => sum + c.notes, 0),
     channels,
     sounding,
@@ -215,6 +430,43 @@ function findNoteCollisions(eventlist, toBeat, minHeldBeats = 1) {
 }
 
 const round = (n) => Math.round(n * 100) / 100;
+
+// Song length in bars. A song is normally a whole number of bars; a fractional
+// length means a pattern did not add up (an off-by-one slot count, a `.repeat()`
+// miscount) and is the single most useful tell the digest can carry. Reporting
+// `Math.ceil` here once hid a 1.5-bar song as "2 bars" and a model spent a whole
+// session hunting the missing notes. Times are rounded to whole ms, so allow a
+// hair of drift before calling a length fractional.
+const WHOLE_BAR_EPSILON_BEATS = 0.05;
+export function songBars(lengthBeats, beatsPerBar = 4) {
+  const bars = lengthBeats / beatsPerBar;
+  const off = Math.abs(bars - Math.round(bars)) * beatsPerBar;
+  return { bars, whole: off <= WHOLE_BAR_EPSILON_BEATS };
+}
+
+// Dead air between the last sound and the end marker. The song still runs
+// through it and only then loops, so the user hears a hole. It is what
+// "4 slots at 4 steps per beat" looks like from the outside: the parts are one
+// BEAT long each, the playhead was advanced by a bar's worth, and the rest of
+// the song is nothing. Real music does leave a tail (examples/beachdrive/song.js
+// releases its last note 5.4 beats before the end), so a gap only counts when
+// it is both a whole bar and a third of the entire song.
+export function trailingSilence(s) {
+  const beats = s.sounding.length ? s.lengthBeats - s.lastSoundBeat : 0;
+  return {
+    beats,
+    bars: beats / s.beatsPerBar,
+    significant: beats >= s.beatsPerBar && beats >= s.lengthBeats / 3
+  };
+}
+
+const barsText = (s) => {
+  const { bars, whole } = songBars(s.lengthBeats, s.beatsPerBar);
+  return whole
+    ? `${Math.round(bars)} bars`
+    : `${round(bars)} bars — NOT a whole number of bars`;
+};
+
 const barRange = (c) => {
   const bars = [...c.bars].sort((a, b) => a - b);
   return bars.length === 1 ? `bar ${bars[0] + 1}` : `bars ${bars[0] + 1}-${bars[bars.length - 1] + 1}`;
@@ -223,13 +475,17 @@ const barRange = (c) => {
 // Compact digest — a fixed handful of lines whatever the song's size. Never
 // dump the event list itself: a few minutes of music is thousands of events.
 export function formatSongSummary(s) {
-  const bars = Math.ceil(s.lengthBeats / s.beatsPerBar);
   const lines = [
-    `song: ${round(s.lengthBeats)} beats (${bars} bars) at ${s.bpm} BPM · ` +
+    `song: ${round(s.lengthBeats)} beats (${barsText(s)}) at ${s.bpm} BPM · ` +
       `${s.sounding.length} sounding channel(s) · ${s.totalNotes} notes`
   ];
   if (!s.sounding.length) {
     lines.push('(no notes at all)');
+  }
+  const silence = trailingSilence(s);
+  if (silence.significant) {
+    lines.push(`last sound at beat ${round(s.lastSoundBeat)} — the remaining `
+      + `${round(silence.beats)} beats (${round(silence.bars)} bars) are SILENT before the loop`);
   }
   for (const c of s.channels) {
     lines.push(
@@ -276,6 +532,27 @@ export function songEventWarnings(s) {
         'Almost always the pattern is written AFTER the awaited beat-keeper, so it starts past the end of the song and `loopHere()` discards it. ' +
         'Parts that sound TOGETHER must be scheduled BEFORE the pattern you await — the awaited one comes LAST: ' +
         '`hats.steps(...); bass.steps(...); await kick.steps(...);`'
+    );
+  }
+  const { bars, whole } = songBars(s.lengthBeats, s.beatsPerBar);
+  if (s.sounding.length && !whole) {
+    warnings.push(
+      `WARNING: the song is ${round(s.lengthBeats)} beats — ${round(bars)} bars, NOT a whole number of bars. ` +
+        'A looping song that does not end on a bar line makes the loop stumble, and it almost always means a pattern ' +
+        'has the wrong number of slots. Check the AWAITED pattern first: it sets the song length. ' +
+        'Count its slots (a trailing empty slot does NOT count — JavaScript drops a single trailing comma, ' +
+        'so `[c3, , , ]` is THREE slots) and remember `.repeat(n)` gives n+1 copies: slots ÷ stepsPerBeat × (n+1) = beats.'
+    );
+  }
+  const silence = trailingSilence(s);
+  if (silence.significant) {
+    warnings.push(
+      `WARNING: the last sound is at beat ${round(s.lastSoundBeat)} but the song runs to beat ${round(s.lengthBeats)} — ` +
+        `${round(silence.beats)} beats (${round(silence.bars)} bars) of SILENCE before it loops. ` +
+        'The playhead was advanced further than the parts actually play. Usually the patterns are shorter than intended: ' +
+        'at N steps per beat an array of N slots is ONE BEAT, not one bar — a 4/4 bar needs 4×N slots ' +
+        '(`steps(4, [...16 slots])`), or use `steps(1, [...4 slots])` for one slot per beat. ' +
+        'Check the pattern lengths before adding more repeats.'
     );
   }
   for (const [a, b] of s.disjointPairs) {

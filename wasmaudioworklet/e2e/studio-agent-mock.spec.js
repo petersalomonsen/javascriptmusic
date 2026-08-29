@@ -37,9 +37,12 @@ import { initializeMidiSynth, postprocess } from '../faust/${basename}';
 export { initializeMidiSynth, postprocess };
 `;
 
+// One BAR: eight slots at two steps per beat. A fixture that does not land on a
+// bar line makes compile report the mismatch, and these tests want compile's
+// result to be exactly "compiled OK" so a spurious warning would show up here.
 const SONG_SOURCE = `setBPM(120);
 
-await createTrack(0).steps(4, [
+await createTrack(0).steps(2, [
     c4,, e4,, g4,, c5,,
 ]);
 
