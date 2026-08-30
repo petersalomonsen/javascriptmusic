@@ -507,6 +507,13 @@ async function sendChat(text) {
   // conversation (the API key must not be persisted into the OPFS repo).
   if (text.startsWith('/nearai')) { handleNearaiCommand(text); return; }
 
+  // One turn at a time. Sending into a running turn corrupts the shared
+  // history; the caller puts the text back in the box so nothing is lost.
+  if (turnRunning) {
+    addLine('tool', '— a turn is still running. Press Escape (or Stop) to end it, then send again —');
+    return false;
+  }
+
   if (nearaiConfig()) {
     addLine('user', text);
     conversation.push({ role: 'user', text });
@@ -746,7 +753,7 @@ async function runNearaiTurn(text) {
   nearaiMessages.push({ role: 'user', content });
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
   try {
-    const { usage } = await runAgentTurn({
+    const { usage, answered } = await runAgentTurn({
       // The signal rides on every request of the turn, so Stop lands mid-loop
       // rather than only between tool calls.
       // The pass rides on every request of the turn; a 402 mid-turn (expiry,
@@ -789,7 +796,12 @@ async function runNearaiTurn(text) {
     const agentText = agentMsgEl ? agentMsgEl.textContent : '';
     if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }
     finishAgentMessage();
-    stopActivity(`done ✓ (${usage?.total_tokens ?? '?'} tokens)`);
+    if (!agentText && answered === false) {
+      addLine('tool', '— the model ended the turn without an answer. Send again, or rephrase —');
+      stopActivity('no answer');
+    } else {
+      stopActivity(`done ✓ (${usage?.total_tokens ?? '?'} tokens)`);
+    }
   } catch (e) {
     // A user-requested stop is not a failure — don't report it as one.
     if (e?.name === 'AbortError' || nearaiAbort?.signal.aborted) {
@@ -826,7 +838,17 @@ const shortName = (n) => (n || '').replace(/^mcp__studio__/, '');
 
 function el(id) { return shadow.getElementById(id); }
 function setStatus(s) { const e = el('studioagentstatus'); if (e) e.textContent = `agent: ${s}`; }
+// Whether a turn is in flight. setBusy already toggled the Send button, but a
+// disabled BUTTON does not stop `form.requestSubmit()` — so Enter started a
+// second turn on top of the first. Both then shared nearaiMessages and wrote
+// into the same agent bubble: three quick follow-ups produced three overlapping
+// requests, a history of back-to-back user messages with no assistant turn
+// between them, and one reply rendered three times. To a user that looks like
+// the agent stopping and never coming back.
+let turnRunning = false;
+
 function setBusy(b) {
+  turnRunning = b;
   const send = el('studioagentsend');
   if (send) { send.disabled = b; send.textContent = b ? '…' : 'Send'; }
   // Stop is only offered while a turn is actually running.
@@ -913,12 +935,14 @@ export function initStudioAgent(shadowRoot) {
     if (checked) input.focus();
   };
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = input.value.trim();
     if (!text) return;
+    // Clear only once the send is accepted — a refused send keeps what was
+    // typed instead of swallowing it.
+    if (await sendChat(text) === false) return;
     input.value = '';
-    sendChat(text);
   });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }

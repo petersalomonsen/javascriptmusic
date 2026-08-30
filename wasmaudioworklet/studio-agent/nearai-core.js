@@ -146,7 +146,11 @@ export async function runAgentTurn({
     if (msg.content) onText(msg.content);
 
     if (!msg.tool_calls || msg.tool_calls.length === 0) {
-      return { messages, usage: data.usage };
+      // A thinking model can end a turn having emitted only reasoning: no
+      // content, no tool calls. Nothing is wrong enough to throw, but the turn
+      // produced no answer, and reporting "done" for that reads as the agent
+      // silently giving up. Say which it was.
+      return { messages, usage: data.usage, answered: Boolean(msg.content) };
     }
     for (const call of msg.tool_calls) {
       // Belt and braces: the tools are registered bare here, but the MCP-style
