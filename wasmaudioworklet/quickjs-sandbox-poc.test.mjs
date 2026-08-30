@@ -119,3 +119,28 @@ test('setVisual rejects names that are not valid GLSL uniforms', async () => {
     await assert.rejects(runSongInSandbox(`setVisual('glow', 'bright'); await createTrack(0).steps(4, [c3]);`),
         /must be a finite number/);
 });
+
+// setBPM() runs INSIDE the guest, against the guest's copy of pattern.js. The
+// host's copy therefore keeps the 110 default unless the tempo is carried back
+// with the rest of the snapshot — and host-side code reads it. insertMidiRecording
+// converts a captured take to beats with `seconds * bpm / 60`, so a 125 BPM song
+// wrote every recorded note at 110/125 = 88% of its real position: the take came
+// in early and compressed, while sounding perfectly correct during playback
+// (audio is scheduled from the compiled event list in milliseconds, which was
+// never wrong). The transport's seek readout reads the same binding.
+test('the song tempo reaches the host, not just the guest', async () => {
+    // Set the host to a value the song does NOT ask for, so this proves the
+    // transfer rather than depending on the module default surviving whatever
+    // other tests in this file compiled first.
+    const { setBPM } = await import('./midisequencer/pattern.js');
+    setBPM(70);
+
+    await compileSong('setBPM(125);\nawait createTrack(0).steps(1, [c4, c4, c4, c4]);\nloopHere();');
+
+    const { bpm: after } = await import('./midisequencer/pattern.js');
+    assert.strictEqual(after, 125);
+
+    // The conversion insertMidiRecording performs, at the tempo it would read.
+    assert.strictEqual(Math.round((10 * after) / 60 * 100) / 100, 20.83,
+        'ten seconds of take lands on the right beat');
+});

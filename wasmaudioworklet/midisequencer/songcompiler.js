@@ -276,6 +276,12 @@ export async function compileSong(songsource) {
     songmessages = result.events;
     instrumentNames = result.instrumentNames;
     recordingStartTimeMillis = result.recordingStartTimeMillis;
+    // The song's setBPM() ran inside the sandbox, against the GUEST's copy of
+    // pattern.js. Without this the host stays at the 110 default, and
+    // insertMidiRecording — which reads `bpm` from the host module — writes a
+    // take at 110/125 of its real position: every note early, the whole phrase
+    // compressed. It sounded right while playing and wrong once inserted.
+    if (typeof result.bpm === 'number' && result.bpm > 0) setBPM(result.bpm);
     songParts = result.songParts;
     trackerPatterns = result.trackerPatterns;
 

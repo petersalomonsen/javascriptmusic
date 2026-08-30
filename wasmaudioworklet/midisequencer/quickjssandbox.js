@@ -76,6 +76,10 @@ export async function __runSong() {
     }
     result.instrumentNames = instrumentNames;
     result.recordingStartTimeMillis = recordingStartTimeMillis;
+    // setBPM() ran in HERE, so the host's copy of pattern.js still holds the
+    // default. Anything host-side that reads the tempo — inserting a recorded
+    // take is the one that bites — needs it carried back across.
+    result.bpm = bpm;
     result.songParts = Object.fromEntries(Object.entries(songParts)
         .map(([name, part]) => [name, { startTime: part.startTime, endTime: part.endTime }]));
     result.trackerPatterns = trackerPatterns.filter(p => p).map(p => ({
