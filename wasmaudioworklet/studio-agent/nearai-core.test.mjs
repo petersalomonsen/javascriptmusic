@@ -2,7 +2,7 @@
 // loop (NEAR AI serverless provider). fetch is injected, so no network.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { runAgentTurn, toOpenAiTools, TOOL_DEFS } from './nearai-core.js';
+import { runAgentTurn, toOpenAiTools, TOOL_DEFS, pruneSupersededReads } from './nearai-core.js';
 
 const ok = (payload) => ({ ok: true, json: async () => payload });
 const completion = (message, usage) => ok({ choices: [{ message }], usage });
@@ -317,4 +317,54 @@ test('a turn cut off at the token limit is distinguishable from one that just st
   });
   assert.strictEqual(justStopped.answered, true);
   assert.strictEqual(justStopped.finishReason, 'stop');
+});
+
+// A whole-document read returns the entire current document, so a later one
+// supersedes every earlier one. A real session carried FOUR full copies of the
+// song — 11,754 chars of a 60k budget, three of them stale — and tipped the
+// conversation over the proxy's cap. The old copies are not just waste: they
+// show the model versions of the file that no longer exist.
+const toolCall = (id, name) => ({ role: 'assistant', tool_calls: [{ id, type: 'function', function: { name, arguments: '{}' } }] });
+
+test('only the newest whole-document read is kept', () => {
+  const messages = [
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'go' },
+    toolCall('a', 'get_song'), { role: 'tool', tool_call_id: 'a', content: 'SONG VERSION ONE' },
+    toolCall('b', 'get_song'), { role: 'tool', tool_call_id: 'b', content: 'SONG VERSION TWO' },
+    toolCall('c', 'get_song'), { role: 'tool', tool_call_id: 'c', content: 'SONG VERSION THREE' },
+  ];
+  const out = pruneSupersededReads(messages);
+
+  assert.equal(out.length, messages.length, 'a tool result must keep its assistant call');
+  assert.match(out.find((m) => m.tool_call_id === 'a').content, /superseded/);
+  assert.match(out.find((m) => m.tool_call_id === 'b').content, /superseded/);
+  assert.equal(out.find((m) => m.tool_call_id === 'c').content, 'SONG VERSION THREE',
+    'the newest read survives intact');
+  assert.deepEqual(messages.find((m) => m.tool_call_id === 'a').content, 'SONG VERSION ONE',
+    'the caller’s array is not mutated');
+});
+
+test('documents are superseded independently, and only whole-document reads are', () => {
+  const messages = [
+    toolCall('a', 'get_song'), { role: 'tool', tool_call_id: 'a', content: 'old song' },
+    toolCall('b', 'get_synth'), { role: 'tool', tool_call_id: 'b', content: 'the synth' },
+    toolCall('c', 'get_song'), { role: 'tool', tool_call_id: 'c', content: 'new song' },
+    // read_faust is per-PATH and grep_song per-PATTERN: a later call answers a
+    // different question, so it supersedes nothing.
+    toolCall('d', 'read_faust'), { role: 'tool', tool_call_id: 'd', content: 'kick.dsp' },
+    toolCall('e', 'read_faust'), { role: 'tool', tool_call_id: 'e', content: 'hihat.dsp' },
+    toolCall('f', 'grep_song'), { role: 'tool', tool_call_id: 'f', content: 'match one' },
+    toolCall('g', 'grep_song'), { role: 'tool', tool_call_id: 'g', content: 'match two' },
+  ];
+  const out = pruneSupersededReads(messages);
+  const at = (id) => out.find((m) => m.tool_call_id === id).content;
+
+  assert.match(at('a'), /superseded/);
+  assert.equal(at('c'), 'new song');
+  assert.equal(at('b'), 'the synth', 'a different document is untouched');
+  assert.equal(at('d'), 'kick.dsp');
+  assert.equal(at('e'), 'hihat.dsp');
+  assert.equal(at('f'), 'match one');
+  assert.equal(at('g'), 'match two');
 });
