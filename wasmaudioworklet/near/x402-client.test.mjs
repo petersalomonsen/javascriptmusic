@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDelegateAction, selectRequirements, walletCanPay, payWithTransaction, passAccountId,
-  encodeHeader, decodeHeader, passRemainingSeconds, passKey,
+  encodeHeader, decodeHeader, passRemainingSeconds, passKey, formatPassDuration,
 } from './x402-client.js';
 import { paymentRequirements, nearTxRequirements, memoFor, x402Config, encodeHeader as srvEncode } from '../functions/_x402.js';
 
@@ -153,4 +153,25 @@ test('one pass per browser, and it says who paid', () => {
   const claims = (sub, exp) => 'h.' + Buffer.from(JSON.stringify({ sub, exp })).toString('base64url') + '.s';
   assert.equal(passAccountId(claims('alice.near', 2 ** 31)), 'alice.near');
   assert.equal(passAccountId('rubbish'), null);
+});
+
+// Passes are MINUTES long — 30 by default — so the pay page's hours arithmetic
+// was the wrong unit throughout: Math.floor(1800/3600) told a buyer they had
+// "about 0h left" on a pass just issued, and the claim message rounded the same
+// figure up to "1 hours". Singular/plural matters here because the numbers are
+// small enough to hit 1 routinely.
+test('formatPassDuration reads naturally at the durations passes actually have', () => {
+  assert.equal(formatPassDuration(1800), '30 minutes');   // the default pass
+  assert.equal(formatPassDuration(60), '1 minute');
+  assert.equal(formatPassDuration(90), '2 minutes');
+  assert.equal(formatPassDuration(3600), '1 hour');
+  assert.equal(formatPassDuration(5400), '1 hour 30 min');
+  assert.equal(formatPassDuration(86400), '24 hours');
+});
+
+test('formatPassDuration handles the edges without saying "0h"', () => {
+  assert.equal(formatPassDuration(0), '0 seconds');
+  assert.equal(formatPassDuration(1), '1 second');
+  assert.equal(formatPassDuration(45), '45 seconds');
+  assert.equal(formatPassDuration(-10), '0 seconds', 'an expired pass never reads as negative');
 });

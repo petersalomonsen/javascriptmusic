@@ -56,7 +56,7 @@
 <script type="module">
 import {
   createPaymentFetch, claimSponsorPass, loadPass, passRemainingSeconds, passAccountId,
-  selectRequirements, decodeHeader, PASS_ENDPOINT,
+  formatPassDuration, selectRequirements, decodeHeader, PASS_ENDPOINT,
 } from './near/x402-client.js';
 
 // Claiming runs against the pass endpoint, which mints without spending any
@@ -80,8 +80,8 @@ let connector, wallet, accountId, terms;
 // Already paid? Say so rather than charging twice.
 const existing = loadPass();
 if (passRemainingSeconds(existing) > 0) {
-  const h = Math.floor(passRemainingSeconds(existing) / 3600);
-  say(`You already have a pass — about ${h}h left${passAccountId(existing) ? `, bought by ${passAccountId(existing)}` : ''}.`, 'ok');
+  const left = formatPassDuration(passRemainingSeconds(existing));
+  say(`You already have a pass — about ${left} left${passAccountId(existing) ? `, bought by ${passAccountId(existing)}` : ''}.`, 'ok');
   $('connect').style.display = 'none';
   $('close').style.display = '';
 }
@@ -194,7 +194,7 @@ $('claim').onclick = async () => {
   say('Sign the message in your wallet to prove the account is yours…', 'info');
   try {
     const result = await claimSponsorPass(wallet, sponsorship, { accountId });
-    say(`Thank you for supporting the project. Your pass is active for ${Math.round(result.secondsRemaining / 3600)} hours.`, 'ok');
+    say(`Thank you for supporting the project. Your pass is active for ${formatPassDuration(result.secondsRemaining)}.`, 'ok');
     $('claim').style.display = 'none';
     $('close').style.display = '';
     try { window.opener?.postMessage({ type: 'studio-pass', pass: result.pass }, location.origin); } catch { /* COOP severed it */ }
