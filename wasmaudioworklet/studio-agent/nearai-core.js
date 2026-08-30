@@ -149,8 +149,15 @@ export async function runAgentTurn({
       // A thinking model can end a turn having emitted only reasoning: no
       // content, no tool calls. Nothing is wrong enough to throw, but the turn
       // produced no answer, and reporting "done" for that reads as the agent
-      // silently giving up. Say which it was.
-      return { messages, usage: data.usage, answered: Boolean(msg.content) };
+      // silently giving up. Say which it was — and pass on finish_reason,
+      // because "length" means it was CUT OFF mid-thought rather than choosing
+      // to stop, which is a different problem with a different fix.
+      return {
+        messages,
+        usage: data.usage,
+        answered: Boolean(msg.content),
+        finishReason: data.choices?.[0]?.finish_reason ?? null,
+      };
     }
     for (const call of msg.tool_calls) {
       // Belt and braces: the tools are registered bare here, but the MCP-style

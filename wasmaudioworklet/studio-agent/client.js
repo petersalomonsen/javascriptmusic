@@ -753,7 +753,7 @@ async function runNearaiTurn(text) {
   nearaiMessages.push({ role: 'user', content });
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
   try {
-    const { usage, answered } = await runAgentTurn({
+    const { usage, answered, finishReason } = await runAgentTurn({
       // The signal rides on every request of the turn, so Stop lands mid-loop
       // rather than only between tool calls.
       // The pass rides on every request of the turn; a 402 mid-turn (expiry,
@@ -797,8 +797,10 @@ async function runNearaiTurn(text) {
     if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }
     finishAgentMessage();
     if (!agentText && answered === false) {
-      addLine('tool', '— the model ended the turn without an answer. Send again, or rephrase —');
-      stopActivity('no answer');
+      addLine('tool', finishReason === 'length'
+        ? '— the model ran out of output budget while thinking, before it could answer. Try a smaller step —'
+        : '— the model ended the turn without an answer. Send again, or rephrase —');
+      stopActivity(finishReason === 'length' ? 'out of output budget' : 'no answer');
     } else {
       stopActivity(`done ✓ (${usage?.total_tokens ?? '?'} tokens)`);
     }

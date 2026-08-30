@@ -49,7 +49,20 @@ const MAX_SYSTEM_CHARS = 80000;
 
 // Bounds the expensive half of a request. Output costs several times input on
 // every model we would consider, and was previously unbounded.
-const MAX_COMPLETION_TOKENS = 2000;
+//
+// 2000 was too tight once the model became a THINKING one: reasoning is billed
+// as output and spends the same budget, so a turn could burn the lot before
+// emitting a single token of answer. A real one did exactly that —
+//
+//   "finish_reason": "length",
+//   "usage": { "completion_tokens": 2000, "reasoning_tokens": 2001,
+//              "prompt_tokens": 22976 }
+//
+// — 23k of input paid for, nothing returned, and the user left to send it again
+// at the same input cost. A cap that forces a retry does not bound spending, it
+// doubles it. This has to leave room for the thinking AND the tool call that
+// follows it.
+const MAX_COMPLETION_TOKENS = 8000;
 
 export const ALLOWED_ORIGINS = [
   /^https:\/\/([a-z0-9-]+\.)?webassemblymusic\.pages\.dev$/, // prod + preview deploys
