@@ -82,6 +82,23 @@ export function passRemainingSeconds(pass, now = Date.now()) {
   return Math.max(0, Math.floor((claims.exp * 1000 - now) / 1000));
 }
 
+/** A pass duration in words. Passes are minutes long, not hours — the default
+ *  is 30 minutes — so hours were the wrong unit entirely: `Math.floor(1800/3600)`
+ *  told the buyer they had "about 0h left" on a pass they had just been given,
+ *  and the claim message rounded the same figure up to "1 hours". The TTL is
+ *  configurable (X402_PASS_TTL_MS), so this covers the longer cases too rather
+ *  than swapping one hardcoded unit for another. */
+export function formatPassDuration(seconds) {
+  const total = Math.max(0, Math.round(seconds));
+  if (total < 60) return `${total} second${total === 1 ? '' : 's'}`;
+  const minutes = Math.round(total / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const h = `${hours} hour${hours === 1 ? '' : 's'}`;
+  return rest ? `${h} ${rest} min` : h;
+}
+
 // ---- wallet capability -----------------------------------------------------
 
 /** Does this wallet declare delegate-action signing? Checked before offering
