@@ -164,3 +164,54 @@ test('runaway tool loops hit the iteration cap', async () => {
     /did not finish within 3/,
   );
 });
+
+// A thinking model attaches its private reasoning to every answer. Keeping it in
+// the history meant re-sending every past thought on every request: in a real
+// four-ask session that was 34,745 of 61,612 conversation chars — 59% — and it
+// pushed a deployed session past the proxy's 60k cap into a 413. Reasoning is
+// regenerated each turn and the providers emitting these fields document that
+// they are not to be sent back, so history keeps role/content/tool_calls only.
+test('a thinking model’s reasoning is not echoed back on the next request', async () => {
+  const bodies = [];
+  const messages = [{ role: 'user', content: 'hi' }];
+  await runAgentTurn({
+    fetchFn: scriptedFetch([
+      completion({
+        role: 'assistant',
+        content: 'working on it',
+        reasoning_content: 'X'.repeat(5000),
+        reasoning: 'Y'.repeat(5000),
+        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'compile', arguments: '{}' } }],
+      }),
+      completion({ role: 'assistant', content: 'done' }),
+    ], bodies),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages, runTool: async () => 'compiled OK',
+  });
+
+  // The SECOND request carries the first answer back — without the thinking.
+  const sent = JSON.stringify(bodies[1]);
+  assert.ok(!sent.includes('XXXXX'), 'reasoning_content must not be re-sent');
+  assert.ok(!sent.includes('YYYYY'), 'reasoning must not be re-sent');
+
+  const assistant = bodies[1].messages.find((m) => m.role === 'assistant');
+  assert.deepEqual(Object.keys(assistant).sort(), ['content', 'role', 'tool_calls']);
+  assert.equal(assistant.content, 'working on it');
+  assert.equal(assistant.tool_calls[0].function.name, 'compile');
+});
+
+test('an assistant turn with no content keeps the tool_calls and adds no empty fields', async () => {
+  const bodies = [];
+  const messages = [{ role: 'user', content: 'hi' }];
+  await runAgentTurn({
+    fetchFn: scriptedFetch([
+      completion({ role: 'assistant', content: '', reasoning_content: 'thinking…',
+        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'get_song', arguments: '{}' } }] }),
+      completion({ role: 'assistant', content: 'ok' }),
+    ], bodies),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages, runTool: async () => 'setBPM(120);',
+  });
+  const assistant = bodies[1].messages.find((m) => m.role === 'assistant');
+  assert.deepEqual(Object.keys(assistant).sort(), ['role', 'tool_calls']);
+});
