@@ -18,7 +18,14 @@
 // SDK — same system prompt, same tools, same verdict, so the numbers compare:
 //
 //   BASE_URL=http://localhost:11434/v1 MODEL=gemma4:12b node bench-drums.mjs
-//   BASE_URL=https://cloud-api.near.ai/v1 MODEL=Qwen/Qwen3.5-122B-A10B node bench-drums.mjs
+//   BASE_URL=https://cloud-api.near.ai/v1 MODEL=Qwen/Qwen3.6-35B-A3B-FP8 node bench-drums.mjs
+//   THINKING=off ... node bench-drums.mjs      # disable a reasoning model's CoT
+//
+// THINKING=off answers "is the thinking earning its keep?", which is not
+// obvious: it is far cheaper per call and was clearly worse per TASK — 0/2
+// against 1/2, 22 tool calls against 13, and 311k input tokens against 164k,
+// because a model that reasons less takes more turns to get anywhere. Note
+// reasoning_effort is ignored by Qwen; chat_template_kwargs is the live knob.
 //
 // The key for a remote endpoint comes from API_KEY or ~/.nearai_api_key.
 // Caveat when reading results across backends: this bench exposes the SIX song
@@ -274,6 +281,10 @@ async function runOnceOpenAI(index) {
         body: JSON.stringify({
           model: MODEL, messages, tools, tool_choice: 'auto',
           stream: true, stream_options: { include_usage: true },
+          // THINKING=off disables a reasoning model's chain of thought. Qwen
+          // ignores reasoning_effort; this is the knob it honours.
+          ...(process.env.THINKING === 'off'
+            ? { chat_template_kwargs: { enable_thinking: false } } : {}),
         }),
       });
     } catch (e) {
