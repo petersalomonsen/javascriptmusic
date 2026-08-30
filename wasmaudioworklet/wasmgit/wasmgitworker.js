@@ -412,8 +412,19 @@ onmessage = async (msg) => {
       postMessage({ filename: msg.data.filename, error: JSON.stringify(e) });
     }
   } else if (msg.data.command === 'log') {
-    callAndCaptureOutput(['log']);
-    postMessage({ log: stdout });
+    // A repo with no commits has no HEAD, and `git log` FAILS there rather than
+    // printing nothing. Uncaught, that exception escapes onmessage, { log } is
+    // never posted, and gitLog() — whose promise has no reject path — hangs its
+    // caller forever. That stalled a whole studio-agent turn: the agent called
+    // git_log on a fresh workspace and the turn never came back. An empty log is
+    // the honest answer for a repo with no commits, which is what git_log's own
+    // `|| '(no commits yet)'` was already written to expect.
+    try {
+      callAndCaptureOutput(['log']);
+      postMessage({ log: stdout });
+    } catch (e) {
+      postMessage({ log: '', error: stderr || (e && e.message) || String(e) });
+    }
   } else {
     const args = msg.data.args || [];
     try {
