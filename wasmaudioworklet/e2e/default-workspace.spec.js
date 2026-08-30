@@ -106,3 +106,26 @@ test('without the opt-in, localhost keeps the classic no-repo boot with the MIDI
     expect(await page.evaluate(() => !!document.querySelector('app-javascriptmusic')
         .shadowRoot.querySelector('wasmgit-ui'))).toBe(false);
 });
+
+// A fresh workspace repo has no commits, so it has no HEAD — and `git log`
+// FAILS there rather than printing nothing. The worker's log branch used to run
+// uncaught, so the exception escaped onmessage, `{ log }` was never posted, and
+// gitLog()'s promise (which has no reject path and no timeout) never settled.
+// The studio agent called git_log on a first visit and the whole turn hung
+// forever with no error — the worst shape a failure can take.
+test('git_log on a fresh workspace returns instead of hanging forever', async ({ page }) => {
+    await page.goto('http://localhost:8080/?defaultrepo=1');
+    await waitForAppReady(page);
+    await page.waitForFunction(() => typeof window.studioAgentRunTool === 'function', { timeout: 30000 });
+
+    // Race it: the bug is a promise that never settles, so a plain await would
+    // hang the whole run rather than fail it.
+    const outcome = await page.evaluate(async () => await Promise.race([
+        window.studioAgentRunTool('git_log').then((v) => ({ settled: true, value: String(v) })),
+        new Promise((resolve) => setTimeout(() => resolve({ settled: false }), 20000)),
+    ]));
+
+    expect(outcome.settled).toBe(true);
+    // An empty history is the honest answer, and git_log already words it.
+    expect(outcome.value).toContain('no commits yet');
+});
