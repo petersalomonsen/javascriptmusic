@@ -50,6 +50,25 @@ export const SERVERLESS_PROMPT_SUFFIX = `
 - Read/Glob/Grep are NOT available. To read repository reference files (examples, docs) use read_repo_file(path) with a repo-relative path.
 - Keep replies short; each tool call is a full network round-trip.`;
 
+// What goes BACK to the API from an assistant turn: role, content, tool_calls.
+// Nothing else.
+//
+// A thinking model answers with its private reasoning attached —
+// `reasoning_content` under the DeepSeek/Qwen convention, `reasoning` elsewhere.
+// Pushing the raw message kept all of it in the history and re-sent every past
+// thought on every subsequent request. In a real four-ask session that was 59%
+// of the whole conversation: 34,745 of 61,612 chars, which is what pushed a
+// deployed session past the proxy's 60k cap and 413'd it. Dropping it puts the
+// same session at 26,867.
+//
+// This is not a heuristic — reasoning is generated fresh each turn and the
+// providers that emit these fields document that they are not to be sent back.
+const forHistory = (msg) => ({
+  role: msg.role ?? 'assistant',
+  ...(msg.content ? { content: msg.content } : {}),
+  ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}),
+});
+
 // Run ONE user turn: call the model, execute tool calls against runTool, feed
 // results back, repeat until the model answers without tool calls (or the
 // iteration cap is hit). Mutates and returns `messages` (the caller owns and
@@ -97,7 +116,7 @@ export async function runAgentTurn({
     const data = await response.json();
     const msg = data.choices?.[0]?.message;
     if (!msg) throw new Error('NEAR AI: empty response (no choices[0].message)');
-    messages.push(msg);
+    messages.push(forHistory(msg));
 
     if (msg.content) onText(msg.content);
 
