@@ -29,7 +29,14 @@ function startMockAgentServer() {
         socket.on('message', (data) => {
             let msg;
             try { msg = JSON.parse(data.toString()); } catch { return; }
-            if (msg.t === 'chat') state.chats.push(msg);
+            // Answer the turn. The client runs strictly one turn at a time, so a
+            // mock that only records and never replies leaves it busy forever and
+            // the next send is (correctly) refused.
+            if (msg.t === 'chat') {
+                state.chats.push(msg);
+                socket.send(JSON.stringify({ t: 'text', text: 'ok' }));
+                socket.send(JSON.stringify({ t: 'done' }));
+            }
         });
     });
     const waitForClient = async (timeoutMs = 30000) => {
@@ -124,6 +131,9 @@ test.describe('studio-agent project kit', () => {
 
         await typeIntoAgentChat(page, 'first');
         await mock.waitForChat();
+        // Wait for the turn to FINISH, not merely to arrive: a second message
+        // sent into a running turn is refused, which is the point of the guard.
+        await expect(page.locator('#studioagentstatus')).toHaveClass(/idle/, { timeout: 15000 });
         await typeIntoAgentChat(page, 'second');
         await expect.poll(() => mock.state.chats.length).toBe(2);
 
