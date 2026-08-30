@@ -8,7 +8,18 @@
 // tools backed by the jsDelivr CDN instead of local disk.
 
 export const DEFAULT_BASE_URL = 'https://cloud-api.near.ai/v1';
-export const DEFAULT_MODEL = 'Qwen/Qwen3.5-122B-A10B';
+// ONE model, picked for being the lightest that still does the job. Measured on
+// the drum bench (tools/studio-agent/bench-drums.mjs), 2 runs each:
+//
+//   Qwen3.6-35B-A3B   2/2   6.0 tool calls    22-32s     <- this
+//   qwen3.5-397b-a17b 2/2  11.0 tool calls    56-350s
+//   Qwen3.8-27B       1/2   6.5 tool calls    81-113s
+//
+// It is a 35B MoE with only ~3B active, which is why it answers in a third of
+// the time of the dense 27B and still passed both runs. Re-run the bench before
+// changing this — the previous default outlived its own catalogue entry and
+// every request 400'd with "Model not found" until someone noticed.
+export const DEFAULT_MODEL = 'Qwen/Qwen3.6-35B-A3B-FP8';
 
 // cloud-api.near.ai only CORS-allowlists localhost origins — anywhere else
 // (webassemblymusic.pages.dev etc.) goes through the same-origin Pages
@@ -35,6 +46,7 @@ export function toOpenAiTools(defs = SHARED_TOOL_DEFS) {
 export const SERVERLESS_PROMPT_SUFFIX = `
 
 ## Serverless mode adjustments
+- Call every tool by its BARE name (\`set_song\`, \`compile\`). There is no \`mcp__\` prefix here; a prefixed name is not a tool and will fail.
 - Read/Glob/Grep are NOT available. To read repository reference files (examples, docs) use read_repo_file(path) with a repo-relative path.
 - Keep replies short; each tool call is a full network round-trip.`;
 
@@ -93,7 +105,10 @@ export async function runAgentTurn({
       return { messages, usage: data.usage };
     }
     for (const call of msg.tool_calls) {
-      const name = call.function?.name;
+      // Belt and braces: the tools are registered bare here, but the MCP-style
+      // prefix is all over this project's own transcripts and docs, so a model
+      // may still reach for it. Accept it rather than answering "no such tool".
+      const name = (call.function?.name || '').replace(/^mcp__studio__/, '');
       let args = {};
       let result;
       try {

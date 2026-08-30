@@ -41,6 +41,12 @@ export const modelFor = (env = {}) => env.NEARAI_MODEL || MODEL;
 // tokens, on top of a ~11.6k-token system prompt and tool schemas.
 const MAX_MESSAGES_CHARS = 60000;
 
+// The client may send its own system prompt, so it needs its own budget. The
+// app's default is ~38k chars; this leaves room for that plus a project kit
+// without letting the system slot become an unbounded free-text channel.
+// Worst case in: 140k chars ~ 35k tokens, against a 2k-token output cap.
+const MAX_SYSTEM_CHARS = 80000;
+
 // Bounds the expensive half of a request. Output costs several times input on
 // every model we would consider, and was previously unbounded.
 const MAX_COMPLETION_TOKENS = 2000;
@@ -132,19 +138,43 @@ export async function onRequest(context) {
   }
 
   const clientMessages = Array.isArray(body.messages) ? body.messages : [];
-  // The proxy ONLY forwards the conversation — never a client system prompt.
   const conversation = clientMessages.filter((m) => m && m.role !== 'system');
   if (JSON.stringify(conversation).length > MAX_MESSAGES_CHARS) {
     return new Response(JSON.stringify({ error: 'conversation too large' }),
       { status: 413, headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) } });
   }
 
+  // The client owns the system prompt. This used to be enforced here on the
+  // theory that it stopped the endpoint being used as a general-purpose LLM —
+  // but it never did: a pass-holder already writes every user turn, and asking
+  // the model in plain language to ignore its instructions works about as well
+  // as replacing them. What actually bounds this endpoint is the x402 pass, the
+  // two size caps, the server-chosen model, and the upstream key's own spend
+  // limit. So the prompt is the app's to control, which lets it ship prompt
+  // fixes without a redeploy and lets a project carry its own conventions.
+  //
+  // The MODEL stays ours: unlike the prompt, picking a costlier one is a direct
+  // and unbounded draw on the key that pays for this.
+  //
+  // Note for cost: a client sending the DEFAULT prompt sends identical bytes to
+  // what this file would have injected, so upstream prompt caching still hits.
+  // Only a customised prompt pays for its own cache miss.
+  const clientSystem = clientMessages.filter((m) => m && m.role === 'system')
+    .map((m) => (typeof m.content === 'string' ? m.content : ''))
+    .join('\n\n')
+    .trim();
+  if (clientSystem.length > MAX_SYSTEM_CHARS) {
+    return new Response(JSON.stringify({ error: 'system prompt too large' }),
+      { status: 413, headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) } });
+  }
+  const systemPrompt = clientSystem || SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX;
+
   const upstreamBody = {
     // The client's `model` is ignored: we pay, so we choose.
     model: modelFor(env || {}),
     max_tokens: MAX_COMPLETION_TOKENS,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX },
+      { role: 'system', content: systemPrompt },
       ...conversation,
     ],
     tools: toOpenAiTools(),
