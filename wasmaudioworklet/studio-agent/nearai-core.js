@@ -63,10 +63,35 @@ export const SERVERLESS_PROMPT_SUFFIX = `
 //
 // This is not a heuristic — reasoning is generated fresh each turn and the
 // providers that emit these fields document that they are not to be sent back.
+// A model can also emit a tool call whose `arguments` is not valid JSON — most
+// often the empty string. The CALL itself copes either way: an empty string is
+// falsy, so the loop below reads it as "no arguments" and runs the tool with {};
+// a malformed non-empty string is caught and answered with an error result.
+// The problem was the message staying in the history verbatim, so
+// every LATER request carried it and the provider rejected the whole
+// conversation with "Assistant tool call function.arguments must be valid JSON".
+// One malformed call bricked the session permanently: no further turn could
+// succeed, whatever the user typed.
+//
+// The call cannot simply be dropped — an assistant tool_call must stay paired
+// with its tool result or the history is malformed a different way. So the
+// arguments are normalised to an empty object, which is both valid and honest
+// about what was actually supplied.
+const isJson = (s) => {
+  if (typeof s !== 'string') return false;
+  try { JSON.parse(s); return true; } catch { return false; }
+};
+
 const forHistory = (msg) => ({
   role: msg.role ?? 'assistant',
   ...(msg.content ? { content: msg.content } : {}),
-  ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}),
+  ...(msg.tool_calls?.length
+    ? {
+      tool_calls: msg.tool_calls.map((c) => (isJson(c?.function?.arguments)
+        ? c
+        : { ...c, function: { ...c.function, arguments: '{}' } })),
+    }
+    : {}),
 });
 
 // Run ONE user turn: call the model, execute tool calls against runTool, feed
