@@ -156,11 +156,19 @@ test('the deployment can pick the model without a code change', async () => {
   assert.equal(modelFor({}), MODEL);
 });
 
-test('completion length is capped — output is the expensive half', async () => {
+// Bounded, but not so tight that a thinking model spends the whole budget on
+// reasoning and returns nothing — a real turn came back with finish_reason
+// "length", completion_tokens 2000 of a 2000 cap and reasoning_tokens 2001,
+// having burned 23k of paid input for no output at all. A cap that forces the
+// user to send it all again is not bounding spend, it is doubling it. So the
+// floor matters as much as the ceiling here.
+test('completion length is capped, with room for thinking AND an answer', async () => {
   const captured = captureFetch();
   await onRequest(chat({ messages: [{ role: 'user', content: 'hi' }] }));
   assert.equal(typeof captured.body.max_tokens, 'number');
-  assert.ok(captured.body.max_tokens > 0 && captured.body.max_tokens <= 4000,
+  assert.ok(captured.body.max_tokens >= 4000,
+    `too tight for a reasoning model to finish a turn: ${captured.body.max_tokens}`);
+  assert.ok(captured.body.max_tokens <= 32000,
     `unbounded or absurd max_tokens: ${captured.body.max_tokens}`);
 });
 

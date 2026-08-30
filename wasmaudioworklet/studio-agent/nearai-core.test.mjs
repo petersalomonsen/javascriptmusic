@@ -292,3 +292,29 @@ test('a turn that produces no answer is reported as such, not as done', async ()
   });
   assert.strictEqual(silent.answered, false);
 });
+
+// "no answer" has two causes that need different responses. A model that simply
+// stops has nothing more to say; one cut off at the token limit was mid-thought
+// and would have carried on. A real turn hit the second: finish_reason "length",
+// completion_tokens 2000 against a 2000 cap, reasoning_tokens 2001 — the whole
+// output budget spent thinking, 23k of input paid for, nothing returned.
+test('a turn cut off at the token limit is distinguishable from one that just stopped', async () => {
+  const cutOff = await runAgentTurn({
+    fetchFn: async () => ok({
+      choices: [{ message: { role: 'assistant', reasoning_content: 'thinking…' }, finish_reason: 'length' }],
+      usage: { completion_tokens: 2000, reasoning_tokens: 2001 },
+    }),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages: [{ role: 'user', content: 'hi' }], runTool: async () => 'ok',
+  });
+  assert.strictEqual(cutOff.answered, false);
+  assert.strictEqual(cutOff.finishReason, 'length');
+
+  const justStopped = await runAgentTurn({
+    fetchFn: async () => ok({ choices: [{ message: { role: 'assistant', content: 'here' }, finish_reason: 'stop' }] }),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages: [{ role: 'user', content: 'hi' }], runTool: async () => 'ok',
+  });
+  assert.strictEqual(justStopped.answered, true);
+  assert.strictEqual(justStopped.finishReason, 'stop');
+});
