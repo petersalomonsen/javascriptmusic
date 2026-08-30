@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
-import { SYSTEM_PROMPT } from './prompt.mjs';
+import { SYSTEM_PROMPT, SDK_PROMPT_SUFFIX } from './prompt.mjs';
 import { toolDefsFor, sdkToolNames } from '../../wasmaudioworklet/studio-agent/tools-def.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -216,8 +216,10 @@ const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 // of spending a round-trip discovering them. Identical text every turn keeps
 // the cached prefix intact; a changed kit costs one cold turn, as it should.
 function systemPromptWith(kit) {
-  if (!kit || !kit.trim()) return SYSTEM_PROMPT;
-  return `${SYSTEM_PROMPT}\n\n## Project kit (from the project's AGENT.md)\n\n` +
+  // This path drives the tools over MCP, so it owns the mcp__studio__ naming rule.
+  const base = SYSTEM_PROMPT + SDK_PROMPT_SUFFIX;
+  if (!kit || !kit.trim()) return base;
+  return `${base}\n\n## Project kit (from the project's AGENT.md)\n\n` +
     `These are the user's instructions for THIS project — instrument sources, ` +
     `channel layout and conventions. Prefer them over generic defaults, and use ` +
     `them directly instead of searching the repository for the same information.` +
@@ -374,7 +376,7 @@ async function sendCompactSummary(send, sid) {
 
 // Run /compact on the session between turns (chats are serialized through
 // chatChain, so a message the user sends meanwhile simply waits for this).
-async function autoCompact(send, sid, contextTokens, systemPrompt = SYSTEM_PROMPT) {
+async function autoCompact(send, sid, contextTokens, systemPrompt = SYSTEM_PROMPT + SDK_PROMPT_SUFFIX) {
   dlog(`auto-compact: context ~${Math.round(contextTokens / 1000)}k tokens > ${Math.round(COMPACT_THRESHOLD / 1000)}k threshold`);
   send({ t: 'compacting', tokens: contextTokens });
   logEvent({ kind: 'autocompact', sessionId: sid, contextTokens });

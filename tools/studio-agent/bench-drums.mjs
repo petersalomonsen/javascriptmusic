@@ -14,6 +14,18 @@
 //   MODE=new RUNS=5 MODEL=haiku node bench-drums.mjs          # working tree
 //   MODE=old BASE=<git-ref> RUNS=5 node bench-drums.mjs        # control arm
 //
+// Other models go through an OpenAI-compatible endpoint instead of the Agent
+// SDK — same system prompt, same tools, same verdict, so the numbers compare:
+//
+//   BASE_URL=http://localhost:11434/v1 MODEL=gemma4:12b node bench-drums.mjs
+//   BASE_URL=https://cloud-api.near.ai/v1 MODEL=Qwen/Qwen3.5-122B-A10B node bench-drums.mjs
+//
+// The key for a remote endpoint comes from API_KEY or ~/.nearai_api_key.
+// Caveat when reading results across backends: this bench exposes the SIX song
+// tools it implements, not the app's full 24, so the schema load is ~700 tokens
+// rather than ~2.8K. The 10K-token system prompt — the dominant load — is
+// identical either way.
+//
 // The control arm extracts prompt.js/tools-core.js from BASE (default HEAD) into
 // a temp dir, so it needs no setup. Per-run songs and the warnings the model
 // actually saw are written to <tmp>/bench-<mode>.json for inspection.
@@ -24,10 +36,11 @@ import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { compileSong } from '../../wasmaudioworklet/midisequencer/songcompiler.js';
+import { SERVERLESS_PROMPT_SUFFIX } from '../../wasmaudioworklet/studio-agent/nearai-core.js';
 // Measurement always uses the current analysis code — it is the yardstick, not
 // the thing under test.
 import {
@@ -41,6 +54,13 @@ const RUNS = Number(process.env.RUNS || 3);
 const MODEL = process.env.MODEL || 'haiku';
 const BASE = process.env.BASE || 'HEAD';
 const OUT_DIR = process.env.OUT_DIR || tmpdir();
+// Set BASE_URL to drive any OpenAI-compatible server (Ollama, NEAR AI, …)
+// instead of the Agent SDK.
+const BASE_URL = process.env.BASE_URL || null;
+const KEY_FILE = resolve(homedir(), '.nearai_api_key');
+const API_KEY = process.env.API_KEY
+  || (BASE_URL && !/localhost|127\.0\.0\.1/.test(BASE_URL) && existsSync(KEY_FILE)
+      ? readFileSync(KEY_FILE, 'utf8').trim() : '');
 
 // The control arm is the same two modules as they were at BASE. They import
 // nothing from the repo, so a plain `git show` into a temp file is enough.
@@ -120,60 +140,215 @@ async function verdict(source) {
 }
 
 // ---- the studio tools, Node-side, faithful to client.js's return strings ----
-function makeTools(state) {
+// Plain async functions returning the tool's text. Both backends drive these:
+// the Agent SDK wraps them as MCP tools, the OpenAI path calls them directly.
+function toolImpls(state) {
   const summarize = async () => {
     const events = await compileSong(state.song);
     state.events = events;
     return core.summarizeSongEvents(events, core.songBpmFromSource(state.song),
       { instruments: core.declaredInstruments(state.song) });
   };
-  const ok = (text) => ({ content: [{ type: 'text', text: text || 'ok' }] });
+  return {
+    get_song: {
+      description: 'Read the current song document.',
+      shape: {},
+      run: async () => state.song,
+    },
+    set_song: {
+      description: 'Replace the entire song document. Provide the full new source.',
+      shape: { source: z.string() },
+      run: async ({ source }) => {
+        state.song = source ?? '';
+        return ['song updated', ...core.songSourceWarnings(state.song)].join(' ');
+      },
+    },
+    edit_song: {
+      description: 'Surgically find-and-replace in the song document IN PLACE.',
+      shape: { old_string: z.string(), new_string: z.string(), replace_all: z.boolean().optional() },
+      run: async (args) => {
+        const r = core.applyEditToText(state.song, args);
+        if (r.error) throw new Error(r.error);
+        state.song = r.text;
+        return [`song edited (${r.count} replacement(s))`, ...core.songSourceWarnings(r.text)].join(' ');
+      },
+    },
+    grep_song: {
+      description: 'Search the song document for a regex.',
+      shape: { pattern: z.string(), context: z.number().optional() },
+      run: async (args) => String(core.grepText(state.song, args)),
+    },
+    compile: {
+      description: 'Compile the current song + synth and report problems.',
+      shape: {},
+      run: async () => ['compiled OK', ...core.songEventWarnings(await summarize())].join('\n'),
+    },
+    song_summary: {
+      description: 'What the song ACTUALLY plays, from the compiled MIDI event list.',
+      shape: {},
+      run: async () => core.formatSongSummary(await summarize()),
+    },
+  };
+}
 
+// JSON Schema for the OpenAI tool format, from the same zod shapes.
+const JSON_SCHEMA = {
+  get_song: { type: 'object', properties: {} },
+  set_song: { type: 'object', properties: { source: { type: 'string', description: 'full new song source' } }, required: ['source'] },
+  edit_song: {
+    type: 'object',
+    properties: {
+      old_string: { type: 'string' }, new_string: { type: 'string' },
+      replace_all: { type: 'boolean' },
+    },
+    required: ['old_string', 'new_string'],
+  },
+  grep_song: { type: 'object', properties: { pattern: { type: 'string' }, context: { type: 'number' } }, required: ['pattern'] },
+  compile: { type: 'object', properties: {} },
+  song_summary: { type: 'object', properties: {} },
+};
+
+function makeTools(state) {
+  const impls = toolImpls(state);
+  const ok = (text) => ({ content: [{ type: 'text', text: text || 'ok' }] });
+  const wrap = (name) => tool(name, impls[name].description, impls[name].shape, async (args) => {
+    try {
+      return ok(await impls[name].run(args ?? {}));
+    } catch (e) {
+      return { content: [{ type: 'text', text: `ERROR: ${e.message}` }], isError: true };
+    }
+  });
   return createSdkMcpServer({
     name: 'studio',
     version: '0.0.1',
-    tools: [
-      tool('get_song', 'Read the current song document.', {}, async () => ok(state.song)),
-      tool('set_song', 'Replace the entire song document. Provide the full new source.',
-        { source: z.string() }, async ({ source }) => {
-          state.song = source;
-          return ok(['song updated', ...core.songSourceWarnings(source)].join(' '));
-        }),
-      tool('edit_song', 'Surgically find-and-replace in the song document IN PLACE.',
-        { old_string: z.string(), new_string: z.string(), replace_all: z.boolean().optional() },
-        async (args) => {
-          const r = core.applyEditToText(state.song, args);
-          if (r.error) return { content: [{ type: 'text', text: `ERROR: ${r.error}` }], isError: true };
-          state.song = r.text;
-          return ok([`song edited (${r.count} replacement(s))`, ...core.songSourceWarnings(r.text)].join(' '));
-        }),
-      tool('grep_song', 'Search the song document for a regex.',
-        { pattern: z.string(), context: z.number().optional() },
-        async (args) => ok(String(core.grepText(state.song, args)))),
-      tool('compile', 'Compile the current song + synth and report problems.', {}, async () => {
-        try {
-          const s = await summarize();
-          return ok(['compiled OK', ...core.songEventWarnings(s)].join('\n'));
-        } catch (e) {
-          return { content: [{ type: 'text', text: `ERROR: ${e.message}` }], isError: true };
-        }
-      }),
-      tool('song_summary', 'What the song ACTUALLY plays, from the compiled MIDI event list.', {},
-        async () => {
-          try {
-            return ok(core.formatSongSummary(await summarize()));
-          } catch (e) {
-            return { content: [{ type: 'text', text: `ERROR: ${e.message}` }], isError: true };
-          }
-        }),
-    ],
+    tools: Object.keys(impls).map(wrap),
   });
 }
 
 const STUDIO = ['get_song', 'set_song', 'edit_song', 'grep_song', 'compile', 'song_summary'];
 const ALLOWED = [...STUDIO.map((n) => `mcp__studio__${n}`), 'Read', 'Glob', 'Grep'];
 
-async function runOnce(index) {
+// ---- backend B: any OpenAI-compatible endpoint (Ollama, NEAR AI, ...) -------
+// Deliberately a local loop rather than nearai-core's runAgentTurn: that one
+// always sends the app's full 24-tool schema, and this bench implements six.
+// The system prompt and the tools are otherwise identical to backend A.
+async function runOnceOpenAI(index) {
+  const state = { song: START_SONG };
+  const impls = toolImpls(state);
+  const calls = [];
+  const warningTexts = [];
+  let sawWarning = 0;
+  let inp = 0, out = 0;
+  let stop = 'done';
+  const started = Date.now();
+
+  // Match the real serverless path: it sends SYSTEM_PROMPT + the suffix that
+  // tells the model these tools are called by their bare names.
+  const messages = [
+    { role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX },
+    { role: 'user', content: `${TASK}\n\n(The three instruments already exist: kick on channel 0, snare on channel 1, hihat on channel 2. Only the song needs writing.)` },
+  ];
+  const tools = Object.entries(impls).map(([name, d]) => ({
+    type: 'function',
+    function: { name, description: d.description, parameters: JSON_SCHEMA[name] },
+  }));
+  const headers = { 'Content-Type': 'application/json' };
+  if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
+
+  for (let i = 0; i < 40; i++) {
+    // A local model loading 8GB of weights on the first call can blow past
+    // undici's 300s headers timeout. That is a stalled request, not a verdict —
+    // record it and end the run rather than crashing the whole sweep.
+    // STREAM. A local model that has to load 8GB of weights and prefill 10k
+    // tokens can take minutes before the first byte, and a non-streamed request
+    // dies on undici's 300s headers timeout with nothing to show for it.
+    // Streaming makes the server send headers at once, so the only limit is how
+    // long we are willing to wait.
+    let res;
+    try {
+      res = await fetch(`${BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers,
+        // include_usage puts a final usage-only chunk on the stream; without it
+        // most servers report nothing and the token columns read 0.
+        body: JSON.stringify({
+          model: MODEL, messages, tools, tool_choice: 'auto',
+          stream: true, stream_options: { include_usage: true },
+        }),
+      });
+    } catch (e) {
+      stop = `request failed: ${e.cause?.code || e.message}`;
+      break;
+    }
+    if (!res.ok) { stop = `HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`; break; }
+
+    const msg = { role: 'assistant', content: '', tool_calls: [] };
+    let buf = '';
+    try {
+      for await (const chunk of res.body) {
+        buf += Buffer.from(chunk).toString('utf8');
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === '[DONE]') continue;
+          let ev; try { ev = JSON.parse(payload); } catch { continue; }
+          if (ev.usage) {
+            inp += ev.usage.prompt_tokens ?? 0;
+            out += ev.usage.completion_tokens ?? 0;
+          }
+          const d = ev.choices?.[0]?.delta;
+          if (!d) continue;
+          if (d.content) msg.content += d.content;
+          // Tool calls arrive in fragments keyed by index; the name lands in the
+          // first, the JSON arguments accumulate across the rest.
+          for (const tc of d.tool_calls ?? []) {
+            const i = tc.index ?? 0;
+            msg.tool_calls[i] ??= { id: tc.id, type: 'function', function: { name: '', arguments: '' } };
+            if (tc.id) msg.tool_calls[i].id = tc.id;
+            if (tc.function?.name) msg.tool_calls[i].function.name = tc.function.name;
+            if (tc.function?.arguments) msg.tool_calls[i].function.arguments += tc.function.arguments;
+          }
+        }
+      }
+    } catch (e) {
+      stop = `stream failed: ${e.cause?.code || e.message}`;
+      break;
+    }
+    msg.tool_calls = msg.tool_calls.filter(Boolean);
+    if (!msg.tool_calls.length) delete msg.tool_calls;
+    messages.push(msg);
+
+    if (!msg.tool_calls?.length) { stop = 'answered'; break; }
+    for (const call of msg.tool_calls) {
+      // Same tolerance as nearai-core: accept the MCP-prefixed form.
+      const name = (call.function?.name || '').replace(/^mcp__studio__/, '');
+      calls.push(name);
+      let text;
+      try {
+        const args = call.function?.arguments ? JSON.parse(call.function.arguments) : {};
+        text = impls[name] ? await impls[name].run(args) : `ERROR: no such tool "${name}"`;
+      } catch (e) {
+        text = `ERROR: ${e.message}`;
+      }
+      for (const line of String(text).split('\n')) {
+        if (line.includes('WARNING')) { sawWarning++; warningTexts.push(line.slice(0, 220)); }
+      }
+      messages.push({ role: 'tool', tool_call_id: call.id, content: String(text) });
+    }
+    if (i === 39) stop = 'hit the 40-iteration cap';
+  }
+
+  const v = await verdict(state.song);
+  console.log(`\n--- ${MODEL} run ${index + 1}/${RUNS} · ${stop} · ${((Date.now() - started) / 1000).toFixed(0)}s`);
+  console.log(`    tool calls (${calls.length}): ${calls.join(' → ') || '(none)'}`);
+  console.log(`    warnings seen: ${sawWarning} · tokens in ${inp} / out ${out}`);
+  console.log(`    ${v.pass ? 'PASS' : 'FAIL'}: ${v.why}`);
+  return { pass: v.pass, why: v.why, calls, warnings: sawWarning, warningTexts, out, inp, stop, song: state.song };
+}
+
+async function runOnceSdk(index) {
   const state = { song: START_SONG };
   const calls = [];
   const warningTexts = [];
@@ -222,7 +397,9 @@ async function runOnce(index) {
   return { pass: v.pass, why: v.why, calls, warnings: sawWarning, warningTexts, out, inp, song: state.song };
 }
 
-console.log(`bench-drums · MODE=${MODE} · model=${MODEL} · runs=${RUNS} · prompt ${SYSTEM_PROMPT.length} chars`);
+console.log(`bench-drums · MODE=${MODE} · model=${MODEL} · runs=${RUNS} · prompt ${SYSTEM_PROMPT.length} chars`
+  + (BASE_URL ? ` · endpoint ${BASE_URL}` : ' · Agent SDK'));
+const runOnce = BASE_URL ? runOnceOpenAI : runOnceSdk;
 const results = [];
 for (let i = 0; i < RUNS; i++) results.push(await runOnce(i));
 
@@ -231,7 +408,7 @@ console.log(`\n=== ${MODE}: ${results.filter((r) => r.pass).length}/${RUNS} pass
   + `mean ${mean((r) => r.calls.length)} tool calls · mean ${mean((r) => r.out)} output tokens · `
   + `mean ${mean((r) => r.inp)} input tokens`);
 results.forEach((r, i) => console.log(`  run ${i + 1}: ${r.pass ? 'PASS' : 'FAIL'} — ${r.why}`));
-const jsonPath = resolve(OUT_DIR, `bench-${MODE}.json`);
+const jsonPath = resolve(OUT_DIR, `bench-${MODE}-${MODEL.replace(/[^\w.-]+/g, '_')}.json`);
 writeFileSync(jsonPath, JSON.stringify({ mode: MODE, model: MODEL, base: MODE === 'old' ? BASE : null, results }, null, 1));
 console.log(`per-run songs and warnings: ${jsonPath}`);
 results.forEach((r, i) => console.log(`\n--- run ${i + 1} final song (${r.pass ? 'PASS' : 'FAIL'}) ---\n${r.song}`));

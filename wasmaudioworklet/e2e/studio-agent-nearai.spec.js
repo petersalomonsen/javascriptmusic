@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { SYSTEM_PROMPT } from '../studio-agent/prompt.js';
 
 // NEAR AI serverless provider: the agent loop runs IN THE BROWSER against an
 // OpenAI-compatible API (no local studio-agent process). The API is mocked
@@ -40,8 +41,8 @@ test('browser agent loop drives tools against a mocked NEAR AI API', async ({ pa
 
     // Configure the provider through the chat command (stored in localStorage,
     // never in the conversation).
-    await sendChat(page, '/nearai test-api-key Qwen/Qwen3.5-122B-A10B');
-    await expect(chatLog(page)).toContainText('NEAR AI mode ON (model Qwen/Qwen3.5-122B-A10B)');
+    await sendChat(page, '/nearai test-api-key Qwen/Qwen3.6-35B-A3B-FP8');
+    await expect(chatLog(page)).toContainText('NEAR AI mode ON (model Qwen/Qwen3.6-35B-A3B-FP8)');
 
     await sendChat(page, 'set the bpm to 123');
 
@@ -56,7 +57,7 @@ test('browser agent loop drives tools against a mocked NEAR AI API', async ({ pa
 
     // Protocol details: auth header + tools sent + tool result fed back.
     expect(requests.length).toBe(2);
-    expect(requests[0].model).toBe('Qwen/Qwen3.5-122B-A10B');
+    expect(requests[0].model).toBe('Qwen/Qwen3.6-35B-A3B-FP8');
     expect(requests[0].tools.some((t) => t.function.name === 'write_faust')).toBe(true);
     const toolMsg = requests[1].messages.find((m) => m.role === 'tool');
     expect(toolMsg.tool_call_id).toBe('call_1');
@@ -65,7 +66,7 @@ test('browser agent loop drives tools against a mocked NEAR AI API', async ({ pa
     expect(JSON.stringify(requests)).not.toContain('test-api-key');
 });
 
-test('proxy mode (/nearai on): no key, no system prompt, no tools sent — server enforces them', async ({ page }) => {
+test('proxy mode (/nearai on): no key and no tools sent, but the app sends its own system prompt', async ({ page }) => {
     page.on('pageerror', (e) => console.log('[browser-error]', e.message));
     const requests = [];
     // Same-origin proxy path (on localhost the default is direct, so the test
@@ -86,9 +87,16 @@ test('proxy mode (/nearai on): no key, no system prompt, no tools sent — serve
     expect(requests.length).toBe(1);
     expect(requests[0].headers.authorization).toBeUndefined();      // server holds the key
     expect(requests[0].body.tools).toBeUndefined();                  // server injects tools
-    expect(requests[0].body.messages.some((m) => m.role === 'system')).toBe(false); // server injects the prompt
-    // The project kit rides in on the FIRST user turn, never as a system message:
-    // the proxy strips those, and repo content carries user authority anyway.
+    // The PROMPT, unlike the key and the tools, is the app's: the proxy forwards
+    // whatever it is sent and only falls back to its own copy when a client
+    // sends none. That is what lets a prompt fix ship with the app instead of
+    // waiting on a Pages redeploy.
+    const system = requests[0].body.messages.filter((m) => m.role === 'system');
+    expect(system.length).toBe(1);
+    expect(system[0].content.startsWith(SYSTEM_PROMPT.slice(0, 60))).toBe(true);
+    // The project kit still rides in on the FIRST user turn rather than as a
+    // second system message, which keeps the history strictly alternating —
+    // and repo content carries user authority anyway.
     const last = requests[0].body.messages.at(-1);
     expect(last.role).toBe('user');
     expect(last.content.endsWith('hello there')).toBe(true);

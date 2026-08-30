@@ -731,9 +731,11 @@ async function runNearaiTurn(text) {
   nearaiAbort = new AbortController();
   let content = text;
   if (!nearaiMessages) {
-    // In proxy mode the server injects the system prompt (and tools) —
-    // sending them from here would be stripped anyway.
-    nearaiMessages = cfg.proxy ? [] : [{ role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX }];
+    // The app owns the system prompt on BOTH paths now: the proxy forwards
+    // whatever it is sent (bounded, and still gated by the x402 pass) and only
+    // falls back to its own copy when a client sends none. So a prompt fix
+    // ships with the app instead of waiting on a Pages redeploy.
+    nearaiMessages = [{ role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX }];
     // ...and that includes a system message carrying the project kit, so the
     // kit rides in as part of the FIRST user turn instead. That is its honest
     // authority level anyway (repo content is the user talking), and merging
