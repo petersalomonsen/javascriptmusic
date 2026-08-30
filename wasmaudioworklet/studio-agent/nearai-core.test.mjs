@@ -215,3 +215,60 @@ test('an assistant turn with no content keeps the tool_calls and adds no empty f
   const assistant = bodies[1].messages.find((m) => m.role === 'assistant');
   assert.deepEqual(Object.keys(assistant).sort(), ['role', 'tool_calls']);
 });
+
+// A model can emit a tool call whose arguments are not valid JSON — an empty
+// string is the common one. The call itself was already answered with an error,
+// but the malformed message stayed in the history, so every LATER request was
+// rejected by the provider with "Assistant tool call function.arguments must be
+// valid JSON". One bad call bricked the session: no further turn could succeed.
+// Reproduced from a real 400, where message #71 held set_song with arguments "".
+test('a tool call with unparseable arguments does not poison the history', async () => {
+  const bodies = [];
+  const messages = [{ role: 'user', content: 'hi' }];
+  const results = [];
+  await runAgentTurn({
+    fetchFn: scriptedFetch([
+      completion({
+        role: 'assistant',
+        tool_calls: [{ id: 'c1', type: 'function', function: { name: 'set_song', arguments: '' } }],
+      }),
+      completion({ role: 'assistant', content: 'recovered' }),
+    ], bodies),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages, runTool: async (name, args) => { results.push(args); return 'ok'; },
+  });
+
+  const assistant = bodies[1].messages.find((m) => m.role === 'assistant');
+  assert.equal(assistant.tool_calls[0].function.arguments, '{}', 'normalised to valid JSON');
+  JSON.parse(assistant.tool_calls[0].function.arguments); // must not throw
+  assert.equal(assistant.tool_calls[0].function.name, 'set_song', 'the call itself is preserved');
+  // The pairing must survive: an assistant tool_call needs its tool result.
+  const toolMsg = bodies[1].messages.find((m) => m.role === 'tool');
+  assert.equal(toolMsg.tool_call_id, 'c1');
+  // An empty string is FALSY, so the loop reads it as "no arguments" and runs
+  // the tool with {}. That was never the bug — only the history was.
+  assert.deepEqual(results, [{}]);
+  assert.equal(toolMsg.content, 'ok');
+});
+
+test('genuinely malformed arguments are answered with an error and stored valid', async () => {
+  const bodies = [];
+  const messages = [{ role: 'user', content: 'hi' }];
+  const results = [];
+  await runAgentTurn({
+    fetchFn: scriptedFetch([
+      completion({
+        role: 'assistant',
+        tool_calls: [{ id: 'c9', type: 'function', function: { name: 'set_song', arguments: '{"source": ' } }],
+      }),
+      completion({ role: 'assistant', content: 'recovered' }),
+    ], bodies),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages, runTool: async (name, args) => { results.push(args); return 'ok'; },
+  });
+  const assistant = bodies[1].messages.find((m) => m.role === 'assistant');
+  assert.equal(assistant.tool_calls[0].function.arguments, '{}');
+  const toolMsg = bodies[1].messages.find((m) => m.role === 'tool');
+  assert.match(toolMsg.content, /could not parse tool arguments/);
+  assert.deepEqual(results, [], 'the tool is not run with arguments we could not read');
+});

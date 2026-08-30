@@ -317,6 +317,13 @@ async function runOnceOpenAI(index) {
       break;
     }
     msg.tool_calls = msg.tool_calls.filter(Boolean);
+    // A tool call whose arguments never arrived leaves '' here, which is not
+    // valid JSON. Left in the history the provider rejects every LATER request
+    // with "Assistant tool call function.arguments must be valid JSON", so one
+    // empty call ends the run. Same normalisation as nearai-core's forHistory.
+    for (const c of msg.tool_calls) {
+      try { JSON.parse(c.function.arguments); } catch { c.function.arguments = '{}'; }
+    }
     if (!msg.tool_calls.length) delete msg.tool_calls;
     messages.push(msg);
 
