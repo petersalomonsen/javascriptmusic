@@ -94,6 +94,39 @@ const forHistory = (msg) => ({
     : {}),
 });
 
+// Whole-document reads. Each takes no arguments and returns the entire current
+// document, so a later one STRICTLY supersedes every earlier one — the older
+// copies are not merely redundant, they are wrong, and leaving them in context
+// invites the model to edit against a version that no longer exists.
+//
+// A real session held FOUR full copies of the song: 11,754 chars of a 60k
+// conversation budget, three of them stale. Keeping only the newest is both
+// cheaper and more truthful.
+//
+// Deliberately limited to argument-free whole-document reads: read_faust is
+// per-path and grep_song is per-pattern, so a later call supersedes nothing.
+const SUPERSEDING_READS = new Set(['get_song', 'get_synth', 'get_shader']);
+const SUPERSEDED_NOTE = '(superseded — a later read of this document appears below)';
+
+export function pruneSupersededReads(messages) {
+  const toolName = new Map();
+  for (const m of messages) {
+    for (const c of m?.tool_calls ?? []) if (c?.id) toolName.set(c.id, c.function?.name);
+  }
+  const seen = new Set();
+  // Walk backwards so the FIRST one met is the newest, and keep that.
+  const out = messages.slice();
+  for (let i = out.length - 1; i >= 0; i--) {
+    const m = out[i];
+    if (m?.role !== 'tool') continue;
+    const name = toolName.get(m.tool_call_id);
+    if (!SUPERSEDING_READS.has(name)) continue;
+    if (!seen.has(name)) { seen.add(name); continue; }
+    if (m.content !== SUPERSEDED_NOTE) out[i] = { ...m, content: SUPERSEDED_NOTE };
+  }
+  return out;
+}
+
 // Run ONE user turn: call the model, execute tool calls against runTool, feed
 // results back, repeat until the model answers without tool calls (or the
 // iteration cap is hit). Mutates and returns `messages` (the caller owns and
@@ -126,7 +159,7 @@ export async function runAgentTurn({
       response = await fetchFn(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...bodyBase, messages }),
+        body: JSON.stringify({ ...bodyBase, messages: pruneSupersededReads(messages) }),
       });
       const retryable = response.status === 429 || response.status >= 500;
       if (response.ok || !retryable || attempt >= maxRetries) break;
