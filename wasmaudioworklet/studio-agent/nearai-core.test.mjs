@@ -272,3 +272,23 @@ test('genuinely malformed arguments are answered with an error and stored valid'
   assert.match(toolMsg.content, /could not parse tool arguments/);
   assert.deepEqual(results, [], 'the tool is not run with arguments we could not read');
 });
+
+// A thinking model can finish a turn having emitted only reasoning: no content,
+// no tool calls. The loop returned normally and the chat panel logged "done ✓",
+// so the agent looked like it had silently given up mid-task — which is exactly
+// how it reads to someone watching tool calls scroll past and then nothing.
+test('a turn that produces no answer is reported as such, not as done', async () => {
+  const withAnswer = await runAgentTurn({
+    fetchFn: scriptedFetch([completion({ role: 'assistant', content: 'here you go' })], []),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages: [{ role: 'user', content: 'hi' }], runTool: async () => 'ok',
+  });
+  assert.strictEqual(withAnswer.answered, true);
+
+  const silent = await runAgentTurn({
+    fetchFn: scriptedFetch([completion({ role: 'assistant', reasoning_content: 'thinking hard…' })], []),
+    baseUrl: 'https://x/v1', apiKey: 'k', model: 'm',
+    messages: [{ role: 'user', content: 'hi' }], runTool: async () => 'ok',
+  });
+  assert.strictEqual(silent.answered, false);
+});

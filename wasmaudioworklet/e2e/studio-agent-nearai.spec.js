@@ -116,3 +116,39 @@ test('API errors surface in the chat and /nearai off restores the local agent pa
     await expect(chatLog(page)).toContainText('NEAR AI mode off');
     expect(await page.evaluate(() => localStorage.getItem('nearai-api-key'))).toBeNull();
 });
+
+// setBusy() disables the Send BUTTON, but Enter calls form.requestSubmit(),
+// which a disabled button does not stop. So typing a follow-up into a running
+// turn started a second one on top of it: both shared nearaiMessages and wrote
+// into the same agent bubble, producing back-to-back user messages with no
+// assistant turn between them — malformed for a tool-calling conversation — and
+// one reply rendered several times. Watching that, the agent looks like it
+// stopped mid-task and never came back.
+test('a second message cannot start a turn while one is running', async ({ page }) => {
+    page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+    const requests = [];
+    await page.route('https://cloud-api.near.ai/**', async (route) => {
+        requests.push(route.request().postDataJSON());
+        await new Promise((r) => setTimeout(r, 3000));   // a turn that takes a while
+        await route.fulfill({ json: { choices: [{ message: { role: 'assistant', content: 'done' } }], usage: { total_tokens: 7 } } });
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('nearai-api-key', 'test-api-key');
+        localStorage.setItem('nearai-model', 'Qwen/Qwen3.6-35B-A3B-FP8');
+    });
+    await bootApp(page);
+
+    await sendChat(page, 'first');
+    await page.waitForTimeout(600);           // the turn is now in flight
+    await chatInput(page).fill('did it stop?');
+    await chatInput(page).press('Enter');
+
+    await expect(chatLog(page)).toContainText('a turn is still running', { timeout: 5000 });
+    // The refused message stays in the box rather than being swallowed.
+    await expect(chatInput(page)).toHaveValue('did it stop?');
+
+    await expect(chatLog(page)).toContainText('done', { timeout: 15000 });
+    expect(requests.length).toBe(1);
+    // One user turn reached the model, not two in a row.
+    expect(requests[0].messages.filter((m) => m.role === 'user').length).toBe(1);
+});
