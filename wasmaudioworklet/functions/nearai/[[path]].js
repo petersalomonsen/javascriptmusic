@@ -62,7 +62,18 @@ const MAX_SYSTEM_CHARS = 80000;
 // at the same input cost. A cap that forces a retry does not bound spending, it
 // doubles it. This has to leave room for the thinking AND the tool call that
 // follows it.
-const MAX_COMPLETION_TOKENS = 8000;
+//
+// 8000 was still too tight. Measured on the drum bench, the runs that SUCCEED
+// average 7,484 output tokens — within 7% of that ceiling, so ordinary work sat
+// one long thought away from truncation. A five-part restructuring ask needed
+// ~9,200 reasoning tokens before it could answer at all.
+//
+// Turning the thinking OFF was tried and is worse, so the budget is the only
+// lever: chat_template_kwargs {enable_thinking:false} scored 0/2 against 1/2,
+// took 22 tool calls against 13, and — because it flails through more turns —
+// spent 311k input tokens against 164k. Cheaper per call, dearer per task.
+// (reasoning_effort is ignored by this model; that knob does nothing.)
+const MAX_COMPLETION_TOKENS = 16000;
 
 export const ALLOWED_ORIGINS = [
   /^https:\/\/([a-z0-9-]+\.)?webassemblymusic\.pages\.dev$/, // prod + preview deploys
