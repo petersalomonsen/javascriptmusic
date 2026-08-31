@@ -1,0 +1,10 @@
+import("stdfaust.lib");
+freq = hslider("freq", 55, 20, 20000, 0.01);
+gate = button("gate");
+gain = hslider("gain", 0.8, 0, 1, 0.01);
+pitchEnv = en.ar(0.001, 0.055, gate);
+ampEnv = en.ar(0.002, 0.32, gate);
+body = os.osc(freq + freq * 5 * pitchEnv);
+click = no.noise * en.ar(0.0005, 0.012, gate) * 0.35;
+sat(x) = x / (1.0 + abs(x));
+process = sat((body * ampEnv + click) * gain * 2.2) * 1.5;
