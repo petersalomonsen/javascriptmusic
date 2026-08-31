@@ -379,7 +379,7 @@ async function runOnceSdk(index) {
     prompt: `${TASK}\n\n(The three instruments already exist: kick on channel 0, snare on channel 1, hihat on channel 2. Only the song needs writing.)`,
     options: {
       model: MODEL,
-      effort: 'medium',
+      effort: process.env.EFFORT || 'medium',
       cwd: REPO_ROOT,
       systemPrompt: SYSTEM_PROMPT,
       mcpServers: { studio: makeTools(state) },

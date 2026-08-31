@@ -61,7 +61,7 @@ export const TOOL_DEFS = [
 
     // ---- git history of the in-browser OPFS repo ----
     { name: 'git_log', where: 'browser', description: 'Show the commit history of the in-browser OPFS repo (the user commits their work here). Use it to find a commit to restore a file from.', parameters: obj({}) },
-    { name: 'read_committed', where: 'browser', description: 'Read the COMMITTED content of a file from the OPFS git repo at a ref (default HEAD). Path is repo-relative (e.g. "song.js", "faust/bass.dsp"). Use to restore something overwritten in the editor: read_committed then set_song/set_synth it back.', parameters: obj({ path: str('repo-relative path'), ref: str('git ref, default HEAD') }, ['path']) },
+    { name: 'read_committed', where: 'browser', description: 'Read the COMMITTED content of a file from the OPFS git repo at a ref (default HEAD). Path is repo-relative (e.g. "song.js", "faust/bass.dsp"). Use ONLY when the user says something was lost: read_committed then set_song/set_synth it back. An editor that differs from HEAD is the normal state of someone working — do not offer to restore a difference the user has not complained about.', parameters: obj({ path: str('repo-relative path'), ref: str('git ref, default HEAD') }, ['path']) },
 
     // ---- build / transport ----
     { name: 'compile', where: 'browser', description: "SAVE + compile the current song+synth in the browser (same as the app's save button). If a track is already playing, the changes are applied and audible immediately. Returns \"compiled OK\" or the exact compiler error. Call after every edit. There is NO play tool — the user starts playback themselves.", parameters: obj({}) },
