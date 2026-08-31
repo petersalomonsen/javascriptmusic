@@ -129,3 +129,46 @@ test('git_log on a fresh workspace returns instead of hanging forever', async ({
     // An empty history is the honest answer, and git_log already words it.
     expect(outcome.value).toContain('no commits yet');
 });
+
+// write_faust replaces a .dsp wholesale, so an agent composing one from what it
+// wrote earlier discards whatever the user changed by hand in between — that has
+// already cost someone a hand-tuned echo coefficient. edit_faust changes only
+// the text it is given, so everything else survives, including edits the agent
+// never knew about.
+test('edit_faust changes only what it names, leaving hand edits intact', async ({ page }) => {
+    test.setTimeout(180000);
+    await page.goto('http://localhost:8080/?defaultrepo=1');
+    await waitForAppReady(page);
+    await page.waitForFunction(() => typeof window.studioAgentRunTool === 'function', { timeout: 30000 });
+    const run = (name, args) => page.evaluate(([n, a]) => window.studioAgentRunTool(n, a), [name, args]);
+
+    // The agent authors an instrument…
+    const written = await run('write_faust', {
+        path: 'edittest',
+        source: [
+            'import("stdfaust.lib");',
+            'freq = hslider("freq", 440, 20, 20000, 0.01);',
+            'gate = button("gate");',
+            'gain = hslider("gain", 0.5, 0, 1, 0.01);',
+            'feedback = 0.5;   // the user will tune this by hand',
+            'process = os.sawtooth(freq) * en.adsr(0.01, 0.1, 0.7, 0.2, gate) * gain * 0.8;',
+        ].join('\n'),
+    });
+    expect(String(written)).not.toContain('__error');
+
+    // …the USER hand-tunes something in it, which the agent never sees…
+    await run('edit_faust', { path: 'edittest', old_string: 'feedback = 0.5;', new_string: 'feedback = 0.37;' });
+
+    // …and the agent later changes the level, knowing nothing of that edit.
+    const edited = await run('edit_faust', { path: 'edittest', old_string: '* 0.8;', new_string: '* 0.4;' });
+    expect(String(edited)).toContain('1 replacement');
+
+    const dsp = String(await run('read_faust', { path: 'edittest' }));
+    expect(dsp).toContain('* 0.4;');            // the agent's change landed
+    expect(dsp).toContain('feedback = 0.37;');  // the hand edit survived it
+    expect(dsp).not.toContain('feedback = 0.5;');
+
+    // A miss must say so rather than silently writing something else.
+    const missed = await run('edit_faust', { path: 'edittest', old_string: 'not in this file', new_string: 'x' });
+    expect(JSON.stringify(missed)).toMatch(/not found/);
+});

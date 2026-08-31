@@ -131,6 +131,28 @@ const registry = {
     catch (e) { return faustUnavailable(e); }
   },
 
+  // Surgical .dsp edit. Everything a .dsp change needs — transpile, staging,
+  // the editor refresh — already lives in write_faust, so this reads the
+  // CURRENT file, applies the replacement to it, and hands the result over.
+  // Reading first is the whole point: write_faust replaces the file wholesale,
+  // and a source composed from what the agent wrote earlier silently discards
+  // whatever the user changed by hand in between. That has already cost someone
+  // a hand-tuned echo coefficient.
+  edit_faust: async ({ path, old_string, new_string, replace_all }) => {
+    const rel = normDsp(path);
+    let current;
+    try {
+      current = await readfile(FAUST_DIR + rel);
+    } catch (e) {
+      return faustUnavailable(e);
+    }
+    const edited = applyEditToText(current, { old_string, new_string, replace_all });
+    if (edited.error) return { __error: `edit_faust ${rel}: ${edited.error}` };
+    const result = await registry.write_faust({ path: rel, source: edited.text });
+    if (result && result.__error) return result;
+    return `${rel} edited (${edited.count} replacement(s)) and re-transpiled. ${result}`;
+  },
+
   // ---- git history (OPFS repo) — inspect commits / restore a committed file ----
   git_log: async () => {
     try { return (await gitLog()) || '(no commits yet)'; }
