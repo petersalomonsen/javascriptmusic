@@ -15,7 +15,8 @@ import {
 } from './tools-core.js';
 import { probeNote, probeNotes, probeWarnings } from '../audioprobe/instrumentprobe.js';
 import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
-import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX } from './nearai-core.js';
+import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX,
+  compactConversation, conversationChars, COMPACT_AT_CHARS } from './nearai-core.js';
 import { loadPass, clearPass, passRemainingSeconds, HEADER_PASS } from '../near/x402-client.js';
 
 // The same-origin Pages Function. Works in production and, since devserver.js
@@ -750,6 +751,29 @@ async function runNearaiTurn(text) {
     const kit = formatKit((await loadKit()).text);
     if (kit) content = `${kit}\n\n---\n\n${text}`;
   }
+  // Compact BEFORE the turn, not after: the proxy refuses an oversized
+  // conversation outright, so arriving at the cap mid-turn loses the turn. The
+  // SDK path does the same thing at its own threshold.
+  if (conversationChars(nearaiMessages) > COMPACT_AT_CHARS) {
+    addLine('tool', `— compacting the conversation (~${Math.round(conversationChars(nearaiMessages) / 1000)}k chars)… —`);
+    setPhase('compacting…');
+    try {
+      const compacted = await compactConversation({
+        fetchFn: (url, init) => fetch(url, { ...withPass(init), signal: nearaiAbort.signal }),
+        baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model,
+        messages: nearaiMessages, signal: nearaiAbort.signal,
+      });
+      nearaiMessages = compacted.messages;
+      sessionSummary = compacted.summary;
+      saveSession();
+      addLine('tool', `— compacted to ~${Math.round(conversationChars(nearaiMessages) / 1000)}k chars —`);
+    } catch (e) {
+      // A failed compaction must not take the turn with it: the conversation is
+      // long, not broken, and the turn may still fit.
+      addLine('tool', `— could not compact (${String(e?.message || e).slice(0, 80)}); continuing —`);
+    }
+  }
+
   nearaiMessages.push({ role: 'user', content });
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
   try {
