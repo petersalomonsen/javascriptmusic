@@ -8,6 +8,7 @@ import { onRequest, MODEL, modelFor } from './functions/nearai/[[path]].js';
 import { resolveDefaultBaseUrl, DEFAULT_BASE_URL, DEFAULT_MODEL, toOpenAiTools } from './studio-agent/nearai-core.js';
 import { SYSTEM_PROMPT } from './studio-agent/prompt.js';
 import { x402Config, mintPass, HEADER_PASS } from './functions/_x402.js';
+import { runAgentTurn } from './studio-agent/nearai-core.js';
 
 const APP = 'https://webassemblymusic.pages.dev';
 const ENV = { NEARAI_API_KEY: 'SERVER_KEY', PASS_SECRET: 'TEST_PASS_SECRET' };
@@ -255,4 +256,91 @@ test('an exhausted credit pool is NOT reported as "you need a pass"', async () =
   const body = await res.json();
   assert.equal(body.error, 'out_of_credits');
   assert.match(body.message, /still valid/, 'the user should keep their pass');
+});
+
+// ---- the whole serverless path, end to end, with no network -----------------
+//
+// Every proxy test above hands onRequest a body written by hand. Nothing ran the
+// CLIENT LOOP through it, and that gap let three bugs reach a user before they
+// reached a test:
+//
+//   #207  the loop echoed the model's reasoning back, and a session 413'd
+//   #208  a tool call with empty arguments poisoned the history for good
+//   #212  max_tokens was too small for a thinking model to finish a turn
+//
+// None was findable from the direct-key path, which sets no max_tokens and
+// enforces no caps. So: drive runAgentTurn against onRequest, mock only the
+// upstream, and assert on what actually arrives there.
+function upstreamScript(...completions) {
+  const seen = [];
+  let i = 0;
+  globalThis.fetch = async (url, opts = {}) => {
+    seen.push(JSON.parse(opts.body));
+    const body = completions[Math.min(i++, completions.length - 1)];
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  return seen;
+}
+
+const assistant = (extra) => ({ choices: [{ message: { role: 'assistant', ...extra }, finish_reason: extra.tool_calls ? 'tool_calls' : 'stop' }], usage: { total_tokens: 10 } });
+const call = (id, name, args) => ({ id, type: 'function', function: { name, arguments: args } });
+
+test('the client loop through the proxy sends nothing the upstream would reject', async () => {
+  const upstream = upstreamScript(
+    // A thinking model, with a tool call whose arguments never arrived.
+    assistant({ reasoning_content: 'R'.repeat(9000), tool_calls: [call('c1', 'get_song', '')] }),
+    assistant({ reasoning_content: 'R'.repeat(9000), content: 'done' }),
+  );
+
+  const messages = [{ role: 'user', content: 'make a kick' }];
+  await runAgentTurn({
+    // The client's fetch, but pointed at the real Pages Function.
+    fetchFn: async (url, opts) => onRequest(chat(JSON.parse(opts.body))),
+    baseUrl: '/nearai/v1', apiKey: '', model: 'ignored-by-proxy',
+    sendTools: false, messages, runTool: async () => 'setBPM(120);',
+  });
+
+  assert.ok(upstream.length >= 2, 'the loop should have taken more than one trip');
+  for (const [n, body] of upstream.entries()) {
+    // #212 — a budget the model can actually finish a turn inside.
+    assert.ok(body.max_tokens >= 4000, `request ${n}: max_tokens ${body.max_tokens}`);
+    // #207 — the model's own thinking must not be handed back to it.
+    assert.ok(!JSON.stringify(body.messages).includes('RRRRR'),
+      `request ${n} carries reasoning back to the upstream`);
+    for (const m of body.messages) {
+      // #208 — an unparseable arguments string rejects the WHOLE conversation.
+      for (const c of m.tool_calls ?? []) {
+        assert.doesNotThrow(() => JSON.parse(c.function.arguments),
+          `request ${n}: ${c.function.name} has invalid JSON arguments`);
+      }
+    }
+    assert.equal(body.messages[0].role, 'system', `request ${n} lost its system prompt`);
+  }
+});
+
+test('a long session stays inside the proxy cap the direct path never enforces', async () => {
+  // Ten trips, each answering with a document-sized tool result — the shape that
+  // grew a real session past 60k and 413'd it.
+  const upstream = upstreamScript(
+    ...Array.from({ length: 9 }, (_, i) => assistant({
+      reasoning_content: 'R'.repeat(4000),
+      tool_calls: [call(`c${i}`, 'get_song', '{}')],
+    })),
+    assistant({ content: 'finished' }),
+  );
+
+  const messages = [{ role: 'user', content: 'build a track' }];
+  const { messages: after } = await runAgentTurn({
+    fetchFn: async (url, opts) => {
+      const res = await onRequest(chat(JSON.parse(opts.body)));
+      assert.notEqual(res.status, 413, 'the conversation outgrew the proxy cap');
+      return res;
+    },
+    baseUrl: '/nearai/v1', apiKey: '', model: 'm',
+    sendTools: false, messages,
+    runTool: async () => 'setBPM(125);\n' + 'x'.repeat(2500),
+  });
+
+  assert.ok(upstream.length >= 10, `expected the full loop, got ${upstream.length} trips`);
+  assert.ok(after.length > 10, 'history should hold every turn');
 });
