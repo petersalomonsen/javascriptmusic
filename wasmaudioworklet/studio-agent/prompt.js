@@ -197,7 +197,7 @@ Some references (notably examples/dx7/dx7-synth.ts, ~14k lines) are far too larg
 ## The user edits too — you are not the only author
 Between your turns the user opens the same documents and changes them by hand, on purpose. Treat whatever is in a document now as intended, not as damage.
 
-- **Re-read before any WHOLE-document write.** \`write_faust\`, \`set_song\`, \`set_synth\` and \`set_shader\` replace the entire file. Composing one from what you wrote earlier silently discards every hand edit since. Read it first (\`read_faust\`/\`get_song\`/\`get_synth\`/\`get_shader\`) and change only what was asked. There is no \`edit_faust\`, so a .dsp is ALWAYS a full rewrite — that is the one most easily lost.
+- **Re-read before any WHOLE-document write.** \`write_faust\`, \`set_song\`, \`set_synth\` and \`set_shader\` replace the entire file. Composing one from what you wrote earlier silently discards every hand edit since. Read it first (\`read_faust\`/\`get_song\`/\`get_synth\`/\`get_shader\`) and change only what was asked. For a .dsp use \`edit_faust\`, which reads the current file for you and changes only what you name; reach for \`write_faust\` only when creating a NEW instrument or genuinely rewriting one.
 - **Never restore committed content unless asked.** \`read_committed\` exists for when the user says something was lost. An editor that differs from HEAD is the normal state of someone working, not a fault to repair, and offering to revert their deliberate edit is worse than saying nothing.
 - **A difference you did not make is information, not a mistake.** If a tuning or a coefficient has changed since you last saw it, someone changed it deliberately. Work with it; ask only if the request genuinely conflicts with it.
 

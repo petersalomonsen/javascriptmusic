@@ -2,7 +2,10 @@
 // loop (NEAR AI serverless provider). fetch is injected, so no network.
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { runAgentTurn, toOpenAiTools, TOOL_DEFS, pruneSupersededReads } from './nearai-core.js';
+import {
+  runAgentTurn, toOpenAiTools, TOOL_DEFS, pruneSupersededReads,
+  compactConversation, conversationChars, COMPACT_AT_CHARS,
+} from './nearai-core.js';
 
 const ok = (payload) => ({ ok: true, json: async () => payload });
 const completion = (message, usage) => ok({ choices: [{ message }], usage });
@@ -367,4 +370,46 @@ test('documents are superseded independently, and only whole-document reads are'
   assert.equal(at('e'), 'hihat.dsp');
   assert.equal(at('f'), 'match one');
   assert.equal(at('g'), 'match two');
+});
+
+// The proxy refuses a conversation over 60k chars, and a working session reaches
+// that with no waste in it — one real one arrived at 60,892 across 84 messages of
+// genuine work, after the reasoning and the stale document copies were already
+// gone. Pruning buys a fixed slice; only compaction bounds a session.
+test('compaction replaces a long history with a summary of it', async () => {
+  const sent = [];
+  const fetchFn = async (url, opts) => {
+    sent.push(JSON.parse(opts.body));
+    return ok({ choices: [{ message: { role: 'assistant', content: 'built a kick on ch0; user hand-tuned the echo' } }] });
+  };
+  const messages = [
+    { role: 'system', content: 'SYSTEM' },
+    { role: 'user', content: 'make a kick' },
+    { role: 'assistant', tool_calls: [{ id: 'a', type: 'function', function: { name: 'set_song', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'a', content: 'song updated' },
+    { role: 'assistant', content: 'done' },
+  ];
+
+  const out = await compactConversation({ fetchFn, baseUrl: 'https://x/v1', apiKey: 'k', model: 'm', messages });
+
+  // The summary request carries the WHOLE history — that is what it summarises.
+  assert.equal(sent[0].messages.length, messages.length + 1);
+  assert.match(sent[0].messages.at(-1).content, /Summarise this session/);
+
+  // What comes back is a fresh, short history that keeps the system prompt.
+  assert.equal(out.messages[0].content, 'SYSTEM');
+  assert.equal(out.messages.length, 2);
+  assert.equal(out.messages[1].role, 'user', 'the summary is context we supply, not something the model claimed');
+  assert.match(out.messages[1].content, /hand-tuned the echo/);
+  assert.ok(conversationChars(out.messages) < conversationChars(messages));
+  assert.match(out.summary, /kick/);
+});
+
+test('the compaction threshold leaves room under the proxy cap', () => {
+  // 60000 is MAX_MESSAGES_CHARS in functions/nearai. Compacting AT the cap would
+  // be too late: the turn that triggers it still has to fit.
+  assert.ok(COMPACT_AT_CHARS < 60000);
+  assert.ok(COMPACT_AT_CHARS > 20000, 'compacting too eagerly throws away context that still fits');
+  assert.equal(conversationChars([{ role: 'system', content: 'x'.repeat(50000) }]), 2,
+    'the system prompt is not part of the conversation budget');
 });

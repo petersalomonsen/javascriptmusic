@@ -127,6 +127,62 @@ export function pruneSupersededReads(messages) {
   return out;
 }
 
+// The proxy refuses a conversation over 60k chars, and a working session gets
+// there: one real one arrived at 60,892 with no waste left in it — no echoed
+// reasoning, no stale document copies, just 84 messages of genuine work. Pruning
+// buys a fixed slice; only compaction bounds a session.
+//
+// Measured on the conversation the proxy cap already sizes for, so the threshold
+// is a fraction of that rather than an independent guess.
+export const COMPACT_AT_CHARS = 42000;   // 70% of the proxy's 60k
+
+export const conversationChars = (messages) =>
+  JSON.stringify((messages ?? []).filter((m) => m?.role !== 'system')).length;
+
+// Replace a long history with a summary of it, the way the SDK path already
+// compacts: ask the model what has been done and what state the project is in,
+// then start again from that plus the system prompt.
+//
+// A summary, not a truncation. Dropping the oldest turns is cheaper but it
+// severs tool_calls from their results and loses the decisions that explain the
+// current state — and in this app the state IS the point, because the documents
+// carry the work and the conversation carries WHY.
+export async function compactConversation({ fetchFn, baseUrl, apiKey, model, messages, signal }) {
+  const system = messages.find((m) => m.role === 'system');
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
+  const ask = {
+    role: 'user',
+    content: 'Summarise this session for your own future reference, in under 400 words. '
+      + 'Cover: what the user asked for and in what order; what you built and where it lives '
+      + '(instrument names, channels, the shape of the song); anything they corrected you on '
+      + 'or asked you not to do; and anything they changed by hand. Write it as notes to '
+      + 'yourself, not as a report to them. No preamble.',
+  };
+
+  const res = await fetchFn(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers,
+    signal,
+    body: JSON.stringify({ model, messages: [...messages, ask] }),
+  });
+  if (!res.ok) throw new Error(`compaction failed: ${res.status}`);
+  const summary = (await res.json()).choices?.[0]?.message?.content;
+  if (!summary) throw new Error('compaction produced no summary');
+
+  // The summary arrives as a USER turn: it is context the app is supplying, and
+  // a history that starts with the assistant asserting things it cannot see is
+  // a worse starting point than one where it is told them.
+  return {
+    summary,
+    messages: [
+      ...(system ? [system] : []),
+      { role: 'user', content: `Notes from earlier in this session:\n\n${summary}` },
+    ],
+  };
+}
+
 // Run ONE user turn: call the model, execute tool calls against runTool, feed
 // results back, repeat until the model answers without tool calls (or the
 // iteration cap is hit). Mutates and returns `messages` (the caller owns and
