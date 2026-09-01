@@ -152,3 +152,40 @@ test('a second message cannot start a turn while one is running', async ({ page 
     // One user turn reached the model, not two in a row.
     expect(requests[0].messages.filter((m) => m.role === 'user').length).toBe(1);
 });
+
+// The proxy refuses a conversation over 60k chars outright, so a long session
+// simply stops working — one real one reached 60,892 with no waste left in it.
+// The app compacts BEFORE a turn rather than after: arriving at the cap
+// mid-turn loses that turn.
+test('a long conversation is compacted before the next turn, not after it fails', async ({ page }) => {
+    page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+    const asks = [];
+    await page.route('https://cloud-api.near.ai/**', async (route) => {
+        const body = route.request().postDataJSON();
+        const last = body.messages.at(-1)?.content ?? '';
+        asks.push(last.slice(0, 40));
+        // The compaction request is recognisable by what it asks for.
+        const isSummary = /Summarise this session/.test(last);
+        const reply = isSummary
+            ? 'kick on ch0, hihat on ch1; user hand-tuned the echo feedback'
+            // A reply large enough to push the history past the threshold.
+            : 'x'.repeat(45000);
+        await route.fulfill({ json: { choices: [{ message: { role: 'assistant', content: reply } }], usage: { total_tokens: 9 } } });
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('nearai-api-key', 'test-api-key');
+        localStorage.setItem('nearai-model', 'Qwen/Qwen3.6-35B-A3B-FP8');
+    });
+    await bootApp(page);
+
+    await sendChat(page, 'make a kick');
+    await expect(page.locator('#studioagentstatus')).toHaveClass(/idle/, { timeout: 20000 });
+
+    await sendChat(page, 'now a hihat');
+    await expect(chatLog(page)).toContainText('compacting the conversation', { timeout: 20000 });
+    await expect(chatLog(page)).toContainText('compacted to', { timeout: 20000 });
+
+    // The summary was actually requested, and the turn carried on afterwards.
+    expect(asks.some((a) => /Summarise this session/.test(a))).toBe(true);
+    await expect(page.locator('#studioagentstatus')).toHaveClass(/idle/, { timeout: 20000 });
+});
