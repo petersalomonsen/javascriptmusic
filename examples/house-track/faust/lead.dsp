@@ -1,0 +1,10 @@
+import("stdfaust.lib");
+freq = hslider("freq", 440, 20, 20000, 0.01);
+gate = button("gate");
+gain = hslider("gain", 0.7, 0, 1, 0.01);
+vib = 1.0 + 0.006 * os.osc(5.0) * en.ar(0.35, 0.1, gate);
+f = freq * vib;
+tone = os.osc(f) * 0.85 + os.osc(f * 2.0) * 0.12 + os.triangle(f) * 0.15;
+breath = (no.noise : fi.bandpass(2, 1500, 4500)) * 0.06;
+env = en.adsr(0.06, 0.1, 0.85, 0.18, gate);
+process = (tone + breath * env) * env * gain * 0.6;

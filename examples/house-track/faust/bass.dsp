@@ -1,0 +1,10 @@
+import("stdfaust.lib");
+freq = hslider("freq", 55, 20, 20000, 0.01);
+gate = button("gate");
+gain = hslider("gain", 0.8, 0, 1, 0.01);
+env = en.adsr(0.03, 0.15, 0.7, 0.14, gate);
+fenv = en.ar(0.04, 0.3, gate);
+osc = os.sawtooth(freq) * 0.4 + os.osc(freq) * 0.8;
+cutoff = 45 + 700 * fenv;
+sat(x) = x / (1.0 + abs(x));
+process = sat((osc : fi.resonlp(cutoff, 2, 1)) * env * gain * 2.4) * 1.1;
