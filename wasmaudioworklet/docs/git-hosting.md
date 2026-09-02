@@ -44,6 +44,20 @@ The URL is written into `.git/config` (which lives in OPFS), so it **persists
 across reloads** — you only need the param once. `origin` still defaults to the
 NEAR url for `<name>` when `remote=` is omitted.
 
+**Swapping the remote of a repo you already have locally** repoints `origin` and
+nothing else: the OPFS directory is keyed on `?gitrepo=`, not on the remote, so
+the existing working tree and history stay put and no clone happens. That's what
+you want in order to push commits you've already made to a newly created repo —
+but it also means a swap will never pull the new remote's content over your own.
+To start from the new remote instead, either use a different `?gitrepo=` name
+(fresh directory, real clone) or "Delete local" first, then reload.
+
+The push itself asks for credentials when it needs them: if the remote answers
+**401**, "Commit & Sync" prompts for a token and retries the push with it. The
+commit has already been made locally at that point, so the retry is only the
+fetch/merge/push half — nothing is committed twice, and cancelling the prompt
+just leaves the commit unpushed.
+
 > **Non-NEAR remotes need CORS + git-over-HTTP.** Only `/near-repo/*` requests
 > go through the NEAR service worker; any other remote is a normal browser
 > `fetch`, so the target server must speak the git smart-HTTP protocol and send

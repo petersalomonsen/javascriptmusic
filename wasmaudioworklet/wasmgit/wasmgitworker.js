@@ -212,6 +212,7 @@ onmessage = async (msg) => {
     }
 
     let err = null;
+    let httpStatus;
     lastHttpRequest = null;
     try {
       callAndCaptureOutput(['fetch', 'origin']);
@@ -222,11 +223,15 @@ onmessage = async (msg) => {
     } catch (e) {
       err = e.message;
       if (lastHttpRequest) {
-        err += ` http status: ${lastHttpRequest.status}`;
+        httpStatus = lastHttpRequest.status;
+        err += ` http status: ${httpStatus}`;
       }
     }
     console.log(currentRepoDir, 'persisted via OPFS');
-    postMessage({ id: msg.data.id, error: err ? err : undefined, dircontents: readdir() });
+    // The status is reported as its own field, not just appended to the message,
+    // so the client can act on a 401 (ask for a token, retry) without parsing
+    // the error string.
+    postMessage({ id: msg.data.id, error: err ? err : undefined, httpStatus, dircontents: readdir() });
   } else if (msg.data.command === 'synclocal') {
     // Candidates in priority order: the canonical `?gitrepo=`-derived name
     // first, then the LEGACY remote-derived name a pre-#183 `?…&remote=` clone

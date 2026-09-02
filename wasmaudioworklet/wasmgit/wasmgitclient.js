@@ -94,21 +94,41 @@ export async function gitLog() {
 
 const GIT_TOKEN_KEY = 'git-http-token';
 
+function readStoredGitToken() {
+    try { return JSON.parse(sessionStorage.getItem(GIT_TOKEN_KEY) || 'null'); } catch (e) { return null; }
+}
+
+// Ask for a token and hand it to the worker. `label` says WHY we're asking —
+// a first clone, or a push the remote answered with 401. Always prompts, even
+// when one is stored: a stored token that just got rejected is exactly the one
+// that needs replacing. Returns false if the user cancelled/left it empty.
+async function promptForGitToken(label) {
+    const stored = readStoredGitToken();
+    const token = await modalPrompt('GitHub token', label, '');
+    if (!token) { return false; }
+    const entry = {
+        token,
+        username: stored?.username || 'wasmmusic',
+        useremail: stored?.useremail || 'wasmmusic@users.noreply.github.com'
+    };
+    try { sessionStorage.setItem(GIT_TOKEN_KEY, JSON.stringify(entry)); } catch (e) { /* private mode */ }
+    await setGitAuthToken(entry.token, entry);
+    return true;
+}
+
 // Apply a stored (or prompted) BYO git token to the worker BEFORE a clone/push,
 // so a PRIVATE remote repo can authenticate. Only used for `remote=` (gitproxy)
 // repos — NEAR repos use their own credentials.
 async function applyStoredGitToken(promptIfMissing) {
-    let stored = null;
-    try { stored = JSON.parse(sessionStorage.getItem(GIT_TOKEN_KEY) || 'null'); } catch (e) { /* ignore */ }
-    if ((!stored || !stored.token) && promptIfMissing) {
-        const token = await modalPrompt('GitHub token',
-            'Fine-grained PAT (Contents: read/write) to clone/push this repo. Leave empty for a public repo.', '');
-        if (token) {
-            stored = { token, username: 'wasmmusic', useremail: 'wasmmusic@users.noreply.github.com' };
-            try { sessionStorage.setItem(GIT_TOKEN_KEY, JSON.stringify(stored)); } catch (e) { /* ignore */ }
-        }
+    const stored = readStoredGitToken();
+    if (stored && stored.token) {
+        await setGitAuthToken(stored.token, { username: stored.username, useremail: stored.useremail });
+        return true;
     }
-    if (stored && stored.token) { await setGitAuthToken(stored.token, { username: stored.username, useremail: stored.useremail }); return true; }
+    if (promptIfMissing) {
+        return await promptForGitToken(
+            'Fine-grained PAT (Contents: read/write) to clone/push this repo. Leave empty for a public repo.');
+    }
     return false;
 }
 
@@ -193,6 +213,13 @@ export async function initWASMGitClient(gitrepo, remoteUrl) {
         }
     } else {
         console.log('Repository is already local');
+        // No clone ran, so the token hand-off in the branch above didn't either
+        // and the worker would push to a `remote=` host anonymously. Re-apply
+        // whatever this session has; don't prompt — a push that needs a token
+        // asks for one when the remote answers 401 (see commitAndSyncRemote).
+        if (remoteUrl) {
+            await applyStoredGitToken(false);
+        }
     }
     console.log('dircontents', dircontents);
     if (dircontents.indexOf('.git') === -1) {
@@ -359,10 +386,27 @@ export async function commitAndSyncRemote(commitmessage) {
         await sendNearCredentials(auth);
     }
 
-    const dircontents = await callAndWaitForWorker({
+    const push = () => callAndWaitForWorker({
         command: 'commitpullpush',
         commitmessage: commitmessage
     });
+
+    let dircontents;
+    try {
+        dircontents = await push();
+    } catch (e) {
+        // 401 from a `remote=` host means the BYO token is missing, expired or
+        // scoped to the wrong repo — the everyday case being a remote pointed at
+        // a repo the current token doesn't cover, e.g. one just created. Ask for
+        // a token and push again. The commit already landed locally, so the
+        // retry is only the fetch/merge/push half and never double-commits.
+        // NEAR repos are excluded: they authenticate with a key, not a PAT.
+        if (e.httpStatus !== 401 || isNearRepo()) { throw e; }
+        const gotToken = await promptForGitToken(
+            'Push was rejected (401). Fine-grained PAT with Contents: read/write on this repo.');
+        if (!gotToken) { throw e; }
+        dircontents = await push();
+    }
 
     remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(dircontents));
     await repoHasChanges(); // update buttons after sync
