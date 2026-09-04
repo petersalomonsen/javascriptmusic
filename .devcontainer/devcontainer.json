@@ -3,6 +3,17 @@
     // artifacts via `COPY --from=…` so no docker access is needed at
     // runtime. See ./Dockerfile + ./README.md for the design.
     "build": { "dockerfile": "Dockerfile" },
+    // The base image (devcontainers/base:ubuntu) ships no Node at all —
+    // post-create.sh needs node/npm/yarn. Version matches CI's setup-node.
+    "features": {
+        "ghcr.io/devcontainers/features/node:1": { "version": "24" }
+    },
+    // The feature provides `yarn` only as a Corepack shim, and Corepack
+    // asks "Do you want to continue? [Y/n]" before its first download —
+    // which hangs postCreateCommand forever (no tty). Answer it up front.
+    "containerEnv": {
+        "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0"
+    },
     "postCreateCommand": "./.devcontainer/post-create.sh",
     "customizations": {
         "vscode": {
