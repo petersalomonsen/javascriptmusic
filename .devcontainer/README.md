@@ -87,6 +87,24 @@ are not `devcontainer.json` options):
 Then check `ssh-add -l` inside the container — if it lists host keys, the
 SSH agent is still being forwarded.
 
+### From the terminal, without VS Code
+
+`volume-up.sh` does the same thing with the `devcontainer` CLI, which
+forwards none of the above in the first place:
+
+```sh
+npm install -g @devcontainers/cli                 # once
+.devcontainer/volume-up.sh [branch] [volume]      # defaults: master, javascriptmusic-agent
+devcontainer exec --workspace-folder ~/.cache/javascriptmusic-devcontainer/javascriptmusic-agent bash
+```
+
+It clones the branch into the named volume (skipped if the volume already
+holds a clone), copies just the clone's `.devcontainer/` to
+`~/.cache/javascriptmusic-devcontainer/<volume>/` on the host so the image
+is built from the cloned branch, rewrites that config's workspace mount to
+the volume, and runs `devcontainer up`. The `exec` line is printed at the
+end; the container's only mount is the volume.
+
 ## Why "sandbox as a process", not a sibling docker container
 
 Earlier iterations of the test setup booted the sandbox image with
