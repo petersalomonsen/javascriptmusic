@@ -552,3 +552,49 @@ test('summarizeSongEvents still takes song length from the end marker', () => {
   ];
   assert.equal(Math.round(summarizeSongEvents(events, 120).lengthBeats), 8);
 });
+
+// ---- playFromHere(): the user's audition marker ------------------------------
+// The compiled song covers only what follows it, so the digest must say why —
+// a live session read "16 beats, jumppad plays NO notes" as damage and
+// deleted the user's marker to repair it.
+
+import { playFromHereLine } from './tools-core.js';
+
+test('playFromHereLine: finds the live call, skipping commented ones', () => {
+  assert.equal(playFromHereLine('setBPM(125);\n// playFromHere();\n/* playFromHere() */ x();\nplayFromHere();\n'), 4);
+  assert.equal(playFromHereLine('/* multi\nline playFromHere()\n*/ ok\n  playFromHere ( ) // audition\n'), 4);
+  assert.equal(playFromHereLine('loopHere();'), null);
+  assert.equal(playFromHereLine(''), null);
+});
+
+test('playFromHere: the digest and warnings name the marker instead of reporting loss', () => {
+  const events = [];
+  for (let b = 0; b < 16; b++) events.push(noteOn(0, 36, b), noteOff(0, 36, b + 0.5));
+  events.push(endAt(16));
+  const instruments = ['kick', 'hat', 'jumppad'];
+  const s = summarizeSongEvents(events, BPM, { instruments, playFromHereLine: 284 });
+  assert.equal(s.playFromHereLine, 284);
+  const text = formatSongSummary(s);
+  assert.match(text, /^song: 16 beats/);
+  assert.match(text, /playFromHere\(\) at line 284 — the user's audition marker: this digest covers ONLY what follows it/);
+  assert.match(text, /ch1 \('hat'\): no notes after playFromHere\(\) — it may well play in the part before it/);
+  assert.doesNotMatch(text, /DECLARED but plays NO notes/);
+
+  const warnings = songEventWarnings(s);
+  assert.match(warnings[0], /^NOTE: playFromHere\(\) at line 284 — the user is auditioning from there/);
+  assert.ok(!warnings.some((w) => /plays NO notes/.test(w)), 'no declared-silent WARNING behind the marker');
+
+  // without the marker the wording is the original one
+  const plain = summarizeSongEvents(events, BPM, { instruments });
+  assert.match(formatSongSummary(plain), /ch1 \('hat'\): DECLARED but plays NO notes/);
+  assert.ok(songEventWarnings(plain).some((w) => /'hat' \(channel 1\) is declared with addInstrument but plays NO notes/.test(w)));
+  assert.ok(!songEventWarnings(plain).some((w) => /playFromHere/.test(w)));
+});
+
+test('playFromHere with nothing scheduled after it says so, not "nothing moved the playhead"', () => {
+  const s = summarizeSongEvents([endAt(0)], BPM, { instruments: ['kick'], playFromHereLine: 9 });
+  assert.match(formatSongSummary(s), /\(no notes after playFromHere\(\)\)/);
+  const warnings = songEventWarnings(s);
+  assert.ok(warnings.some((w) => /WARNING: no notes after playFromHere\(\) \(line 9\)/.test(w)));
+  assert.ok(!warnings.some((w) => /Nothing moved the playhead/.test(w)));
+});

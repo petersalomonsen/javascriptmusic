@@ -33,8 +33,8 @@
         "test-claude-bridge": "npx playwright test e2e/claude-bridge.spec.js",
         "near-sandbox": "docker run --rm -p 3030:8080 ghcr.io/petersalomonsen/near-git-storage/sandbox:main",
         "test-faust": "node ../tools/faust2as/generate-test-sources.js && npx playwright test e2e/faust2as-compilation.spec.js",
-        "test-agent-tools": "node --test studio-agent/tools-core.test.mjs studio-agent/nearai-core.test.mjs studio-agent/tools-def.test.mjs",
-        "test-quickjs-sandbox": "node --test quickjs-sandbox-poc.test.mjs",
+        "test-agent-tools": "node --test studio-agent/tools-core.test.mjs studio-agent/nearai-core.test.mjs studio-agent/tools-def.test.mjs studio-agent/script-helpers.test.mjs",
+        "test-quickjs-sandbox": "node --test quickjs-sandbox-poc.test.mjs studio-agent/script-sandbox.test.mjs",
         "test-gitproxy": "node --test gitproxy.test.mjs nearai-proxy.test.mjs near/network.test.mjs x402.test.mjs near/x402-client.test.mjs sponsors.test.mjs",
         "test-repozip": "node --test wasmgit/repozip.test.mjs"
     },
