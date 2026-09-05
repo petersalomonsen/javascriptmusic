@@ -23,6 +23,14 @@ needed) as well as locally:
 - Drops a `near-git-sandbox` launcher onto PATH that chdirs into
   `/opt/near-sandbox` and runs `git-server` on `localhost:3030`.
 
+`devcontainer.json` layers the `node` feature (Node 24, matching CI's
+`setup-node`) on top. The base image ships no Node whatsoever, so without
+the feature `post-create.sh` dies on `yarn: command not found`. The
+feature's `yarn` is a Corepack shim that downloads yarn classic on first
+use — `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` in `containerEnv` suppresses
+the interactive "Do you want to continue?" that would otherwise hang
+`postCreateCommand` (no tty).
+
 `post-create.sh` then just does the Node side:
 
 1. Boots `pulseaudio`.
@@ -53,6 +61,49 @@ node tools/faust2as/generate-test-sources.js
 cd wasmaudioworklet
 yarn playwright test --workers=1
 ```
+
+## Running agents inside (no host filesystem)
+
+Use **Dev Containers: Clone Repository in Container Volume…** rather than
+"Reopen in Container": the workspace then lives in a Docker volume with
+no bind mount of the host checkout. (A bind-mounted container also
+rewrites the host's `node_modules` with Linux binaries on `yarn install`,
+breaking local builds until you `yarn install` again on the host.)
+
+The workspace mount is not the only host connection, though. By default
+the VS Code extension also copies `~/.gitconfig` in, wires the host's git
+credential helper into the container, logs the GitHub CLI in with the
+host's token, and forwards the host SSH agent. If the container is meant
+as a sandbox for agents, turn those off in *host* VS Code settings (they
+are not `devcontainer.json` options):
+
+```json
+"dev.containers.copyGitConfig": false,
+"dev.containers.gitCredentialHelperConfigLocation": "none",
+"dev.containers.githubCLILoginWithToken": false,
+"dev.containers.dockerCredentialHelper": false
+```
+
+Then check `ssh-add -l` inside the container — if it lists host keys, the
+SSH agent is still being forwarded.
+
+### From the terminal, without VS Code
+
+`volume-up.sh` does the same thing with the `devcontainer` CLI, which
+forwards none of the above in the first place:
+
+```sh
+npm install -g @devcontainers/cli                 # once
+.devcontainer/volume-up.sh [branch] [volume]      # defaults: master, javascriptmusic-agent
+devcontainer exec --workspace-folder ~/.cache/javascriptmusic-devcontainer/javascriptmusic-agent bash
+```
+
+It clones the branch into the named volume (skipped if the volume already
+holds a clone), copies just the clone's `.devcontainer/` to
+`~/.cache/javascriptmusic-devcontainer/<volume>/` on the host so the image
+is built from the cloned branch, rewrites that config's workspace mount to
+the volume, and runs `devcontainer up`. The `exec` line is printed at the
+end; the container's only mount is the volume.
 
 ## Why "sandbox as a process", not a sibling docker container
 
