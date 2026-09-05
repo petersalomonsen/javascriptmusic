@@ -16,7 +16,9 @@
 // package.json.
 const QUICKJS_WASM_VERSION = '0.0.5';
 
-async function getCreateQuickJS() {
+// Shared with studio-agent/script-sandbox.js, which runs agent scripts in the
+// same engine under the same limits.
+export async function getCreateQuickJS() {
     const { createQuickJS } = (typeof process !== 'undefined' && process.versions && process.versions.node)
         ? await import('quickjs-wasm')
         : await import(`https://cdn.jsdelivr.net/npm/quickjs-wasm@${QUICKJS_WASM_VERSION}/js/quickjs.js`);
@@ -24,8 +26,8 @@ async function getCreateQuickJS() {
 }
 
 // Interrupts a runaway song (while(true){}) instead of hanging the tab.
-const SANDBOX_TIMEOUT_MS = 20000;
-const SANDBOX_MEMORY_LIMIT = 64 * 1024 * 1024;
+export const SANDBOX_TIMEOUT_MS = 20000;
+export const SANDBOX_MEMORY_LIMIT = 64 * 1024 * 1024;
 
 const GUEST_SOURCE_FILES = [
     'sequenceconstants.js',

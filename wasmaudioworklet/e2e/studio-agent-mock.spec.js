@@ -5,7 +5,9 @@ import {
     setupServiceWorker,
     clearOPFS,
     waitForAppReady,
+    waitForStudioAgentTools,
     pushBaseline,
+    specRepo,
 } from './near-git-helpers.js';
 
 // Studio-agent CLIENT tests with a MOCKED agent server (and thus a mocked
@@ -247,5 +249,118 @@ uniform float uTextMix;`,
         expect(res.ok).toBe(false);
         expect(String(res.result)).toContain('unknown tool');
         expect(await page.evaluate(() => !!window.audioworkletnode)).toBe(false);
+    });
+});
+
+// ---- run_script -------------------------------------------------------------
+// The agent's "shell": a snippet in the QuickJS song sandbox over the document
+// text, writing back through the opt-in host function. The unit tests cover
+// the sandbox in Node; this pins the BROWSER path — quickjs-wasm from the CDN,
+// the editors as the write target, the tool queue surviving an interrupted
+// script. Its own local repo, so no NEAR sandbox is needed.
+
+const SCRIPT_REPO = specRepo('studio-agent-run-script');
+
+// A song with a recorded take exactly as the recorder writes it (one row per
+// note, chords as consecutive rows at nearly the same beat), between record
+// markers, with the rest of the song around it.
+const TAKE_SONG = `setBPM(125);
+const pad = createTrack(1, 4);
+startRecording();
+createTrack(2).play([[ 0.60, f7(0.56, 79) ],
+[ 0.07, f5(1.58, 69) ],
+[ 0.08, d5(1.57, 63) ],
+[ 0.07, a5(1.60, 78) ],
+[ 1.49, c7(0.50, 98) ]]);
+stopRecording();
+await waitDuration(4);
+loopHere();
+`;
+
+// The prompt's own worked example: chords to the pad an octave up on the
+// 2-beat grid, melody quantized to 16ths, velocities and durations kept.
+const SPLIT_SCRIPT = `
+const take = findPlayBlocks(song).find(b => b.track === 'createTrack(2)');
+const groups = groupByBeat(take.notes, 0.1);
+const chords = groups.filter(g => g.length > 1).flat()
+  .map(n => ({ ...n, note: n.note + 12, beat: quantizeBeat(n.beat, 0.5) }));
+const melody = groups.filter(g => g.length === 1).flat()
+  .map(n => ({ ...n, beat: quantizeBeat(n.beat, 4) }));
+const replacement = 'pad.play([\\n' + formatNotes(chords, { chords: true }) + ']);\\n'
+  + 'createTrack(2).play([\\n' + formatNotes(melody) + '])';
+await setSong(song.slice(0, take.start) + replacement + song.slice(take.end));
+print(take.notes.length + ' notes: ' + chords.length + ' chord notes to pad (+12), ' + melody.length + ' melody notes quantized');
+`;
+
+test.describe('studio-agent run_script (local repo)', () => {
+    let mock;
+
+    test.beforeEach(() => { mock = startMockAgentServer(); });
+    test.afterEach(async ({ page }) => {
+        await clearOPFS(page, SCRIPT_REPO);
+        await mock.close();
+    });
+
+    test('a recorded take is split in the sandbox and written back, the notes never leaving the browser', async ({ page }) => {
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+        await page.addInitScript((port) => { window.STUDIO_AGENT_PORT = port; }, mock.port());
+        await page.goto(`http://localhost:8080/?gitrepo=${SCRIPT_REPO}`);
+        await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
+        await mock.waitForClient();
+
+        expect((await mock.callTool('set_song', { source: TAKE_SONG })).ok).toBe(true);
+
+        const run = await timedCall(mock, 'run_script', { code: SPLIT_SCRIPT });
+        expect(run.msg.ok).toBe(true);
+        expect(run.secs).toBeLessThan(15);
+        // The tool result is the script's own report plus what was written —
+        // not the notes.
+        expect(String(run.msg.result)).toContain('5 notes: 3 chord notes to pad (+12), 2 melody notes quantized');
+        expect(String(run.msg.result)).toContain('song updated (12 → 12 lines)');
+        expect(String(run.msg.result)).not.toContain('f6(1.58');
+
+        const song = String((await mock.callTool('get_song', {})).result);
+        // chords: pad, an octave up, on the grid, played order and velocities kept
+        expect(song).toContain('pad.play([\n[ 0.00, f6(1.58, 69), a6(1.60, 78), d6(1.57, 63) ]]);');
+        // melody: same channel, quantized, velocities kept
+        expect(song).toContain('createTrack(2).play([\n[ 0.50, f7(0.56, 79) ],\n[ 1.50, c7(0.50, 98) ]]);');
+        expect(song).not.toContain('f5(1.58');
+        // everything around the take survived the splice
+        expect(song).toMatch(/^setBPM\(125\);\nconst pad = createTrack\(1, 4\);\nstartRecording\(\);\n/);
+        expect(song).toMatch(/\nstopRecording\(\);\nawait waitDuration\(4\);\nloopHere\(\);\n$/);
+
+        // A script with no write callback path: reading only.
+        const read = await mock.callTool('run_script', { code: `return findPlayBlocks(song).map(b => b.track + ':' + b.notes.length);` });
+        expect(read.ok).toBe(true);
+        expect(String(read.result)).toBe('returned: ["pad:3","createTrack(2):2"]');
+
+        // A broken script fails the tool with the error, and the document is untouched.
+        const bad = await mock.callTool('run_script', { code: `print('x'); nope();` });
+        expect(bad.ok).toBe(false);
+        expect(String(bad.result)).toMatch(/^x\nERROR: .*nope/);
+        expect(String((await mock.callTool('get_song', {})).result)).toBe(song);
+    });
+
+    test('a runaway script is interrupted and the tool queue stays responsive', async ({ page }) => {
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+        await page.addInitScript((port) => { window.STUDIO_AGENT_PORT = port; }, mock.port());
+        await page.goto(`http://localhost:8080/?gitrepo=${SCRIPT_REPO}`);
+        await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
+        await mock.waitForClient();
+
+        expect((await mock.callTool('set_song', { source: TAKE_SONG })).ok).toBe(true);
+        const loop = await timedCall(mock, 'run_script', { code: `await setSong(song + '// touched\\n'); while (true) {}` }, 60000);
+        expect(loop.msg.ok).toBe(false);
+        expect(String(loop.msg.result)).toContain('did not finish within 20s');
+        expect(String(loop.msg.result)).toContain('song updated'); // the write before the loop stands
+        expect(loop.secs).toBeGreaterThan(15);
+        expect(loop.secs).toBeLessThan(40);
+
+        const g = await timedCall(mock, 'grep_song', { pattern: 'touched' }, 10000);
+        expect(g.msg.ok).toBe(true);
+        expect(String(g.msg.result)).toContain('// touched');
+        expect(g.secs).toBeLessThan(3);
     });
 });
