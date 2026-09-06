@@ -53,6 +53,19 @@ test('serverless mode gets the repo-file readers, the SDK path does not', () => 
     }
 });
 
+test('run_script reaches both providers and runs in the browser', () => {
+    // The sandbox lives in the browser, so the serverless tier gets it for free
+    // and the SDK path proxies it like every other browser tool.
+    const def = TOOL_DEFS.find((d) => d.name === 'run_script');
+    assert.equal(def.where, 'browser');
+    assert.deepEqual(def.parameters.required, ['code']);
+    assert.ok(sdkToolNames().includes('run_script'));
+    assert.ok(toOpenAiTools().some((t) => t.function.name === 'run_script'));
+    for (const helper of ['findPlayBlocks', 'parseNotes', 'formatNotes', 'groupByBeat', 'setSong']) {
+        assert.ok(def.description.includes(helper), `run_script's description must name ${helper}`);
+    }
+});
+
 test('there is no play tool — starting playback stays the user\'s action', () => {
     assert.ok(!TOOL_DEFS.some((d) => d.name === 'play'));
     assert.ok(TOOL_DEFS.some((d) => d.name === 'stop'));

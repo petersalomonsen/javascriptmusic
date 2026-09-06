@@ -11,8 +11,10 @@ import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from '../wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
-  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments
+  summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
+  playFromHereLine
 } from './tools-core.js';
+import { runAgentScript, formatScriptResult } from './script-sandbox.js';
 import { probeNote, probeNotes, probeWarnings } from '../audioprobe/instrumentprobe.js';
 import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
 import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX,
@@ -293,6 +295,39 @@ const registry = {
   // action (play button). The agent saves via `compile`; a playing track
   // picks the changes up live.
   stop: async () => { window.stopaudio(); return 'stopped'; },
+
+  // ---- scripting: compute an edit over the documents' DATA ----
+  // The agent's "shell": a snippet in the QuickJS song sandbox (deadline,
+  // no DOM/network) over the document text, with note-row helpers in scope.
+  // Writes come back through the opt-in host function and land on the editors
+  // exactly like set_song/set_synth/set_shader — same lint warnings included —
+  // so the transformed notes never pass through the model.
+  run_script: async ({ code }) => {
+    const song = songsourceeditor.doc.getValue();
+    const values = {
+      song,
+      synth: synthsourceeditor.doc.getValue(),
+      shader: shadersourceeditor.doc.getValue(),
+      events: window.lastCompiledEventList || null,
+      bpm: songBpmFromSource(song),
+    };
+    const editors = { song: songsourceeditor, synth: synthsourceeditor, shader: shadersourceeditor };
+    const write = async (name, text) => {
+      const editor = editors[name];
+      const before = editor.doc.getValue().split('\n').length;
+      editor.doc.setValue(text);
+      const warnings = name === 'song' ? songSourceWarnings(text) : name === 'shader' ? shaderWarnings() : [];
+      return { message: `${name} updated (${before} → ${text.split('\n').length} lines)`, warnings };
+    };
+    let result;
+    try {
+      result = await runAgentScript(String(code || ''), values, { write });
+    } catch (e) {
+      return { __error: String(e?.message || e) };
+    }
+    const text = formatScriptResult(result);
+    return result.error ? { __error: text } : text;
+  },
 };
 
 // Analyse the event list stashed by the last compile (editorcontroller.js).
@@ -300,7 +335,12 @@ function analyzeCompiledSong() {
   const eventlist = window.lastCompiledEventList;
   if (!eventlist || !eventlist.length) return null;
   const source = songsourceeditor.doc.getValue();
-  return summarizeSongEvents(eventlist, songBpmFromSource(source), { instruments: declaredInstruments(source) });
+  return summarizeSongEvents(eventlist, songBpmFromSource(source), {
+    instruments: declaredInstruments(source),
+    // The user's audition marker: the digest must say the song is cut there
+    // on purpose, or the agent "repairs" it by deleting the user's line.
+    playFromHereLine: playFromHereLine(source),
+  });
 }
 
 // Probe every channel the song actually plays, using a note it really uses, and

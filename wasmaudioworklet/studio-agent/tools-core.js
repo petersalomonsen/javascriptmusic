@@ -259,6 +259,39 @@ export function songSourceWarnings(source) {
   return warnings;
 }
 
+// ---- playFromHere() ---------------------------------------------------------
+//
+// `playFromHere()` drops every note scheduled before it and restarts the
+// clock (midisequencer/songcompiler.js), so the compiled song — and therefore
+// every digest and warning below — covers ONLY what follows it. The app never
+// inserts it: it is there because the USER typed it to audition or record one
+// section. Without knowing that, the digest reads as a catastrophe (a 60-bar
+// song "collapsed" to 16 beats, an instrument that "plays NO notes") and the
+// agent removes the user's marker to "fix" it — which is what happened in a
+// live session. So the marker is named wherever the digest could mislead.
+
+// 1-based line of the first live `playFromHere()` call, or null. Comments are
+// skipped (a `// playFromHere()` left behind must not count).
+export function playFromHereLine(source) {
+  const lines = String(source || '').split('\n');
+  let inBlock = false;
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    if (inBlock) {
+      const end = line.indexOf('*/');
+      if (end === -1) continue;
+      inBlock = false;
+      line = line.slice(end + 2);
+    }
+    line = line.replace(/\/\*.*?\*\//g, ' ');
+    const open = line.indexOf('/*');
+    if (open !== -1) { inBlock = true; line = line.slice(0, open); }
+    line = line.replace(/\/\/.*$/, '');
+    if (/\bplayFromHere\s*\(/.test(line)) return i + 1;
+  }
+  return null;
+}
+
 // ---- compiled-event analysis ------------------------------------------------
 //
 // Compiling a song produces a MIDI event list — note on/off, CC, at exact
@@ -287,7 +320,7 @@ const isSequencerControl = (status) => status < 0;
 // eventlist: [{ time (ms), message: [status, data1, data2] }], as returned by
 // compileSong. bpm is needed to express times in beats; song BPM lives inside
 // the sandboxed compile, so callers pass it (see songBpmFromSource).
-export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, instruments = [] } = {}) {
+export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, instruments = [], playFromHereLine = null } = {}) {
   const msPerBeat = (60 * 1000) / (bpm > 0 ? bpm : 110);
   const toBeat = (ms) => ms / msPerBeat;
   const byChannel = new Map();
@@ -359,7 +392,8 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, ins
     sounding,
     disjointPairs,
     noteCollisions,
-    declaredSilent
+    declaredSilent,
+    playFromHereLine
   };
 }
 
@@ -479,8 +513,12 @@ export function formatSongSummary(s) {
     `song: ${round(s.lengthBeats)} beats (${barsText(s)}) at ${s.bpm} BPM · ` +
       `${s.sounding.length} sounding channel(s) · ${s.totalNotes} notes`
   ];
+  if (s.playFromHereLine) {
+    lines.push(`playFromHere() at line ${s.playFromHereLine} — the user's audition marker: this digest covers ONLY what follows it. `
+      + 'Earlier parts are absent by design, not lost; leave the marker in place.');
+  }
   if (!s.sounding.length) {
-    lines.push('(no notes at all)');
+    lines.push(s.playFromHereLine ? '(no notes after playFromHere())' : '(no notes at all)');
   }
   const silence = trailingSilence(s);
   if (silence.significant) {
@@ -496,7 +534,9 @@ export function formatSongSummary(s) {
     );
   }
   for (const { channel, name } of s.declaredSilent) {
-    lines.push(`ch${channel} ('${name}'): DECLARED but plays NO notes — nothing of it reaches the timeline`);
+    lines.push(s.playFromHereLine
+      ? `ch${channel} ('${name}'): no notes after playFromHere() — it may well play in the part before it`
+      : `ch${channel} ('${name}'): DECLARED but plays NO notes — nothing of it reaches the timeline`);
   }
   for (const [a, b] of s.disjointPairs) {
     lines.push(
@@ -519,13 +559,25 @@ const collisionExamples = (s, limit = 3) =>
 // way shader warnings already are. Only things that are almost certainly wrong.
 export function songEventWarnings(s) {
   const warnings = [];
-  if (!s.sounding.length) {
+  if (s.playFromHereLine) {
+    warnings.push(
+      `NOTE: playFromHere() at line ${s.playFromHereLine} — the user is auditioning from there, so the compiled song contains ONLY what follows it ` +
+        '(everything scheduled before it is dropped and the clock restarts). That is intended: leave the marker in place, do not treat the earlier parts as missing, ' +
+        'and read the length and channel figures as those of that section alone.'
+    );
+  }
+  if (!s.sounding.length && s.playFromHereLine) {
+    warnings.push(
+      `WARNING: no notes after playFromHere() (line ${s.playFromHereLine}) — the section the user is auditioning schedules nothing after the marker.`
+    );
+  } else if (!s.sounding.length) {
     warnings.push(
       'WARNING: the compiled song contains NO notes. Nothing moved the playhead, so loopHere() ended the song at beat 0 and every note was discarded. ' +
         'Check that at least one pattern is awaited, and that no sequencing is wrapped in a function that is never awaited.'
     );
   }
-  for (const { channel, name } of s.declaredSilent) {
+  // An instrument with no notes AFTER the marker is not a bug — it plays earlier.
+  for (const { channel, name } of s.playFromHereLine ? [] : s.declaredSilent) {
     warnings.push(
       `WARNING: '${name}' (channel ${channel}) is declared with addInstrument but plays NO notes — its part never reaches the timeline. ` +
         'This is a SONG bug, NOT an instrument bug: probing that instrument will show it works perfectly. ' +

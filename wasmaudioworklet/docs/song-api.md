@@ -234,7 +234,14 @@ playGroove(); await waitDuration(16);   // then 16 beats of groove — no beat m
 ```
 
 ### `playFromHere()`
-Resets playback to start from the current position, keeping only control change messages.
+Makes the compiled song start at the current playhead position: every note
+scheduled *before* this point is dropped (control changes are kept, so patches
+and settings still arrive) and the clock restarts at 0. Use it while working on
+one section — put it above the section to hear or record just that part
+instead of waiting for the whole song — and remove it when you are done. While
+it is in place the song, its length and any per-channel summary describe only
+what follows the marker. The studio agent treats it as yours: it will not add
+or remove one.
 
 ### `loopHere()`
 Marks the **end** of the song, at the current playhead position. When playback

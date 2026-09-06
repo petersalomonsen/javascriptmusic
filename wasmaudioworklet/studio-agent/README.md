@@ -13,6 +13,8 @@ shader by driving the app's own tools. Two providers share everything here:
 | `tools-def.js` | every tool declared ONCE, with `where` saying who executes it |
 | `tools-core.js` | pure logic behind the tools (edits, grep, song-event analysis), unit-tested in Node |
 | `client.js` | the browser side: the tool registry acting on the editors, compiler and OPFS repo |
+| `script-sandbox.js` | `run_script`: an agent snippet run in the QuickJS song sandbox over the documents' text, writing back through an opt-in host function |
+| `script-helpers.js` | the data view of note rows for those scripts (`parseNotes`, `formatNotes`, `findPlayBlocks`, `groupByBeat`…), import-free so it loads into the guest |
 | `nearai-core.js` | the serverless agent loop and OpenAI tool conversion |
 
 Run the unit tests with `npm run test-agent-tools` (from `wasmaudioworklet/`).
@@ -32,3 +34,15 @@ reports back what it can actually establish:
 
 The prompt's ASSURANCE section ties these together: each check proves one thing,
 and none of them may be reported as proof of a higher one.
+
+## Why the agent has a script tool
+
+A recorded take is note data. With only get/set/edit tools the agent transforms
+it by transcription — reading the rows, working out the chords in its head and
+retyping them — which is slow, expensive, unverifiable, and loses the
+performance (every retyped velocity comes out the same). `run_script` gives it
+the equivalent of a shell: a twenty-line snippet in the song sandbox does the
+same job deterministically, keeps what the user played, and the notes never
+pass through the model. The sandbox is the right vehicle for its deadline, not
+for isolation: an agent-written endless loop is interrupted instead of freezing
+the tab, and it works on the serverless NEAR AI tier, which has no server.
