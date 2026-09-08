@@ -14,7 +14,7 @@ import { waitForAppReady, waitForStudioAgentTools, clearOPFS } from './near-git-
 //
 // No NEAR sandbox needed: an unregistered `?gitrepo=` falls back to local OPFS.
 
-const REPO = 'abort-e2e-test';
+const REPO = 'abort-e2e-test.local'; // *.local: never looked up on the legacy host (see legacyRemoteFor)
 
 function startMockAgentServer() {
     const wss = new ws.Server({ port: 0 });

@@ -16,7 +16,7 @@ import { waitForAppReady, clearOPFS } from './near-git-helpers.js';
 //
 // No NEAR sandbox needed: an unregistered `?gitrepo=` falls back to local OPFS.
 
-const REPO = 'zip-export-test';
+const REPO = 'zip-export-test.local'; // *.local: never looked up on the legacy host (see legacyRemoteFor)
 
 test.describe('export the repo as a zip', () => {
     // Fail fast: a wasm-git call that never answers should not burn 10 minutes.
