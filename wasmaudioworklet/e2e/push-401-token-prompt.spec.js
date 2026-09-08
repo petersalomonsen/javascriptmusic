@@ -76,11 +76,12 @@ test.describe('push rejected with 401 asks for a token and retries', () => {
         await route401(page, auths);
         await page.goto(`http://localhost:8080/?gitrepo=${REPO}&remote=${encodeURIComponent(GITPROXY_URL)}`);
 
-        // Boot asks for a token before cloning; cancel it, which is exactly how
-        // a repo ends up local-with-no-token in the first place.
-        const bootPrompt = page.locator('common-modal #modal-prompt-input');
+        // The anonymous clone 401s, so boot asks for a token (see
+        // clone-token-prompt.spec.js); cancel it, which is exactly how a repo
+        // ends up local-with-no-token in the first place.
+        const bootPrompt = page.locator('common-modal', { hasText: 'Clone was rejected (401)' });
         await bootPrompt.waitFor({ timeout: 60000 });
-        await page.locator('common-modal button', { hasText: 'Cancel' }).click();
+        await bootPrompt.locator('button', { hasText: 'Cancel' }).click();
 
         // Clone 401s, so the app falls back to a local OPFS repo and boots.
         await waitForAppReady(page);

@@ -17,7 +17,7 @@ import { waitForAppReady, waitForStudioAgentTools, clearOPFS } from './near-git-
 // No NEAR sandbox needed: an unregistered `?gitrepo=` name fails to clone and
 // falls back to a local OPFS repo, which is also the "no AGENT.md" case.
 
-const REPO = 'kit-e2e-test';
+const REPO = 'kit-e2e-test.local'; // *.local: never looked up on the legacy host (see legacyRemoteFor)
 
 // Mock agent server — only needs to capture what the client sends.
 function startMockAgentServer() {

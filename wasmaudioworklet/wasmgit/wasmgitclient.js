@@ -116,18 +116,17 @@ async function promptForGitToken(label) {
     return true;
 }
 
-// Apply a stored (or prompted) BYO git token to the worker BEFORE a clone/push,
-// so a PRIVATE remote repo can authenticate. Only used for `remote=` (gitproxy)
-// repos — NEAR repos use their own credentials.
-async function applyStoredGitToken(promptIfMissing) {
+// Apply a stored BYO git token to the worker BEFORE a clone/push, so a PRIVATE
+// remote repo can authenticate. Never prompts: a public repo needs no token to
+// clone, and the ONE place we know one is required is the 401 the remote sends
+// back — so that is where the prompt lives (see the clone at init, and
+// commitAndSyncRemote for push). Only used for `remote=` (gitproxy) repos —
+// NEAR repos use their own credentials.
+async function applyStoredGitToken() {
     const stored = readStoredGitToken();
     if (stored && stored.token) {
         await setGitAuthToken(stored.token, { username: stored.username, useremail: stored.useremail });
         return true;
-    }
-    if (promptIfMissing) {
-        return await promptForGitToken(
-            'Fine-grained PAT (Contents: read/write) to clone/push this repo. Leave empty for a public repo.');
     }
     return false;
 }
@@ -153,6 +152,20 @@ async function sendNearCredentials(auth) {
             useremail: auth.useremail || auth.username,
         });
     });
+}
+
+// Before NEAR storage (PR #119) `?gitrepo=<name>` meant a repo on the original
+// wasm-git http server, and links of that form are still shared — the WebAssembly
+// Summit song in #224 is one. A suffix-less name cannot be a NEAR contract (see
+// isNearRepo), so for those the legacy host is the only remote that could hold
+// it. `workspace` (the first-time visitor's local repo) and `*.local` (the e2e
+// isolation convention) never lived there, so they skip the lookup.
+export const LEGACY_GIT_HOST = 'https://wasm-git.petersalomonsen.com';
+export function legacyRemoteFor(gitrepo) {
+    if (!gitrepo || isNearRepo(gitrepo) || gitrepo === 'workspace' || gitrepo.endsWith('.local')) {
+        return null;
+    }
+    return `${LEGACY_GIT_HOST}/${gitrepo}`;
 }
 
 export async function initWASMGitClient(gitrepo, remoteUrl) {
@@ -193,15 +206,32 @@ export async function initWASMGitClient(gitrepo, remoteUrl) {
 
     if (!dircontents) {
         // Nothing local yet. With a `remote=` (e.g. GitHub via the CORS proxy),
-        // clone from THAT remote — authenticating first so a private repo works.
-        // Otherwise clone the NEAR url. A failed/unreachable clone returns null;
+        // clone from THAT remote, asking for a token only if it turns out to be
+        // private. Otherwise clone the NEAR url (or the legacy host, see below). A failed/unreachable clone returns null;
         // fall back to a persistent local OPFS repo so edits survive reload (#151).
         try {
             if (remoteUrl) {
-                await applyStoredGitToken(true);
+                // Clone anonymously first (a stored token from this session is
+                // still sent). Only a 401 means the repo is private and needs a
+                // PAT — ask for one then, and retry once. Anything else (404,
+                // unreachable) is not a credentials problem; fall through to the
+                // local repo below. A visitor following a link to a PUBLIC repo
+                // must never be greeted with a token prompt (#224).
+                await applyStoredGitToken();
                 dircontents = await clone(remoteUrl);
+                if (!dircontents && lastCloneHttpStatus === 401) {
+                    const gotToken = await promptForGitToken(
+                        'Clone was rejected (401): this looks like a private repo. Fine-grained PAT with Contents: read (write to push).');
+                    if (gotToken) {
+                        dircontents = await clone(remoteUrl);
+                    }
+                }
             } else {
-                dircontents = await clone();
+                // A name the NEAR service worker can't resolve is looked up on
+                // the legacy host instead, so pre-NEAR `?gitrepo=` links keep
+                // working; a miss there still lands in the local repo below.
+                const legacyUrl = legacyRemoteFor(gitrepo);
+                dircontents = legacyUrl ? await clone(legacyUrl) : await clone();
             }
         } catch (e) {
             console.warn('clone failed, falling back to local repo', e);
@@ -218,7 +248,7 @@ export async function initWASMGitClient(gitrepo, remoteUrl) {
         // whatever this session has; don't prompt — a push that needs a token
         // asks for one when the remote answers 401 (see commitAndSyncRemote).
         if (remoteUrl) {
-            await applyStoredGitToken(false);
+            await applyStoredGitToken();
         }
     }
     console.log('dircontents', dircontents);
@@ -261,7 +291,13 @@ export function addRemoteSyncListener(remoteSyncListener) {
 // local directory is keyed on `?gitrepo=` so that synclocal and "Delete local"
 // can find the repo again on the next boot, regardless of what the remote
 // happens to be called. See PR #183.
+// HTTP status of the most recent failed clone (undefined when it succeeded or
+// never got as far as an HTTP reply). Lets init distinguish a private repo
+// (401) from a missing one without changing clone()'s null-on-failure contract.
+let lastCloneHttpStatus;
+
 export async function clone(url = gitrepourl) {
+    lastCloneHttpStatus = undefined;
     worker.postMessage({
         command: 'clone',
         url,
@@ -286,6 +322,9 @@ async function awaitDirContents(timeoutMs = 30000) {
                 // targets the real directory even when it's a legacy one.
                 if (msg.data.repoName) {
                     localRepoName = msg.data.repoName;
+                }
+                if (msg.data.cloneFailed) {
+                    lastCloneHttpStatus = msg.data.httpStatus;
                 }
                 resolve(msg.data.dircontents);
             } else {
@@ -364,9 +403,20 @@ export async function deletelocal() {
 }
 
 export async function pull() {
-    const result = await callAndWaitForWorker({
-        command: 'pull'
-    });
+    const doPull = () => callAndWaitForWorker({ command: 'pull' });
+    let result;
+    try {
+        result = await doPull();
+    } catch (e) {
+        // A private `remote=` host answers the fetch with 401: ask for a PAT
+        // and pull again, exactly as clone (init) and push (commitAndSyncRemote)
+        // do. NEAR repos never need one for reads, so only PAT hosts qualify.
+        if (e.httpStatus !== 401 || isNearRepo()) { throw e; }
+        const gotToken = await promptForGitToken(
+            'Pull was rejected (401): this looks like a private repo. Fine-grained PAT with Contents: read (write to push).');
+        if (!gotToken) { throw e; }
+        result = await doPull();
+    }
     remoteSyncListeners.forEach(remoteSyncListener => remoteSyncListener(result));
     await repoHasChanges();
     return result;

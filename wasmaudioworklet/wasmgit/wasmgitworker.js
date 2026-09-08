@@ -279,6 +279,7 @@ onmessage = async (msg) => {
     const repoName = repoDirName(msg.data);
     currentRepoDir = OPFS_MOUNT + '/' + repoName;
 
+    lastHttpRequest = null;
     callMainInDir(['clone', msg.data.url, currentRepoDir]);
 
     // A failed clone (unreachable/unregistered remote) leaves no repo behind —
@@ -293,8 +294,12 @@ onmessage = async (msg) => {
     } catch (e) { /* target dir doesn't exist — clone failed */ }
 
     if (!cloned) {
-      console.log('clone failed, no repository at', currentRepoDir);
-      postMessage({ dircontents: null, cloneFailed: true });
+      // Same as commitpullpush: the HTTP status rides along as its own field
+      // so the client can tell a private repo (401 → ask for a token, retry)
+      // from a remote that simply isn't there (→ local repo).
+      const httpStatus = lastHttpRequest ? lastHttpRequest.status : undefined;
+      console.log('clone failed, no repository at', currentRepoDir, 'http status', httpStatus);
+      postMessage({ dircontents: null, cloneFailed: true, httpStatus });
       return;
     }
 
@@ -350,10 +355,29 @@ onmessage = async (msg) => {
     }
     postMessage({ diff: stdout });
   } else if (msg.data.command === 'pull') {
-    callMainInDir(['fetch', 'origin']);
-    callMainInDir(['merge', 'FETCH_HEAD']);
+    // Same error contract as commitpullpush: a failed fetch (e.g. 401 from a
+    // private `remote=` host) is reported with its HTTP status instead of
+    // throwing inside the worker and leaving the client waiting forever.
+    let err;
+    let httpStatus;
+    lastHttpRequest = null;
+    try {
+      // callAndCaptureOutput (not callMainInDir): lg2 reports git failures on
+      // stderr without throwing, so only the capturing helper turns them into
+      // an error. Skip the merge when the fetch brought nothing, as push does.
+      callAndCaptureOutput(['fetch', 'origin']);
+      if (stdout.indexOf('Received 0/0 objects') === -1) {
+        callAndCaptureOutput(['merge', 'FETCH_HEAD']);
+      }
+    } catch (e) {
+      err = e.message;
+      if (lastHttpRequest) {
+        httpStatus = lastHttpRequest.status;
+        err += ` http status: ${httpStatus}`;
+      }
+    }
     console.log(currentRepoDir, 'persisted via OPFS');
-    postMessage({ id: msg.data.id, dircontents: readdir(), lastHttpStatus: lastHttpRequest.status });
+    postMessage({ id: msg.data.id, error: err ? err : undefined, httpStatus, dircontents: readdir(), lastHttpStatus: lastHttpRequest ? lastHttpRequest.status : undefined });
   } else if (msg.data.command === 'listfiles') {
     // List files matching an optional prefix (e.g. "faust/"). Returns an
     // array of paths (strings) relative to the repo root. Walks the working

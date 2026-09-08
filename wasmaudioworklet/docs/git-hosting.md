@@ -150,6 +150,13 @@ verifies (or reuse the NEAR login for a signature) — overkill until it's neede
 
 - `?gitrepo=<name>.gitfactory.testnet` is resolved to `<origin>/near-repo/<name>.git`
   ([`wasmgitclient.js`](../wasmgit/wasmgitclient.js)).
+- A name with no NEAR suffix (`?gitrepo=wasmsummit2`) cannot be a contract, so it
+  is cloned from the original wasm-git host (`https://wasm-git.petersalomonsen.com/<name>`)
+  instead — pre-NEAR links keep working. `workspace` and `*.local` names skip that
+  lookup and are purely local; so is any name the legacy host doesn't have.
+- `?gitrepo=<name>&remote=<url>` clones from `<url>` (e.g. GitHub via the CORS
+  proxy). No token is asked for up front: only a 401 on clone, pull or push
+  opens the PAT prompt, so links to public repos just load.
 - A service worker (from `near-git-storage`) intercepts those git HTTP requests
   and translates them into NEAR RPC calls — there is no server. Transaction
   signing happens in the browser; the private key never leaves the client.
