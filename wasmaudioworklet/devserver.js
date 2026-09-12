@@ -6,7 +6,10 @@ import { join, extname } from 'node:path';
 // beside the default one on 8080.
 const PORT = Number(process.env.PORT) || 8080;
 const STATIC_ROOT = new URL('.', import.meta.url).pathname;
-const WASM_GIT_UNPKG = 'https://unpkg.com/wasm-git@0.0.17/';
+// jsDelivr, like every other runtime CDN dependency of the app: unpkg took
+// production down once (2026-08-18) and a flaky fetch of lg2_opfs.js here
+// stalls every test and every session that opens a repo.
+const WASM_GIT_CDN = 'https://cdn.jsdelivr.net/npm/wasm-git@0.0.17/';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -38,7 +41,7 @@ const CROSS_ORIGIN_HEADERS = {
 
 async function handleWasmGitProxy(req, res) {
   const filePath = req.url.replace(/^\/wasm-git\//, '');
-  const targetUrl = WASM_GIT_UNPKG + filePath;
+  const targetUrl = WASM_GIT_CDN + filePath;
 
   try {
     const fetchResp = await fetch(targetUrl);
@@ -163,7 +166,7 @@ const server = createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Dev server running at http://localhost:${PORT}/`);
-  console.log(`wasm-git proxy: /wasm-git/* -> unpkg.com`);
+  console.log(`wasm-git proxy: /wasm-git/* -> cdn.jsdelivr.net`);
   console.log(`NEAR git: handled by service worker (/near-repo/*)`);
   console.log(`Pages Functions: ${FUNCTION_ROUTES.join(', ')} -> functions/*/[[path]].js`);
   const missing = ['NEARAI_API_KEY', 'PASS_SECRET'].filter((k) => !process.env[k]);

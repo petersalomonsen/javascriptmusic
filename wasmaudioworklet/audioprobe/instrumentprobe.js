@@ -117,3 +117,25 @@ export function probeWarnings(results) {
 
 // Exposed for tests: reset the module cache between compiles.
 export function _resetProbeCache() { cachedModule = null; cachedBytes = null; }
+
+
+/**
+ * The probe report the agent reads: one line per note, the cross-note check,
+ * then the warnings. Shared by the in-app probe_instrument tool and the
+ * headless studio in tools/studio-agent/bench, so both say exactly the same
+ * thing about the same audio.
+ */
+export function formatProbeReport(results) {
+    const lines = results.map((r) => r.silent
+        ? `ch${r.channel} ${r.name}: SILENT — no audio produced`
+        : `ch${r.channel} ${r.name}: peak ${r.peak.toFixed(3)}, rms ${r.rms.toFixed(4)}, `
+          + `dominant ${r.dominantHz.toFixed(1)}Hz (note is ${r.expectedHz.toFixed(1)}Hz), `
+          + `centroid ${r.centroidHz.toFixed(0)}Hz`);
+    const audible = results.filter((r) => !r.silent);
+    const distinct = new Set(audible.map((r) => `${Math.round(r.dominantHz)}:${Math.round(r.centroidHz / 20)}`));
+    if (audible.length > 1 && distinct.size === 1) {
+        lines.push('All notes rendered the SAME audio — the instrument ignores the note number. '
+            + 'Correct for a fixed-pitch drum; a bug for a pitched voice (declare `freq`) or for a kit meant to map notes to drums.');
+    }
+    return [...lines, ...probeWarnings(results)].join('\n');
+}

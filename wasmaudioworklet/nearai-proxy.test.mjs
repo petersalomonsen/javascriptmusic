@@ -126,15 +126,28 @@ test('the model stays ours even though the prompt does not', async () => {
   assert.notEqual(captured.body.model, 'something/expensive');
 });
 
-test('tools are enforced server-side; client tools ignored', async () => {
+test('the client\'s tool list is forwarded, not replaced — a subset stays a subset', async () => {
+  // The tools run in the client's own browser, so its list shapes only what
+  // the model says back to it; injecting ours cost the app the ability to
+  // send the instrument specialist's narrower set.
   const captured = captureFetch();
-  await onRequest(chat({
-    model: DEFAULT_MODEL,
-    messages: [{ role: 'user', content: 'hi' }],
-    tools: [{ type: 'function', function: { name: 'evil_tool', parameters: {} } }],
-  }));
-  assert.equal(captured.body.tools.length, toOpenAiTools().length);
-  assert.ok(!JSON.stringify(captured.body.tools).includes('evil_tool'));
+  const subset = toOpenAiTools().slice(0, 3);
+  await onRequest(chat({ messages: [{ role: 'user', content: 'hi' }], tools: subset, tool_choice: 'auto' }));
+  assert.deepEqual(captured.body.tools, subset);
+  assert.equal(captured.body.tool_choice, 'auto');
+  // no tools sent → a plain chat turn, nothing injected
+  const plain = captureFetch();
+  await onRequest(chat({ messages: [{ role: 'user', content: 'hi' }] }));
+  assert.equal(plain.body.tools, undefined);
+  assert.equal(plain.body.tool_choice, undefined);
+});
+
+test('an oversized tool list is refused, not forwarded', async () => {
+  const captured = captureFetch();
+  const huge = [{ type: 'function', function: { name: 'big', description: 'x'.repeat(50000), parameters: {} } }];
+  const res = await onRequest(chat({ messages: [{ role: 'user', content: 'hi' }], tools: huge }));
+  assert.equal(res.status, 413);
+  assert.equal(captured.body, undefined);
 });
 
 test('the client cannot choose the model — we pay, so we choose', async () => {

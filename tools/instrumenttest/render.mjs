@@ -42,99 +42,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The compile scaffold and the note renderer are shared with the studio-agent
+// bench's headless studio (tools/studio-agent/bench), so both measure the same way.
+import { buildSynthWasm, renderNote, SAMPLERATE, REPO } from './headless.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REPO = path.resolve(__dirname, '..', '..');
 // Shared with the in-app probe (wasmaudioworklet/audioprobe/instrumentprobe.js) so the
 // harness and the agent's tool report the same numbers.
 const { rms, peak, spectrum, noteName, midiToFreq, parseNote } =
     await import(path.join(REPO, 'wasmaudioworklet', 'audioprobe', 'audioanalysis.js'));
-const ASSEMBLY = path.join(REPO, 'wasmaudioworklet', 'synth1', 'assembly');
 const FAUST2AS = path.join(REPO, 'tools', 'faust2as', 'faust2as.js');
 
-const SAMPLERATE = 44100;
-const FRAMES = 128;                 // samplebuffer frames per fillSampleBuffer call
-const RIGHT_OFFSET_BYTES = FRAMES * 4;
-
 // ---- build -----------------------------------------------------------------
-/**
- * Scaffold a compile tree: the real assembly sources, with `mixes/midi.mix.ts`
- * replaced by the instrument under test. midisynth.ts imports
- * `../mixes/midi.mix`, so the instrument's own initializeMidiSynth() wires it
- * onto a channel exactly as it would in the app.
- */
+// The instrument under test IS the mix: midisynth.ts imports `../mixes/midi.mix`,
+// so its own initializeMidiSynth() wires it onto a channel exactly as in the app.
 function buildWasm(instrumentTs, { keep }) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'instrumenttest-'));
-    const asm = path.join(dir, 'assembly');
-    fs.mkdirSync(asm);
-    for (const entry of fs.readdirSync(ASSEMBLY)) {
-        if (entry === 'mixes') continue;
-        fs.symlinkSync(path.join(ASSEMBLY, entry), path.join(asm, entry));
-    }
-    // mixes/ must be real: midi.mix.ts is ours, everything else is shared.
-    const mixes = path.join(asm, 'mixes');
-    fs.mkdirSync(mixes);
-    for (const entry of fs.readdirSync(path.join(ASSEMBLY, 'mixes'))) {
-        if (entry === 'midi.mix.ts') continue;
-        fs.symlinkSync(path.join(ASSEMBLY, 'mixes', entry), path.join(mixes, entry));
-    }
-    fs.writeFileSync(path.join(mixes, 'midi.mix.ts'), instrumentTs);
-
-    const wasm = path.join(dir, 'instrument.wasm');
-    try {
-        execFileSync('npx', ['asc', path.join(asm, 'midi', 'midisynth.ts'),
-            '--runtime', 'stub', '-o', wasm, '-Ospeed', '--exportRuntime'],
-            { cwd: path.join(REPO, 'wasmaudioworklet', 'synth1'), stdio: 'pipe' });
-    } catch (e) {
-        const out = `${e.stdout || ''}${e.stderr || ''}`;
-        throw new Error(`AssemblyScript compile failed:\n${out.trim()}`);
-    }
-    if (!keep) process.on('exit', () => fs.rmSync(dir, { recursive: true, force: true }));
-    else console.error(`build dir kept: ${dir}`);
-    return wasm;
-}
-
-// ---- render ----------------------------------------------------------------
-async function renderNote(wasmPath, { note, velocity, channel, holdSeconds, tailSeconds }) {
-    // Fresh instance per note: voices, envelopes and reverb tails must not leak
-    // between notes, or a silent instrument can look alive from the previous one.
-    const bytes = fs.readFileSync(wasmPath);
-    const { instance } = await WebAssembly.instantiate(bytes, {
-        environment: { SAMPLERATE },
-        env: {
-            abort: (msg, file, line, col) => { throw new Error(`wasm abort at ${line}:${col}`); },
-            seed: () => 0,
-            'Math.random': () => 0.5,
-        },
-    });
-    const ex = instance.exports;
-    const mem = new Float32Array(ex.memory.buffer);
-    const bufPtr = ex.samplebuffer.valueOf ? ex.samplebuffer.valueOf() : ex.samplebuffer;
-
-    const holdFrames = Math.round(holdSeconds * SAMPLERATE / FRAMES);
-    const tailFrames = Math.round(tailSeconds * SAMPLERATE / FRAMES);
-    const left = new Float32Array((holdFrames + tailFrames) * FRAMES);
-    const right = new Float32Array(left.length);
-
-    const pull = (blockIndex) => {
-        ex.fillSampleBuffer();
-        const base = bufPtr / 4;
-        const rbase = (bufPtr + RIGHT_OFFSET_BYTES) / 4;
-        for (let i = 0; i < FRAMES; i++) {
-            left[blockIndex * FRAMES + i] = mem[base + i];
-            right[blockIndex * FRAMES + i] = mem[rbase + i];
-        }
-    };
-
-    ex.shortmessage(0x90 | (channel & 0x0f), note, velocity);
-    let block = 0;
-    for (let i = 0; i < holdFrames; i++) pull(block++);
-    ex.shortmessage(0x80 | (channel & 0x0f), note, 0);
-    for (let i = 0; i < tailFrames; i++) pull(block++);
-
-    const mono = new Float32Array(left.length);
-    for (let i = 0; i < left.length; i++) mono[i] = (left[i] + right[i]) / 2;
-    return { mono, left, right, holdSamples: holdFrames * FRAMES };
+    return buildSynthWasm({ 'mixes/midi.mix.ts': instrumentTs }, { keep }).bytes;
 }
 
 // ---- wav out ---------------------------------------------------------------

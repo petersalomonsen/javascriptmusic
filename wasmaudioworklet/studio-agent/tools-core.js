@@ -663,3 +663,62 @@ export function faustRegistrationHint(ts, stem) {
     `then ${reg}`;
   return { classes, voice, chan, message };
 }
+
+// ---- design_instrument: the specialist's brief and its result ----------------
+//
+// Both provider paths run the instrument specialist the same way — a nested
+// agent turn with its own prompt and tool subset — so the text that goes IN
+// (the brief) and the text that comes OUT (the result the producer reads) are
+// built here, once.
+
+/** The specialist's task message, from the producer's design_instrument arguments. */
+export function specialistBrief({ brief, kind, channel, name } = {}) {
+  const lines = [`BRIEF: ${String(brief || '').trim() || '(none given)'}`];
+  if (kind) lines.push(`KIND: ${kind}`);
+  lines.push(`INSTRUMENT NAME: ${name || '(choose a short lower-case name from the brief)'} — the file is faust/<name>.dsp`);
+  lines.push(`CHANNEL: ${Number.isFinite(Number(channel)) ? `register the voice on MIDI channel ${Number(channel)} in synth.ts` : 'register the voice on the next free MIDI channel in synth.ts (read synth.ts to find it) and say which'}`);
+  lines.push('Build it, compile, probe the channel, then end with the REPORT block and nothing after it.');
+  return lines.join('\n');
+}
+
+/** The report header the specialist is asked to end with. */
+export const SPECIALIST_REPORT_FORMAT = `REPORT
+file: faust/<name>.dsp
+class: <Name> (and <Name>Channel if write_faust reported one)
+channel: <n>
+probe: <the probe_instrument lines for at least two notes, verbatim>
+notes: <one or two lines: what the sound is, what to nudge if it is not right>`;
+
+// The specialist's report is trusted only for what it SAYS; whether the
+// instrument sounds is measured by the tool itself after the specialist has
+// finished. This joins the two so the producer sees the specialist's account
+// next to the probe the tool ran, with the verdict in the FIRST line — a silent
+// or unprobed instrument is labelled FAILED there, not buried in prose.
+export function specialistResult({ report, probeText, channel, name } = {}) {
+  const probe = String(probeText || '').trim();
+  const firstLine = probe.split('\n')[0] || '';
+  const unprobed = !probe || /^ERROR/i.test(probe) || /no compiled synth/i.test(probe) || /probe failed/i.test(probe);
+  const silent = !unprobed && /SILENT/i.test(probe);
+  const status = unprobed
+    ? `FAILED: the instrument could not be probed (${firstLine || 'no probe result'}) — it is NOT verified; tell the user`
+    : silent
+      ? 'FAILED: the tool\'s own probe found SILENCE on the channel — the instrument is not usable yet; tell the user'
+      : 'OK: audio verified by the tool\'s own probe';
+  const what = name ? `"${name}" ` : '';
+  const where = Number.isFinite(Number(channel)) ? `channel ${Number(channel)}` : 'an unspecified channel';
+  return [
+    `design_instrument ${what}on ${where}: ${status}`,
+    '',
+    'SPECIALIST REPORT:',
+    String(report || '').trim() || '(the specialist ended without a report)',
+    '',
+    `VERIFIED PROBE (run by the tool after the specialist finished, ${where}):`,
+    probe || '(none)',
+  ].join('\n');
+}
+
+/** The channel a specialist report says it registered on, or null. */
+export function channelFromReport(report) {
+  const m = /^\s*channel:\s*(\d+)/m.exec(String(report || ''));
+  return m ? Number(m[1]) : null;
+}

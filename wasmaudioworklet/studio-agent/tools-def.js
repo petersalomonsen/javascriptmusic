@@ -45,7 +45,7 @@ export const TOOL_DEFS = [
     // ---- synth ----
     { name: 'get_synth', where: 'browser', description: 'Return the current synth document (AssemblyScript).', parameters: obj({}) },
     { name: 'set_synth', where: 'browser', description: 'Replace the entire synth document. Provide the full new source.', parameters: obj({ source: str('full new synth source') }, ['source']) },
-    { name: 'edit_synth', where: 'browser', description: 'Surgically find-and-replace in the synth document IN PLACE (like the Edit tool). Use this to add a voice/channel to a large synth (e.g. the DX7 bundle) WITHOUT rewriting it. old_string must match exactly and be unique unless replace_all is true.', parameters: editParams },
+    { name: 'edit_synth', where: 'browser', description: 'Surgically find-and-replace in the synth document IN PLACE (like the Edit tool). Use this to add a voice/channel to a large synth (e.g. a generated bundle) WITHOUT rewriting it. old_string must match exactly and be unique unless replace_all is true.', parameters: editParams },
     { name: 'grep_synth', where: 'browser', description: 'Search the CURRENT in-browser synth document for a regex; returns matching line numbers + text (optionally with surrounding context lines). Use to find exact anchors for edit_synth in a large synth without dumping the whole file.', parameters: grepParams },
 
     // ---- visualizer shader ----
@@ -73,6 +73,9 @@ export const TOOL_DEFS = [
     // ---- scripting: compute an edit instead of retyping note data ----
     { name: 'run_script', where: 'browser', description: "Run a small JavaScript program in the browser sandbox to COMPUTE an edit from the documents instead of retyping note data by hand. `code` is the body of an async function. In scope: `song`, `synth`, `shader` (the current documents as strings), `events` (the last compiled MIDI event list [{time ms, message:[status,data1,data2]}] or null), `bpm`; helpers `findPlayBlocks(text)` (every `<track>.play(...)` call: {track, start, end, text, inner, notes}), `parseNotes(text)` ([{beat, note, name, duration, velocity}] — a row with several notes is a chord; control changes come as {beat, cc, value}), `formatNotes(notes, {indent, chords})` (back to `[ beat, name(dur, vel) ]` rows), `groupByBeat(notes, tolerance)` (notes that start together — 2+ = a chord, 1 = melody), `quantizeBeat(beat, stepsPerBeat, pct)`, `noteNumber(name)`, `noteName(n)`; `print(...)` to report; `await setSong(text)` / `setSynth(text)` / `setShader(text)` to write a document back (the song write reports step-pattern warnings). Returns what you printed, the return value, and what was written. USE IT for anything derived from existing notes — separating chords from a melody, quantizing, moving or transposing a take, velocity changes, harmonizing against a chord map, doubling a part — and whenever more than a handful of notes would otherwise pass through your context: a script keeps the user's velocities and durations, a retype does not. 20s limit, no network, no DOM; small literal edits still belong to edit_song.", parameters: obj({ code: str('JavaScript source — the body of an async function (top-level await and return allowed)') }, ['code']) },
 
+    // ---- delegation: instrument design runs in a specialist agent ----
+    { name: 'design_instrument', where: 'agent', description: 'Delegate the design of ONE instrument sound to the instrument specialist: a separate agent that holds the Faust knowledge and the faust tools and works in its own context. Give it a musical brief (what the sound is for and how it should feel), the kind (fm, subtractive, drums, or a free description), the MIDI channel to register it on in synth.ts, and the instrument name (it becomes faust/<name>.dsp). It writes or edits the .dsp, wires the voice class onto that channel, compiles, and probes the channel; you get back its report AND a probe the tool runs itself: file, class, channel, measured audio — or an explicit FAILED line. You never author or edit .dsp files yourself: every new sound and every change to an existing instrument goes through this tool, one instrument per call. Afterwards add addInstrument() in the song at the matching index if the channel is new, compile, and verify with song_summary.', parameters: obj({ brief: str('what the sound should be and how it will be used, in musical terms; for a change to an existing instrument, what to change'), kind: str('fm | subtractive | drums | or a short description (default: infer from the brief)'), channel: num('MIDI channel to register the voice on in synth.ts (default: the next free channel)'), name: str('instrument name, becomes faust/<name>.dsp and the voice class (default: derived from the brief)') }, ['brief']) },
+
     // ---- repository files ----
     { name: 'load_synth_from_file', where: 'loadfile', target: 'synth', description: 'Load a repository file DIRECTLY into the synth editor without reading it into context. Use this for large bundles (e.g. examples/dx7/dx7-synth.ts) — pass a repo-relative path.', parameters: obj({ path: str('repo-relative path') }, ['path']) },
     { name: 'load_song_from_file', where: 'loadfile', target: 'song', description: 'Load a repository file DIRECTLY into the song editor without reading it into context — pass a repo-relative path.', parameters: obj({ path: str('repo-relative path') }, ['path']) },
@@ -82,7 +85,29 @@ export const TOOL_DEFS = [
 export const browserToolNames = () => TOOL_DEFS.filter((d) => d.where === 'browser').map((d) => d.name);
 export const toolDefsFor = (where) => TOOL_DEFS.filter((d) => d.where === where);
 
-// Every tool the SDK path exposes: browser-proxied + the server-side file
+// Every tool the SDK path can proxy: browser-proxied + the server-side file
 // loaders. read_repo_file is excluded — that path has built-in Read/Glob/Grep.
+// Which of these a given agent actually gets is decided per ROLE below.
 export const sdkToolNames = () =>
     TOOL_DEFS.filter((d) => d.where === 'browser' || d.where === 'loadfile').map((d) => d.name);
+
+// Who gets which tools. The PRODUCER holds the conversation and never touches
+// a .dsp itself: instrument design is delegated through design_instrument to
+// the INSTRUMENT specialist, which runs in its own context with only what an
+// instrument needs — the faust tools, enough of synth.ts to register the voice
+// on its channel, compile and probe, and repo reading for the guides. Neither
+// list is hand-maintained per provider: both paths derive theirs from here.
+export const ROLES = {
+    producer: { exclude: ['write_faust', 'edit_faust'] },
+    instrument: { include: ['read_faust', 'list_faust', 'write_faust', 'edit_faust', 'get_synth', 'grep_synth', 'edit_synth', 'compile', 'probe_instrument', 'read_repo_file'] },
+};
+
+/** Tool definitions for a role, optionally limited to the given `where` kinds. */
+export function toolDefsForRole(role, wheres = null) {
+    const spec = ROLES[role];
+    if (!spec) throw new Error(`unknown agent role "${role}"`);
+    return TOOL_DEFS
+        .filter((d) => (wheres ? wheres.includes(d.where) : true))
+        .filter((d) => (spec.include ? spec.include.includes(d.name) : !spec.exclude.includes(d.name)));
+}
+export const toolNamesForRole = (role, wheres = null) => toolDefsForRole(role, wheres).map((d) => d.name);
