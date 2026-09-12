@@ -1,6 +1,6 @@
 import { deserializePianorollsData, importToPianoroll, serializePianorollsData } from '../pianorollserialization.js';
 import { getMixes, publishMix, buyMix, viewTokenOwner, viewTokenPrice, getMixTokenContent, connectNear } from './nearclient.js';
-import { ungzip, gzip } from 'https://unpkg.com/pako@2.0.3/dist/pako.esm.mjs';
+import { ungzip, gzip } from 'https://cdn.jsdelivr.net/npm/pako@2.0.3/dist/pako.esm.mjs';
 import { toggleSpinner } from '../../../common/ui/progress-spinner.js';
 import { exportWav, addPianoroll, clearAll, selectPianoroll, updateSequence } from './pianorolldemo.js';
 import { COLUMNS_PER_BEAT } from '../pianoroll.js';
