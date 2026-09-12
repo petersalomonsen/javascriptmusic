@@ -813,3 +813,68 @@ export function channelFromReport(report) {
   const m = /^\s*channel:\s*(\d+)/m.exec(String(report || ''));
   return m ? Number(m[1]) : null;
 }
+
+// ---- render_shader: what the shader's note uniforms hold at a song time ----
+//
+// The live visualizer feeds the shader from playback: note-ons set
+// targetNoteStates[n] = velocity/127*2-1, note-offs reset it to -1, and
+// smoothedNoteStates follows with an instant attack and a slow release. An
+// offline frame at song time t has no playback to read from, so replay the
+// compiled event list up to t instead — the frame then shows what the shader
+// really does at that moment of THIS song, not at a fake energy level.
+const SMOOTH_RELEASE_PER_SECOND = 0.04 * 60; // fragmentshader.js releases 0.04/frame at ~60fps
+
+export function noteStatesAtTime(eventlist, tSeconds) {
+  const target = new Float32Array(128).fill(-1);
+  const smoothed = new Float32Array(128).fill(-1);
+  const releasedAt = new Float64Array(128).fill(NaN); // seconds, when the note was last released
+  const releasedFrom = new Float32Array(128).fill(-1);
+  const tMs = tSeconds * 1000;
+  let sounding = 0;
+  for (const evt of eventlist || []) {
+    if (!(evt.time <= tMs)) continue;
+    const [status, note, velocity] = evt.message || [];
+    if (status === undefined || note === undefined || note < 0 || note > 127) continue;
+    const type = status & 0xf0;
+    if (type === NOTE_ON && velocity > 0) {
+      target[note] = (velocity / 127) * 2 - 1;
+      releasedAt[note] = NaN;
+    } else if (type === NOTE_OFF || type === NOTE_ON) {
+      if (target[note] > -1) {
+        releasedFrom[note] = target[note];
+        releasedAt[note] = evt.time / 1000;
+      }
+      target[note] = -1;
+    }
+  }
+  for (let n = 0; n < 128; n++) {
+    if (target[n] > -1) { sounding++; smoothed[n] = target[n]; continue; }
+    if (Number.isNaN(releasedAt[n])) continue;
+    smoothed[n] = Math.max(-1, releasedFrom[n] - (tSeconds - releasedAt[n]) * SMOOTH_RELEASE_PER_SECOND);
+  }
+  return { target, smoothed, sounding };
+}
+
+/** The headless harness's stand-in when nothing is compiled: a band of notes lit to `energy` (0..1). */
+export function fakeNoteStates(energy) {
+  const e = Math.max(0, Math.min(1, Number(energy) || 0));
+  const target = new Float32Array(128).fill(-1);
+  const lit = Math.floor(e * 60);
+  for (let i = 20; i < 20 + lit; i++) target[i] = 0.9;
+  return { target, smoothed: target, sounding: lit };
+}
+
+/** "2, 8.5,16" → [2, 8.5, 16]; at most `max` distinct non-negative times, in the order given. */
+export function parseRenderTimes(times, { max = 4, fallback = [4] } = {}) {
+  const raw = Array.isArray(times) ? times : String(times ?? '').split(/[,\s]+/);
+  const out = [];
+  for (const v of raw) {
+    if (v === '' || v === null || v === undefined) continue;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) throw new Error(`render_shader: "${v}" is not a song time in seconds`);
+    if (!out.includes(n)) out.push(n);
+  }
+  if (!out.length) return fallback;
+  if (out.length > max) throw new Error(`render_shader: at most ${max} frames per call (got ${out.length}) — pick the moments that matter`);
+  return out;
+}

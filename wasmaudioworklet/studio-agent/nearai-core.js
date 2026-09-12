@@ -39,8 +39,18 @@ import { TOOL_DEFS as SHARED_TOOL_DEFS, toolDefsForRole } from './tools-def.js';
 import { buildSpecialistPrompt } from './prompt.js';
 import { SPECIALISTS } from './tools-core.js';
 
+// Tools whose result is a picture (render_shader) are left out: an
+// OpenAI-style tool message is text only, so this provider cannot see them.
 export function toOpenAiTools(defs = SHARED_TOOL_DEFS) {
-  return defs.map((d) => ({ type: 'function', function: { name: d.name, description: d.description, parameters: d.parameters } }));
+  return defs.filter((d) => !d.image).map((d) => ({ type: 'function', function: { name: d.name, description: d.description, parameters: d.parameters } }));
+}
+
+/** A browser tool's result as the text a tool message carries — a picture is described, never inlined. */
+export function toolResultText(result) {
+  if (result && typeof result === 'object' && typeof result.image === 'string') {
+    return `${result.text || 'ok'}\n(the rendered image cannot be shown to this model)`;
+  }
+  return typeof result === 'string' ? result : JSON.stringify(result ?? 'ok');
 }
 
 // Extra system-prompt section for serverless mode: the local agent's built-in
@@ -50,6 +60,7 @@ export const SERVERLESS_PROMPT_SUFFIX = `
 ## Serverless mode adjustments
 - Call every tool by its BARE name (\`set_song\`, \`compile\`). There is no \`mcp__\` prefix here; a prefixed name is not a tool and will fail.
 - Read/Glob/Grep are NOT available. To read repository reference files (examples, docs) use read_repo_file(path) with a repo-relative path.
+- render_shader is NOT available here: you cannot see the canvas. After a shader change say what you changed and ask the user what appears; never claim a visual result you can't verify.
 - Keep replies short; each tool call is a full network round-trip.`;
 
 // What goes BACK to the API from an assistant turn: role, content, tool_calls.
@@ -289,7 +300,7 @@ export async function runAgentTurn({
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
-        content: typeof result === 'string' ? result : JSON.stringify(result ?? 'ok'),
+        content: toolResultText(result),
       });
     }
   }

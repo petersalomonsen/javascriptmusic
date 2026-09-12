@@ -19,9 +19,10 @@ function scriptedFetch(responses, capturedBodies = []) {
   };
 }
 
-test('tool schemas: every def maps to an OpenAI function tool', () => {
+test('tool schemas: every text-result def maps to an OpenAI function tool', () => {
   const tools = toOpenAiTools();
-  assert.equal(tools.length, TOOL_DEFS.length);
+  // image-result tools (render_shader) are deliberately absent — see tools-def.test
+  assert.equal(tools.length, TOOL_DEFS.filter((d) => !d.image).length);
   for (const t of tools) {
     assert.equal(t.type, 'function');
     assert.ok(t.function.name && t.function.description && t.function.parameters);
@@ -513,4 +514,17 @@ test('runSpecialistTurn: the mastering role gets its own prompt and tools, and p
   assert.equal(notReady.ok, false);
   assert.match(notReady.text.split('\n')[0], /^master_mix: FAILED: NOT READY .* true peak -0.2 dBTP/);
   await assert.rejects(runSpecialistTurn({ role: 'dj', fetchFn, baseUrl: 'u', apiKey: 'k', model: 'm', runTool: async () => 'x', probe: async () => 'x' }), /unknown specialist role/);
+});
+
+// ---- image results never reach this provider's context as a blob ----
+import { toolResultText, toOpenAiTools as toOpenAiToolsForImages } from './nearai-core.js';
+
+test('toolResultText: a render_shader-style result is described, its base64 dropped; other results unchanged', () => {
+  const r = toolResultText({ text: 'rendered 2 frame(s)', image: 'AAAA'.repeat(1000), mimeType: 'image/jpeg' });
+  assert.equal(r, 'rendered 2 frame(s)\n(the rendered image cannot be shown to this model)');
+  assert.ok(!r.includes('AAAA'));
+  assert.equal(toolResultText('plain'), 'plain');
+  assert.equal(toolResultText({ a: 1 }), '{"a":1}');
+  assert.equal(toolResultText(undefined), '"ok"');
+  assert.ok(!toOpenAiToolsForImages([{ name: 'x', image: true, description: '', parameters: {} }, { name: 'y', description: '', parameters: {} }]).some((t) => t.function.name === 'x'));
 });

@@ -101,12 +101,21 @@ export function makeStudioServer(backend, role = 'producer', hooks = {}, config 
   const h = withDefaults(hooks);
   const text = (t) => ({ content: [{ type: 'text', text: t || 'ok' }] });
   const error = (t) => ({ content: [{ type: 'text', text: `ERROR: ${t}` }], isError: true });
+  // A browser tool answers with a string, a JSON-able value, or — render_shader —
+  // { text, image (base64), mimeType }: the picture goes to the model as an
+  // image block after the text, which is how the agent gets to SEE a frame.
+  const toolResult = (r) => {
+    if (r && typeof r === 'object' && typeof r.image === 'string') {
+      return { content: [{ type: 'text', text: r.text || 'ok' }, { type: 'image', data: r.image, mimeType: r.mimeType || 'image/jpeg' }] };
+    }
+    return text(typeof r === 'string' ? r : JSON.stringify(r));
+  };
 
   const proxy = (d) => tool(d.name, d.description, zodShape(d.parameters), async (args) => {
     try {
       const res = await backend.call(d.name, args);
       if (!res.ok) return error(res.result ?? 'tool failed');
-      return text(typeof res.result === 'string' ? res.result : JSON.stringify(res.result));
+      return toolResult(res.result);
     } catch (e) {
       return error(e?.message || e);
     }

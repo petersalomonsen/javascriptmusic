@@ -6,13 +6,14 @@
 // the "full in-app" path: tool calls operate on the browser, not on disk.
 
 import { songsourceeditor, synthsourceeditor, shadersourceeditor } from '../editorcontroller.js';
+import { renderShaderFrames } from '../visualizer/fragmentshader.js';
 import { transpileDspSource } from '../faust/faust-rs-transpile.js';
 import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
-  playFromHereLine, SPECIALISTS,
+  playFromHereLine, SPECIALISTS, noteStatesAtTime, fakeNoteStates, parseRenderTimes,
 } from './tools-core.js';
 import { runAgentScript, formatScriptResult } from './script-sandbox.js';
 import { probeNote, probeNotes, formatProbeReport } from '../audioprobe/instrumentprobe.js';
@@ -125,6 +126,42 @@ const registry = {
     return [result, ...shaderWarnings()].join('\n');
   },
   grep_shader: async (args) => grepDoc(shadersourceeditor, args),
+  // The agent's eyes: frames of the CURRENT shader at chosen song times, as
+  // one labelled contact sheet. Note uniforms are replayed from the compiled
+  // song, so a frame is what the app shows at that moment of THIS song; with
+  // nothing compiled a fake energy band stands in (like the headless harness).
+  // The sheet is also shown in the chat panel, so the user sees exactly what
+  // the agent judged.
+  render_shader: async ({ times, energy, width }) => {
+    const source = shadersourceeditor.doc.getValue();
+    if (!source.trim()) return { __error: 'the shader editor is empty — nothing to render (set_shader first)' };
+    let ts;
+    try { ts = parseRenderTimes(times); } catch (e) { return { __error: e.message }; }
+    const w = Math.max(160, Math.min(1280, Math.round(Number(width) || 640)));
+    const h = Math.round((w * 9) / 16);
+    const eventlist = window.lastCompiledEventList;
+    const fake = energy !== undefined && energy !== null && Number.isFinite(Number(energy));
+    const useSong = !fake && !!(eventlist && eventlist.length);
+    const noteStatesAt = useSong ? (t) => noteStatesAtTime(eventlist, t) : () => fakeNoteStates(fake ? energy : 0.5);
+    let r;
+    try {
+      r = renderShaderFrames(source, { times: ts, width: w, height: h, noteStatesAt });
+    } catch (e) {
+      return { __error: `shader failed to compile:\n${String(e?.message || e)}` };
+    }
+    addImage(r.dataUrl, `render_shader: t = ${ts.join('s, ')}s`);
+    const how = useSong ? 'note uniforms replayed from the compiled song'
+      : fake ? `note uniforms faked at energy ${Number(energy)}`
+        : 'note uniforms FAKED at energy 0.5 — nothing is compiled; run compile to see the real song';
+    const lines = [`rendered ${ts.length} frame(s) of the current shader at ${w}x${h}, ${how}. Look at the image: framing, proportions, what reacts.`];
+    for (const fr of r.frames) {
+      lines.push(`t=${fr.t}s: ${fr.litPct}% of pixels lit, mean brightness ${fr.brightness}%`
+        + (fr.sounding !== null ? `, ${fr.sounding} note(s) sounding` : '')
+        + (fr.changedPct !== null ? `, ${fr.changedPct}% of pixels differ from the previous frame` : ''));
+    }
+    if (r.frames.every((fr) => fr.litPct === 0)) lines.push('WARNING: every frame is black — the shader draws nothing at these times.');
+    return { text: [...lines, ...shaderWarnings()].join('\n'), image: r.dataUrl.split(',')[1], mimeType: 'image/jpeg' };
+  },
 
   // ---- Faust instrument authoring (OPFS faust/ folder; needs ?gitrepo= mode) ----
   list_faust: async () => {
@@ -1101,6 +1138,22 @@ function addLine(kind, text) {
   log.appendChild(line);
   log.scrollTop = log.scrollHeight;
   return line;
+}
+// A rendered contact sheet in the log — what render_shader handed the model.
+function addImage(dataUrl, caption) {
+  const log = el('studioagentlog');
+  if (!log) return;
+  const line = document.createElement('div');
+  line.className = 'sa-msg-tool sa-msg-image';
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.alt = caption;
+  img.title = caption;
+  img.style.maxWidth = '100%';
+  img.style.display = 'block';
+  line.appendChild(img);
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
 }
 function startAgentMessage() { agentMsgEl = addLine('agent', ''); }
 function appendAgentText(t) {

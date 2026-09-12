@@ -670,3 +670,53 @@ test('SPECIALISTS: each role says what to measure afterwards', () => {
   assert.deepEqual(SPECIALISTS.instrument.probeArgs({}, 'REPORT\nchannel: 5'), { channel: 5, notes: 'c3,c4,c5' });
   assert.equal(SPECIALISTS.instrument.probeArgs({}, 'no channel here'), null);
 });
+
+// ---- render_shader: note uniforms at a song time ----
+import { noteStatesAtTime, fakeNoteStates, parseRenderTimes } from './tools-core.js';
+
+const ev = (time, status, note, vel) => ({ time, message: [status, note, vel] });
+
+test('noteStatesAtTime: a sounding note is velocity-mapped, a released one decays in the smoothed view', () => {
+  const events = [ev(0, 0x90, 60, 127), ev(1000, 0x80, 60, 0), ev(1000, 0x91, 64, 64)];
+  const mid = noteStatesAtTime(events, 0.5);
+  assert.equal(mid.target[60], 1);
+  assert.equal(mid.smoothed[60], 1);
+  assert.equal(mid.target[64], -1);
+  assert.equal(mid.sounding, 1);
+  const after = noteStatesAtTime(events, 1.25); // 60 released 0.25s ago: 1 - 0.25*2.4 = 0.4
+  assert.equal(after.target[60], -1);
+  assert.ok(Math.abs(after.smoothed[60] - 0.4) < 1e-6, String(after.smoothed[60]));
+  assert.ok(Math.abs(after.target[64] - ((64 / 127) * 2 - 1)) < 1e-6);
+  assert.equal(after.sounding, 1);
+  const late = noteStatesAtTime(events, 3);
+  assert.equal(late.smoothed[60], -1); // fully released
+  assert.equal(noteStatesAtTime(events, 0).target[60], 1); // events AT t count
+  assert.equal(noteStatesAtTime([], 5).sounding, 0);
+});
+
+test('noteStatesAtTime: a note-on with velocity 0 is a release; sequencer control messages are ignored', () => {
+  const events = [ev(0, 0x90, 60, 100), ev(500, 0x90, 60, 0), { time: 100, message: [0xff, 0, 0] }, { time: 200 }];
+  const s = noteStatesAtTime(events, 0.5);
+  assert.equal(s.target[60], -1);
+  assert.ok(s.smoothed[60] > 0.5 && s.smoothed[60] < 0.6); // just released → still high
+});
+
+test('fakeNoteStates lights a band proportional to energy, like the headless harness', () => {
+  assert.equal(fakeNoteStates(0).sounding, 0);
+  const half = fakeNoteStates(0.5);
+  assert.equal(half.sounding, 30);
+  assert.ok(Math.abs(half.target[20] - 0.9) < 1e-6);
+  assert.ok(Math.abs(half.target[49] - 0.9) < 1e-6);
+  assert.equal(half.target[50], -1);
+  assert.equal(fakeNoteStates(7).sounding, 60); // clamped
+});
+
+test('parseRenderTimes: comma/space separated, deduplicated, capped, defaulted', () => {
+  assert.deepEqual(parseRenderTimes('2, 8.5,16 2'), [2, 8.5, 16]);
+  assert.deepEqual(parseRenderTimes([1, 2]), [1, 2]);
+  assert.deepEqual(parseRenderTimes(''), [4]);
+  assert.deepEqual(parseRenderTimes(undefined), [4]);
+  assert.throws(() => parseRenderTimes('1,2,3,4,5'), /at most 4 frames/);
+  assert.throws(() => parseRenderTimes('abc'), /not a song time/);
+  assert.throws(() => parseRenderTimes('-1'), /not a song time/);
+});
