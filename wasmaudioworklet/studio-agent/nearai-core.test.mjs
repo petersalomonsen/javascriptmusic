@@ -413,3 +413,72 @@ test('the compaction threshold leaves room under the proxy cap', () => {
   assert.equal(conversationChars([{ role: 'system', content: 'x'.repeat(50000) }]), 2,
     'the system prompt is not part of the conversation budget');
 });
+
+// ---- the specialist as a nested turn ----------------------------------------
+import { runSpecialistTurn } from './nearai-core.js';
+
+test('runSpecialistTurn: specialist prompt + instrument tools go out, the caller\'s probe decides the verdict', async () => {
+  const bodies = [];
+  const fetchFn = async (url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    // the scripted specialist: one write_faust, then its report
+    if (bodies.length === 1) return completion({ role: 'assistant', content: null, tool_calls: [{ id: 't1', type: 'function', function: { name: 'write_faust', arguments: JSON.stringify({ path: 'bell', source: 'x' }) } }] });
+    return completion({ role: 'assistant', content: 'REPORT\nfile: faust/bell.dsp\nclass: Bell\nchannel: 3\nprobe: …\nnotes: ok' });
+  };
+  const toolCalls = [];
+  const r = await runSpecialistTurn({
+    fetchFn, baseUrl: 'http://x/v1', apiKey: 'k', model: 'm',
+    args: { brief: 'a bell', kind: 'fm', name: 'bell' },          // no channel: the report's channel is used
+    runTool: async (name, args, role) => { toolCalls.push({ name, role }); return 'written'; },
+    probe: async ({ channel, notes }) => `ch${channel} c4: peak 0.3, rms 0.1, dominant 261.0Hz (note is 130.8Hz), centroid 500Hz (${notes})`,
+  });
+  assert.equal(r.ok, true);
+  assert.match(r.text.split('\n')[0], /^design_instrument "bell" on channel 3: OK/);
+  assert.ok(r.text.includes('SPECIALIST REPORT:\nREPORT\nfile: faust/bell.dsp'));
+  // what the specialist was given
+  assert.ok(bodies[0].messages[0].content.startsWith('You are the INSTRUMENT SPECIALIST'));
+  assert.ok(bodies[0].messages[0].content.includes('### Guide: FM'));
+  assert.ok(bodies[0].messages[1].content.startsWith('BRIEF: a bell'));
+  const names = bodies[0].tools.map((t) => t.function.name);
+  assert.ok(names.includes('write_faust') && names.includes('probe_instrument'));
+  assert.ok(!names.includes('get_song') && !names.includes('design_instrument'));
+  assert.deepEqual(toolCalls, [{ name: 'write_faust', role: 'instrument' }]);
+});
+
+test('runSpecialistTurn: a probe that cannot run, or finds silence, is a FAILED verdict — never an implicit OK', async () => {
+  const fetchFn = async () => completion({ role: 'assistant', content: 'REPORT\nfile: faust/x.dsp\nclass: X\nchannel: 1\nprobe: claimed fine\nnotes: -' });
+  const noSynth = await runSpecialistTurn({ fetchFn, baseUrl: 'u', apiKey: 'k', model: 'm', args: { brief: 'x', channel: 1 }, runTool: async () => 'ok', probe: async () => { throw new Error('No compiled synth yet — call compile first.'); } });
+  assert.equal(noSynth.ok, false);
+  assert.match(noSynth.text.split('\n')[0], /FAILED: .*could not be probed/);
+  const silent = await runSpecialistTurn({ fetchFn, baseUrl: 'u', apiKey: 'k', model: 'm', args: { brief: 'x', channel: 1 }, runTool: async () => 'ok', probe: async () => 'ch1 c4: SILENT — no audio produced' });
+  assert.equal(silent.ok, false);
+  assert.match(silent.text.split('\n')[0], /FAILED: .*SILENCE/);
+  // a specialist that errors mid-run still yields a report line, and the probe still runs
+  const broken = await runSpecialistTurn({ fetchFn: async () => { throw new Error('boom'); }, baseUrl: 'u', apiKey: 'k', model: 'm', args: { brief: 'x', channel: 1 }, runTool: async () => 'ok', probe: async () => 'ch1 c4: peak 0.2, rms 0.1, dominant 130.8Hz (note is 130.8Hz), centroid 300Hz' });
+  assert.equal(broken.ok, true);
+  assert.ok(broken.text.includes('ended with an error: boom'));
+});
+
+test('a dropped connection is retried like a 503, and an abort is not', async () => {
+  let calls = 0;
+  const retries = [];
+  const r = await runAgentTurn({
+    fetchFn: async () => { calls++; if (calls < 3) throw new TypeError('fetch failed'); return completion({ role: 'assistant', content: 'ok' }); },
+    baseUrl: 'u', apiKey: 'k', model: 'm', messages: [{ role: 'user', content: 'hi' }], runTool: () => {},
+    onRetry: (status, delayMs, attempt) => retries.push([status, attempt]), sleepFn: async () => {},
+  });
+  assert.equal(r.answered, true);
+  assert.deepEqual(retries, [['network', 1], ['network', 2]]);
+  // an abort goes straight through
+  await assert.rejects(runAgentTurn({
+    fetchFn: async () => { throw Object.assign(new Error('aborted'), { name: 'AbortError' }); },
+    baseUrl: 'u', apiKey: 'k', model: 'm', messages: [{ role: 'user', content: 'hi' }], runTool: () => {}, sleepFn: async () => {},
+  }), /aborted/);
+  // ...and a persistent failure gives up after maxRetries
+  let n = 0;
+  await assert.rejects(runAgentTurn({
+    fetchFn: async () => { n++; throw new TypeError('fetch failed'); },
+    baseUrl: 'u', apiKey: 'k', model: 'm', messages: [{ role: 'user', content: 'hi' }], runTool: () => {}, maxRetries: 2, sleepFn: async () => {},
+  }), /fetch failed/);
+  assert.equal(n, 3);
+});

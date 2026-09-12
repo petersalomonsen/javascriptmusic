@@ -598,3 +598,41 @@ test('playFromHere with nothing scheduled after it says so, not "nothing moved t
   assert.ok(warnings.some((w) => /WARNING: no notes after playFromHere\(\) \(line 9\)/.test(w)));
   assert.ok(!warnings.some((w) => /Nothing moved the playhead/.test(w)));
 });
+
+
+// ---- design_instrument brief + result ------------------------------------------
+import { specialistBrief, specialistResult, SPECIALIST_REPORT_FORMAT } from './tools-core.js';
+
+test('specialistBrief carries brief, kind, name and channel, and asks for the report', () => {
+    const b = specialistBrief({ brief: 'warm FM e-piano', kind: 'fm', channel: 3, name: 'epiano' });
+    assert.match(b, /^BRIEF: warm FM e-piano/);
+    assert.ok(b.includes('KIND: fm') && b.includes('faust/<name>.dsp') && b.includes('epiano') && b.includes('MIDI channel 3'));
+    assert.ok(b.includes('REPORT'));
+    // no channel → the specialist picks the next free one and must say which
+    assert.ok(specialistBrief({ brief: 'x' }).includes('next free MIDI channel'));
+    assert.ok(SPECIALIST_REPORT_FORMAT.startsWith('REPORT\nfile:'));
+});
+
+test('specialistResult puts the verdict in the first line, from the probe the tool ran', () => {
+    const ok = specialistResult({ report: 'REPORT\nfile: faust/epiano.dsp', probeText: 'ch3 c4: peak 0.290, rms 0.1091, dominant 261.1Hz (note is 130.8Hz), centroid 267Hz', channel: 3, name: 'epiano' });
+    assert.match(ok.split('\n')[0], /^design_instrument "epiano" on channel 3: OK/);
+    assert.ok(ok.includes('SPECIALIST REPORT:\nREPORT\nfile: faust/epiano.dsp'));
+    assert.ok(ok.includes('VERIFIED PROBE'));
+
+    const silent = specialistResult({ report: 'REPORT\n…', probeText: 'ch3 c4: SILENT — no audio produced', channel: 3 });
+    assert.match(silent.split('\n')[0], /FAILED: .*SILENCE/);
+
+    const unprobed = specialistResult({ report: '', probeText: 'ERROR: No compiled synth yet — call compile first.', channel: 5 });
+    assert.match(unprobed.split('\n')[0], /FAILED: .*could not be probed/);
+    assert.ok(unprobed.includes('(the specialist ended without a report)'));
+
+    // an empty probe is a failure too — never an implicit OK
+    assert.match(specialistResult({ report: 'x', probeText: '', channel: 0 }).split('\n')[0], /FAILED/);
+});
+
+test('channelFromReport reads the report line and nothing else', async () => {
+    const { channelFromReport } = await import('./tools-core.js');
+    assert.equal(channelFromReport('REPORT\nfile: faust/x.dsp\nclass: X\nchannel: 4\nprobe: …'), 4);
+    assert.equal(channelFromReport('I used channel 4 in synth.ts'), null);
+    assert.equal(channelFromReport(''), null);
+});

@@ -17,10 +17,12 @@ import { homedir } from 'node:os';
 import { mkdirSync, createWriteStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { z } from 'zod';
-import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
-import { SYSTEM_PROMPT, SDK_PROMPT_SUFFIX } from './prompt.mjs';
-import { toolDefsFor, sdkToolNames } from '../../wasmaudioworklet/studio-agent/tools-def.js';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+import { SDK_PROMPT_SUFFIX, buildProducerPrompt } from './prompt.mjs';
+// Who the agents are — prompts, tool subsets per role, the nested specialist —
+// lives in agent-core.mjs behind a backend interface, so the bench can run the
+// same code against a headless studio. This file is the WebSocket backend.
+import { producerQuery, producerSystemPrompt, abortSpecialists } from './agent-core.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
@@ -73,23 +75,10 @@ if (process.env.ANTHROPIC_API_KEY) {
   );
 }
 
-// Tools the agent may use: our browser-proxied studio tools + read-only repo
-// access. The tool set itself is declared once in
-// wasmaudioworklet/studio-agent/tools-def.js and shared with the in-browser
-// NEAR AI provider, so adding a tool cannot reach only one of them.
-const STUDIO_TOOLS = sdkToolNames();
-const ALLOWED = new Set([
-  ...STUDIO_TOOLS.map((n) => `mcp__studio__${n}`),
-  'Read', 'Glob', 'Grep',
-]);
+const SPECIALIST_MODEL = process.env.STUDIO_AGENT_SPECIALIST_MODEL || undefined;
+const SPECIALIST_MAX_TURNS = Number(process.env.STUDIO_AGENT_SPECIALIST_MAX_TURNS || 40);
 // Built-in tools that cause the agent to thrash on this task — keep it focused.
 const DISALLOWED = ['Bash', 'BashOutput', 'KillShell', 'Agent', 'Task', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
-
-function safeResolve(p) {
-  const full = resolve(REPO_ROOT, p);
-  if (full !== REPO_ROOT && !full.startsWith(REPO_ROOT + '/')) throw new Error(`path "${p}" escapes the repo`);
-  return full;
-}
 
 // ---- WebSocket plumbing: one browser at a time -----------------------------
 let pending = new Map();   // id -> { resolve, started, fail }
@@ -106,6 +95,7 @@ let currentTurn = null;    // { controller, aborted }
 function abortCurrentTurn() {
   if (!currentTurn || currentTurn.aborted) return false;
   currentTurn.aborted = true;
+  abortSpecialists();
   try { currentTurn.controller.abort(); } catch { /* already torn down */ }
   for (const entry of [...pending.values()]) entry.fail('turn stopped by the user');
   return true;
@@ -141,71 +131,6 @@ function callBrowser(ws, name, args) {
   });
 }
 
-// The shared tool defs carry JSON Schema (what the OpenAI-compatible NEAR AI
-// path sends); the Agent SDK wants a zod shape. Only the primitive types the
-// defs actually use are supported — anything else is a mistake worth throwing on.
-function zodShape(parameters) {
-  const required = new Set(parameters.required || []);
-  const shape = {};
-  for (const [name, spec] of Object.entries(parameters.properties || {})) {
-    let field;
-    if (spec.type === 'string') field = z.string();
-    else if (spec.type === 'number') field = z.number();
-    else if (spec.type === 'boolean') field = z.boolean();
-    else throw new Error(`studio tool schema: unsupported type "${spec.type}" for "${name}"`);
-    if (spec.description) field = field.describe(spec.description);
-    shape[name] = required.has(name) ? field : field.optional();
-  }
-  return shape;
-}
-
-// ---- Build the in-process MCP tools, bound to one browser socket -----------
-function makeStudioServer(ws) {
-  const proxy = (name, description, shape) =>
-    tool(name, description, shape, async (args) => {
-      try {
-        const res = await callBrowser(ws, name, args);
-        if (!res.ok) {
-          return { content: [{ type: 'text', text: `ERROR: ${res.result ?? 'tool failed'}` }], isError: true };
-        }
-        const text = typeof res.result === 'string' ? res.result : JSON.stringify(res.result);
-        return { content: [{ type: 'text', text: text || 'ok' }] };
-      } catch (e) {
-        return { content: [{ type: 'text', text: `ERROR: ${e?.message || e}` }], isError: true };
-      }
-    });
-
-  // Load a repo file straight into an editor: the bytes are read server-side and
-  // pushed to the browser, so a huge bundle never has to pass through the model.
-  const loadInto = (def) =>
-    tool(def.name, `${def.description} The file content is read here and sent to the browser for you.`,
-      zodShape(def.parameters),
-      async ({ path }) => {
-        try {
-          const content = await readFile(safeResolve(path), 'utf8');
-          const res = await callBrowser(ws, def.target === 'synth' ? 'set_synth' : 'set_song', { source: content });
-          if (!res.ok) return { content: [{ type: 'text', text: `ERROR: ${res.result ?? 'load failed'}` }], isError: true };
-          return { content: [{ type: 'text', text: `loaded ${path} (${content.split('\n').length} lines) into the ${def.target} editor` }] };
-        } catch (e) {
-          return { content: [{ type: 'text', text: `ERROR: ${e?.message || e}` }], isError: true };
-        }
-      });
-
-  return createSdkMcpServer({
-    name: 'studio',
-    version: '1.0.0',
-    // Pin the studio tool schemas into the turn-1 prompt instead of letting
-    // them sit behind tool search. Deferred schemas cost an extra ToolSearch
-    // round-trip before the agent can act at all — measured at ~1.4x the
-    // median turn and a much worse tail on real sessions.
-    alwaysLoad: true,
-    tools: [
-      ...toolDefsFor('browser').map((d) => proxy(d.name, d.description, zodShape(d.parameters))),
-      ...toolDefsFor('loadfile').map((d) => loadInto(d)),
-    ],
-  });
-}
-
 // ---- Run one chat turn through the agent -----------------------------------
 const t0 = () => new Date().toISOString().slice(11, 23);
 const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
@@ -215,21 +140,16 @@ const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 // the model has the project's instruments and conventions from turn 0 instead
 // of spending a round-trip discovering them. Identical text every turn keeps
 // the cached prefix intact; a changed kit costs one cold turn, as it should.
-function systemPromptWith(kit) {
-  // This path drives the tools over MCP, so it owns the mcp__studio__ naming rule.
-  const base = SYSTEM_PROMPT + SDK_PROMPT_SUFFIX;
-  if (!kit || !kit.trim()) return base;
-  return `${base}\n\n## Project kit (from the project's AGENT.md)\n\n` +
-    `These are the user's instructions for THIS project — instrument sources, ` +
-    `channel layout and conventions. Prefer them over generic defaults, and use ` +
-    `them directly instead of searching the repository for the same information.` +
-    `\n\n${kit}`;
-}
+// (producerSystemPrompt in agent-core.mjs builds it, so the bench gets the same.)
 
 async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false) {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
-  const studio = makeStudioServer(ws);
-  const systemPrompt = systemPromptWith(kit);
+  const systemPrompt = producerSystemPrompt(kit);
+  // The studio the agents act on, as agent-core sees it: every tool call goes
+  // to the browser over this socket; file loads read the repo here first.
+  const backend = { call: (name, args) => callBrowser(ws, name, args), repoRoot: REPO_ROOT };
+  const hooks = { send, log: logEvent, dlog, isAborted: () => !!currentTurn?.aborted };
+  const config = { model: MODEL, effort: EFFORT, cwd: REPO_ROOT, specialistModel: SPECIALIST_MODEL, specialistMaxTurns: SPECIALIST_MAX_TURNS };
   let sid = sessionId || null;
   let contextTokens = 0; // last model call's input size (fresh + cached)
   dlog('chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)',
@@ -242,27 +162,8 @@ async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false
   currentTurn = { controller, aborted: false };
 
   try {
-    for await (const m of query({
-      prompt: text,
-      options: {
-        abortController: controller,
-        resume: sessionId || undefined,
-        model: MODEL,
-        effort: EFFORT,
-        cwd: REPO_ROOT,
-        systemPrompt,
-        mcpServers: { studio },
-        allowedTools: [...ALLOWED],
-        disallowedTools: DISALLOWED,
-        canUseTool: async (name, input) => {
-          const ok = ALLOWED.has(name);
-          dlog(ok ? 'ALLOW' : 'DENY ', name, ok ? '' : '(not in allowlist)');
-          return ok
-            ? { behavior: 'allow', updatedInput: input }
-            : { behavior: 'deny', message: `${name} is not available to the studio agent; use only Read/Glob/Grep and the studio tools (set_synth/set_song/compile/play/stop).` };
-        },
-        maxTurns: 60,
-      },
+    for await (const m of producerQuery({
+      prompt: text, sessionId, systemPrompt, abortController: controller, backend, hooks, config, maxTurns: 60,
     })) {
       if (m.type === 'system' && m.subtype === 'init') {
         sid = m.session_id || sid;
@@ -376,7 +277,7 @@ async function sendCompactSummary(send, sid) {
 
 // Run /compact on the session between turns (chats are serialized through
 // chatChain, so a message the user sends meanwhile simply waits for this).
-async function autoCompact(send, sid, contextTokens, systemPrompt = SYSTEM_PROMPT + SDK_PROMPT_SUFFIX) {
+async function autoCompact(send, sid, contextTokens, systemPrompt = buildProducerPrompt() + SDK_PROMPT_SUFFIX) {
   dlog(`auto-compact: context ~${Math.round(contextTokens / 1000)}k tokens > ${Math.round(COMPACT_THRESHOLD / 1000)}k threshold`);
   send({ t: 'compacting', tokens: contextTokens });
   logEvent({ kind: 'autocompact', sessionId: sid, contextTokens });
@@ -435,4 +336,5 @@ console.log(`\n  studio-agent → ws://localhost:${PORT}`);
 console.log(`  repo root:     ${REPO_ROOT}`);
 console.log(`  model:         ${MODEL || '(default)'}`);
 console.log(`  effort:        ${EFFORT}`);
+console.log(`  specialist:    ${SPECIALIST_MODEL || MODEL || '(default)'} model, ≤${SPECIALIST_MAX_TURNS} turns (STUDIO_AGENT_SPECIALIST_MODEL / _MAX_TURNS)`);
 console.log('  auth:          Claude Code subscription login (no API key)\n');

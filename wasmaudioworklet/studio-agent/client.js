@@ -8,23 +8,24 @@
 import { songsourceeditor, synthsourceeditor, shadersourceeditor } from '../editorcontroller.js';
 import { transpileDspSource } from '../faust/faust-rs-transpile.js';
 import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
-import { readfile, writefileandstage, listfiles, gitCommand, gitLog } from '../wasmgit/wasmgitclient.js';
+import { readfile, writefileandstage, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
   playFromHereLine
 } from './tools-core.js';
 import { runAgentScript, formatScriptResult } from './script-sandbox.js';
-import { probeNote, probeNotes, probeWarnings } from '../audioprobe/instrumentprobe.js';
+import { probeNote, probeNotes, formatProbeReport } from '../audioprobe/instrumentprobe.js';
 import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
-import { runAgentTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX,
-  compactConversation, conversationChars, COMPACT_AT_CHARS } from './nearai-core.js';
+import { runAgentTurn, runSpecialistTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX,
+  compactConversation, conversationChars, COMPACT_AT_CHARS, toOpenAiTools } from './nearai-core.js';
+import { toolDefsForRole, toolNamesForRole } from './tools-def.js';
 import { loadPass, clearPass, passRemainingSeconds, HEADER_PASS } from '../near/x402-client.js';
 
 // The same-origin Pages Function. Works in production and, since devserver.js
 // runs the Functions too, on localhost.
 const PROXY_BASE_URL = '/nearai/v1';
-import { SYSTEM_PROMPT } from './prompt.js';
+import { buildProducerPrompt } from './prompt.js';
 import { loadKit, formatKit } from './kit.js';
 
 const DEFAULT_PORT = 17891;
@@ -271,18 +272,7 @@ const registry = {
     } catch (e) {
       return { __error: `probe failed: ${e.message || e}` };
     }
-    const lines = results.map((r) => r.silent
-      ? `ch${r.channel} ${r.name}: SILENT — no audio produced`
-      : `ch${r.channel} ${r.name}: peak ${r.peak.toFixed(3)}, rms ${r.rms.toFixed(4)}, `
-        + `dominant ${r.dominantHz.toFixed(1)}Hz (note is ${r.expectedHz.toFixed(1)}Hz), `
-        + `centroid ${r.centroidHz.toFixed(0)}Hz`);
-    const audible = results.filter((r) => !r.silent);
-    const distinct = new Set(audible.map((r) => `${Math.round(r.dominantHz)}:${Math.round(r.centroidHz / 20)}`));
-    if (audible.length > 1 && distinct.size === 1) {
-      lines.push('All notes rendered the SAME audio — the instrument ignores the note number. '
-        + 'Correct for a fixed-pitch drum; a bug for a pitched voice (declare `freq`) or for a kit meant to map notes to drums.');
-    }
-    return [...lines, ...probeWarnings(results)].join('\n');
+    return formatProbeReport(results);
   },
   song_summary: async () => {
     const summary = analyzeCompiledSong();
@@ -465,9 +455,23 @@ async function onMessage(msg) {
       appendAgentText(msg.text);
       setPhase('responding…');
       break;
-    case 'tool': // assistant decided to use a tool (informational)
-      addLine('tool', `⚙ ${shortName(msg.name)}`);
-      setPhase(`running ${shortName(msg.name)}…`);
+    case 'tool': // the assistant (or its specialist) decided to use a tool (informational)
+      if (msg.sub) {
+        addLine('tool', `   ↳ ${shortName(msg.name)} (${msg.sub} specialist)`);
+        setPhase(`${msg.sub} specialist: ${shortName(msg.name)}…`);
+      } else {
+        addLine('tool', `⚙ ${shortName(msg.name)}`);
+        setPhase(`running ${shortName(msg.name)}…`);
+      }
+      break;
+    case 'specialist': // a nested specialist run started / ended inside the turn
+      if (msg.state === 'start') {
+        addLine('tool', `— ${msg.role} specialist started${msg.name ? ` (${msg.name})` : ''} —`);
+        setPhase(`${msg.role} specialist…`);
+      } else {
+        addLine('tool', `— ${msg.role} specialist finished: ${msg.ok ? 'OK' : 'FAILED'} —`);
+        setPhase('thinking…');
+      }
       break;
     case 'tool_call': // request to EXECUTE a tool in the browser
       // Run STRICTLY one at a time: the agent can fire several tool calls at once,
@@ -569,6 +573,14 @@ async function sendChat(text) {
   // /nearai provider commands are handled locally and never enter the
   // conversation (the API key must not be persisted into the OPFS repo).
   if (text.startsWith('/nearai')) { handleNearaiCommand(text); return; }
+
+  // The agent works inside a project repo only: instruments live in the OPFS
+  // faust/ folder, the session is saved to the repo, and the specialist writes
+  // .dsp files there. Without a repo half the tools would fail one by one.
+  if (!gitWorker) {
+    addLine('error', 'The studio agent needs a project repo: open the app with ?gitrepo=<name> (a local-only name is fine) so there is an OPFS working tree for instruments and the session.');
+    return false;
+  }
 
   // One turn at a time. Sending into a running turn corrupts the shared
   // history; the caller puts the text back in the box so nothing is lost.
@@ -678,7 +690,11 @@ async function fetchRepoFile(path) {
   return res.text();
 }
 
-async function runNearaiServerlessTool(name, args) {
+async function runNearaiServerlessTool(name, args, role = 'producer') {
+  // Each role sees only its own tools; a call outside the role's list is a
+  // model error and is answered as one rather than silently executed.
+  if (!toolNamesForRole(role).includes(name)) throw new Error(`tool ${name} is not available to the ${role}`);
+  if (name === 'design_instrument') return runNearaiSpecialist(args);
   if (registry[name]) {
     const result = await registry[name](args || {});
     if (result && result.__error) throw new Error(result.__error);
@@ -694,6 +710,32 @@ async function runNearaiServerlessTool(name, args) {
     return `loaded ${args.path} (${content.split('\n').length} lines) into the ${name === 'load_synth_from_file' ? 'synth' : 'song'} editor`;
   }
   throw new Error(`unknown tool ${name}`);
+}
+
+// ---- the instrument specialist (serverless path) ------------------------------
+// The loop itself lives in nearai-core (runSpecialistTurn) so the bench runs
+// the same code; this adds the chat lines and the in-app probe.
+async function runNearaiSpecialist(args = {}) {
+  const cfg = nearaiConfig();
+  addLine('tool', `— instrument specialist started${args.name ? ` (${args.name})` : ''} —`);
+  setPhase('instrument specialist…');
+  const { text, ok } = await runSpecialistTurn({
+    fetchFn: nearaiFetch(), baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model, args,
+    // NOT through toolQueue: this whole call IS the queued item the producer's
+    // design_instrument occupies, and queueing behind itself would wait
+    // forever. The specialist's own loop runs its tools one at a time anyway.
+    runTool: (n, a, role) => runNearaiServerlessTool(n, a, role),
+    probe: async (p) => {
+      const r = await registry.probe_instrument(p);
+      if (r && r.__error) throw new Error(r.__error);
+      return r;
+    },
+    onToolCall: (n) => { addLine('tool', `   ↳ ${n} (instrument specialist)`); setPhase(`instrument specialist: ${n}…`); },
+    onRetry: (status, delayMs, attempt) => addLine('tool', `— specialist: ${status === 429 ? 'rate limited' : status === 'network' ? 'connection dropped' : `upstream ${status}`}; retry ${attempt} in ${delayMs / 1000}s —`),
+  });
+  addLine('tool', `— instrument specialist finished: ${ok ? 'OK' : 'FAILED'} —`);
+  setPhase(`${cfg.model.split('/').pop()} thinking…`);
+  return text;
 }
 
 let nearaiMessages = null; // model-visible history (in-memory for iteration 1)
@@ -796,6 +838,31 @@ function offerPass(onBought) {
   return line;
 }
 
+// One fetch for every request of a turn — the producer's and a specialist's
+// alike: the pass rides on each, Stop lands mid-loop through the abort signal,
+// and the two "not really an error" statuses become typed errors the turn
+// handler knows how to answer.
+function nearaiFetch() {
+  return async (url, init) => {
+    const res = await fetch(url, { ...withPass(init), signal: nearaiAbort?.signal });
+    // 503 out_of_credits is the shared pool running dry, NOT a pass problem —
+    // keep the pass and say so, rather than sending them to claim again.
+    if (res.status === 503) {
+      const body = await res.clone().json().catch(() => ({}));
+      if (body.error === 'out_of_credits') {
+        throw Object.assign(new Error(body.message), { outOfCredits: true });
+      }
+    }
+    if (res.status === 402) {
+      // The server is the authority on validity, so a rejected pass is
+      // dead weight — drop it rather than resend it on every retry.
+      clearPass();
+      throw Object.assign(new Error('payment required'), { paymentRequired: true });
+    }
+    return res;
+  };
+}
+
 async function runNearaiTurn(text) {
   const cfg = nearaiConfig();
   nearaiAbort = new AbortController();
@@ -805,7 +872,7 @@ async function runNearaiTurn(text) {
     // whatever it is sent (bounded, and still gated by the x402 pass) and only
     // falls back to its own copy when a client sends none. So a prompt fix
     // ships with the app instead of waiting on a Pages redeploy.
-    nearaiMessages = [{ role: 'system', content: SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX }];
+    nearaiMessages = [{ role: 'system', content: buildProducerPrompt() + SERVERLESS_PROMPT_SUFFIX }];
     // ...and that includes a system message carrying the project kit, so the
     // kit rides in as part of the FIRST user turn instead. That is its honest
     // authority level anyway (repo content is the user talking), and merging
@@ -840,32 +907,14 @@ async function runNearaiTurn(text) {
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
   try {
     const { usage, answered, finishReason } = await runAgentTurn({
-      // The signal rides on every request of the turn, so Stop lands mid-loop
-      // rather than only between tool calls.
-      // The pass rides on every request of the turn; a 402 mid-turn (expiry,
-      // or spending it in another tab) is caught below and offered, not thrown.
-      fetchFn: async (url, init) => {
-        const res = await fetch(url, { ...withPass(init), signal: nearaiAbort.signal });
-        // 503 out_of_credits is the shared pool running dry, NOT a pass problem —
-        // keep the pass and say so, rather than sending them to claim again.
-        if (res.status === 503) {
-          const body = await res.clone().json().catch(() => ({}));
-          if (body.error === 'out_of_credits') {
-            throw Object.assign(new Error(body.message), { outOfCredits: true });
-          }
-        }
-        if (res.status === 402) {
-          // The server is the authority on validity, so a rejected pass is
-          // dead weight — drop it rather than resend it on every retry.
-          clearPass();
-          throw Object.assign(new Error('payment required'), { paymentRequired: true });
-        }
-        return res;
-      },
+      fetchFn: nearaiFetch(),
       baseUrl: cfg.baseUrl,
       apiKey: cfg.apiKey,
       model: cfg.model,
-      sendTools: !cfg.proxy,
+      // The producer's tool set: everything but the .dsp writers, plus
+      // design_instrument. The list goes out on every path — the proxy forwards
+      // it (bounded) rather than injecting its own.
+      tools: toOpenAiTools(toolDefsForRole('producer')),
       messages: nearaiMessages,
       runTool: (name, args) => new Promise((resolve, reject) => {
         // reuse the same serialization as WS tool calls; once the tool is
@@ -877,7 +926,7 @@ async function runNearaiTurn(text) {
       }),
       onText: (t) => { appendAgentText(t); setPhase('responding…'); },
       onToolCall: (name, args) => { addLine('tool', `⚙ ${name}`); setPhase(`running ${name}…`); },
-      onRetry: (status, delayMs, attempt) => { addLine('tool', `— ${status === 429 ? 'rate limited' : `upstream ${status}`}; retry ${attempt} in ${delayMs / 1000}s —`); setPhase(`retrying (${status})…`); },
+      onRetry: (status, delayMs, attempt) => { addLine('tool', `— ${status === 429 ? 'rate limited' : status === 'network' ? 'connection dropped' : `upstream ${status}`}; retry ${attempt} in ${delayMs / 1000}s —`); setPhase(`retrying (${status})…`); },
     });
     const agentText = agentMsgEl ? agentMsgEl.textContent : '';
     if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }

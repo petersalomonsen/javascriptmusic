@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { SYSTEM_PROMPT } from '../studio-agent/prompt.js';
+import { buildProducerPrompt } from '../studio-agent/prompt.js';
+import { specRepo, clearOPFS, waitForAppReady } from './near-git-helpers.js';
+
+// The agent only works inside a project repo (OPFS working tree), so every
+// test boots one — local-only, no NEAR sandbox needed.
+const REPO = specRepo('studio-agent-nearai');
 
 // NEAR AI serverless provider: the agent loop runs IN THE BROWSER against an
 // OpenAI-compatible API (no local studio-agent process). The API is mocked
@@ -11,12 +16,15 @@ const chatInput = (page) => page.locator('#studioagentinput');
 const chatLog = (page) => page.locator('#studioagentlog');
 
 async function bootApp(page) {
-    await page.goto('/');
+    await page.goto(`/?gitrepo=${REPO}`);
+    await waitForAppReady(page);
     // The chat input exists in the DOM before initStudioAgent runs — wait for
     // toggleStudioAgent (defined at the END of app boot) to avoid a CI race.
     await page.waitForFunction(() => typeof window.toggleStudioAgent === 'function', { timeout: 30000 });
     await page.evaluate(() => window.toggleStudioAgent(true));
 }
+
+test.afterEach(async ({ page }) => { await clearOPFS(page, REPO); });
 
 async function sendChat(page, text) {
     await chatInput(page).fill(text);
@@ -58,7 +66,13 @@ test('browser agent loop drives tools against a mocked NEAR AI API', async ({ pa
     // Protocol details: auth header + tools sent + tool result fed back.
     expect(requests.length).toBe(2);
     expect(requests[0].model).toBe('Qwen/Qwen3.6-35B-A3B-FP8');
-    expect(requests[0].tools.some((t) => t.function.name === 'write_faust')).toBe(true);
+    // The PRODUCER's tool list: it delegates instrument design, so it offers
+    // design_instrument and not the .dsp writers.
+    const names = requests[0].tools.map((t) => t.function.name);
+    expect(names).toContain('design_instrument');
+    expect(names).toContain('set_song');
+    expect(names).not.toContain('write_faust');
+    expect(names).not.toContain('edit_faust');
     const toolMsg = requests[1].messages.find((m) => m.role === 'tool');
     expect(toolMsg.tool_call_id).toBe('call_1');
     expect(toolMsg.content).toBe('song updated');
@@ -66,7 +80,7 @@ test('browser agent loop drives tools against a mocked NEAR AI API', async ({ pa
     expect(JSON.stringify(requests)).not.toContain('test-api-key');
 });
 
-test('proxy mode (/nearai on): no key and no tools sent, but the app sends its own system prompt', async ({ page }) => {
+test('proxy mode (/nearai on): no key sent; the app sends its own system prompt AND its tool list', async ({ page }) => {
     page.on('pageerror', (e) => console.log('[browser-error]', e.message));
     const requests = [];
     // Same-origin proxy path (on localhost the default is direct, so the test
@@ -86,14 +100,16 @@ test('proxy mode (/nearai on): no key and no tools sent, but the app sends its o
 
     expect(requests.length).toBe(1);
     expect(requests[0].headers.authorization).toBeUndefined();      // server holds the key
-    expect(requests[0].body.tools).toBeUndefined();                  // server injects tools
-    // The PROMPT, unlike the key and the tools, is the app's: the proxy forwards
-    // whatever it is sent and only falls back to its own copy when a client
-    // sends none. That is what lets a prompt fix ship with the app instead of
-    // waiting on a Pages redeploy.
+    // The tool list is the app's too: the proxy forwards it (bounded) and
+    // injects nothing, which is what lets a specialist turn offer a subset.
+    expect(requests[0].body.tools.some((t) => t.function.name === 'design_instrument')).toBe(true);
+    // The PROMPT, unlike the key, is the app's: the proxy forwards whatever it
+    // is sent and only falls back to its own copy when a client sends none.
+    // That is what lets a prompt fix ship with the app instead of waiting on a
+    // Pages redeploy.
     const system = requests[0].body.messages.filter((m) => m.role === 'system');
     expect(system.length).toBe(1);
-    expect(system[0].content.startsWith(SYSTEM_PROMPT.slice(0, 60))).toBe(true);
+    expect(system[0].content.startsWith(buildProducerPrompt().slice(0, 60))).toBe(true);
     // The project kit still rides in on the FIRST user turn rather than as a
     // second system message, which keeps the history strictly alternating —
     // and repo content carries user authority anyway.
@@ -101,6 +117,82 @@ test('proxy mode (/nearai on): no key and no tools sent, but the app sends its o
     expect(last.role).toBe('user');
     expect(last.content.endsWith('hello there')).toBe(true);
     expect(last.content).toContain('Performance kit');
+});
+
+// design_instrument runs a SECOND agent loop in the browser with the specialist
+// prompt and only the instrument tools; afterwards the tool probes the channel
+// itself. This scripts both loops and pins the protocol: what the specialist
+// is sent, what it may call, and that the producer gets a MEASURED verdict.
+test('design_instrument runs the instrument specialist as a nested loop and returns a measured verdict', async ({ page }) => {
+    page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+    const requests = [];
+    const responses = [
+        // 1 — the producer delegates
+        { choices: [{ message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_d', type: 'function', function: { name: 'design_instrument', arguments: JSON.stringify({ brief: 'a short bright FM bell', kind: 'fm', channel: 2, name: 'bell' }) } }] } }] },
+        // 2 — the specialist answers with its report straight away (no tools)
+        { choices: [{ message: { role: 'assistant', content: 'REPORT\nfile: faust/bell.dsp\nclass: Bell\nchannel: 2\nprobe: (skipped in this scripted run)\nnotes: scripted specialist' } }] },
+        // 3 — the producer reads the verdict and answers the user
+        { choices: [{ message: { role: 'assistant', content: 'The bell could not be verified.' } }], usage: { total_tokens: 99 } },
+    ];
+    await page.route('https://cloud-api.near.ai/**', async (route) => {
+        requests.push(route.request().postDataJSON());
+        await route.fulfill({ json: responses[requests.length - 1] });
+    });
+    await bootApp(page);
+    await sendChat(page, '/nearai test-api-key Qwen/Qwen3.6-35B-A3B-FP8');
+    await expect(chatLog(page)).toContainText('NEAR AI mode ON');
+
+    await sendChat(page, 'make me a bell');
+    await expect(chatLog(page)).toContainText('The bell could not be verified.', { timeout: 20000 });
+    expect(requests.length).toBe(3);
+
+    // The specialist's request: its own prompt, the brief as its task, only the instrument tools.
+    const sp = requests[1];
+    expect(sp.messages[0].role).toBe('system');
+    expect(sp.messages[0].content.startsWith('You are the INSTRUMENT SPECIALIST')).toBe(true);
+    expect(sp.messages[0].content).toContain('### Guide: FM');
+    expect(sp.messages[0].content).not.toContain('## SONG format');
+    expect(sp.messages[1].role).toBe('user');
+    expect(sp.messages[1].content.startsWith('BRIEF: a short bright FM bell')).toBe(true);
+    expect(sp.messages[1].content).toContain('MIDI channel 2');
+    const spTools = sp.tools.map((t) => t.function.name);
+    expect(spTools).toContain('write_faust');
+    expect(spTools).toContain('probe_instrument');
+    expect(spTools).not.toContain('get_song');
+    expect(spTools).not.toContain('design_instrument');
+
+    // The producer gets the report AND the tool's own probe; with nothing
+    // compiled the verdict is FAILED in the first line — measured, not claimed.
+    const toolMsg = requests[2].messages.find((m) => m.role === 'tool');
+    expect(toolMsg.tool_call_id).toBe('call_d');
+    expect(toolMsg.content).toMatch(/^design_instrument "bell" on channel 2: FAILED/);
+    expect(toolMsg.content).toContain('SPECIALIST REPORT:\nREPORT\nfile: faust/bell.dsp');
+    expect(toolMsg.content).toContain('VERIFIED PROBE');
+    // …and the chat shows the specialist's life cycle.
+    await expect(chatLog(page)).toContainText('— instrument specialist started (bell) —');
+    await expect(chatLog(page)).toContainText('— instrument specialist finished: FAILED —');
+});
+
+// The agent works only inside a project repo: instruments, the session file and
+// the specialist's .dsp writes all live in the OPFS working tree. Without one
+// the panel says so and sends nothing, instead of failing tool by tool.
+test('without a project repo the agent refuses to start a turn and says why', async ({ page }) => {
+    page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+    let requests = 0;
+    await page.route('https://cloud-api.near.ai/**', async (route) => { requests++; await route.fulfill({ json: { choices: [{ message: { role: 'assistant', content: 'should not happen' } }] } }); });
+    await page.addInitScript(() => {
+        localStorage.setItem('nearai-api-key', 'test-api-key');
+        localStorage.setItem('nearai-model', 'Qwen/Qwen3.6-35B-A3B-FP8');
+    });
+    await page.goto('/');   // localhost: the classic no-repo boot
+    await page.waitForFunction(() => typeof window.toggleStudioAgent === 'function', { timeout: 30000 });
+    await page.evaluate(() => window.toggleStudioAgent(true));
+    await sendChat(page, 'hello');
+    await expect(chatLog(page)).toContainText('needs a project repo');
+    await expect(chatLog(page)).toContainText('?gitrepo=');
+    expect(requests).toBe(0);
+    // the typed text is kept for the user to resend after opening a repo
+    expect(await chatInput(page).inputValue()).toBe('hello');
 });
 
 test('API errors surface in the chat and /nearai off restores the local agent path', async ({ page }) => {

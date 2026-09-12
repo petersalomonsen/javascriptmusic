@@ -6,10 +6,13 @@
 // of their own. That makes it a paid resource, so it is NOT an open relay:
 //
 //   • ONLY POST /nearai/v1/chat/completions and POST /nearai/pass;
-//   • the SYSTEM PROMPT and TOOLS are enforced SERVER-SIDE — imported from
-//     the same modules the app uses (single source of truth, deployed
-//     together). Client-sent system messages are stripped; client tools are
-//     ignored. The proxy only forwards the user/assistant/tool conversation.
+//   • the SYSTEM PROMPT and the TOOL LIST are the client's (both bounded in
+//     size); the proxy forwards them and injects nothing. Neither was ever a
+//     safety boundary — a pass-holder writes every user turn anyway, and the
+//     tools execute in the client's own browser — but injecting the tool list
+//     cost the app the ability to send a SUBSET (the instrument specialist
+//     runs with a narrower set than the producer). Only when a client sends
+//     no system prompt at all does the proxy fall back to its own copy.
 //   • ONE model, chosen here — the client cannot pick, because we pay;
 //   • origin-allowlisted; request and completion size capped;
 //   • and it is NOT free: an x402 session pass is required (see _x402.js).
@@ -19,7 +22,7 @@
 // Spending is additionally bounded by the key's own limit on cloud.near.ai.
 
 import { SYSTEM_PROMPT } from '../../studio-agent/prompt.js';
-import { toOpenAiTools, SERVERLESS_PROMPT_SUFFIX, DEFAULT_MODEL } from '../../studio-agent/nearai-core.js';
+import { SERVERLESS_PROMPT_SUFFIX, DEFAULT_MODEL } from '../../studio-agent/nearai-core.js';
 import {
   x402Config, requirePass, settlementHeaders, passRemainingSeconds,
   HEADER_PASS, HEADER_SIGNATURE, HEADER_REQUIRED, HEADER_RESPONSE, HEADER_SPONSOR,
@@ -46,6 +49,10 @@ const MAX_MESSAGES_CHARS = 60000;
 // without letting the system slot become an unbounded free-text channel.
 // Worst case in: 140k chars ~ 35k tokens, against a 2k-token output cap.
 const MAX_SYSTEM_CHARS = 80000;
+
+// The client's tool list, serialized. The app's full set is ~13k chars; the
+// cap only stops the tool slot becoming another unbounded free-text channel.
+const MAX_TOOLS_CHARS = 40000;
 
 // Bounds the expensive half of a request. Output costs several times input on
 // every model we would consider, and was previously unbounded.
@@ -193,6 +200,15 @@ export async function onRequest(context) {
   }
   const systemPrompt = clientSystem || SYSTEM_PROMPT + SERVERLESS_PROMPT_SUFFIX;
 
+  // The tool list is the client's for the same reason the prompt is: the tools
+  // run in that client's browser, so a definition it sends shapes only what
+  // the model says back to it. A turn without tools is a plain chat turn.
+  const clientTools = Array.isArray(body.tools) && body.tools.length ? body.tools : null;
+  if (clientTools && JSON.stringify(clientTools).length > MAX_TOOLS_CHARS) {
+    return new Response(JSON.stringify({ error: 'tool list too large' }),
+      { status: 413, headers: { 'Content-Type': 'application/json', ...corsHeaders(origin) } });
+  }
+
   const upstreamBody = {
     // The client's `model` is ignored: we pay, so we choose.
     model: modelFor(env || {}),
@@ -201,8 +217,7 @@ export async function onRequest(context) {
       { role: 'system', content: systemPrompt },
       ...conversation,
     ],
-    tools: toOpenAiTools(),
-    tool_choice: 'auto',
+    ...(clientTools ? { tools: clientTools, tool_choice: body.tool_choice || 'auto' } : {}),
     stream: body.stream === true,
   };
 

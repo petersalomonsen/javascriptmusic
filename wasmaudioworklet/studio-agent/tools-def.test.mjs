@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { TOOL_DEFS, browserToolNames, sdkToolNames, toolDefsFor } from './tools-def.js';
+import { TOOL_DEFS, browserToolNames, sdkToolNames, toolDefsFor, ROLES, toolDefsForRole, toolNamesForRole } from './tools-def.js';
 import { toOpenAiTools } from './nearai-core.js';
 
 test('every tool is declared once, with a description and an object schema', () => {
@@ -24,7 +24,7 @@ test('every tool is declared once, with a description and an object schema', () 
         for (const req of def.parameters.required || []) {
             assert.ok(def.parameters.properties?.[req], `${def.name}: required "${req}" is not a property`);
         }
-        assert.ok(['browser', 'loadfile', 'repofile'].includes(def.where), `${def.name}: unknown where "${def.where}"`);
+        assert.ok(['browser', 'loadfile', 'repofile', 'agent'].includes(def.where), `${def.name}: unknown where "${def.where}"`);
     }
 });
 
@@ -81,4 +81,40 @@ test('OpenAI conversion keeps names, descriptions and schemas intact', () => {
         assert.strictEqual(tool.function.description, def.description);
         assert.deepStrictEqual(tool.function.parameters, def.parameters);
     }
+});
+
+test('roles: the producer delegates .dsp work, the instrument specialist gets only what an instrument needs', () => {
+    const producer = toolNamesForRole('producer');
+    const specialist = toolNamesForRole('instrument');
+    // The producer never touches a .dsp; it delegates.
+    assert.ok(producer.includes('design_instrument'));
+    assert.ok(!producer.includes('write_faust') && !producer.includes('edit_faust'));
+    // ...but keeps everything else, including reading what instruments exist.
+    for (const n of ['get_song', 'edit_song', 'run_script', 'compile', 'probe_instrument', 'read_faust', 'list_faust', 'get_shader', 'load_synth_from_file', 'read_repo_file']) {
+        assert.ok(producer.includes(n), `producer lacks ${n}`);
+    }
+    // The specialist has the faust tools, enough synth.ts to register a voice,
+    // compile and probe — and no song, shader, script or delegation tools.
+    for (const n of ['write_faust', 'edit_faust', 'read_faust', 'list_faust', 'get_synth', 'grep_synth', 'edit_synth', 'compile', 'probe_instrument', 'read_repo_file']) {
+        assert.ok(specialist.includes(n), `specialist lacks ${n}`);
+    }
+    for (const n of ['get_song', 'set_song', 'edit_song', 'set_synth', 'set_shader', 'run_script', 'stop', 'design_instrument', 'load_synth_from_file']) {
+        assert.ok(!specialist.includes(n), `specialist must not have ${n}`);
+    }
+    // Every name in an include list is a real tool (a typo would silently drop it).
+    for (const n of ROLES.instrument.include) assert.ok(TOOL_DEFS.some((d) => d.name === n), `unknown tool in role: ${n}`);
+    for (const n of ROLES.producer.exclude) assert.ok(TOOL_DEFS.some((d) => d.name === n), `unknown tool in role: ${n}`);
+    // where-filtering: the SDK path never proxies read_repo_file; the browser path never sees the agent tool as a browser tool
+    assert.ok(!toolNamesForRole('instrument', ['browser', 'loadfile']).includes('read_repo_file'));
+    assert.ok(!browserToolNames().includes('design_instrument'));
+    assert.deepEqual(toolDefsForRole('producer', ['agent']).map((d) => d.name), ['design_instrument']);
+    assert.throws(() => toolDefsForRole('dj'), /unknown agent role/);
+});
+
+test('design_instrument asks for what the specialist brief needs', () => {
+    const def = TOOL_DEFS.find((d) => d.name === 'design_instrument');
+    assert.equal(def.where, 'agent');
+    assert.deepEqual(def.parameters.required, ['brief']);
+    for (const p of ['brief', 'kind', 'channel', 'name']) assert.ok(def.parameters.properties[p], p);
+    assert.ok(/FAILED/.test(def.description), 'the description tells the producer to expect an explicit failure line');
 });

@@ -35,7 +35,9 @@ export function resolveDefaultBaseUrl(hostname) {
 // function-calling format. Serverless mode gets every tool including the
 // repo-file readers (there is no built-in Read here).
 export { TOOL_DEFS } from './tools-def.js';
-import { TOOL_DEFS as SHARED_TOOL_DEFS } from './tools-def.js';
+import { TOOL_DEFS as SHARED_TOOL_DEFS, toolDefsForRole } from './tools-def.js';
+import { buildSpecialistPrompt } from './prompt.js';
+import { specialistBrief, specialistResult, channelFromReport } from './tools-core.js';
 
 export function toOpenAiTools(defs = SHARED_TOOL_DEFS) {
   return defs.map((d) => ({ type: 'function', function: { name: d.name, description: d.description, parameters: d.parameters } }));
@@ -199,24 +201,40 @@ export async function runAgentTurn({
   onRetry = () => {},
   maxIterations = 25,
   maxRetries = 4,
-  // Proxy mode: the same-origin Pages Function injects auth, system prompt
-  // and tools server-side — the client then sends neither key nor tools.
+  // The tool list this turn offers the model. The client owns it on every
+  // path (the proxy forwards it, bounded, and injects nothing), so a nested
+  // specialist turn can offer a narrower set than the producer's. Defaults to
+  // every tool.
+  tools = null,
+  // Set false to send no tool list at all (a plain chat turn).
   sendTools = true,
   sleepFn = (ms) => new Promise((r) => setTimeout(r, ms)),
 }) {
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-  const bodyBase = sendTools ? { model, tools: toOpenAiTools(), tool_choice: 'auto' } : { model };
+  const bodyBase = sendTools ? { model, tools: tools || toOpenAiTools(), tool_choice: 'auto' } : { model };
   for (let i = 0; i < maxIterations; i++) {
     let response;
     // Transient failures (rate limits, upstream 5xx) must not kill the turn —
     // a live session died mid-work on a 429 "retry with exponential backoff".
     for (let attempt = 0; ; attempt++) {
-      response = await fetchFn(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ...bodyBase, messages: pruneSupersededReads(messages) }),
-      });
+      try {
+        response = await fetchFn(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...bodyBase, messages: pruneSupersededReads(messages) }),
+        });
+      } catch (e) {
+        // A dropped connection ("fetch failed", a reset mid-stream) is as
+        // transient as a 503 and was killing whole turns — the bench lost two
+        // long NEAR AI runs to it. Retry it the same way; an abort, a payment
+        // or credits error is the caller's business and goes straight through.
+        if (e?.name === 'AbortError' || e?.paymentRequired || e?.outOfCredits || attempt >= maxRetries) throw e;
+        const delayMs = 1000 * Math.pow(2, attempt);
+        onRetry('network', delayMs, attempt + 1);
+        await sleepFn(delayMs);
+        continue;
+      }
       const retryable = response.status === 429 || response.status >= 500;
       if (response.ok || !retryable || attempt >= maxRetries) break;
       const delayMs = 1000 * Math.pow(2, attempt); // 1s, 2s, 4s, 8s
@@ -276,4 +294,60 @@ export async function runAgentTurn({
     }
   }
   throw new Error(`NEAR AI: turn did not finish within ${maxIterations} model iterations`);
+}
+
+
+// ---- the instrument specialist, as a nested turn ---------------------------
+//
+// design_instrument runs a SECOND agent loop with the specialist prompt (the
+// instrument + mix sections and a guide for the kind of sound), only the
+// instrument tools, and a fresh message history — so the transpile errors and
+// probes it works through never enter the producer's conversation. This is the
+// whole of that loop, minus anything UI: the browser client wraps it with chat
+// lines, the bench runs it as-is against a headless studio.
+//
+// It ends with the specialist's report plus a probe the CALLER's `probe`
+// function runs afterwards, on the channel the brief named (or the report
+// says): the OK/FAILED verdict in the first line is measured, not claimed.
+export async function runSpecialistTurn({
+  fetchFn, baseUrl, apiKey, model,
+  args = {},                 // { brief, kind, channel, name } — the producer's design_instrument arguments
+  runTool,                   // (name, args, role) => result; called with role 'instrument'
+  probe,                     // ({ channel, notes }) => probe report text; throws when it cannot probe
+  onText = () => {}, onToolCall = () => {}, onRetry = () => {},
+  maxIterations = 20, sleepFn,
+  systemPrompt = null,       // override of the specialist prompt (the bench A/Bs prompt versions)
+}) {
+  const { brief, kind = '', channel, name } = args;
+  const messages = [
+    { role: 'system', content: (systemPrompt ?? buildSpecialistPrompt('instrument', { kind })) + SERVERLESS_PROMPT_SUFFIX },
+    { role: 'user', content: specialistBrief({ brief, kind, channel, name }) },
+  ];
+  let report = '';
+  try {
+    await runAgentTurn({
+      fetchFn, baseUrl, apiKey, model, messages, maxIterations, sleepFn,
+      tools: toOpenAiTools(toolDefsForRole('instrument')),
+      runTool: (n, a) => runTool(n, a, 'instrument'),
+      onText: (t) => { report = t; onText(t); },   // the LAST text is the report
+      onToolCall, onRetry,
+    });
+  } catch (e) {
+    // Stop, payment and credits are the TURN's business — let them through.
+    if (e?.name === 'AbortError' || e?.paymentRequired || e?.outOfCredits) throw e;
+    report = `${report}\n\n(the specialist run ended with an error: ${e?.message || e})`.trim();
+  }
+  const ch = Number.isFinite(Number(channel)) ? Number(channel) : channelFromReport(report);
+  let probeText;
+  if (ch === null || ch === undefined) {
+    probeText = 'ERROR: no channel known — the specialist did not report which channel it registered the voice on';
+  } else {
+    try {
+      probeText = String(await probe({ channel: ch, notes: 'c3,c4,c5' }) ?? '');
+    } catch (e) {
+      probeText = `ERROR: ${e?.message || e}`;
+    }
+  }
+  const text = specialistResult({ report, probeText, channel: ch, name });
+  return { text, ok: text.split('\n')[0].includes(': OK'), report, probeText, messages };
 }
