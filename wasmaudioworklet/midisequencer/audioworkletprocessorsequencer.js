@@ -157,10 +157,15 @@ export function AudioWorkletProcessorSequencerModule() {
         }
 
         // The inner meta loop above can push sequenceIndex past the end
-        // (a broadcast-send / recording marker at the end of the song).
-        // If it did, there's no midi event to fire; the outer loop's
-        // next iteration will re-check the bounds and exit cleanly.
-        if (this.sequenceIndex >= this.sequence.length || !this.sequence[this.sequenceIndex]) {
+        // (a broadcast-send / recording marker at the end of the song), or
+        // onto an event that is still in the future (a recording marker
+        // followed by a gap — e.g. stopRecording(); await waitDuration(4);
+        // loopHere()). Either way there is nothing to fire yet: firing the
+        // future event here would play a note early, or swallow the loop
+        // marker as a bogus midi message so the song never loops.
+        if (this.sequenceIndex >= this.sequence.length ||
+            !this.sequence[this.sequenceIndex] ||
+            this.sequence[this.sequenceIndex].time >= currentTime) {
           break;
         }
 
