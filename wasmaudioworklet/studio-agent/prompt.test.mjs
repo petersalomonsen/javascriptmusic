@@ -8,11 +8,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { SYSTEM_PROMPT, SECTIONS, SECTION_NAMES, buildSystemPrompt, SDK_PROMPT_SUFFIX } from './prompt.js';
+import { SYSTEM_PROMPT, SECTIONS, SECTION_NAMES, buildSystemPrompt, SDK_PROMPT_SUFFIX, MASTERING_GUIDE } from './prompt.js';
 
 test('the default build is the everything-included prompt', () => {
   assert.equal(buildSystemPrompt(), SYSTEM_PROMPT);
-  assert.deepEqual(SECTION_NAMES, ['sequence', 'instrument', 'mix', 'shader']);
+  assert.deepEqual(SECTION_NAMES, ['sequence', 'instrument', 'mix', 'mastering', 'shader']);
   for (const name of SECTION_NAMES) assert.ok(SYSTEM_PROMPT.includes(SECTIONS[name]), `${name} section present`);
 });
 
@@ -43,6 +43,7 @@ test('each section owns its domain: headers live in exactly one place', () => {
   const owner = { '## SONG format': 'sequence', '## run_script': 'sequence', '## Editing recorded performances': 'sequence',
     '## Authoring an instrument in FAUST': 'instrument', '### Legacy synths': 'instrument',
     '## synth.ts is ONLY the multitimbral combiner': 'mix', '## Adding a voice/channel to a LARGE existing synth': 'mix',
+    '## Mastering the mix': 'mastering',
     '## The visualizer shader': 'shader' };
   for (const [header, name] of Object.entries(owner)) {
     for (const other of SECTION_NAMES) {
@@ -67,7 +68,7 @@ test('the SDK suffix is separate from the shared prompt', () => {
 
 // ---- producer + specialist ---------------------------------------------------
 import { buildProducerPrompt, buildSpecialistPrompt, INSTRUMENT_GUIDES, guideFor } from './prompt.js';
-import { SPECIALIST_REPORT_FORMAT } from './tools-core.js';
+import { SPECIALIST_REPORT_FORMAT, MASTERING_REPORT_FORMAT } from './tools-core.js';
 
 test('the producer delegates instrument design and never holds the instrument section', () => {
   const p = buildProducerPrompt();
@@ -118,4 +119,24 @@ test('guides resolve by kind and by a description of the sound', () => {
     assert.ok(text.length < 2500, `${name} guide should stay short (${text.length})`);
     assert.ok(text.includes('probe_instrument'), `${name} guide says how to verify`);
   }
+});
+
+test('the mastering specialist prompt is its head + assurance + mix + mastering + the move table, and nothing about the song', () => {
+  const sp = buildSpecialistPrompt('mastering');
+  assert.ok(sp.startsWith('You are the MASTERING SPECIALIST'));
+  assert.ok(sp.includes('## ASSURANCE'));
+  assert.ok(sp.includes(SECTIONS.mix) && sp.includes(SECTIONS.mastering));
+  assert.ok(sp.includes(MASTERING_GUIDE) && sp.includes(MASTERING_REPORT_FORMAT));
+  assert.ok(!sp.includes(SECTIONS.instrument) && !sp.includes('## SONG format') && !sp.includes('## The visualizer shader'));
+  // it never gets the producer-only delegation tools
+  assert.ok(!sp.includes('design_instrument') && !sp.includes('master_mix'));
+  assert.ok(buildSpecialistPrompt('mastering', { guide: '### Guide: custom\nx' }).includes('### Guide: custom'));
+});
+
+test('the producer delegates mastering: it has the tools, not the section', () => {
+  const p = buildProducerPrompt();
+  assert.ok(!p.includes(SECTIONS.mastering));
+  assert.ok(!p.includes('## Mastering the mix'));
+  assert.ok(p.includes('- probe_mix(') && p.includes('- master_mix('));
+  assert.ok(/5\. \*\*probe_mix\*\*/.test(p), 'probe_mix has its rung on the assurance ladder');
 });

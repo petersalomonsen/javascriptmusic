@@ -14,7 +14,7 @@
 
 ## How it works
 
-The other examples (e.g. `examples/dx7`) generate `MidiVoice` subclasses — instruments that produce audio per-note. `master_me` is different: it has stereo input and stereo output and acts on the final mix, so the transpiler is invoked in `--mastering` mode.
+The other examples (e.g. `examples/dx7`) generate `MidiVoice` subclasses — instruments that produce audio per-note. `master_me` is different: it has stereo input and stereo output and acts on the final mix, so the transpiler is invoked in `--effect` mode.
 
 The mastering pipeline runs once per sample frame from `postprocess()` in [midisynth.ts](../../wasmaudioworklet/synth1/assembly/midi/midisynth.ts). At that point the per-channel signals (voices, reverb) have already been summed into `outputline`. The generated `MasterMe.process()` reads `outputline.left`/`outputline.right`, runs them through the master_me chain, and writes the processed result back into `outputline` before the sample is stored.
 
@@ -28,7 +28,7 @@ voices → channels → mainline + reverbline → outputline → postprocess() �
 ## Regenerating the bundle
 
 ```sh
-node tools/faust2as/faust2asc.js --mastering \
+node tools/faust2as/faust2asc.js --effect \
   --name MasterMe \
   --out examples/master_me/master_me-synth.ts \
   examples/master_me/dsp/master_me.dsp
@@ -38,7 +38,9 @@ The transpiler runs `faust -lang asc` via [`@psalomo/wasm-music-faust`](https://
 
 ## Parameters
 
-master_me exposes ~80 mastering parameters (gate, EQ, leveler target, knee comp, multiband comp, limiter, brickwall ceiling). They are stored as private fields initialized to the defaults from the DSP and currently aren't exposed to MIDI CC — runtime control would mean adding setters or an NRPN-mapped channel; the defaults give a usable mastering chain as-is.
+master_me exposes ~80 mastering parameters (gate, EQ, leveler target, knee comp, multiband comp, limiter, brickwall ceiling). In this committed bundle they are private fields at the DSP defaults; regenerating with the current transpiler makes every one a public named field on `MasterMe` (see the Tapiir example in [docs/effects.md](../../wasmaudioworklet/docs/effects.md)).
+
+For the app's own, much smaller mastering chain — and the measurement loop the studio agent runs around it — see [docs/mastering.md](../../wasmaudioworklet/docs/mastering.md) and `wasmaudioworklet/synth1/assembly/fx/mastering.dsp`.
 
 ## Notes
 

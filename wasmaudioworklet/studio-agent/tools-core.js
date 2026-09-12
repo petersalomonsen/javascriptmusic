@@ -652,6 +652,18 @@ export function faustRegistrationHint(ts, stem) {
     const m = /^(\w+?)(?:Effect)?Dsp$/.exec(c);
     return !(m && exported.includes(m[1]));
   });
+  // A stereo-in/stereo-out .dsp transpiles to an EFFECT class for
+  // postprocess(), not a voice — registering it on a channel is the `input0`
+  // error. The generated class carries processOutputline(); key on that.
+  if (/processOutputline\(\)/.test(ts)) {
+    const cls = classes[0] || 'Xxx';
+    const inst = cls.charAt(0).toLowerCase() + cls.slice(1);
+    const message =
+      `transpiled OK → faust/${stem}.ts is a stereo EFFECT (audio in → audio out), not an instrument. It exports: ${classes.join(', ')}. ` +
+      `In synth.ts: import { ${cls} } from '../faust/${stem}';  const ${inst} = new ${cls}();  and in postprocess(): ${inst}.processOutputline();  ` +
+      `Set its parameters as fields (${inst}.<param> = value) in initializeMidiSynth(). Do NOT register it on a midichannel.`;
+    return { classes, voice: null, chan: null, effect: cls, message };
+  }
   const voice = classes.find((c) => !/Channel$/.test(c)) || 'Xxx';
   const chan = classes.find((c) => /Channel$/.test(c));
   const reg = chan
@@ -716,6 +728,85 @@ export function specialistResult({ report, probeText, channel, name } = {}) {
     probe || '(none)',
   ].join('\n');
 }
+
+// ---- master_mix: the mastering specialist's brief and its result -----------------
+//
+// Same shape as design_instrument: the brief goes in, the report comes out, and
+// the tool measures the mix itself afterwards so the first line is a verdict
+// the producer can trust (probe_mix's own MASTER OK / NOT READY line).
+
+export const MASTERING_REPORT_FORMAT = `REPORT
+target: <the delivery target and its numbers>
+before: <the loudness and peaks lines of the FIRST probe_mix, verbatim>
+after: <the same two lines of the LAST probe_mix, verbatim>
+settings: <every Mastering field you set, as it stands in synth.ts>
+mix notes: <each change you made to the song's mix (channel, CC, from → to), or "none">
+notes: <one or two lines: what is still off and why you stopped, what the user should listen for>`;
+
+/** The mastering specialist's task message, from the producer's master_mix arguments. */
+export function masteringBrief({ brief, target, targetLufs, truePeakDb } = {}) {
+  const t = [String(target || 'streaming')];
+  if (Number.isFinite(Number(targetLufs))) t.push(`integrated ${Number(targetLufs)} LUFS`);
+  if (Number.isFinite(Number(truePeakDb))) t.push(`true peak ${Number(truePeakDb)} dBTP`);
+  return [
+    `BRIEF: ${String(brief || '').trim() || '(none — master for the target below and keep the character of the mix)'}`,
+    `TARGET: ${t.join(', ')} — pass the same target/targetLufs/truePeakDb to every probe_mix call.`,
+    'Measure first (compile, probe_mix), wire the Mastering chain, set its fields from the numbers, compile, probe_mix again, and iterate until the verdict is MASTER OK or you have run out of sensible moves. End with the REPORT block and nothing after it.',
+  ].join('\n');
+}
+
+/** Joins the mastering report with the tool's own probe_mix; verdict in the first line. */
+export function masteringResult({ report, probeText } = {}) {
+  const probe = String(probeText || '').trim();
+  const firstLine = probe.split('\n')[0] || '';
+  const unprobed = !probe || /^ERROR/i.test(probe) || /no compiled/i.test(probe) || /probe failed/i.test(probe);
+  const ok = !unprobed && /^MASTER OK/.test(firstLine);
+  const problems = probe.split('\n').filter((l) => /^PROBLEM:/.test(l)).map((l) => l.replace(/^PROBLEM:\s*/, ''));
+  const status = unprobed
+    ? `FAILED: the mix could not be measured (${firstLine || 'no probe result'}) — nothing is verified; tell the user`
+    : ok
+      ? `OK: ${firstLine}`
+      : `FAILED: ${firstLine}${problems.length ? ` — ${problems.join('; ')}` : ''} — tell the user what is still off`;
+  return [
+    `master_mix: ${status}`,
+    '',
+    'SPECIALIST REPORT:',
+    String(report || '').trim() || '(the specialist ended without a report)',
+    '',
+    'VERIFIED MEASUREMENT (probe_mix run by the tool after the specialist finished):',
+    probe || '(none)',
+  ].join('\n');
+}
+
+// ---- the specialists, by role ------------------------------------------------------
+//
+// Everything a nested specialist run needs that differs per role, so the two
+// loop implementations (nearai-core.js, tools/studio-agent/agent-core.mjs) and
+// the bench switch on this table instead of on tool names.
+export const SPECIALISTS = {
+  instrument: {
+    label: 'instrument specialist',
+    probeTool: 'probe_instrument',
+    kind: (args) => args.kind || '',
+    brief: (args) => specialistBrief(args),
+    /** What the tool measures afterwards; null when it cannot (no channel known). */
+    probeArgs: (args, report) => {
+      const ch = Number.isFinite(Number(args.channel)) ? Number(args.channel) : channelFromReport(report);
+      return ch === null || ch === undefined ? null : { channel: ch, notes: 'c3,c4,c5' };
+    },
+    noProbe: 'ERROR: no channel known — the specialist did not report which channel it registered the voice on',
+    result: ({ report, probeText, args, probeArgs }) => specialistResult({ report, probeText, channel: probeArgs?.channel, name: args.name }),
+  },
+  mastering: {
+    label: 'mastering specialist',
+    probeTool: 'probe_mix',
+    kind: () => '',
+    brief: (args) => masteringBrief(args),
+    probeArgs: (args) => ({ target: args.target, targetLufs: args.targetLufs, truePeakDb: args.truePeakDb }),
+    noProbe: null,
+    result: ({ report, probeText }) => masteringResult({ report, probeText }),
+  },
+};
 
 /** The channel a specialist report says it registered on, or null. */
 export function channelFromReport(report) {

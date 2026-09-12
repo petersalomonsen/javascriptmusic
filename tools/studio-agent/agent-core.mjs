@@ -1,5 +1,5 @@
-// The producer + instrument-specialist agents over the Claude Agent SDK, with
-// the studio they act on behind a small BACKEND interface:
+// The producer + specialist agents (instrument, mastering) over the Claude
+// Agent SDK, with the studio they act on behind a small BACKEND interface:
 //
 //   backend.call(name, args) → Promise<{ ok, result }>   run one studio tool
 //   backend.repoRoot                                    for the file loaders
@@ -21,18 +21,21 @@ import { readFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import { SDK_PROMPT_SUFFIX, buildProducerPrompt, buildSpecialistPrompt } from './prompt.mjs';
 import { toolDefsForRole, toolNamesForRole } from '../../wasmaudioworklet/studio-agent/tools-def.js';
-import { specialistBrief, specialistResult, channelFromReport } from '../../wasmaudioworklet/studio-agent/tools-core.js';
+import { SPECIALISTS } from '../../wasmaudioworklet/studio-agent/tools-core.js';
 
 // Tools an agent may use: its ROLE's share of the studio tools + read-only repo
 // access. The tool set itself is declared once in tools-def.js and shared with
 // the in-browser NEAR AI provider, and the roles (who gets what) live there
-// too. Two roles run here: the PRODUCER (the conversation; delegates instrument
-// design) and the INSTRUMENT specialist (one brief, its own nested run, only
-// the instrument tools). Neither gets write_faust AND design_instrument.
+// too. Three roles run here: the PRODUCER (the conversation; delegates
+// instrument design and mastering), the INSTRUMENT specialist (one brief, its
+// own nested run, only the instrument tools) and the MASTERING specialist (the
+// master insert, the mix-level song edits, the whole-mix probe). Nobody gets
+// write_faust AND design_instrument.
 const mcpNames = (role) => toolNamesForRole(role, ['browser', 'loadfile', 'agent']).map((n) => `mcp__studio__${n}`);
 export const ALLOWED_BY_ROLE = {
   producer: new Set([...mcpNames('producer'), 'Read', 'Glob', 'Grep']),
   instrument: new Set([...mcpNames('instrument'), 'Read', 'Glob', 'Grep']),
+  mastering: new Set([...mcpNames('mastering'), 'Read', 'Glob', 'Grep']),
 };
 // Built-in tools that cause the agent to thrash on this task — keep it focused.
 export const DISALLOWED = ['Bash', 'BashOutput', 'KillShell', 'Agent', 'Task', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
@@ -136,12 +139,18 @@ export function makeStudioServer(backend, role = 'producer', hooks = {}, config 
       ...toolDefsForRole(role, ['browser']).map(proxy),
       ...toolDefsForRole(role, ['loadfile']).map(loadInto),
       ...toolDefsForRole(role, ['agent']).map((d) =>
-        tool(d.name, d.description, zodShape(d.parameters), (args) => designInstrument(backend, args, h, config))),
+        tool(d.name, d.description, zodShape(d.parameters), (args) => runSpecialist(backend, d.role, args, h, config))),
     ],
   });
 }
 
-// ---- The instrument specialist: a nested run inside one tool call ------------
+// ---- A specialist: a nested run inside one tool call -----------------------------
+//
+// design_instrument → the instrument specialist, master_mix → the mastering
+// specialist. What differs per role (prompt, brief, the probe the tool runs
+// afterwards, the verdict) comes from SPECIALISTS in tools-core.js; the loop,
+// the abort handling and the logging are shared. The paragraph below describes
+// the instrument case; the mastering one differs only in what is measured.
 //
 // design_instrument is an ordinary MCP tool to the producer. Behind it a second
 // query() runs with the SPECIALIST prompt (the instrument + mix sections and a
@@ -158,22 +167,27 @@ export function abortSpecialists() {
   running.clear();
 }
 
-export async function designInstrument(backend, args, hooks = {}, config = {}) {
+export async function runSpecialist(backend, role, args, hooks = {}, config = {}) {
   const h = withDefaults(hooks);
-  const { brief, kind = '', channel, name } = args || {};
+  const spec = SPECIALISTS[role];
+  if (!spec) throw new Error(`unknown specialist role "${role}"`);
+  args = args || {};
+  const { brief, name } = args;
+  const kind = spec.kind(args);
   const t0ms = Date.now();
   const controller = new AbortController();
   running.add(controller);
-  const allowed = ALLOWED_BY_ROLE.instrument;
-  const studio = makeStudioServer(backend, 'instrument', h, config);
-  const systemPrompt = (config.specialistPrompt ? config.specialistPrompt(kind) : buildSpecialistPrompt('instrument', { kind })) + SDK_PROMPT_SUFFIX;
-  const prompt = specialistBrief({ brief, kind, channel, name });
+  const allowed = ALLOWED_BY_ROLE[role];
+  const studio = makeStudioServer(backend, role, h, config);
+  // config.specialistPrompt A/Bs the INSTRUMENT specialist's prompt (the bench); the others use the working tree's.
+  const systemPrompt = (role === 'instrument' && config.specialistPrompt ? config.specialistPrompt(kind) : buildSpecialistPrompt(role, { kind })) + SDK_PROMPT_SUFFIX;
+  const prompt = spec.brief(args);
   let report = '';
   let subSid = null;
   const stats = { turns: 0, costUsd: 0, toolCalls: 0 };
-  h.dlog('specialist ▶', kind || '(kind unset)', JSON.stringify(brief || '').slice(0, 80));
-  h.log({ kind: 'specialist_start', role: 'instrument', input: args || {} });
-  h.send({ t: 'specialist', state: 'start', role: 'instrument', name: name || null });
+  h.dlog('specialist ▶', role, kind || '(kind unset)', JSON.stringify(brief || '').slice(0, 80));
+  h.log({ kind: 'specialist_start', role, input: args });
+  h.send({ t: 'specialist', state: 'start', role, name: name || null });
   try {
     for await (const m of query({
       prompt,
@@ -202,7 +216,7 @@ export async function designInstrument(backend, args, hooks = {}, config = {}) {
             stats.toolCalls++;
             h.dlog('  specialist tool_use →', block.name, JSON.stringify(block.input).slice(0, 60));
             h.log({ kind: 'specialist_tool_use', sessionId: subSid, name: block.name, input: block.input });
-            h.send({ t: 'tool', name: block.name, input: block.input, sub: 'instrument' });
+            h.send({ t: 'tool', name: block.name, input: block.input, sub: role });
           }
         }
       } else if (m.type === 'user') {
@@ -228,28 +242,32 @@ export async function designInstrument(backend, args, hooks = {}, config = {}) {
     running.delete(controller);
   }
 
-  // Verify independently of what the report says: probe the channel it should
-  // have registered on. No channel known → cannot verify → FAILED, by design.
-  const ch = Number.isFinite(Number(channel)) ? Number(channel) : channelFromReport(report);
+  // Verify independently of what the report says: probe the channel the
+  // instrument should be on, or measure the whole mix for a master. Nothing to
+  // probe (no channel known) → cannot verify → FAILED, by design.
+  const probeArgs = spec.probeArgs(args, report);
   let probeText;
-  if (ch === null || ch === undefined) {
-    probeText = 'ERROR: no channel known — the specialist did not report which channel it registered the voice on';
+  if (!probeArgs) {
+    probeText = spec.noProbe;
   } else {
     try {
-      const res = await backend.call('probe_instrument', { channel: ch, notes: 'c3,c4,c5' });
+      const res = await backend.call(spec.probeTool, probeArgs);
       probeText = res.ok ? String(res.result ?? '') : `ERROR: ${res.result ?? 'probe failed'}`;
     } catch (e) {
       probeText = `ERROR: ${e?.message || e}`;
     }
   }
-  const text = specialistResult({ report, probeText, channel: ch, name });
+  const text = spec.result({ report, probeText, args, probeArgs });
   const ok = text.split('\n')[0].includes(': OK');
   h.dlog('specialist ◀', ok ? 'OK' : 'FAILED', `${((Date.now() - t0ms) / 1000).toFixed(0)}s`);
   h.log({ kind: 'specialist_end', sessionId: subSid, ok, ms: Date.now() - t0ms, ...stats, firstLine: text.split('\n')[0] });
-  h.send({ t: 'specialist', state: 'end', role: 'instrument', name: name || null, ok });
+  h.send({ t: 'specialist', state: 'end', role, name: name || null, ok });
   // A FAILED result is information the producer must relay, not a tool error.
   return { content: [{ type: 'text', text }] };
 }
+
+/** The instrument specialist, by its old name. */
+export const designInstrument = (backend, args, hooks, config) => runSpecialist(backend, 'instrument', args, hooks, config);
 
 // ---- One producer turn ------------------------------------------------------
 // Returns the SDK's message stream for the caller to consume (the server

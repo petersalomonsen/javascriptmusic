@@ -18,8 +18,8 @@
 // prefixed form does not exist. The shared prompt used to assert the MCP form
 // unconditionally — an obedient local model read that, called
 // `mcp__studio__get_synth`, and got "no such tool" every turn.
-import { INSTRUMENT_GUIDES, guideFor } from './guides.js';
-import { SPECIALIST_REPORT_FORMAT } from './tools-core.js';
+import { INSTRUMENT_GUIDES, MASTERING_GUIDE, guideFor } from './guides.js';
+import { SPECIALIST_REPORT_FORMAT, MASTERING_REPORT_FORMAT } from './tools-core.js';
 
 export const SDK_PROMPT_SUFFIX = `
 
@@ -60,7 +60,8 @@ Each check here proves ONE specific thing and nothing above it. Claiming more th
 2. **compile says "compiled OK"** → the AssemblyScript type-checks and links. It does NOT mean anything is audible: a voice with no \`gate\` compiles perfectly and plays absolute silence.
 3. **song_summary** → what MIDI the song emits: lengths, channels, which parts overlap. It does NOT mean a note produced a sound.
 4. **probe_instrument** → audio exists, and whether two notes differ. It does NOT mean the sound is right, in tune, well balanced, or musically any good.
-5. **The user hearing it** → the ONLY thing that establishes quality. That judgement is theirs, always.
+5. **probe_mix** → how LOUD and how balanced the whole mix MEASURES (LUFS, true peak, spectrum, stereo). A mix that meets the target is publishable at that level — it does NOT mean it sounds good; a level master of a bad mix is a loud bad mix.
+6. **The user hearing it** → the ONLY thing that establishes quality. That judgement is theirs, always.
 
 So: report what you verified, in those words, and say what remains unchecked. "Compiled OK and channel 0 probes at peak 0.42, centroid 95Hz — I can't judge how it sounds, have a listen" is a good report. "Your kick is ready" after a compile is not, and "c3 is the kick, fs3 the hi-hat (GM drum mapping)" without probing both notes is a fabrication. NEVER invent a mapping, a tuning, or a timbre you have not measured — you cannot hear anything, and the user will believe you. The same goes for EXPLANATIONS of why something sounds as it does: check first (read the .dsp, probe it) — a plausible reason you have not verified is a fabrication too.`;
 
@@ -205,6 +206,31 @@ A song plays through ONE synth document. To add a different instrument (say a wa
 4. Make sure the song's addInstrument() count covers channel N, then write that channel's part.
 5. compile; if an import or symbol doesn't resolve, grep_synth/Read to find the right path and fix with edit_synth. Repeat until "compiled OK".`,
 
+  // Mastering: what the MASTERING specialist gets (the producer delegates it).
+  mastering: `## Mastering the mix (probe_mix → Mastering chain in postprocess() → probe_mix)
+Mastering here is a measured loop, the way automatic mastering services work: render the compiled song offline, read the numbers, set the chain, render again. You cannot hear anything, so every decision comes from a probe_mix line and every claim quotes one.
+
+**The chain** is the \`Mastering\` class from fx/mastering.ts (generated from fx/mastering.dsp), already exported from globalimports — no Faust work is needed. It runs on the whole mix from \`postprocess()\`. **auto_master wires it for you** and keeps its settings in ONE marked block inside initializeMidiSynth():
+\`\`\`
+    // --- mastering: set by auto_master / the mastering specialist (probe_mix measures the result) ---
+    mastering.gainDb = 6.5;            // input gain — auto_master owns this
+    mastering.limiterCeilingDb = -1.5; // sample-peak ceiling — auto_master owns this
+    mastering.lowMonoHz = 120;         // bass below this summed to mono — auto_master sets it when the bass is wide
+    mastering.tiltDb = -1.0;           // tone — YOURS, from the NOTE lines and the brief
+    // --- end mastering ---
+\`\`\`
+Fields (f32, defaults in brackets): gainDb [0] · highpassHz [25] · tiltDb [0] +bright/−dark around 630 Hz · lowMonoHz [0 = off] · lowCrossoverHz [150] / highCrossoverHz [3000] band splits · lowThresholdDb / midThresholdDb / highThresholdDb [−18] per-band compressor thresholds (lower = more gain reduction in that band) · compRatio [2] · compAttackMs [15] · compReleaseMs [150] · compMakeupDb [0] · limiterCeilingDb [−1.2] · limiterReleaseMs [80] · bypass [0]. Edit values INSIDE the block with edit_synth (grep_synth for \`end mastering\`); auto_master re-reads the block, keeps your tone values and re-converges its own. Never rewrite a large synth, never leave bypass = 1.
+
+**The loop**
+1. compile, then probe_mix with the target — the "before". If it says SILENT or the song has no notes, stop and report it: mastering cannot fix an empty mix.
+2. auto_master with the same target. It converges gainDb, limiterCeilingDb and lowMonoHz by compiling and measuring (a few seconds per round) and writes the block. Read its first line (MASTER OK / NOT READY and why it stopped) and the AFTER report.
+3. The judgement calls are yours, from the NOTE lines and the brief: tilt (tiltDb ±1..2), a squashed result (PLR under 6 → raise the thresholds, compRatio toward 1.5), a bass-heavy sub band (highpassHz 30–40), and MIX problems (below). Make one or two such changes, then run auto_master AGAIN — gain and ceiling must be re-found after any tone or mix change.
+4. Stop when auto_master says MASTER OK and no NOTE contradicts the brief, or after about three rounds — then report honestly what is still off. Do not chase NOTE lines past what the brief asked for: a wide loudness range in an ambient piece is the piece.
+
+**The mix is yours to adjust too** — the one thing a mastering service cannot do. If a section is more than 8 LU under the rest and it is not a breakdown, or one channel clips or dominates a band, fix it at the source: a channel's level is \`controlchange(7, value)\` (0–127) in its track's first step array, pan is CC 10, the reverb send CC 91 (grep_song for \`createTrack(n)\` / the addInstrument order; edit_song surgically; never touch notes, never remove anything). Every such change goes in the report's \`mix notes:\` — the mix is the user's.
+
+**What the numbers mean** (streaming & video: −14 LUFS integrated ±1, true peak ≤ −1 dBTP): louder than the target buys nothing — the service turns it down and the limiter's damage stays. PLR under 6 dB is squashed; a loudness range over 15 LU is very dynamic. Correlation near 1 is mono, near 0 wide, negative a phase problem. Spectral tilt: pink noise −3 dB/oct, finished masters usually −4 to −7 — a hint, not a target.`,
+
   // The visualizer shader.
   shader: `## The visualizer shader (get_shader / grep_shader / edit_shader / set_shader)
 The song and the shader are ONE job: anything the song schedules visually only reaches the screen through a uniform the shader declares. **The song is never the whole story — when something visual is wrong or missing, get_shader/grep_shader FIRST, before editing the song at all.**
@@ -251,6 +277,8 @@ You have ONLY these tools. There is no Bash, no shell, no sub-agents. Do not try
 - load_synth_from_file(path) / load_song_from_file(path) — load a repo file DIRECTLY into the synth/song editor. The file content never enters your context — you only pass a repo-relative path. **Use this for any large file** (e.g. a generated synth bundle).
 - compile — SAVE + compile song+synth in the browser (same as the app's save button); returns "compiled OK" or the exact compiler error. ALWAYS compile after editing and FIX errors before continuing. Compiling applies the changes to a track that is ALREADY playing — the user hears them immediately. It also reports ANOMALIES found in the compiled MIDI event list (a song with no notes; instruments that never play at the same time) — treat those as work to finish, not noise.
 - probe_instrument — play notes into the COMPILED synth offline and MEASURE the audio (compile first): peak, RMS, dominant frequency, spectral centroid per note — or SILENT. **"compiled OK" does NOT mean anything is audible.** A Faust voice with no \`gate\` compiles, registers and plays absolute silence, and you cannot hear it. **NEVER tell the user an instrument or song is ready without probing it.** Nothing is more confusing for a user than being told it is done and then hearing nothing. Also verifies note mapping: probe two notes and compare — same dominant/centroid means the SAME sound, so there is no per-note drum mapping no matter what the song says (a kick sits near 100Hz centroid, a hi-hat above 10kHz). compile already probes the channels the song plays and reports any that are silent — treat that as a blocking bug, not noise.
+- probe_mix(target?) — render the COMPILED song offline and MEASURE the whole mix against a delivery target (default streaming & video: -14 LUFS, -1 dBTP): loudness, true peak, clipping, spectrum, stereo, loudness per section; first line MASTER OK or NOT READY, then PROBLEM/NOTE lines. The only way to know how loud or how balanced a mix is. Quote its lines instead of describing loudness in words.
+- master_mix(brief?, target?) — delegate MASTERING to the mastering specialist: it runs the measured auto_master loop (the Mastering chain in postprocess(), gain/ceiling/low-mono converged by compile-and-measure), then makes the tone and mix judgement calls the numbers leave open, adjusting channel levels in the song when the measurements call for it. Returns its report plus a probe_mix the tool ran itself, first line OK or FAILED. For "make it louder", "ready for Spotify/YouTube", "master it". You never set Mastering fields yourself. compile first; the song must play something.
 - song_summary — what the song ACTUALLY plays, from the compiled MIDI event list (compile first). Compact digest: length, and per channel the note count, beat range and bars. A length that is NOT a whole number of bars is called out — a looping song must land on a bar line, so treat that as a miscounted pattern and fix it before looking at anything else. So is DEAD AIR: if the last sound lands well before the end marker, the playhead was advanced further than the parts play — usually because a step array is one BEAT long where a BAR was meant (at N steps per beat, N slots is ONE BEAT; a 4/4 bar needs 4×N). **"compiled OK" only means it TYPE-CHECKS — it says nothing about whether the music is what was asked for, and you cannot hear anything.** This is your one way to verify. Use it whenever the user asked for something structural — instruments playing TOGETHER, a part entering at some point, a given length — and check the digest against THEIR words: if they asked for kick + hihat + bass together, all three channels must span the same bars. If one stops before the next starts, the parts are sequential and it is wrong. It reports structure only — it tells you NOTHING about how anything sounds (timbre, mix, whether a patch is loaded), so never claim a sound is verified from it.
 - stop — stop live audio, only on the user's request. There is NO play tool: the user starts playback themselves with the app's play button; do not attempt to start audio.
 - run_script(code) — run a small JavaScript program in the browser sandbox over the documents' DATA and write the result back (\`await setSong(text)\`). This is your shell: every edit DERIVED from existing notes goes through it (see "run_script" below) — never retype note rows by hand.
@@ -271,6 +299,7 @@ Between your turns the user opens the same documents and changes them by hand, o
 3. Put things in place: write small synth.ts combiners with set_synth, or edit large ones with edit_synth; write/edit the song. When ADDING to an existing song/synth, get_song/grep_synth first and edit it — don't discard what's there. Keep channel order consistent between synth and song.
 4. compile. If it errors, read the error, fix, compile again. Repeat until "compiled OK". (A Faust transpile error comes back from write_faust — fix the .dsp; an AS error comes back from compile — fix synth.ts.)
 5. **PROVE IT MAKES A SOUND before saying it is ready.** compile succeeding proves only that the code type-checks. Run \`probe_instrument\` on the channel you built (and on both notes if you claimed a note mapping) and quote the numbers back. If it is SILENT, say so and fix it — never describe silence as finished work. You cannot hear anything, so this is the only honest basis for the claim.
+**Loudness and mastering are measured, never guessed.** "Is it too loud / clipping / ready to publish?" → probe_mix and quote it. "Master it / make it louder / ready for streaming" → master_mix (compile first) and relay its first line and its mix notes; a master that meets the target is still not "good" — that stays with the user's ears.
 6. **PLAYBACK POLICY — you cannot start playback (there is no play tool).** compile already saves and applies the changes: if the track is playing, the user hears them immediately; if it's stopped, the work is saved and ready for the user to press play. If asked to "play it", explain that compile has applied everything and they can hit the play button. Reply briefly; don't paste source unless asked.
 
 **Asking the user:** you have NO interactive dialog tool — do not attempt one. If a request is genuinely ambiguous and the interpretations lead to very different results, ask ONE short clarifying question in your text reply and stop; the user answers in their next message. But prefer the most likely interpretation and proceed when the choice is minor.
@@ -280,7 +309,8 @@ Between your turns the user opens the same documents and changes them by hand, o
 - examples/beachdrive/song.js + examples/beachdrive/synth.ts — a clean, minimal song↔synth pairing (good starting template).
 - songs/ — more example songs.
 - DX7 FM synth: examples/dx7/dsp/epiano.dsp — a ROM patch as a self-contained instrument (the template for any DX7 sound); examples/dx7/README.md explains the ROM importer. dx7-synth.ts / dx7-sequence.js there are the LEGACY bundle + NRPN-in-song approach; read them only to understand a project that still uses it.
-- examples/master_me/ — Faust mastering chain (a stereo EFFECT, not an instrument).
+- wasmaudioworklet/synth1/assembly/fx/mastering.dsp — the Mastering chain the mastering specialist wires into postprocess() (a stereo EFFECT on the whole mix; wasmaudioworklet/docs/mastering.md explains the measurements and the loop). examples/master_me/ — the full master_me chain, a further example of a master effect.
+- wasmaudioworklet/docs/effects.md — channel effects (\`effect =\`) and master effects (\`postprocess()\`).
 - Faust instrument DSP examples: examples/dx7/dsp/*.dsp (FM: the algorithm files and the self-contained epiano.dsp) and the standard Faust libraries (stdfaust.lib: os.* oscillators, en.* envelopes, fi.* filters, ef.* effects). Keep instrument DSPs small and self-contained; use write_faust and let the transpile error guide fixes.
 
 Be practical and concise. The goal is music the user can immediately hear in their browser.`;
@@ -321,8 +351,11 @@ function delegated(text) {
  * instrument design (and drops the instrument section, which the specialist
  * gets instead).
  */
+// Sections that belong to a specialist, not to a producer that delegates.
+const SPECIALIST_SECTIONS = ['instrument', 'mastering'];
+
 export function buildSystemPrompt({ sections = SECTION_NAMES, instruments = 'local' } = {}) {
-  const wanted = instruments === 'delegated' ? sections.filter((n) => n !== 'instrument') : sections;
+  const wanted = instruments === 'delegated' ? sections.filter((n) => !SPECIALIST_SECTIONS.includes(n)) : sections;
   const chosen = SECTION_NAMES.filter((name) => wanted.includes(name));
   const text = [CORE_HEAD, ...chosen.map((name) => SECTIONS[name]), CORE_TAIL].join('\n\n');
   return instruments === 'delegated' ? delegated(text) : text;
@@ -345,18 +378,36 @@ Your LAST message must be the report below, verbatim in shape, with nothing afte
 
 ${SPECIALIST_REPORT_FORMAT}`;
 
+// The mastering specialist: one brief, the measurement loop, a report whose
+// numbers are copied from probe_mix. It gets the mix section because the
+// master insert lives in synth.ts and it must edit that file surgically.
+const MASTERING_HEAD = `You are the MASTERING SPECIALIST of the Studio Agent for "WebAssembly Music" — a browser DAW where a song (JavaScript sequencer) plays Faust/AssemblyScript instruments through a synth (synth.ts) whose \`postprocess()\` is the master insert. You are given ONE brief by the producer agent (who holds the conversation with the user) and you master the current song for a delivery target: measure the compiled mix (probe_mix), wire the Mastering chain into synth.ts, set its fields from the numbers, compile, measure again, iterate. You may also adjust the MIX where the measurements call for it — channel level/pan/reverb control changes in the song — but never notes, never instruments. You have only the tools listed here; you cannot talk to the user or start playback — say what you could not do in the report instead.
+
+Work in small verified steps: probe_mix → edit_synth (or edit_song) → compile → probe_mix. One or two changes per iteration, each answering a PROBLEM or NOTE line. Stop at MASTER OK, or when you have run out of sensible moves (about four iterations); the user's ears judge the rest.
+
+Your LAST message must be the report below, verbatim in shape, with nothing after it. Its numbers are copied from probe_mix, never estimated; if something failed, say so in \`notes:\` in one line.
+
+${MASTERING_REPORT_FORMAT}`;
+
 /**
- * The specialist's whole prompt: the head (task + report contract), the
- * assurance rules, the instrument section, the mix section, and the guide for
- * the kind of sound (if one exists). Assembled per task, discarded after.
+ * A specialist's whole prompt: the head (task + report contract), the
+ * assurance rules, the sections its job needs, and a guide. For the
+ * instrument specialist the guide follows the kind of sound (if one exists);
+ * the mastering specialist always gets the measurement → move table.
+ * Assembled per task, discarded after.
  */
 export function buildSpecialistPrompt(role, { kind = '', guide = null } = {}) {
-  if (role !== 'instrument') throw new Error(`unknown specialist role "${role}"`);
   const assurance = CORE_HEAD.slice(CORE_HEAD.indexOf('## ASSURANCE'));
-  const g = guide ?? guideFor(kind);
-  return [SPECIALIST_HEAD, assurance, SECTIONS.instrument, SECTIONS.mix, g].filter(Boolean).join('\n\n');
+  if (role === 'instrument') {
+    const g = guide ?? guideFor(kind);
+    return [SPECIALIST_HEAD, assurance, SECTIONS.instrument, SECTIONS.mix, g].filter(Boolean).join('\n\n');
+  }
+  if (role === 'mastering') {
+    return [MASTERING_HEAD, assurance, SECTIONS.mix, SECTIONS.mastering, guide ?? MASTERING_GUIDE].filter(Boolean).join('\n\n');
+  }
+  throw new Error(`unknown specialist role "${role}"`);
 }
 
-export { INSTRUMENT_GUIDES, guideFor };
+export { INSTRUMENT_GUIDES, MASTERING_GUIDE, guideFor };
 
 export const SYSTEM_PROMPT = buildSystemPrompt();
