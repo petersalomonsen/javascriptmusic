@@ -37,7 +37,7 @@ export function resolveDefaultBaseUrl(hostname) {
 export { TOOL_DEFS } from './tools-def.js';
 import { TOOL_DEFS as SHARED_TOOL_DEFS, toolDefsForRole } from './tools-def.js';
 import { buildSpecialistPrompt } from './prompt.js';
-import { specialistBrief, specialistResult, channelFromReport } from './tools-core.js';
+import { SPECIALISTS } from './tools-core.js';
 
 export function toOpenAiTools(defs = SHARED_TOOL_DEFS) {
   return defs.map((d) => ({ type: 'function', function: { name: d.name, description: d.description, parameters: d.parameters } }));
@@ -297,38 +297,42 @@ export async function runAgentTurn({
 }
 
 
-// ---- the instrument specialist, as a nested turn ---------------------------
+// ---- a specialist, as a nested turn ----------------------------------------
 //
-// design_instrument runs a SECOND agent loop with the specialist prompt (the
-// instrument + mix sections and a guide for the kind of sound), only the
-// instrument tools, and a fresh message history — so the transpile errors and
-// probes it works through never enter the producer's conversation. This is the
-// whole of that loop, minus anything UI: the browser client wraps it with chat
-// lines, the bench runs it as-is against a headless studio.
+// design_instrument and master_mix each run a SECOND agent loop with that
+// specialist's prompt, only its role's tools, and a fresh message history — so
+// the transpile errors and probes it works through never enter the producer's
+// conversation. This is the whole of that loop, minus anything UI: the browser
+// client wraps it with chat lines, the bench runs it as-is against a headless
+// studio. What differs per role (brief, prompt, what to measure afterwards,
+// how to phrase the verdict) comes from SPECIALISTS in tools-core.js.
 //
 // It ends with the specialist's report plus a probe the CALLER's `probe`
-// function runs afterwards, on the channel the brief named (or the report
-// says): the OK/FAILED verdict in the first line is measured, not claimed.
+// function runs afterwards — the channel's notes for an instrument, the whole
+// mix for a master: the OK/FAILED verdict in the first line is measured, not
+// claimed.
 export async function runSpecialistTurn({
   fetchFn, baseUrl, apiKey, model,
-  args = {},                 // { brief, kind, channel, name } — the producer's design_instrument arguments
-  runTool,                   // (name, args, role) => result; called with role 'instrument'
-  probe,                     // ({ channel, notes }) => probe report text; throws when it cannot probe
+  role = 'instrument',       // 'instrument' | 'mastering'
+  args = {},                 // the producer's design_instrument / master_mix arguments
+  runTool,                   // (name, args, role) => result
+  probe,                     // (probeArgs) => probe report text; throws when it cannot probe
   onText = () => {}, onToolCall = () => {}, onRetry = () => {},
   maxIterations = 20, sleepFn,
   systemPrompt = null,       // override of the specialist prompt (the bench A/Bs prompt versions)
 }) {
-  const { brief, kind = '', channel, name } = args;
+  const spec = SPECIALISTS[role];
+  if (!spec) throw new Error(`unknown specialist role "${role}"`);
   const messages = [
-    { role: 'system', content: (systemPrompt ?? buildSpecialistPrompt('instrument', { kind })) + SERVERLESS_PROMPT_SUFFIX },
-    { role: 'user', content: specialistBrief({ brief, kind, channel, name }) },
+    { role: 'system', content: (systemPrompt ?? buildSpecialistPrompt(role, { kind: spec.kind(args) })) + SERVERLESS_PROMPT_SUFFIX },
+    { role: 'user', content: spec.brief(args) },
   ];
   let report = '';
   try {
     await runAgentTurn({
       fetchFn, baseUrl, apiKey, model, messages, maxIterations, sleepFn,
-      tools: toOpenAiTools(toolDefsForRole('instrument')),
-      runTool: (n, a) => runTool(n, a, 'instrument'),
+      tools: toOpenAiTools(toolDefsForRole(role)),
+      runTool: (n, a) => runTool(n, a, role),
       onText: (t) => { report = t; onText(t); },   // the LAST text is the report
       onToolCall, onRetry,
     });
@@ -337,17 +341,17 @@ export async function runSpecialistTurn({
     if (e?.name === 'AbortError' || e?.paymentRequired || e?.outOfCredits) throw e;
     report = `${report}\n\n(the specialist run ended with an error: ${e?.message || e})`.trim();
   }
-  const ch = Number.isFinite(Number(channel)) ? Number(channel) : channelFromReport(report);
+  const probeArgs = spec.probeArgs(args, report);
   let probeText;
-  if (ch === null || ch === undefined) {
-    probeText = 'ERROR: no channel known — the specialist did not report which channel it registered the voice on';
+  if (!probeArgs) {
+    probeText = spec.noProbe;
   } else {
     try {
-      probeText = String(await probe({ channel: ch, notes: 'c3,c4,c5' }) ?? '');
+      probeText = String(await probe(probeArgs) ?? '');
     } catch (e) {
       probeText = `ERROR: ${e?.message || e}`;
     }
   }
-  const text = specialistResult({ report, probeText, channel: ch, name });
-  return { text, ok: text.split('\n')[0].includes(': OK'), report, probeText, messages };
+  const text = spec.result({ report, probeText, args, probeArgs });
+  return { text, ok: text.split('\n')[0].includes(': OK'), report, probeText, messages, probeArgs };
 }

@@ -28,6 +28,22 @@ export const INSTRUMENT_GUIDES = {
 - Verify with probe_instrument: a kick has its centroid near 60-150 Hz, a hi-hat above 8 kHz, a snare in between with a clear noise component; two notes on the same drum returning the same spectrum is CORRECT here.`,
 };
 
+// What the MASTERING specialist is handed on top of the mastering section: the
+// measurement → move table, so an iteration is a lookup rather than a guess.
+export const MASTERING_GUIDE = `### Guide: reading probe_mix and choosing the move
+auto_master owns the arithmetic — gainDb, limiterCeilingDb, lowMonoHz — and reports why it stopped; do not hand-tune those. Your moves answer what it leaves, one or two per round, then auto_master again:
+- auto_master stopped with "gainDb is at its limit" → the source mix is too quiet or too hot: change the channel levels in the song (CC 7) by the missing amount, not the master.
+- "the loudness gap stopped shrinking" → the compressor absorbs the gain: raise the three thresholds by 6 dB (less compression) or, if the brief wants density, lower them and accept a lower PLR.
+- clipped samples > 0 after auto_master → a channel clips BEFORE the chain: find the hot channel (grep_song for its track, CC 7) and lower it in the song.
+- loudness range > 15 LU and the piece is not meant to be that dynamic → compRatio 3 and thresholds −24, or lift the quiet part's channel with CC 7.
+- PLR under 6 dB → squashed: raise the thresholds, compRatio toward 1.5, gainDb down.
+- low-end correlation under 0.8 → lowMonoHz 100–150.
+- tilt above −3.5 dB/oct (harsh) → tiltDb −1..−2, or highThresholdDb −24; tilt below −8 (dull) → tiltDb +1..+2.
+- sub band above −6 dB of the total → highpassHz 30–40, lowThresholdDb −24.
+- a section more than 8 LU under the rest that is not a breakdown → raise that part's channel (CC 7) in the song, not the master.
+- L/R balance beyond 1.5 dB → a pan (CC 10) problem in the song; note it, fix it only if the brief allows.
+Defaults are a gentle 2:1 three-band compressor at −18 dB thresholds and a −1.2 dB ceiling; a typical streaming master needs gainDb between +3 and +9 on top of that. Never leave bypass = 1. Verify with probe_mix after every compile; the report's before/after lines are copied from it.`;
+
 const SYNONYMS = [
   [/(^|\b)(fm|dx7|dx-7|yamaha|e\.?piano|epiano|bell|tine)(\b|$)/i, 'fm'],
   [/(^|\b)(drum|drums|kick|snare|hi-?hat|hat|percussion|clap|tom)(\b|$)/i, 'drums'],

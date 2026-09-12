@@ -27,7 +27,8 @@ import { producerQuery, producerSystemPrompt } from '../agent-core.mjs';
 import { SDK_PROMPT_SUFFIX } from '../prompt.mjs';
 import { runAgentTurn, runSpecialistTurn, toOpenAiTools, SERVERLESS_PROMPT_SUFFIX } from '../../../wasmaudioworklet/studio-agent/nearai-core.js';
 import { buildProducerPrompt, buildSpecialistPrompt } from '../../../wasmaudioworklet/studio-agent/prompt.js';
-import { toolDefsForRole, toolNamesForRole } from '../../../wasmaudioworklet/studio-agent/tools-def.js';
+import { toolDefsForRole, toolNamesForRole, specialistRoleForTool } from '../../../wasmaudioworklet/studio-agent/tools-def.js';
+import { SPECIALISTS } from '../../../wasmaudioworklet/studio-agent/tools-core.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -97,7 +98,7 @@ async function runSdk(task, studio, transcript, log, { prompt = task.prompt, ses
       for (const b of m.message?.content ?? []) if (b.type === 'tool_result') {
         const text = Array.isArray(b.content) ? b.content.map((x) => x.text || '').join('') : String(b.content || '');
         transcript.push({ kind: 'tool_result', text, isError: !!b.is_error, t: Date.now() });
-        if (/^design_instrument /.test(text)) log(`  ↩ ${text.split('\n')[0]}`);
+        if (/^(design_instrument |master_mix:)/.test(text)) log(`  ↩ ${text.split('\n')[0]}`);
       }
     } else if (m.type === 'result') { stats.turns = m.num_turns; stats.costUsd = m.total_cost_usd; stats.usage = m.usage; }
   }
@@ -154,14 +155,16 @@ async function runOpenAI(task, studio, transcript, log, { prompt = task.prompt, 
     runTool: async (name, a) => {
       transcript.push({ kind: 'tool_use', name, input: a, t: Date.now() });
       log(`  ⚙ ${name} ${JSON.stringify(a).slice(0, 100)}`);
-      if (name === 'design_instrument') {
-        transcript.push({ kind: 'specialist', state: 'start', t: Date.now() });
+      const specialistRole = specialistRoleForTool(name);
+      if (specialistRole) {
+        transcript.push({ kind: 'specialist', state: 'start', role: specialistRole, t: Date.now() });
         const r = await runSpecialistTurn({
-          fetchFn: fetchWithDeadline, baseUrl: BASE_URL, apiKey: API_KEY, model: SPECIALIST_MODEL || MODEL, args: a,
-          systemPrompt: PROMPT_REF ? prompts.specialist(a?.kind || '') : null,
-          runTool: (n, x, role) => { transcript.push({ kind: 'tool_use', name: n, input: x, sub: 'instrument', t: Date.now() }); log(`     ↳ ${n} ${JSON.stringify(x).slice(0, 80)}`); return roleTool(role)(n, x); },
-          probe: (p) => studio.runTool('probe_instrument', p),
-          onText: (t) => transcript.push({ kind: 'specialist_text', text: t, sub: 'instrument', t: Date.now() }),
+          fetchFn: fetchWithDeadline, baseUrl: BASE_URL, apiKey: API_KEY, model: SPECIALIST_MODEL || MODEL, role: specialistRole, args: a,
+          // --prompt-ref A/Bs the INSTRUMENT specialist's prompt; the mastering one is the working tree's
+          systemPrompt: PROMPT_REF && specialistRole === 'instrument' ? prompts.specialist(a?.kind || '') : null,
+          runTool: (n, x, role) => { transcript.push({ kind: 'tool_use', name: n, input: x, sub: role, t: Date.now() }); log(`     ↳ ${n} ${JSON.stringify(x).slice(0, 80)}`); return roleTool(role)(n, x); },
+          probe: (p) => studio.runTool(SPECIALISTS[specialistRole].probeTool, p),
+          onText: (t) => transcript.push({ kind: 'specialist_text', text: t, sub: specialistRole, t: Date.now() }),
         });
         transcript.push({ kind: 'specialist', state: 'end', ok: r.ok, t: Date.now() });
         transcript.push({ kind: 'tool_result', text: r.text, t: Date.now() });

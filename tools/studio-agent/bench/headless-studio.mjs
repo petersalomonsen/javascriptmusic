@@ -23,6 +23,9 @@ import { compileSong } from '../../../wasmaudioworklet/midisequencer/songcompile
 import * as core from '../../../wasmaudioworklet/studio-agent/tools-core.js';
 import { runAgentScript, formatScriptResult } from '../../../wasmaudioworklet/studio-agent/script-sandbox.js';
 import { probeNote, probeNotes, formatProbeReport } from '../../../wasmaudioworklet/audioprobe/instrumentprobe.js';
+import { measureMix } from '../../../wasmaudioworklet/audioprobe/mixprobe.js';
+import { formatMixReport, resolveTarget } from '../../../wasmaudioworklet/audioprobe/mixanalysis.js';
+import { autoMaster, formatAutoMasterReport } from '../../../wasmaudioworklet/audioprobe/automaster.js';
 import { parseNote, noteName } from '../../../wasmaudioworklet/audioprobe/audioanalysis.js';
 import { buildSynthWasm, REPO } from '../../instrumenttest/headless.mjs';
 
@@ -193,6 +196,34 @@ export function createHeadlessStudio({ project = {}, repoRoot = REPO } = {}) {
         results = await probeNotes(state.wasm, noteNumbers, { channel: Number(channel) || 0, holdSeconds: hold > 0 ? Number(hold) : 0.4, velocity: velocity > 0 ? Number(velocity) : 100 });
       } catch (e) { return { __error: `probe failed: ${e.message || e}` }; }
       return formatProbeReport(results);
+    },
+    probe_mix: async ({ target, targetLufs, truePeakDb, tail } = {}) => {
+      if (!state.wasm) return { __error: 'No compiled synth yet — call compile first.' };
+      if (!state.events || !state.events.length) return { __error: 'No compiled song yet — call compile first.' };
+      try {
+        const a = await measureMix(state.wasm, state.events, { sampleRate: 44100, tailSeconds: tail > 0 ? Number(tail) : 1.5, bpm: core.songBpmFromSource(state.song) });
+        return formatMixReport(a, resolveTarget({ target, targetLufs, truePeakDb }));
+      } catch (e) { return { __error: `mix probe failed: ${e?.message || e}` }; }
+    },
+    auto_master: async ({ target, targetLufs, truePeakDb, maxIterations } = {}) => {
+      if (!state.events || !state.events.length) return { __error: 'No compiled song yet — call compile first.' };
+      const t = resolveTarget({ target, targetLufs, truePeakDb });
+      const bpm = core.songBpmFromSource(state.song);
+      const build = (src) => buildSynthWasm({ 'mixes/midi.mix.ts': src, ...faustFiles() }).bytes;
+      let r;
+      try {
+        r = await autoMaster({
+          source: state.synth, target: t,
+          compile: async (src) => build(src),
+          measure: (bytes) => measureMix(bytes, state.events, { sampleRate: 44100, tailSeconds: 1.5, bpm }),
+          maxIterations: maxIterations > 0 ? Number(maxIterations) : 6,
+        });
+      } catch (e) { return { __error: `auto_master failed: ${e?.message || e}` }; }
+      if (r.final && r.source !== state.synth) {
+        state.synth = r.source;
+        try { state.wasm = build(state.synth); } catch (e) { return { __error: String(e?.message || e) }; }
+      }
+      return formatAutoMasterReport(r) + (r.final ? '\n\nsynth.ts updated and compiled.' : '');
     },
     song_summary: async () => {
       if (!state.events) return { __error: 'No compiled song yet — call compile first.' };

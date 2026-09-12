@@ -12,14 +12,18 @@ import { readfile, writefileandstage, listfiles, gitCommand, gitLog, worker as g
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
-  playFromHereLine
+  playFromHereLine, SPECIALISTS,
 } from './tools-core.js';
 import { runAgentScript, formatScriptResult } from './script-sandbox.js';
 import { probeNote, probeNotes, formatProbeReport } from '../audioprobe/instrumentprobe.js';
+import { measureMix } from '../audioprobe/mixprobe.js';
+import { formatMixReport, resolveTarget } from '../audioprobe/mixanalysis.js';
+import { autoMaster, formatAutoMasterReport } from '../audioprobe/automaster.js';
+import { compileWebAssemblySynth } from '../synth1/browsersynthcompiler.js';
 import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
 import { runAgentTurn, runSpecialistTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX,
   compactConversation, conversationChars, COMPACT_AT_CHARS, toOpenAiTools } from './nearai-core.js';
-import { toolDefsForRole, toolNamesForRole } from './tools-def.js';
+import { toolDefsForRole, toolNamesForRole, specialistRoleForTool } from './tools-def.js';
 import { loadPass, clearPass, passRemainingSeconds, HEADER_PASS } from '../near/x402-client.js';
 
 // The same-origin Pages Function. Works in production and, since devserver.js
@@ -273,6 +277,70 @@ const registry = {
       return { __error: `probe failed: ${e.message || e}` };
     }
     return formatProbeReport(results);
+  },
+  // The whole mix, measured: the compiled song rendered offline through the
+  // very wasm that plays (postprocess() included), then analysed the way a
+  // mastering engineer reads meters. This is what the mastering specialist
+  // steers by, and the producer's answer to "is it too loud / clipping".
+  probe_mix: async ({ target, targetLufs, truePeakDb, tail } = {}) => {
+    const bytes = window.WASM_SYNTH_BYTES;
+    if (!bytes) return { __error: 'No compiled synth yet — call compile first.' };
+    const eventlist = window.lastCompiledEventList;
+    if (!eventlist || !eventlist.length) return { __error: 'No compiled event list available — call compile first (only the midi-synth path produces one).' };
+    const t = resolveTarget({ target, targetLufs, truePeakDb });
+    try {
+      // rendered and analysed in a Worker: a long song is seconds of work
+      const a = await measureMix(bytes, eventlist, { sampleRate: 44100, tailSeconds: tail > 0 ? Number(tail) : 1.5, bpm: songBpmFromSource(songsourceeditor.doc.getValue()) });
+      return formatMixReport(a, t);
+    } catch (e) {
+      return { __error: `mix probe failed: ${e.message || e}` };
+    }
+  },
+  // The numeric half of mastering, done by measurement rather than by a model:
+  // wire the chain, then compile → render → analyse → adjust gain/ceiling/
+  // low-mono until the target is met. Trial builds go through the compile
+  // worker without touching the editors; only the result is written back and
+  // saved, so the live synth ends up with exactly the settings reported.
+  auto_master: async ({ target, targetLufs, truePeakDb, maxIterations } = {}) => {
+    const eventlist = window.lastCompiledEventList;
+    if (!eventlist || !eventlist.length) return { __error: 'No compiled event list available — call compile first (and the song must play something).' };
+    const t = resolveTarget({ target, targetLufs, truePeakDb });
+    const bpm = songBpmFromSource(songsourceeditor.doc.getValue());
+    const faustSources = await loadFaustTsSources();
+    const source = synthsourceeditor.doc.getValue();
+    let trial = 0;
+    const compile = async (src) => {
+      // A trial marker keeps every variant distinct from the document saved
+      // afterwards: the compile worker answers an unchanged source with "no
+      // changes" and no wasm, which would leave the live synth on a stale build.
+      const bytes = await compileWebAssemblySynth(`${src}\n// auto_master trial ${++trial}\n`, undefined, 44100, false, faustSources);
+      if (!bytes) throw new Error('the compiler returned no wasm for a trial build');
+      return bytes;
+    };
+    let r;
+    try {
+      r = await autoMaster({
+        source, target: t, compile,
+        measure: (bytes) => measureMix(bytes, eventlist, { sampleRate: 44100, tailSeconds: 1.5, bpm }),
+        maxIterations: maxIterations > 0 ? Number(maxIterations) : 6,
+        log: (line) => addLine('tool', `   · auto_master ${line}`),
+      });
+    } catch (e) {
+      return { __error: `auto_master failed: ${e.message || e}` };
+    }
+    let tail = '';
+    if (r.final && r.source !== source) {
+      synthsourceeditor.doc.setValue(r.source);
+      try {
+        await window.saveSong();
+      } catch (e) {
+        return { __error: `the mastering settings were written to synth.ts but compile/save failed: ${e?.message || e}` };
+      }
+      const err = readErrorPanel();
+      if (err && /(^|\n)\s*ERROR/.test(err)) return { __error: err };
+      tail = '\n\nsynth.ts updated and saved (compiled OK); a playing track has the new settings now.';
+    }
+    return formatAutoMasterReport(r) + tail;
   },
   song_summary: async () => {
     const summary = analyzeCompiledSong();
@@ -694,7 +762,8 @@ async function runNearaiServerlessTool(name, args, role = 'producer') {
   // Each role sees only its own tools; a call outside the role's list is a
   // model error and is answered as one rather than silently executed.
   if (!toolNamesForRole(role).includes(name)) throw new Error(`tool ${name} is not available to the ${role}`);
-  if (name === 'design_instrument') return runNearaiSpecialist(args);
+  const specialistRole = specialistRoleForTool(name);
+  if (specialistRole) return runNearaiSpecialist(specialistRole, args);
   if (registry[name]) {
     const result = await registry[name](args || {});
     if (result && result.__error) throw new Error(result.__error);
@@ -712,28 +781,44 @@ async function runNearaiServerlessTool(name, args, role = 'producer') {
   throw new Error(`unknown tool ${name}`);
 }
 
-// ---- the instrument specialist (serverless path) ------------------------------
+// The transpiled faust/*.ts of the OPFS repo, as the compiler wants them
+// (same as the app's own save path does before compiling).
+async function loadFaustTsSources() {
+  try {
+    const all = await listfiles(FAUST_DIR);
+    const out = {};
+    for (const p of all.filter((f) => f.endsWith('.ts'))) out[p.substring(FAUST_DIR.length)] = await readfile(p);
+    return out;
+  } catch (e) {
+    console.warn('auto_master: could not list faust/*.ts sources', e);
+    return {};
+  }
+}
+
+// ---- the specialists (serverless path) ------------------------------------------
 // The loop itself lives in nearai-core (runSpecialistTurn) so the bench runs
-// the same code; this adds the chat lines and the in-app probe.
-async function runNearaiSpecialist(args = {}) {
+// the same code; this adds the chat lines and the in-app probe — the channel
+// probe for an instrument, the whole-mix probe for a master.
+async function runNearaiSpecialist(role, args = {}) {
   const cfg = nearaiConfig();
-  addLine('tool', `— instrument specialist started${args.name ? ` (${args.name})` : ''} —`);
-  setPhase('instrument specialist…');
+  const spec = SPECIALISTS[role];
+  addLine('tool', `— ${spec.label} started${args.name ? ` (${args.name})` : ''} —`);
+  setPhase(`${spec.label}…`);
   const { text, ok } = await runSpecialistTurn({
-    fetchFn: nearaiFetch(), baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model, args,
+    fetchFn: nearaiFetch(), baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model, role, args,
     // NOT through toolQueue: this whole call IS the queued item the producer's
     // design_instrument occupies, and queueing behind itself would wait
     // forever. The specialist's own loop runs its tools one at a time anyway.
     runTool: (n, a, role) => runNearaiServerlessTool(n, a, role),
     probe: async (p) => {
-      const r = await registry.probe_instrument(p);
+      const r = await registry[spec.probeTool](p);
       if (r && r.__error) throw new Error(r.__error);
       return r;
     },
-    onToolCall: (n) => { addLine('tool', `   ↳ ${n} (instrument specialist)`); setPhase(`instrument specialist: ${n}…`); },
+    onToolCall: (n) => { addLine('tool', `   ↳ ${n} (${spec.label})`); setPhase(`${spec.label}: ${n}…`); },
     onRetry: (status, delayMs, attempt) => addLine('tool', `— specialist: ${status === 429 ? 'rate limited' : status === 'network' ? 'connection dropped' : `upstream ${status}`}; retry ${attempt} in ${delayMs / 1000}s —`),
   });
-  addLine('tool', `— instrument specialist finished: ${ok ? 'OK' : 'FAILED'} —`);
+  addLine('tool', `— ${spec.label} finished: ${ok ? 'OK' : 'FAILED'} —`);
   setPhase(`${cfg.model.split('/').pop()} thinking…`);
   return text;
 }

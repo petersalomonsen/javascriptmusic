@@ -708,14 +708,19 @@ export function assembleBundle(results, { forEditor = false } = {}) {
 // auto-mastering the outputline still works without any caller changes.
 // ---------------------------------------------------------------------------
 
-// transpileEffect({ asSource, clsName, sourceFile, importDepth })
+// transpileEffect({ asSource, clsName, sourceFile, importDepth, emitHooks })
 //   asSource   — native AS output for a stereo effect
 //                (compiled with `-cn <clsName>Dsp --ec --os`)
 //   clsName    — class name for the generated mastering class
 //   sourceFile — basename of the .dsp source; header comment only
+//   emitHooks  — also emit the default singleton + initializeMidiSynth()/
+//                postprocess() so the file can BE the mix entry (default).
+//                false for a library effect that lives in assembly/fx/ and is
+//                re-exported from globalimports: those hooks would otherwise
+//                be re-exported too and shadow the real mix's.
 //
 // Returns the array of output lines (caller joins with '\n').
-export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1 }) {
+export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1, emitHooks = true }) {
     const dspClassName = clsName + 'Dsp';
     const { uiParams, numInputs, numOutputs } = extractUIFromJSON(asSource);
 
@@ -732,7 +737,7 @@ export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1
 
     const out = [];
     out.push(`// Mastering effect: ${clsName}`);
-    out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--effect, native control/frame)`);
+    out.push(`// Auto-transpiled from Faust DSP by faust2asc.js (--effect${emitHooks ? '' : ' --library'}, native control/frame)`);
     out.push(`// Source: ${sourceFile}`);
     out.push('');
     // importDepth = number of '..' segments above the assembly/ root
@@ -779,8 +784,19 @@ export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1
     out.push('        this.signal.left = this.fout[0];');
     out.push('        this.signal.right = this.fout[1];');
     out.push('    }');
+    out.push('');
+    // The common case — the effect is a master insert — as one call from
+    // postprocess(): read the mix bus, process, write it back.
+    out.push('    /** Process `outputline` in place: the whole of a master-insert postprocess(). */');
+    out.push('    processOutputline(): void {');
+    out.push('        this.process(outputline.left, outputline.right);');
+    out.push('        outputline.left = this.signal.left;');
+    out.push('        outputline.right = this.signal.right;');
+    out.push('    }');
     out.push('}');
     out.push('');
+
+    if (!emitHooks) return out;
 
     // Backwards-compat: keep the synth engine's `initializeMidiSynth` /
     // `postprocess` hooks pointing at a singleton that mastering-processes

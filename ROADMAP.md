@@ -73,7 +73,7 @@ History and roadmap of the WebAssembly music project
 - More Wasm-git UIs
 - Web UI for playing WebAssembly music modules
 - Simplify synth programming with AssemblyScript
-- Improve clip detection and basic mastering tools
+- Improve clip detection and basic mastering tools — done 2026: `probe_mix` measurement + `Mastering` chain + mastering specialist ([docs](wasmaudioworklet/docs/mastering.md))
 - Physical modeling synth UI
 - Interactive apps with easy and entertaining UI for evolving and republishing music NFTs
 - NFT contracts with auction, commission

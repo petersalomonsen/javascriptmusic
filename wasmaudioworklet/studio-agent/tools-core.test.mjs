@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   stepPatternSpans, summarizeSongEvents, formatSongSummary, songEventWarnings,
-  trailingSilence, songBpmFromSource, declaredInstruments
-} from './tools-core.js';
+  trailingSilence, songBpmFromSource, declaredInstruments, masteringBrief, masteringResult, SPECIALISTS } from './tools-core.js';
 import { spectrum, measureNote, parseNote, noteName } from '../audioprobe/audioanalysis.js';
 import { probeWarnings } from '../audioprobe/instrumentprobe.js';
 
@@ -635,4 +634,39 @@ test('channelFromReport reads the report line and nothing else', async () => {
     assert.equal(channelFromReport('REPORT\nfile: faust/x.dsp\nclass: X\nchannel: 4\nprobe: …'), 4);
     assert.equal(channelFromReport('I used channel 4 in synth.ts'), null);
     assert.equal(channelFromReport(''), null);
+});
+
+test('faustRegistrationHint: a stereo effect is wired into postprocess(), never onto a channel', () => {
+  const ts = 'export class MasteringDsp {}\nexport class Mastering {\n  processOutputline(): void {}\n}\n';
+  const h = faustRegistrationHint(ts, 'mastering');
+  assert.equal(h.effect, 'Mastering');
+  assert.deepEqual(h.classes, ['Mastering']);
+  assert.ok(/stereo EFFECT/.test(h.message));
+  assert.ok(/mastering\.processOutputline\(\)/.test(h.message));
+  assert.ok(!/midichannels\[N\]/.test(h.message));
+});
+
+test('masteringBrief carries the target and its overrides for every probe_mix call', () => {
+  const b = masteringBrief({ brief: 'warm, not squashed', target: 'apple', truePeakDb: -2 });
+  assert.ok(b.startsWith('BRIEF: warm, not squashed'));
+  assert.ok(/TARGET: apple, true peak -2 dBTP/.test(b));
+  assert.ok(/^BRIEF: \(none/.test(masteringBrief({})));
+});
+
+test('masteringResult: the verdict is probe_mix\'s first line, unmeasured is FAILED', () => {
+  const ok = masteringResult({ report: 'REPORT\ntarget: streaming', probeText: 'MASTER OK for streaming & video\nrender: 60 s' });
+  assert.match(ok.split('\n')[0], /^master_mix: OK: MASTER OK for streaming/);
+  assert.ok(ok.includes('SPECIALIST REPORT:\nREPORT\ntarget: streaming'));
+  const bad = masteringResult({ report: 'r', probeText: 'NOT READY for streaming — 1 problem\nloudness: …\nPROBLEM: integrated loudness -11.0 LUFS is 3.0 LU ABOVE the -14 LUFS target' });
+  assert.match(bad.split('\n')[0], /^master_mix: FAILED: NOT READY for streaming — 1 problem — integrated loudness -11.0 LUFS is 3.0 LU ABOVE/);
+  assert.match(masteringResult({ report: 'r', probeText: 'ERROR: No compiled synth yet — call compile first.' }).split('\n')[0], /^master_mix: FAILED: the mix could not be measured/);
+  assert.match(masteringResult({ report: '' }).split('\n')[0], /FAILED/);
+});
+
+test('SPECIALISTS: each role says what to measure afterwards', () => {
+  assert.deepEqual(SPECIALISTS.mastering.probeArgs({ target: 'club', targetLufs: -9 }), { target: 'club', targetLufs: -9, truePeakDb: undefined });
+  assert.equal(SPECIALISTS.mastering.probeTool, 'probe_mix');
+  assert.deepEqual(SPECIALISTS.instrument.probeArgs({ channel: 2 }, ''), { channel: 2, notes: 'c3,c4,c5' });
+  assert.deepEqual(SPECIALISTS.instrument.probeArgs({}, 'REPORT\nchannel: 5'), { channel: 5, notes: 'c3,c4,c5' });
+  assert.equal(SPECIALISTS.instrument.probeArgs({}, 'no channel here'), null);
 });

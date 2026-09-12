@@ -91,6 +91,11 @@ midichannels[0].controlchange(58, 45);  // chorus deviation (CC 58)
 
 ## B. Tapiir echo — master effect (whole mix)
 
+> Looking for loudness/mastering rather than an echo? The built-in `Mastering`
+> chain and the measurement loop around it are in [mastering.md](mastering.md).
+> Every generated master effect also has `processOutputline()`, which does the
+> read-process-write-back below in one call.
+
 Tapiir is its own class, applied to the final mix in `postprocess()`.
 
 Transpiling a stereo-in/stereo-out `.dsp` (like `tapiir.dsp`) puts the transpiler

@@ -8,6 +8,8 @@ export { DelayLineFloat } from '../fx/delayline';
 export { EQBand } from '../fx/eqband';
 export { Freeverb } from '../fx/freeverb';
 export { Limiter } from '../fx/limiter';
+export { MasteringDsp } from '../fx/mastering';
+export { Mastering } from '../fx/mastering';
 export { MidSideProcessor } from '../fx/midsideprocessor';
 export { MonoCompressor } from '../fx/monocompressor';
 export { StereoCompressor } from '../fx/monocompressor';

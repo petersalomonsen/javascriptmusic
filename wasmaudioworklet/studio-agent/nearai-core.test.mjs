@@ -482,3 +482,35 @@ test('a dropped connection is retried like a 503, and an abort is not', async ()
   }), /fetch failed/);
   assert.equal(n, 3);
 });
+
+test('runSpecialistTurn: the mastering role gets its own prompt and tools, and probe_mix\'s verdict', async () => {
+  const bodies = [];
+  const fetchFn = async (url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    if (bodies.length === 1) return completion({ role: 'assistant', content: null, tool_calls: [{ id: 't1', type: 'function', function: { name: 'probe_mix', arguments: JSON.stringify({ target: 'streaming' }) } }] });
+    return completion({ role: 'assistant', content: 'REPORT\ntarget: streaming\nbefore: …\nafter: …\nsettings: gainDb 4\nmix notes: none\nnotes: ok' });
+  };
+  const toolCalls = [];
+  const probes = [];
+  const r = await runSpecialistTurn({
+    fetchFn, baseUrl: 'http://x/v1', apiKey: 'k', model: 'm', role: 'mastering',
+    args: { brief: 'ready for YouTube', target: 'streaming', truePeakDb: -1.5 },
+    runTool: async (name, args, role) => { toolCalls.push({ name, role }); return 'NOT READY …'; },
+    probe: async (p) => { probes.push(p); return 'MASTER OK for streaming & video\nloudness: integrated -14.2 LUFS'; },
+  });
+  assert.equal(r.ok, true);
+  assert.match(r.text.split('\n')[0], /^master_mix: OK: MASTER OK for streaming/);
+  assert.ok(bodies[0].messages[0].content.startsWith('You are the MASTERING SPECIALIST'));
+  assert.ok(bodies[0].messages[0].content.includes('### Guide: reading probe_mix'));
+  assert.ok(bodies[0].messages[1].content.startsWith('BRIEF: ready for YouTube'));
+  const names = bodies[0].tools.map((t) => t.function.name);
+  assert.ok(names.includes('probe_mix') && names.includes('edit_synth') && names.includes('edit_song'));
+  assert.ok(!names.includes('write_faust') && !names.includes('probe_instrument') && !names.includes('master_mix'));
+  assert.deepEqual(toolCalls, [{ name: 'probe_mix', role: 'mastering' }]);
+  // the tool's own measurement uses the producer's target, not the specialist's word
+  assert.deepEqual(probes, [{ target: 'streaming', targetLufs: undefined, truePeakDb: -1.5 }]);
+  const notReady = await runSpecialistTurn({ fetchFn, baseUrl: 'u', apiKey: 'k', model: 'm', role: 'mastering', args: {}, runTool: async () => 'x', probe: async () => 'NOT READY for streaming & video — 1 problem\nPROBLEM: true peak -0.2 dBTP is over the -1 dBTP ceiling by 0.8 dB' });
+  assert.equal(notReady.ok, false);
+  assert.match(notReady.text.split('\n')[0], /^master_mix: FAILED: NOT READY .* true peak -0.2 dBTP/);
+  await assert.rejects(runSpecialistTurn({ role: 'dj', fetchFn, baseUrl: 'u', apiKey: 'k', model: 'm', runTool: async () => 'x', probe: async () => 'x' }), /unknown specialist role/);
+});

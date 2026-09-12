@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { TOOL_DEFS, browserToolNames, sdkToolNames, toolDefsFor, ROLES, toolDefsForRole, toolNamesForRole } from './tools-def.js';
+import { TOOL_DEFS, browserToolNames, sdkToolNames, toolDefsFor, ROLES, toolDefsForRole, toolNamesForRole, specialistRoleForTool } from './tools-def.js';
 import { toOpenAiTools } from './nearai-core.js';
 
 test('every tool is declared once, with a description and an object schema', () => {
@@ -107,7 +107,7 @@ test('roles: the producer delegates .dsp work, the instrument specialist gets on
     // where-filtering: the SDK path never proxies read_repo_file; the browser path never sees the agent tool as a browser tool
     assert.ok(!toolNamesForRole('instrument', ['browser', 'loadfile']).includes('read_repo_file'));
     assert.ok(!browserToolNames().includes('design_instrument'));
-    assert.deepEqual(toolDefsForRole('producer', ['agent']).map((d) => d.name), ['design_instrument']);
+    assert.deepEqual(toolDefsForRole('producer', ['agent']).map((d) => d.name), ['design_instrument', 'master_mix']);
     assert.throws(() => toolDefsForRole('dj'), /unknown agent role/);
 });
 
@@ -117,4 +117,37 @@ test('design_instrument asks for what the specialist brief needs', () => {
     assert.deepEqual(def.parameters.required, ['brief']);
     for (const p of ['brief', 'kind', 'channel', 'name']) assert.ok(def.parameters.properties[p], p);
     assert.ok(/FAILED/.test(def.description), 'the description tells the producer to expect an explicit failure line');
+});
+
+test('mastering: the tools reach both providers, the role holds the master insert and the mix, every agent tool names its specialist', () => {
+    const openai = toOpenAiTools().map((t) => t.function.name);
+    assert.ok(browserToolNames().includes('probe_mix'), 'probe_mix runs in the browser');
+    assert.ok(sdkToolNames().includes('probe_mix'), 'the SDK path proxies probe_mix');
+    for (const name of ['probe_mix', 'master_mix']) assert.ok(openai.includes(name), `${name} missing from the OpenAI/NEAR AI definitions`);
+    // agent tools are not proxied; the SDK path runs the nested specialist itself (agent-core.mjs)
+    assert.ok(!sdkToolNames().includes('master_mix'));
+    const producer = toolNamesForRole('producer');
+    assert.ok(producer.includes('probe_mix') && producer.includes('master_mix'));
+    const mastering = toolNamesForRole('mastering');
+    for (const n of ['get_synth', 'grep_synth', 'edit_synth', 'grep_song', 'edit_song', 'compile', 'probe_mix', 'auto_master', 'song_summary', 'read_repo_file']) {
+        assert.ok(mastering.includes(n), `mastering lacks ${n}`);
+    }
+    // the optimiser belongs to the specialist: the producer delegates with master_mix
+    assert.ok(!producer.includes('auto_master'));
+    assert.ok(browserToolNames().includes('auto_master') && sdkToolNames().includes('auto_master'));
+    // no whole-document rewrites, no instruments, no delegation, no other specialist's probe
+    for (const n of ['set_song', 'set_synth', 'write_faust', 'edit_faust', 'probe_instrument', 'design_instrument', 'master_mix', 'run_script', 'stop']) {
+        assert.ok(!mastering.includes(n), `mastering must not have ${n}`);
+    }
+    assert.ok(!toolNamesForRole('instrument').includes('probe_mix'));
+    for (const n of ROLES.mastering.include) assert.ok(TOOL_DEFS.some((d) => d.name === n), `unknown tool in role: ${n}`);
+    // the nested runs switch on this, so an agent tool without a role is a dead tool
+    for (const d of TOOL_DEFS.filter((d) => d.where === 'agent')) assert.ok(ROLES[d.role], `${d.name}: role "${d.role}" is not in ROLES`);
+    assert.equal(specialistRoleForTool('design_instrument'), 'instrument');
+    assert.equal(specialistRoleForTool('master_mix'), 'mastering');
+    assert.equal(specialistRoleForTool('compile'), null);
+    const def = TOOL_DEFS.find((d) => d.name === 'master_mix');
+    assert.deepEqual(def.parameters.required, []);
+    for (const p of ['brief', 'target', 'targetLufs', 'truePeakDb']) assert.ok(def.parameters.properties[p], p);
+    assert.ok(/FAILED/.test(def.description));
 });

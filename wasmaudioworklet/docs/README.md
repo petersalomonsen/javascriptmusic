@@ -37,6 +37,10 @@ itself see the [app README](../README.md); for the monorepo overview see the
 - [Faust effects: channel & master](effects.md) — adding a per-instrument
   effect (`effect =`) or a whole-mix master effect (`postprocess()`), with a
   chorus and a Tapiir-echo worked example.
+- [Mastering: measure, process, measure again](mastering.md) — the whole-mix
+  measurement (LUFS, true peak, spectrum, stereo, per-section loudness), the
+  `Mastering` chain in `postprocess()`, and the agent loop that iterates it
+  against a streaming/video delivery target.
 
 ## Sharing & hosting
 

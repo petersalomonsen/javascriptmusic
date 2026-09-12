@@ -43,12 +43,14 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     console.log(`  --out       Output .ts file path`);
     console.log(`  --bundle    Transpile multiple DSPs into a single bundle with initializeMidiSynth()`);
     console.log(`  --effect    Generate a standalone Effect class (stereo in/out) with a default singleton wired into postprocess() on outputline`);
+    console.log(`  --library   With --effect: emit only the class (no singleton/initializeMidiSynth/postprocess), for effects that live in assembly/fx/ and are re-exported from globalimports`);
     process.exit(0);
 }
 
 const bundleMode = args.includes('--bundle');
 const forEditor = args.includes('--for-editor');
 const effectMode = args.includes('--effect');
+const libraryMode = args.includes('--library');
 let outputPath = null;
 let className = null;
 const dspFiles = [];
@@ -57,6 +59,7 @@ for (let i = 0; i < args.length; i++) {
     if (args[i] === '--bundle') continue;
     if (args[i] === '--for-editor') continue;
     if (args[i] === '--effect') continue;
+    if (args[i] === '--library') continue;
     if (args[i] === '--name' && args[i + 1]) { className = args[++i]; continue; }
     if (args[i] === '--out' && args[i + 1]) { outputPath = args[++i]; continue; }
     dspFiles.push(args[i]);
@@ -267,6 +270,7 @@ function transpileEffect(inputDsp, clsName) {
         asSource,
         clsName,
         sourceFile: path.basename(inputDsp),
+        emitHooks: !libraryMode,
     });
 }
 

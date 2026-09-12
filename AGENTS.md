@@ -56,7 +56,7 @@ You can't see the canvas or hear the audio, so lean on the headless checks:
 
 ## Key guides
 - [Song API](wasmaudioworklet/docs/song-api.md), [Animations](wasmaudioworklet/docs/animations.md),
-  [Shaders](wasmaudioworklet/docs/shaders.md)
+  [Shaders](wasmaudioworklet/docs/shaders.md), [Mastering](wasmaudioworklet/docs/mastering.md)
 - [faust2as](tools/faust2as/README.md), [claude-bridge](tools/claude-bridge/README.md)
 
 ## Conventions
