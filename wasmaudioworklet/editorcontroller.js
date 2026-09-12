@@ -48,7 +48,7 @@ async function loadCodeMirror() {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/search/jump-to-line.js');
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/dialog/dialog.js');
 
-    await loadScript('https://unpkg.com/jshint@2.9.6/dist/jshint.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/jshint@2.9.6/dist/jshint.js');
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/lint/lint.js');
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/lint/javascript-lint.js');
     await loadCSS('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/lint/lint.css');
