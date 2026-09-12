@@ -88,6 +88,18 @@ e = clamp(e / 24.0, 0.0, 1.0);
   per-clip / tempo clock uniform — if you need tempo-locked motion, derive it
   from `time` (e.g. `beat = time * BPM/60`).
 
+## Seeing a shader from inside the app (studio agent)
+
+The studio agent has a `render_shader` tool: it renders the shader currently
+in the editor at up to four song times on an offscreen canvas, through the
+same `drawFrame` as the screen (scheduled images, `showText`, `setVisual`
+uniforms included), with the note uniforms replayed from the last compiled
+song. The frames come back as one labelled contact sheet that the model sees
+as an image, plus per-frame numbers (lit pixels, brightness, notes sounding,
+change since the previous frame), and the same sheet appears in the chat
+panel. Only the local Agent SDK path can take images; the in-browser NEAR AI
+tier does not get the tool.
+
 ## The test harness
 
 [`tools/shadertest/render.mjs`](../../tools/shadertest/render.mjs) compiles a

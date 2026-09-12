@@ -364,3 +364,113 @@ test.describe('studio-agent run_script (local repo)', () => {
         expect(g.secs).toBeLessThan(3);
     });
 });
+
+// ---- render_shader: the agent's eyes ---------------------------------------
+// The SDK path turns { text, image } into a text block + an image block for the
+// model. This pins the browser half: a real offscreen WebGL render of the
+// CURRENT shader, note uniforms replayed from the compiled song, one labelled
+// JPEG back over the socket, the same sheet shown in the chat panel, and a
+// broken shader answering with the GLSL log instead of a picture.
+
+const RENDER_REPO = specRepo('studio-agent-render-shader');
+
+// Blue while nothing sounds, red where notes sound; the text layer on top.
+const NOTE_SHADER = `precision highp float;
+uniform vec2 resolution;
+uniform float time;
+uniform float targetNoteStates[128];
+uniform sampler2D uText;
+void main() {
+    float e = 0.0;
+    for (int i = 0; i < 128; i++) e += max(0.0, targetNoteStates[i] * 0.5 + 0.5);
+    vec2 uv = gl_FragCoord.xy / resolution;
+    vec3 col = mix(vec3(0.0, 0.0, 0.6), vec3(0.9, 0.1, 0.1), min(e, 1.0));
+    vec4 txt = texture2D(uText, vec2(uv.x, 1.0 - uv.y));
+    gl_FragColor = vec4(mix(col, txt.rgb, txt.a), 1.0);
+}
+`;
+
+// One note on the first beat, then a bar of silence: t=0.1s sounds, t=3s does not.
+const ONE_NOTE_SONG = `setBPM(120);
+await createTrack(0).steps(2, [ c4, , , , , , , ]);
+loopHere();
+`;
+
+test.describe('studio-agent render_shader (local repo)', () => {
+    let mock;
+
+    test.beforeEach(() => { mock = startMockAgentServer(); });
+    test.afterEach(async ({ page }) => {
+        await clearOPFS(page, RENDER_REPO);
+        await mock.close();
+    });
+
+    test('frames of the current shader come back as one image, note uniforms from the compiled song', async ({ page }) => {
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+        await page.addInitScript((port) => { window.STUDIO_AGENT_PORT = port; }, mock.port());
+        await page.goto(`http://localhost:8080/?gitrepo=${RENDER_REPO}`);
+        await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
+        await mock.waitForClient();
+
+        expect((await mock.callTool('set_shader', { source: NOTE_SHADER })).result).toBe('shader updated');
+        expect((await mock.callTool('set_song', { source: ONE_NOTE_SONG })).ok).toBe(true);
+        expect(String((await mock.callTool('compile', {})).result)).toContain('compiled OK');
+
+        const r = await timedCall(mock, 'render_shader', { times: '0.1, 3' });
+        expect(r.msg.ok).toBe(true);
+        expect(r.secs).toBeLessThan(10);
+        const res = r.msg.result;
+        expect(res.mimeType).toBe('image/jpeg');
+        expect(res.image).toMatch(/^\/9j\//); // JPEG magic, base64
+        expect(res.image.length).toBeGreaterThan(2000);
+        expect(res.text).toContain('rendered 2 frame(s) of the current shader at 640x360, note uniforms replayed from the compiled song');
+        expect(res.text).toMatch(/t=0\.1s: 100% of pixels lit, mean brightness \d+%, 1 note\(s\) sounding/);
+        expect(res.text).toMatch(/t=3s: 100% of pixels lit, mean brightness \d+%, 0 note\(s\) sounding, 100% of pixels differ from the previous frame/);
+
+        // The frames really differ the way the shader says: red with the note, blue without.
+        const rgb = await page.evaluate(async (dataUrl) => {
+            const img = new Image();
+            await new Promise((ok, err) => { img.onload = ok; img.onerror = err; img.src = dataUrl; });
+            const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+            const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+            const px = (x, y) => [...g.getImageData(x, y, 1, 1).data].slice(0, 3);
+            return { size: [img.width, img.height], left: px(320, 200), right: px(960, 200) };
+        }, `data:image/jpeg;base64,${res.image}`);
+        expect(rgb.size).toEqual([1280, 382]); // two frames side by side, plus the label strip
+        expect(rgb.left[0]).toBeGreaterThan(150); expect(rgb.left[2]).toBeLessThan(80);   // red: the note sounds
+        expect(rgb.right[2]).toBeGreaterThan(100); expect(rgb.right[0]).toBeLessThan(60);  // blue: silence
+
+        // The user sees what the model saw: the sheet is in the chat panel.
+        const shown = await page.evaluate(() => {
+            const app = document.querySelector('app-javascriptmusic');
+            const roots = [app.shadowRoot, ...[...app.shadowRoot.querySelectorAll('*')].map((e) => e.shadowRoot).filter(Boolean)];
+            return roots.flatMap((r) => [...r.querySelectorAll('.sa-msg-image img')]).map((i) => i.src.slice(0, 22));
+        });
+        expect(shown).toEqual(['data:image/jpeg;base64']);
+
+        // A fake energy level stands in for the song when asked for.
+        const fake = await mock.callTool('render_shader', { times: '3', energy: 0.4 });
+        expect(fake.ok).toBe(true);
+        expect(fake.result.text).toContain('note uniforms faked at energy 0.4');
+        expect(fake.result.text).toMatch(/t=3s: .*24 note\(s\) sounding/);
+
+        // Too many frames is refused before rendering anything.
+        const many = await mock.callTool('render_shader', { times: '1,2,3,4,5' });
+        expect(many.ok).toBe(false);
+        expect(String(many.result)).toContain('at most 4 frames');
+
+        // A shader that does not compile answers with the GLSL log, no picture,
+        // and the live canvas is still there afterwards.
+        expect((await mock.callTool('set_shader', { source: 'precision highp float;\nvoid main() { gl_FragColor = nope; }' })).ok).toBe(true);
+        const bad = await mock.callTool('render_shader', { times: '1' });
+        expect(bad.ok).toBe(false);
+        expect(String(bad.result)).toContain('shader failed to compile');
+        expect(String(bad.result)).toContain("'nope' : undeclared identifier");
+        expect(await page.evaluate(() => {
+            const cv = document.querySelector('app-javascriptmusic').shadowRoot.querySelector('#glCanvas');
+            const gl = cv && cv.getContext('webgl');
+            return !!gl && !gl.isContextLost();
+        })).toBe(true);
+    });
+});

@@ -135,6 +135,7 @@ export function createHeadlessStudio({ project = {}, repoRoot = REPO } = {}) {
     set_shader: async ({ source }) => { state.shader = source ?? ''; return 'shader updated'; },
     edit_shader: async (args) => { const r = editDoc('shader', args); if (r.__error) return r; return `shader edited (${r.count} replacement(s))`; },
     grep_shader: async (args) => grepDoc('shader', args),
+    render_shader: async () => ({ __error: 'render_shader needs a browser (WebGL) — the headless studio cannot render frames' }),
     // ---- faust ----
     list_faust: async () => { const names = [...state.faust.keys()].map((s) => `${s}.dsp`); return names.length ? names.join('\n') : '(no .dsp instruments yet)'; },
     read_faust: async ({ path: p }) => { const f = state.faust.get(core.normDsp(p).replace(/\.dsp$/, '')); return f ? f.dsp : { __error: `no such instrument: ${core.normDsp(p)}` }; },

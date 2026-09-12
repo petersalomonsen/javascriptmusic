@@ -211,8 +211,8 @@ function applyVisualParams(ctx, currentTimeSeconds) {
     });
 }
 
-function configureGLContext(source) {
-    const glContext = canvas.getContext("webgl");
+function configureGLContext(source, targetCanvas = canvas) {
+    const glContext = targetCanvas.getContext("webgl");
 
     glContext.viewport(0, 0, glContext.drawingBufferWidth, glContext.drawingBufferHeight);
     glContext.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -323,8 +323,10 @@ function configureGLContext(source) {
 }
 
 // One frame with every uniform the app provides — shared by the live render
-// loop and the video export so the two can't drift apart.
-function drawFrame(ctx, currentTimeSeconds) {
+// loop, the video export and the studio agent's offline frames so they can't
+// drift apart. `noteStates` ({ target, smoothed }) replaces the live playback
+// state for a frame rendered at a song time nobody is playing.
+function drawFrame(ctx, currentTimeSeconds, noteStates = null) {
     const gl = ctx.glContext;
 
     const mix = updateMediaStateAndGetMix(gl, ctx.mediaState, currentTimeSeconds);
@@ -335,8 +337,8 @@ function drawFrame(ctx, currentTimeSeconds) {
         ctx.textUniformLocation, ctx.textPrevUniformLocation, ctx.textMixUniformLocation, textMix);
 
     gl.uniform1f(ctx.timeUniformLocation, currentTimeSeconds);
-    gl.uniform1fv(ctx.targetNoteStatesUniformLocation, getTargetNoteStates());
-    gl.uniform1fv(ctx.smoothedNoteStatesUniformLocation, computeSmoothedNoteStates());
+    gl.uniform1fv(ctx.targetNoteStatesUniformLocation, noteStates ? noteStates.target : getTargetNoteStates());
+    gl.uniform1fv(ctx.smoothedNoteStatesUniformLocation, noteStates ? noteStates.smoothed : computeSmoothedNoteStates());
     gl.uniform1fv(ctx.synthStateUniformLocation, getSynthState());
     applyVisualParams(ctx, currentTimeSeconds);
 
@@ -457,4 +459,89 @@ export async function exportVideo(source, eventlist) {
     await fileStream.close();
     setProgressbarValue(null);
 
+}
+// ---- Offline frames: the studio agent's eyes (render_shader) ---------------
+//
+// Renders the given shader source at chosen song times on an OFFSCREEN canvas
+// with its own WebGL context, so the live canvas and its loop are untouched.
+// Goes through the same configureGLContext/drawFrame as the screen and the
+// video export: scheduled images, showText() and setVisual() uniforms at time
+// t all take part, so a frame here is what the app would show at that moment.
+// Note uniforms come from `noteStatesAt(t)` (the compiled song, replayed by
+// the caller) since nothing is playing.
+//
+// The canvas and context are kept and the program is recompiled only when the
+// source changes — browsers cap live WebGL contexts, so one per call would
+// eventually kill the visualizer itself.
+let offscreen = null;
+
+export function renderShaderFrames(source, { times = [4], width = 640, height = 360, noteStatesAt = null } = {}) {
+    if (!offscreen) {
+        const c = document.createElement('canvas');
+        // The first getContext fixes the attributes: keep the buffer so the
+        // pixels can be read back after the draw.
+        c.getContext('webgl', { preserveDrawingBuffer: true });
+        offscreen = { canvas: c, source: null, ctx: null };
+    }
+    const oc = offscreen.canvas;
+    if (oc.width !== width || oc.height !== height) {
+        oc.width = width;
+        oc.height = height;
+        offscreen.source = null; // the resolution uniform is set at setup
+    }
+    if (offscreen.source !== source) {
+        if (offscreen.ctx) offscreen.ctx.glContext.deleteProgram(offscreen.ctx.program);
+        offscreen.ctx = null;
+        offscreen.ctx = configureGLContext(source, oc); // throws with the GLSL log on a bad shader
+        offscreen.source = source;
+    }
+    const ctx = offscreen.ctx;
+    const gl = ctx.glContext;
+    gl.useProgram(ctx.program);
+    gl.viewport(0, 0, width, height);
+
+    const n = times.length;
+    const cols = n > 1 ? 2 : 1;
+    const rows = Math.ceil(n / cols);
+    const labelH = 22;
+    const sheet = document.createElement('canvas');
+    sheet.width = cols * width;
+    sheet.height = rows * (height + labelH);
+    const g2 = sheet.getContext('2d');
+    g2.fillStyle = '#222';
+    g2.fillRect(0, 0, sheet.width, sheet.height);
+    g2.font = 'bold 14px sans-serif';
+
+    const px = new Uint8Array(width * height * 4);
+    let prev = null;
+    const frames = times.map((t, i) => {
+        const states = noteStatesAt ? noteStatesAt(t) : null;
+        drawFrame(ctx, t, states);
+        gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        let lit = 0, sum = 0, changed = 0;
+        for (let p = 0; p < px.length; p += 4) {
+            const b = px[p] + px[p + 1] + px[p + 2];
+            sum += b;
+            if (b > 24) lit++;
+            if (prev && Math.abs(b - prev[p >> 2]) > 24) changed++;
+        }
+        const cur = new Uint16Array(width * height);
+        for (let p = 0, q = 0; p < px.length; p += 4, q++) cur[q] = px[p] + px[p + 1] + px[p + 2];
+        const total = width * height;
+        const frame = {
+            t,
+            litPct: Math.round((100 * lit) / total),
+            brightness: Math.round((100 * sum) / (total * 765)),
+            changedPct: prev ? Math.round((100 * changed) / total) : null,
+            sounding: states ? states.sounding : null,
+        };
+        prev = cur;
+        const x = (i % cols) * width;
+        const y = Math.floor(i / cols) * (height + labelH);
+        g2.fillStyle = '#eee';
+        g2.fillText(`t = ${t}s`, x + 6, y + 16);
+        g2.drawImage(oc, x, y + labelH, width, height);
+        return frame;
+    });
+    return { dataUrl: sheet.toDataURL('image/jpeg', 0.85), frames, width, height };
 }

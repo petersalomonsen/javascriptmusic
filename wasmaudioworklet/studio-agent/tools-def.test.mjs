@@ -73,7 +73,7 @@ test('there is no play tool — starting playback stays the user\'s action', () 
 
 test('OpenAI conversion keeps names, descriptions and schemas intact', () => {
     const tools = toOpenAiTools();
-    assert.strictEqual(tools.length, TOOL_DEFS.length);
+    assert.strictEqual(tools.length, TOOL_DEFS.filter((d) => !d.image).length);
     for (const tool of tools) {
         assert.strictEqual(tool.type, 'function');
         const def = TOOL_DEFS.find((d) => d.name === tool.function.name);
@@ -150,4 +150,17 @@ test('mastering: the tools reach both providers, the role holds the master inser
     assert.deepEqual(def.parameters.required, []);
     for (const p of ['brief', 'target', 'targetLufs', 'truePeakDb']) assert.ok(def.parameters.properties[p], p);
     assert.ok(/FAILED/.test(def.description));
+});
+
+test('render_shader (an image result) reaches the SDK path only — the NEAR AI definitions leave it out', () => {
+    // An OpenAI-style tool message is text only, so a provider on that path
+    // could never see the frame; offering it would only invite a call whose
+    // result is a base64 blob in the context.
+    const def = TOOL_DEFS.find((d) => d.name === 'render_shader');
+    assert.ok(def && def.image === true && def.where === 'browser');
+    assert.ok(browserToolNames().includes('render_shader'));
+    assert.ok(sdkToolNames().includes('render_shader'));
+    assert.ok(!toOpenAiTools().some((t) => t.function.name === 'render_shader'));
+    assert.ok(toolNamesForRole('producer').includes('render_shader'));
+    for (const role of ['instrument', 'mastering']) assert.ok(!toolNamesForRole(role).includes('render_shader'), role);
 });

@@ -256,7 +256,7 @@ Rules of thumb:
 - set_shader/edit_shader/compile report back visuals the song schedules that the shader still can't show — treat those warnings as work to finish, not noise.
 - \`compile\` also applies the shader and returns GLSL compile errors verbatim.
 - A shader that composites the image layer over its own output (\`col = mix(col, card.rgb, card.a)\`) shows nothing from that layer when the song has no images — the layer is transparent. If the user reports a flat/blank screen, read the shader before suspecting the song.
-- You cannot SEE the canvas. Say what you changed and ask the user what appears; never claim a visual result you can't verify.
+- **\`render_shader\` is your eyes.** After EVERY shader change (and before answering "what does it look like"), render the moments that matter — the opening, a beat later, where the song changes — and LOOK at the frames: framing (nothing clipped, the subject where it belongs), proportions, colour, whether the picture reacts between frames. Compile first so the note uniforms come from the real song. Fix what you see before reporting; when a frame shows the problem, name it in geometric terms (what, where, how far off). The live canvas itself you never see — say what you rendered, and never claim a visual result you did not render.
 - Reference: wasmaudioworklet/docs/shaders.md (uniform contract + the headless render harness), docs/animations.md, examples/textoverlay (worked song+shader pair), examples/beachdrive.`,
 };
 
