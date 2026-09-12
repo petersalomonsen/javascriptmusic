@@ -10,9 +10,9 @@ Yamaha DX7 synthesizer running as a transpiled AssemblyScript instrument via the
 | `dx7-synth-asc-backend.ts` | Generated synth bundle using ASC backend transpiler |
 | `dx7-sequence.js` | Example sequence with E.Piano, Bass, Strings, Bells, and Drum Kit patches |
 | `dx7-drumbeat.js` | Minimal, self-contained drums-only beat — embeds the channel-4 kick/snare/hat NRPN patch block, then a `steps()` groove. Load it alongside `dx7-synth.ts` and edit `setBPM`/the `steps()` pattern to make a beat. (Reminder: the patches MUST stay in the song — `initializeMidiSynth()` only zeroes defaults, which sound like a sine.) |
-| `dsp/` | Faust DSP source files for each algorithm variant |
-| `parse-rom.js` | Utility to convert DX7 SysEx ROM (`.syx`) files to NRPN patch data |
-| `sequence-to-patches.js` | Utility to convert an NRPN sequence into typed-field assignments for the modular per-algorithm `.ts` files (see "Porting a ROM patch into a modular channel" below) |
+| `dsp/` | Faust DSP source files for each algorithm variant, plus `dsp/epiano.dsp` — a ROM patch as a self-contained instrument (see below) |
+| `parse-rom.js` | Converts DX7 SysEx ROM (`.syx`) patches to a self-contained Faust instrument (`--dsp`, recommended) or to legacy NRPN patch data |
+| `sequence-to-patches.js` | Legacy: converts an NRPN sequence into typed-field assignments for the modular per-algorithm `.ts` files (see "Porting a ROM patch into a modular channel" below) |
 
 ## How it works
 
@@ -63,7 +63,41 @@ node tools/faust2as/faust2asc.js --bundle \
 
 After regenerating, the last three DSPs (alg17, alg21, alg5\_hat) are placed on separate MIDI channels. To combine them into a single drum kit channel, manually add the `Dx7DrumKitChannel` class and replace the three separate channel initializations with a single channel 4. See `dx7-synth.ts` for the reference implementation — the drum kit code is identical for both backends.
 
-## Adding patches from DX7 ROM files
+## Self-contained instruments (recommended)
+
+A DX7 patch is 145 parameter values on a fixed engine, so the cleanest way to use one is as an ordinary Faust instrument with those values baked in: every parameter is a constant in the `.dsp`, the only MIDI-facing controls are `freq`, `gate` and `gain`, and the song carries no patch data at all. `dsp/epiano.dsp` is ROM1A's "E.PIANO 1" written that way. It calls `dx.operator(...)` once per operator with the patch's values and restates the algorithm's routing from `dx7.lib` in `process`; it transpiles in about a second to a single `Epiano` voice class.
+
+`parse-rom.js --dsp` generates such a file from any patch in a ROM cartridge:
+
+```sh
+# List the 32 patches
+node parse-rom.js ROM1A.syx
+
+# E.PIANO 1 (#11) as a self-contained instrument; --name sets the file stem / class name
+node parse-rom.js ROM1A.syx 11 --dsp --name epiano > dsp/epiano.dsp
+```
+
+To use it in a project:
+
+1. Drop the file into the project's `faust/` directory as `faust/<name>.dsp` (in the app, `write_faust` does the same and transpiles it).
+2. Import the voice class in `synth.ts` and register it on a channel with the base `MidiChannel`, like any other instrument:
+   ```ts
+   import { Epiano } from '../faust/epiano';
+   midichannels[0] = new MidiChannel(8, (channel: MidiChannel) => new Epiano(channel));
+   ```
+3. `addInstrument('epiano')` in the song at the matching index and play notes. No `nrpn()` block, no typed-field assignments.
+
+To automate a parameter from the song, replace its constant in the `.dsp` with an `hslider` of the same range; it then becomes a channel field reachable by CC/NRPN (the transpiler generates an `<Name>Channel` class once any extra slider exists). Everything else stays a constant, so the instrument is self-contained and the song stays purely musical.
+
+The same shape is intended for any future legacy synth port: engine in a Faust library, presets baked into `.dsp` files by an importer, sliders only for what should move.
+
+`node --test parse-rom.test.mjs` covers the generator (routing table, per-operator lists, value ranges).
+
+## Legacy: patches as NRPN data in the song
+
+The workflows below predate `--dsp`. They still work and existing songs rely on them, but new projects should use self-contained instruments.
+
+### Adding patches from DX7 ROM files
 
 The `parse-rom.js` utility converts standard DX7 SysEx bulk dump files (`.syx`, 4104 bytes, 32 voices) into the NRPN format used by `dx7-sequence.js`.
 
@@ -89,7 +123,7 @@ process = dx.algorithm(N) <: _,_;
 
 Then add it to the bundle compilation command and regenerate.
 
-## Porting a ROM patch into a modular channel
+### Porting a ROM patch into a modular channel
 
 The bundle workflow above sets patches via `nrpn(beat, idx, value)` calls inside the song. The **modular** layout used by the live app (one `.ts` per algorithm under `faust/dx7/`, transpiled with `faust2asc.js --for-editor`) instead keeps the song purely musical and sets each patch as **typed-field assignments** in `synth.ts` — e.g. `lead.feedback = <f32>7.0;`. The field value is the NRPN value scaled to the parameter's native range (`min + value/127 * (max-min)`); assigning a raw 0–127 to a 0–7 field would crash the DSP on the first note.
 

@@ -1,0 +1,3 @@
+# DX7 factory ROM cartridges are freely redistributed but not committed here
+# (see README.md). Download e.g. ROM1A.syx next to parse-rom.js.
+*.syx
