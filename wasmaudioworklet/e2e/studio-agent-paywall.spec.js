@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { specRepo, clearOPFS, waitForAppReady } from './near-git-helpers.js';
+
+// The agent only sends from inside a project repo (OPFS working tree), so
+// every test boots a local one — no NEAR sandbox needed.
+const REPO = specRepo('studio-agent-paywall');
 
 // The session pass, from the app's side.
 //
@@ -15,7 +20,8 @@ const chatInput = (page) => page.locator('#studioagentinput');
 const chatLog = (page) => page.locator('#studioagentlog');
 
 async function bootApp(page) {
-    await page.goto('/');
+    await page.goto(`/?gitrepo=${REPO}`);
+    await waitForAppReady(page);
     await page.waitForFunction(() => typeof window.toggleStudioAgent === 'function', { timeout: 30000 });
     await page.evaluate(() => window.toggleStudioAgent(true));
 }
@@ -62,6 +68,8 @@ async function mockPaidProxy(page, { reply = 'Done.' } = {}) {
     });
     return seen;
 }
+
+test.afterEach(async ({ page }) => { await clearOPFS(page, REPO); });
 
 test('an unpaid turn offers a session pass instead of failing', async ({ page }) => {
     page.on('pageerror', (e) => console.log('[browser-error]', e.message));
