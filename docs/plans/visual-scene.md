@@ -120,6 +120,50 @@ check when moving.
   same QuickJS guest, for helpers like `buildDiagram()` — orchestration stays
   in the song, definitions get their own file. Data out, never host code.
 
+## Sandboxed scene code: bake, don't run live
+
+Could Three.js run in QuickJS? Its scene graph, matrices, cameras and
+procedural geometry are plain JavaScript and would; its renderer needs GL
+and would not — and text, fat lines, materials and lighting live in the
+renderer. Three in the sandbox therefore buys an authoring API whose
+serialized output is the element table anyway.
+
+The song runs once at compile time and produces a schedule; that model
+stays. Sandboxed scene code fits it by **baking**: run over the whole song
+inside QuickJS, emit keyframes into the element table. Deterministic under
+seek and export, the guest stays one-shot. Useful beyond Three: a
+force-directed or layered **diagram layout** computed in the sandbox at
+compile time, positions out as data. A live guest called once per frame
+during playback is possible but not worth it for visuals — seeking would
+mean re-simulating from zero, and every frame is a deadline-bounded call
+across the wasm boundary.
+
+## Interactivity: an on-screen knob is a virtual MIDI controller
+
+Knobs and sliders drawn by the shader that change the music, and the
+visuals back, fit the design without running repo code on the host:
+
+- The song declares the control as **data** in the element table: a row
+  with a `control` field naming a MIDI channel, a controller number and a
+  range (this is why the row layout must be fixed early).
+- The host already packs that table, so it **hit-tests** pointer drags
+  against the row's position and size and sends the resulting control
+  change to the live synth — the same path a hardware controller takes.
+- The shader draws the knob from the element table and its position from
+  `synthState`, which the synth already relays back as a uniform. The loop
+  closes through the synth: pointer → CC → synth → uniform → pixels.
+  Hardware knobs and on-screen knobs are indistinguishable.
+- Because it is a control change it is **recordable**: turned while
+  recording, it lands in the song like any performance; afterwards playback
+  moves the knob and the sound deterministically, seek and export work, and
+  the headless studio plays the recorded values with no pointer at all.
+- Visual-only controls take the same route on a spare channel, or a value
+  written into a live uniform.
+
+Not covered: picking arbitrary shader-drawn shapes that are not in the
+table. That would need an ID render target (WebGL2 multiple render
+targets) if it is ever wanted.
+
 ## Phases
 
 1. **WebGL2 + vectors.** Context switch with fallback; `setVisual` vectors
@@ -148,7 +192,7 @@ Roughly half of the Three.js route, with one engine instead of two.
 
 - Label resolution when the camera zooms far in: render slices at 2× and
   accept softness beyond, or SDF glyphs later.
-- Row layout of the element table (how many texels per element) — fix it
-  early, shaders will hard-code it.
+- Row layout of the element table (how many texels per element, where the
+  `control` fields go) — fix it early, shaders will hard-code it.
 - Whether `setElements` ramps whole tables or only rows that changed.
 - WebGL1 fallback scope: silently lacking the feeds, or a visible warning.
