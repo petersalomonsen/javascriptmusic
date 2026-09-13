@@ -144,8 +144,9 @@ Knobs and sliders drawn by the shader that change the music, and the
 visuals back, fit the design without running repo code on the host:
 
 - The song declares the control as **data** in the element table: a row
-  with a `control` field naming a MIDI channel, a controller number and a
-  range (this is why the row layout must be fixed early).
+  with a `control` field naming a MIDI channel and either a controller
+  number with a range, or a **note** number (this is why the row layout
+  must be fixed early).
 - The host already packs that table, so it **hit-tests** pointer drags
   against the row's position and size and sends the resulting control
   change to the live synth — the same path a hardware controller takes.
@@ -157,6 +158,16 @@ visuals back, fit the design without running repo code on the host:
   recording, it lands in the song like any performance; afterwards playback
   moves the knob and the sound deterministically, seek and export work, and
   the headless studio plays the recorded values with no pointer at all.
+- **Notes, not only controllers.** A shader-drawn MIDI keyboard is one
+  element row per key with a note number (the song generates the rows in a
+  loop). Pointer down on a key sends note on, pointer up note off; pointer
+  ids give multi-touch chords and drags give glissandi; velocity from where
+  on the key the finger lands, or pressure where reported. The keys light up
+  from `targetNoteStates`, the per-note uniform every shader already reads,
+  so a touched key, a hardware key and a played-back key light the same way.
+  Recording is the existing performance recording. Latency: the host's hit
+  test is a direct table lookup on the pointer event, never a per-frame
+  pass, so touch → note on reaches the worklet in a few milliseconds.
 - Visual-only controls take the same route on a spare channel, or a value
   written into a live uniform.
 
