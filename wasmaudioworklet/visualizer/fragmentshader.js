@@ -412,18 +412,25 @@ export function createOpusAudioTrack(audioBuffer, onChunk, { bitrate = 192_000, 
 // Video export. With `audioBuffer` (the song rendered offline at 48 kHz, see
 // renderSongOffline) the WebM gets an Opus audio track too — one file, in
 // sync, since frames and audio both come from the same event list.
-export async function exportVideo(source, eventlist, { audioBuffer = null, saveFilePicker = null } = {}) {
-    exporting = true;
-
-    const { Muxer, FileSystemWritableFileStreamTarget } = (await import('https://cdn.jsdelivr.net/npm/webm-muxer@3.0.3/+esm')).default;
-
-    let fileHandle = await (saveFilePicker || window.showSaveFilePicker)({
+// The save dialog. The browser only shows it while the user's click is still
+// "active" (a few seconds), so a caller that renders audio first — minutes for
+// a long song — must ask for the file BEFORE rendering and pass the handle in.
+export function pickVideoFile() {
+    return window.showSaveFilePicker({
         suggestedName: `video.webm`,
         types: [{
             description: 'Video File',
             accept: { 'video/webm': ['.webm'] }
         }],
     });
+}
+
+export async function exportVideo(source, eventlist, { audioBuffer = null, fileHandle = null } = {}) {
+    exporting = true;
+
+    const { Muxer, FileSystemWritableFileStreamTarget } = (await import('https://cdn.jsdelivr.net/npm/webm-muxer@3.0.3/+esm')).default;
+
+    if (!fileHandle) fileHandle = await pickVideoFile();
     let fileStream = await fileHandle.createWritable();
 
     const width = 1280, height = 720;

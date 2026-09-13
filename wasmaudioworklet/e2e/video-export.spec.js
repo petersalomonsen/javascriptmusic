@@ -26,8 +26,11 @@ test.describe('video export with sound (local repo)', () => {
     test('one WebM carries a VP9 video track and an Opus audio track of the song', async ({ page }) => {
         page.on('pageerror', (e) => console.log('[browser-error]', e.message));
         await page.addInitScript(() => {
-            // what the export would ask the user for: a file to write to
-            window.showSaveFilePicker = async () => (await navigator.storage.getDirectory()).getFileHandle('export-test.webm', { create: true });
+            // what the export would ask the user for: a file to write to. Counted,
+            // because the real dialog only opens inside the click's gesture window:
+            // it must be asked for once, up front, before the long offline render.
+            window.__pickerCalls = 0;
+            window.showSaveFilePicker = async () => { window.__pickerCalls++; return (await navigator.storage.getDirectory()).getFileHandle('export-test.webm', { create: true }); };
         });
         await page.goto(`http://localhost:8080/?gitrepo=${REPO}`);
         await waitForAppReady(page);
@@ -58,6 +61,7 @@ test.describe('video export with sound (local repo)', () => {
                 videoSeconds: video.duration, width: video.videoWidth, height: video.videoHeight };
         });
         console.log('export:', JSON.stringify(result));
+        expect(await page.evaluate(() => window.__pickerCalls)).toBe(1);
         expect(result.size).toBeGreaterThan(50_000);
         expect(result.channels).toBe(2);
         expect(result.audioSeconds).toBeGreaterThan(3.9);
