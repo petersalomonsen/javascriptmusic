@@ -145,8 +145,9 @@ visuals back, fit the design without running repo code on the host:
 
 - The song declares the control as **data** in the element table: a row
   with a `control` field naming a MIDI channel and either a controller
-  number with a range, or a **note** number (this is why the row layout
-  must be fixed early).
+  number with a range, or a **note** number — or a **signal** name for the
+  performance-mode signal bus (see [performance-mode.md](performance-mode.md))
+  (this is why the row layout must be fixed early).
 - The host already packs that table, so it **hit-tests** pointer drags
   against the row's position and size and sends the resulting control
   change to the live synth — the same path a hardware controller takes.
