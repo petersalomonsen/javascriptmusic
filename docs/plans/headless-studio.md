@@ -17,6 +17,24 @@ Agent knowledge travels with the project using standard conventions: a
 top-level `AGENTS.md` and a skills folder. Git is the sync between the two
 worlds; nothing else needs to be.
 
+## Lineage: this is where the repo started
+
+The root commit (2018-07-15, then a Bitbucket repo called *nodemusic*) is a
+headless Node composition tool: a `package.json` whose only dependency is
+`midi`, `record.js` capturing a K-Board into `recording.json`, and
+`playback.js` replaying it over a virtual MIDI port into ZynAddSubFX. Four
+days later "Async await based pattern" introduced `waitForBeat` and
+`playNote`; two months later the `steps()` tracker method. Both are still
+the song API. The browser only arrived (2018-11-27, "web assembly audio
+worklet") because the synth moved inside the process as wasm, and the
+`midi` dependency did not leave `package.json` until 2021.
+
+So the headless studio is the original shape with the one gap filled: in
+2018 the terminal had the sequencer but not the sound. Now the sound is a
+wasm module, and `node-web-audio-api` gives Node the worklet interface the
+browser has, playing the role the `midi` package and an external synth played
+then. The song still runs as JavaScript in both worlds.
+
 ## What exists
 
 | Piece | Where | Runs without a browser? |
