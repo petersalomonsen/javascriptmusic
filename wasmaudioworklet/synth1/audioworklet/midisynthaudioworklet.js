@@ -184,8 +184,10 @@ export async function getCurrentTime() {
     return currentTime;
 }
 
-export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate = 44100) {
-    toggleSpinner(true);
+// Render the whole song offline through the real synth, faster than real
+// time: an AudioBuffer plus the clipping the level analyser saw. Shared by
+// the WAV export and the video export (which muxes this as the audio track).
+export async function renderSongOffline(eventlist, wasm_synth_bytes, renderSampleRate = 44100) {
     const duration = eventlist[eventlist.length - 1].time / 1000;
     const offlineCtx = new OfflineAudioContext(2,
         duration * renderSampleRate,
@@ -210,17 +212,18 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
     updateSpinner();
 
     const renderedBuffer = await offlineCtx.startRendering();
+    rendering = false;
     console.log('finished rendering');
     const exportstats = await statfunc();
 
-    const clips = skipClipsWithinCentiSeconds(exportstats.clips);
-    if (clips.length > 0) {
-        rendering = false;
+    return { renderedBuffer, clips: skipClipsWithinCentiSeconds(exportstats.clips), duration };
+}
 
-        toggleSpinner(false);
-
-        const maxClipsToShow = 1000;
-        if (!await modal(`
+// The clipping warning the exports show; resolves true to go on, false to cancel.
+export async function confirmClipping(clips) {
+    if (!clips.length) return true;
+    const maxClipsToShow = 1000;
+    return !!await modal(`
             <h3>Warning: clipping in exported audio</h3>
             <p>${clips.length} clips ${clips.length > maxClipsToShow ? `, showing the first ${maxClipsToShow}` : ''}</p>
             <div style="height: 80px; overflow: auto">
@@ -236,7 +239,17 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
             <button onclick="getRootNode().result(true)">
                 Save exported file
             </button>
-        `)) {
+        `);
+}
+
+export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate = 44100) {
+    toggleSpinner(true);
+    const { renderedBuffer, clips } = await renderSongOffline(eventlist, wasm_synth_bytes, renderSampleRate);
+
+    if (clips.length > 0) {
+        toggleSpinner(false);
+
+        if (!await confirmClipping(clips)) {
             console.log('export wav cancelled');
             return;
         }
@@ -245,7 +258,6 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
         type: "application/octet-stream"
     });
 
-    rendering = false;
     toggleSpinner(false);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

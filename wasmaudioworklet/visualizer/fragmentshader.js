@@ -374,12 +374,50 @@ export function setupWebGL(source, targetCanvas, customGetTimeSeconds = null) {
     render();
 }
 
-export async function exportVideo(source, eventlist) {
+// The audio track of a video export: an offline-rendered AudioBuffer encoded
+// as Opus (WebM's audio codec; it wants 48 kHz, so render the song at 48000)
+// and pushed to the muxer chunk by chunk. `pushUntil(seconds)` encodes the
+// audio up to that song time, so the frame loop can interleave audio with
+// the video frames in time order (audio leads a frame by at most one chunk,
+// 100 ms); `finish()` flushes the encoder.
+const OPUS_FRAME = 960;     // 20 ms at 48 kHz, Opus's native frame; chunks are a multiple of it
+export function createOpusAudioTrack(audioBuffer, onChunk, { bitrate = 192_000, framesPerChunk = OPUS_FRAME * 5 } = {}) {
+    const sampleRate = audioBuffer.sampleRate;
+    const numberOfChannels = audioBuffer.numberOfChannels;
+    const encoder = new AudioEncoder({
+        output: (chunk, meta) => onChunk(chunk, meta),
+        error: (e) => console.error('audio encoder', e.message),
+    });
+    encoder.configure({ codec: 'opus', sampleRate, numberOfChannels, bitrate });
+    const channels = Array.from({ length: numberOfChannels }, (_, c) => audioBuffer.getChannelData(c));
+    let cursor = 0;
+    const pushUntil = (seconds) => {
+        const until = Math.min(audioBuffer.length, Math.ceil(seconds * sampleRate));
+        while (cursor < until) {
+            const n = Math.min(framesPerChunk, audioBuffer.length - cursor);
+            // f32-planar: every channel's frames back to back
+            const data = new Float32Array(n * numberOfChannels);
+            for (let c = 0; c < numberOfChannels; c++) data.set(channels[c].subarray(cursor, cursor + n), c * n);
+            encoder.encode(new AudioData({
+                format: 'f32-planar', sampleRate, numberOfChannels, numberOfFrames: n,
+                timestamp: Math.round(cursor / sampleRate * 1_000_000), data,
+            }));
+            cursor += n;
+        }
+    };
+    const finish = async () => { pushUntil(Infinity); await encoder.flush(); encoder.close(); };
+    return { sampleRate, numberOfChannels, pushUntil, finish };
+}
+
+// Video export. With `audioBuffer` (the song rendered offline at 48 kHz, see
+// renderSongOffline) the WebM gets an Opus audio track too — one file, in
+// sync, since frames and audio both come from the same event list.
+export async function exportVideo(source, eventlist, { audioBuffer = null, saveFilePicker = null } = {}) {
     exporting = true;
 
     const { Muxer, FileSystemWritableFileStreamTarget } = (await import('https://cdn.jsdelivr.net/npm/webm-muxer@3.0.3/+esm')).default;
 
-    let fileHandle = await window.showSaveFilePicker({
+    let fileHandle = await (saveFilePicker || window.showSaveFilePicker)({
         suggestedName: `video.webm`,
         types: [{
             description: 'Video File',
@@ -395,8 +433,10 @@ export async function exportVideo(source, eventlist) {
             codec: 'V_VP9',
             width,
             height
-        }
+        },
+        ...(audioBuffer ? { audio: { codec: 'A_OPUS', numberOfChannels: audioBuffer.numberOfChannels, sampleRate: audioBuffer.sampleRate } } : {}),
     });
+    const audioTrack = audioBuffer ? createOpusAudioTrack(audioBuffer, (chunk, meta) => muxer.addAudioChunk(chunk, meta)) : null;
 
     canvas.width = width;
     canvas.height = height;
@@ -439,6 +479,8 @@ export async function exportVideo(source, eventlist) {
 
         drawFrame(ctx, currentTimeSeconds);
 
+        // audio first, up to this frame's time, so the muxer sees both tracks in order
+        if (audioTrack) audioTrack.pushUntil(currentTimeSeconds);
         const frame = new VideoFrame(canvas, { timestamp: currentTimeMillis * 1000 });
         const keyFrame = (frame_counter % framerate) == 0;
         encoder.encode(frame, { keyFrame });
@@ -450,6 +492,7 @@ export async function exportVideo(source, eventlist) {
 
     console.log('Flushing encoder');
     await encoder.flush();
+    if (audioTrack) await audioTrack.finish();
     console.log('Finalizing mixer');
     muxer.finalize();
     console.log('Closing filestream');

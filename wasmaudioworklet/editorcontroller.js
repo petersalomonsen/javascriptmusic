@@ -12,7 +12,7 @@ import { transpileDspSource } from './faust/faust-rs-transpile.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal, modalPrompt, modalAlert } from './common/ui/modal.js';
 import { zipRepo, downloadBlob } from './wasmgit/repozip.js';
-import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { updateSong, updateSynth, exportToWav, renderSongOffline, confirmClipping } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
 import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
@@ -516,7 +516,8 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                         const EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG = 'midimultipartmodulepng';
                         const EXPORT_MODE_MIDIPARTS_JSON = 'midipartsjson';
 
-                        exportProject = await modal(`
+                        // `true` (the export button) asks; a mode name (tests, scripts) goes straight to it
+                        if (exportProject === true) exportProject = await modal(`
                             <h3>Select export</h3>
                             <p>
                                 <form>
@@ -527,6 +528,7 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG}">PNG compressed WASM midi-multipart module</label><br />
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDIPARTS_JSON}">MIDI parts as JSON</label><br />
                                     <label><input type="radio" name="exporttype" value="pngsources">source code as PNG image</label><br />
+                                    <label><input type="radio" name="exporttype" value="videoaudio">Shader video with sound (WebM: VP9 + Opus 48kHz)</label><br />
                                     <label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />
                                     <label><input type="radio" name="exporttype" value="repozip">Project repository as ZIP (with git history)</label><br />
                                 </form>
@@ -613,6 +615,16 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                             triggerDownload(encodeBufferAsPNG(sourcesbytes), 'wasmstuff.png');
                         } else if (exportProject === 'video') {
                             await exportVideo(shadersource, eventlist);
+                        } else if (exportProject === 'videoaudio') {
+                            // one file: the song rendered offline at 48 kHz (what Opus
+                            // wants) becomes the WebM's audio track, then the frames
+                            const wasmBytes = await compileWebAssemblySynth(synthsource + '\n', undefined, 48000, false, faustSources);
+                            const { renderedBuffer, clips } = await renderSongOffline(eventlist, wasmBytes, 48000);
+                            if (clips.length) toggleSpinner(false);   // the dialog must not sit under the spinner
+                            if (await confirmClipping(clips)) {
+                                toggleSpinner(true);
+                                await exportVideo(shadersource, eventlist, { audioBuffer: renderedBuffer });
+                            }
                         } else if (exportProject === EXPORT_MODE_MIDIPARTS_JSON) {
                             const songParts = getSongParts();
                             triggerDownload(URL.createObjectURL(new Blob([JSON.stringify(songParts)],
