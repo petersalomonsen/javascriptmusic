@@ -82,6 +82,47 @@ await waitForSignal('any', { loop: 'part' });
 Every signal is also **recordable** as a sequencer meta-event, so a
 performance can be captured and replayed exactly, including its jumps.
 
+## Prompted performance: the prompt is the trigger and the caption
+
+"Neon Release" (wasm-agent-music, 2026-09-13) tells its own making as
+on-screen captions: each change is announced one bar ahead as a typed
+command with a short reply, in the words that were actually used. On
+stage the same thing happens **for real**: the performer types the prompt,
+it appears as the caption, and the change follows. The show is unique
+because the prompts are, and longer because thinking takes time — and the
+music never waits for either.
+
+What makes it fast enough is that the ingredients already exist as named
+things in the project: parts as functions, dance moves and lights as shader
+parameters, recorded takes, variations. The live job is selection and small
+arrangement, not composition. Two paths, by cost:
+
+- **Instant path (no model).** A prompt that names an ingredient — a part,
+  a signal, a move — is dispatched by the panel directly: a signal or a part
+  jump, and the caption shown at once. The kit lists the names.
+- **Agent path (one short turn).** A freeform prompt becomes a few-line
+  arrangement edit plus a **live recompile**: the app already hot-swaps a
+  recompiled song into the playing worklet (that is how the song was made,
+  and what the IS² set relies on). With the ingredients in the kit, the
+  edit is small and the turn is seconds, not the minutes of a composition
+  session. The performance role therefore gets one editing tool after all:
+  `arrange(edit)` — a constrained song edit that may only call existing
+  ingredients and set counts/order, applied on the next bar.
+
+Either way the **caption is host-side**: the panel calls the text layer
+with the typed prompt (green) and the reply (blue) at song time "now" — no
+song edit needed for the story to appear, and it lands the instant the
+prompt is sent, before the change.
+
+While the performer thinks and the agent works, the current part **loops
+under its wait policy** and the change lands on the bar. Thinking time gets
+a musical form. And because prompts, their timings and the resulting edits
+are **recorded**, the evening can be replayed, exported as one video, and
+pushed as its own repo: the performance becomes a song.
+
+Open: whether the live recompile lands bar-aligned today or at once
+(`updateSong` on the playing worklet) — the plan wants bar-aligned.
+
 ## The agent in performance mode
 
 Pressing play in performance mode switches the studio agent panel to a
