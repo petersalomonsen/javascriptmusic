@@ -120,6 +120,7 @@ wasm-music probe <ch> [notes] # probe_instrument
 wasm-music mix [--target]     # probe_mix / auto_master
 wasm-music script <file.js>   # run_script in the same sandbox, over the project files
 wasm-music render --wav out.wav [--from s --to s]   # offline render (measureMix already renders)
+wasm-music render --video out.mp4 [--size 3840x2160 --fps 60]   # frames + audio, muxed (see below)
 wasm-music play [--from s]    # realtime playback (see below)
 wasm-music shader --times 1,9,30 [--out sheet.jpg]  # render_shader; --compile-only
 wasm-music mcp                # the same tools as an MCP server over stdio
@@ -189,6 +190,23 @@ enforced yet, and it matters more headless because a URL there becomes a
 network request from the user's machine; and the legacy wasm song mode still
 evaluates natively, so the headless CLI refuses that mode rather than inherit
 the hole.
+
+## Video with audio, in one go
+
+Today the app exports video (VP9 in WebM, frame by frame at the animation
+rate) and audio (an offline render to WAV) separately, and the two are
+combined afterwards by hand. Two fixes, both from the same event list so
+sync is exact:
+
+- **In the app, one file** — the WebM muxer takes an audio track: render
+  the audio offline first (the WAV path), encode it as Opus with the
+  browser's audio encoder, add it as the muxer's audio track, then run the
+  existing frame loop. About a hundred lines; a separate small PR.
+- **Headless, at any quality** — `wasm-music render --video`: frames from
+  the offscreen renderer (the same `drawFrame` as `render_shader`) at any
+  resolution and frame rate, deterministic and faster than real time; audio
+  from the headless synth; ffmpeg muxes to H.264 + AAC (what YouTube wants)
+  or VP9 + Opus. Playwright is the only browser involved, and only for GL.
 
 ## Tools for the terminal agent: CLI first, MCP as a thin wrapper
 
