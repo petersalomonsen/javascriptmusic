@@ -469,7 +469,7 @@ test.describe('studio-agent render_shader (local repo)', () => {
         expect(String(bad.result)).toContain("'nope' : undeclared identifier");
         expect(await page.evaluate(() => {
             const cv = document.querySelector('app-javascriptmusic').shadowRoot.querySelector('#glCanvas');
-            const gl = cv && cv.getContext('webgl');
+            const gl = cv && (cv.getContext('webgl2') || cv.getContext('webgl'));
             return !!gl && !gl.isContextLost();
         })).toBe(true);
     });

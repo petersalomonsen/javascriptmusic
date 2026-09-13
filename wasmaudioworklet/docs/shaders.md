@@ -1,7 +1,9 @@
 # Developing & testing visualizer shaders
 
-The visualizer renders a full-screen **fragment shader** (WebGL1 / GLSL ES 1.00)
-behind the music. Shaders live in a song project's `shaders/` folder and are
+The visualizer renders a full-screen **fragment shader** behind the music, on a
+WebGL2 context (WebGL1 where the browser has no WebGL2). Shaders are GLSL ES
+1.00 by default; a first line of `#version 300 es` opts into GLSL ES 3.00 —
+see [GLSL ES 3.00](#glsl-es-300-opt-in) below. Shaders live in a song project's `shaders/` folder and are
 selected per song in `wasmmusic.config.json` (`fragmentshader`, plus the
 `availableShaders` picker list). This guide is the contract every shader must
 follow and the headless feedback loop for building one without a GPU in front of
@@ -99,6 +101,23 @@ as an image, plus per-frame numbers (lit pixels, brightness, notes sounding,
 change since the previous frame), and the same sheet appears in the chat
 panel. Only the local Agent SDK path can take images; the in-browser NEAR AI
 tier does not get the tool.
+
+## GLSL ES 3.00 (opt-in)
+
+The context is WebGL2, which runs GLSL ES 1.00 shaders unchanged — every
+existing shader keeps working and nothing needs converting. A shader whose
+**first line** is `#version 300 es` (the compiler insists: no comment or
+blank line before it) is compiled as GLSL ES 3.00 with a matching vertex
+shader. What changes in the source:
+
+- `out vec4 fragColor;` declared at top level and written instead of
+  `gl_FragColor`
+- `texture(uText, uv)` instead of `texture2D`
+- loops may use non-constant bounds; integer math, `texelFetch`,
+  `sampler2DArray` and float textures are available
+
+The uniform contract is the same in both dialects. The harness and the studio
+agent's `render_shader` compile whichever dialect the source declares.
 
 ## The test harness
 

@@ -1,3 +1,4 @@
+import { getGLContext } from './glcontext.js';
 "use strict";
 
 const vertexShaderSource = `
@@ -26,7 +27,7 @@ const fragmentShaderSource = `
 
 const canvas = document.querySelector("#glCanvas");
 // Initialize the GL context
-const gl = canvas.getContext("webgl");
+const gl = getGLContext(canvas);
 
 // Set clear color to black, fully opaque
 gl.clearColor(0.0, 0.0, 0.0, 1.0);

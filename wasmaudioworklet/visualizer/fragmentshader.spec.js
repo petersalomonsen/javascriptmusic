@@ -1,5 +1,6 @@
 import { exportVideo, setupWebGL } from './fragmentshader.js';
 import { setVisualParamSchedule } from './visualparams.js';
+import { getGLContext, isWebGL2 } from './glcontext.js';
 import { setTextSchedule } from './videoscheduler.js';
 // textimage.js is pure string work with no imports — deliberately NOT going
 // through the song compiler here: that would pull the QuickJS sandbox (and its
@@ -46,7 +47,7 @@ describe('fragmentshader', function() {
         // need to wait for a frame (rAF is unreliable in headless CI).
         setupWebGL(shadersource, canvaselement, () => 1.5);
 
-        const gl = canvaselement.getContext('webgl');
+        const gl = getGLContext(canvaselement);
         const program = gl.getParameter(gl.CURRENT_PROGRAM);
         const uniform = name => gl.getUniform(program, gl.getUniformLocation(program, name));
         expect(uniform('textTransition')).to.equal(2);
@@ -56,6 +57,40 @@ describe('fragmentshader', function() {
         expect(uniform('uTextMix')).to.equal(1);
 
         setVisualParamSchedule([]);
+        document.documentElement.removeChild(canvaselement);
+    });
+    it('runs on WebGL2 and compiles a #version 300 es shader with a matching vertex shader', () => {
+        // The canvas is shared by three modules, so the context kind is decided
+        // in glcontext.js: WebGL2 first. A 300 es fragment shader needs a
+        // 300 es vertex shader or the program does not link. The directive
+        // must be the very first line — the compiler rejects a comment before it.
+        const canvaselement = document.createElement('canvas');
+        canvaselement.width = 160;
+        canvaselement.height = 90;
+        document.documentElement.appendChild(canvaselement);
+        const shadersource = `#version 300 es
+precision highp float;
+uniform vec2 resolution;
+uniform float time;
+uniform float targetNoteStates[128];
+out vec4 fragColor;
+void main() {
+    int n = int(resolution.x) / 40;      // a non-constant loop bound: GLSL ES 3.00 only
+    float e = 0.0;
+    for (int i = 0; i < n; i++) e += max(0.0, targetNoteStates[i] * 0.5 + 0.5);
+    fragColor = vec4(1.0, 0.5 * time, e, 1.0);
+}
+`;
+        setupWebGL(shadersource, canvaselement, () => 0.5);
+        const gl = getGLContext(canvaselement);
+        expect(isWebGL2(gl)).to.equal(true);
+        const program = gl.getParameter(gl.CURRENT_PROGRAM);
+        expect(gl.getProgramParameter(program, gl.LINK_STATUS)).to.equal(true);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        const px = new Uint8Array(4);
+        gl.readPixels(80, 45, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        expect(px[0]).to.equal(255);
+        expect(px[1]).to.be.closeTo(64, 2);   // 0.5 * time(0.5)
         document.documentElement.removeChild(canvaselement);
     });
     it('should render text scheduled by showText into the uText layer', async () => {
@@ -87,7 +122,7 @@ describe('fragmentshader', function() {
         // 1s into a 2s fade; the first frame is drawn synchronously
         setupWebGL(shadersource, canvaselement, () => 1.0);
 
-        const gl = canvaselement.getContext('webgl');
+        const gl = getGLContext(canvaselement);
         const program = gl.getParameter(gl.CURRENT_PROGRAM);
         expect(gl.getUniform(program, gl.getUniformLocation(program, 'uTextMix'))).to.be.closeTo(0.5, 1e-6);
 

@@ -1,3 +1,4 @@
+import { getGLContext } from './glcontext.js';
 "use strict";
 const fragmentShaderSource = `
 precision mediump float;
@@ -49,7 +50,7 @@ export async function initVisualizer(componentRoot) {
     const canvas = componentRoot.querySelector("#glCanvas");
 
     // Initialize the GL context
-    gl = canvas.getContext("webgl");
+    gl = getGLContext(canvas);
 
     // Set clear color to black, fully opaque
     gl.clearColor(0.0, 0.0, 0.0, 1.0);

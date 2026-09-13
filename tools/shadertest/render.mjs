@@ -110,8 +110,10 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 
 // Headless compile check first — clear, fast failure with the GLSL info log.
+// WebGL2 first, like the app (visualizer/glcontext.js); WebGL1 is the fallback.
 const compile = await page.evaluate((src) => {
-  const gl = document.createElement('canvas').getContext('webgl');
+  const cv = document.createElement('canvas');
+  const gl = cv.getContext('webgl2') || cv.getContext('webgl');
   const sh = gl.createShader(gl.FRAGMENT_SHADER);
   gl.shaderSource(sh, src);
   gl.compileShader(sh);
@@ -132,9 +134,13 @@ async function render(time) {
   ];
   const r = await page.evaluate(async ({ src, W, H, time, energy, visuals, textUrls, textMix }) => {
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-    const gl = cv.getContext('webgl', { preserveDrawingBuffer: true });
+    const gl = cv.getContext('webgl2', { preserveDrawingBuffer: true }) || cv.getContext('webgl', { preserveDrawingBuffer: true });
     const mk = (type, s) => { const o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); return o; };
-    const vs = mk(gl.VERTEX_SHADER, 'attribute vec2 a_position;void main(){gl_Position=vec4(a_position,0.0,1.0);}');
+    // a "#version 300 es" fragment shader needs a 300 es vertex shader (glcontext.js does the same)
+    const is300 = /^[ \t]*#version[ \t]+300[ \t]+es\b/.test(src);   // must be the first line
+    const vs = mk(gl.VERTEX_SHADER, is300
+      ? '#version 300 es\nin vec2 a_position;void main(){gl_Position=vec4(a_position,0.0,1.0);}'
+      : 'attribute vec2 a_position;void main(){gl_Position=vec4(a_position,0.0,1.0);}');
     const fs = mk(gl.FRAGMENT_SHADER, src);
     const p = gl.createProgram(); gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p); gl.useProgram(p);
     const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);

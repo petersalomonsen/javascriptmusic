@@ -3,13 +3,10 @@ import { getCurrentTimeSeconds, setUseDefaultVisualizer, getUseDefaultVisualizer
 import { setGetCurrentTimeFunction, visualizeSong } from './midieventlistvisualizer.js';
 import { getActiveVideo, getActiveText } from './videoscheduler.js';
 import { getActiveVisualParams } from './visualparams.js';
+import { getGLContext, vertexShaderFor } from './glcontext.js';
 
-const vertexShaderSrc = `            
-attribute vec2 a_position;
-void main() {
-    gl_Position = vec4(a_position, 0, 1);
-}
-`;
+// The vertex shader (a full-screen quad) lives in glcontext.js, chosen per
+// fragment shader so a `#version 300 es` shader gets a matching one.
 
 let exporting = false;
 let canvas;
@@ -212,7 +209,7 @@ function applyVisualParams(ctx, currentTimeSeconds) {
 }
 
 function configureGLContext(source, targetCanvas = canvas) {
-    const glContext = targetCanvas.getContext("webgl");
+    const glContext = getGLContext(targetCanvas);
 
     glContext.viewport(0, 0, glContext.drawingBufferWidth, glContext.drawingBufferHeight);
     glContext.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -221,7 +218,7 @@ function configureGLContext(source, targetCanvas = canvas) {
     const mediaState = createMediaState(glContext);
 
     const vertexShader = glContext.createShader(glContext.VERTEX_SHADER);
-    glContext.shaderSource(vertexShader, vertexShaderSrc);
+    glContext.shaderSource(vertexShader, vertexShaderFor(source));
     glContext.compileShader(vertexShader);
 
     const fragmentShader = glContext.createShader(glContext.FRAGMENT_SHADER);
@@ -480,7 +477,7 @@ export function renderShaderFrames(source, { times = [4], width = 640, height = 
         const c = document.createElement('canvas');
         // The first getContext fixes the attributes: keep the buffer so the
         // pixels can be read back after the draw.
-        c.getContext('webgl', { preserveDrawingBuffer: true });
+        getGLContext(c, { preserveDrawingBuffer: true });
         offscreen = { canvas: c, source: null, ctx: null };
     }
     const oc = offscreen.canvas;
