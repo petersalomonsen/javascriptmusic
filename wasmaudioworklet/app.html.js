@@ -25,6 +25,13 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
 
     &nbsp;
 
+    <label title="performance mode: waitForSignal() in the song holds or loops a part until a signal (sendSignal)">
+      <input id="performanceModeCheckbox" type="checkbox" onclick="togglePerformanceMode(this.checked)" />
+      <span>performance</span>
+    </label>
+
+    &nbsp;
+
     <label title="toggle screen and audio capture">
       <input id="toggleSongPlayCheckbox" type="checkbox" onclick="toggleCapture(this.checked)" />
       <span>capture</span>
