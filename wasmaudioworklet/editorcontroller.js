@@ -15,7 +15,7 @@ import { zipRepo, downloadBlob } from './wasmgit/repozip.js';
 import { updateSong, updateSynth, exportToWav, renderSongOffline, confirmClipping } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
-import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
+import { exportVideo, pickVideoFile, setupWebGL } from './visualizer/fragmentshader.js';
 import { hasScheduledText } from './visualizer/videoscheduler.js';
 import { getVisualParamNames } from './visualizer/visualparams.js';
 import { visualWarnings } from './visualizer/visualwarnings.js';
@@ -617,13 +617,18 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                             await exportVideo(shadersource, eventlist);
                         } else if (exportProject === 'videoaudio') {
                             // one file: the song rendered offline at 48 kHz (what Opus
-                            // wants) becomes the WebM's audio track, then the frames
+                            // wants) becomes the WebM's audio track, then the frames.
+                            // The save dialog needs the click's user gesture, which the
+                            // render (minutes for a long song) would use up: ask FIRST.
+                            toggleSpinner(false);
+                            const fileHandle = await pickVideoFile();
+                            toggleSpinner(true);
                             const wasmBytes = await compileWebAssemblySynth(synthsource + '\n', undefined, 48000, false, faustSources);
                             const { renderedBuffer, clips } = await renderSongOffline(eventlist, wasmBytes, 48000);
                             if (clips.length) toggleSpinner(false);   // the dialog must not sit under the spinner
                             if (await confirmClipping(clips)) {
                                 toggleSpinner(true);
-                                await exportVideo(shadersource, eventlist, { audioBuffer: renderedBuffer });
+                                await exportVideo(shadersource, eventlist, { audioBuffer: renderedBuffer, fileHandle });
                             }
                         } else if (exportProject === EXPORT_MODE_MIDIPARTS_JSON) {
                             const songParts = getSongParts();
