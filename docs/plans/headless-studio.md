@@ -144,6 +144,52 @@ today, but loading `visualizer/fragmentshader.js` itself so `render_shader`
 headless is the same offscreen renderer with the same note-uniform replay.
 Playwright is an optional dependency: everything audio works without it.
 
+## The song still runs in QuickJS — everywhere
+
+The QuickJS-in-wasm sandbox is not a browser workaround the terminal can
+drop. It is the contract that makes a song portable and safe to run anywhere,
+and the case for it is stronger headless than in the app:
+
+- **Containment.** In the browser a malicious song is stored XSS, contained
+  by the page. In Node on V8 it runs as the user: file system, network, child
+  processes and the NEAR signing keys under the home directory are one
+  `require` away. Every cloned song is untrusted code, and agent-written
+  songs are not fully trusted either. The JSON-only host boundary, the 20 s
+  eval deadline and the memory limit already work in Node — the bench's
+  headless studio compiles through them today.
+- **Fidelity.** A result in the terminal must mean the same thing in the app.
+  On V8 a song could "work headless" through a timer, a Node global or an
+  engine quirk the sandbox lacks, then fail in the browser. Same engine, same
+  limits, same event list, byte for byte.
+
+Decisions:
+
+- **One path, no bypass.** No `--no-sandbox` fast path: songs compile in tens
+  of milliseconds, and the flag would become the path that diverges. If a song
+  ever needs something from the host, that is a song-API feature with a JSON
+  host function, not an escape hatch.
+- **Agent scripts too.** `run_script` stays in the sandbox headless. A
+  terminal agent has a shell anyway, but a script arriving from another host
+  or repo gets no more than the song does.
+- **The engine ships with the package.** The browser loads the pinned
+  `quickjs-wasm` from jsDelivr, Node uses the npm package; the headless
+  package depends on the same pinned version directly. That makes the version
+  pin five places instead of four — part of the release checklist.
+- **Playback needs no engine.** The song is compiled once to an event list and
+  `wasm-music play` only schedules events into the synth wasm. No song code
+  runs at play time, in either world.
+- **The synth side is already contained.** AssemblyScript compilation is not
+  execution, the Faust compiler is a wasm module, and the compiled synth wasm
+  gets a single `abort` import. The standing rule holds: never accept
+  guest-supplied wasm.
+
+To close first (both tracked in the sandbox follow-ups, issue #174): the
+media allowlist limiting `addImage`/`addVideo` to repo-relative paths is not
+enforced yet, and it matters more headless because a URL there becomes a
+network request from the user's machine; and the legacy wasm song mode still
+evaluates natively, so the headless CLI refuses that mode rather than inherit
+the hole.
+
 ## Tools for the terminal agent: CLI first, MCP as a thin wrapper
 
 The earlier editor bridge tried MCP and dropped it (2026-05): the server
