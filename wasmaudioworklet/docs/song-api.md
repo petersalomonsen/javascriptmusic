@@ -515,10 +515,59 @@ await createTrack(0).steps(4, [
 
 ---
 
+## Performance Mode
+
+For a concert, a presentation or an unattended installation: the song holds
+or **loops within a part and moves on when told** — by a signal from a
+shader element, a MIDI mapping, the agent, another window, or a timeout —
+to the next part or to any part by name. Performance mode is a checkbox
+next to the play control (`togglePerformanceMode(on)` in code). Off, the
+waits are inert and the song is the same deterministic score everywhere:
+export, headless rendering and the agent's `render_shader` frames.
+
+### `waitForSignal(name = 'go', options = {})`
+In performance mode, parks the song here until a signal named `name` (or
+`'any'`) arrives.
+
+- `loop` (`'part'` | `'hold'`, default `'part'`): loop the current part
+  (from its `definePartStart`) while waiting, or freeze the clock.
+- `quantize` (`'bar'` | `'beat'` | `'now'`, default `'bar'`): when the signal
+  arrives, leave on the next bar line (bars are four beats of the current BPM),
+  the next beat, or at once.
+- `default` (`'continue'` | part name, default `'continue'`): what happens
+  outside performance mode — play on, or seek to that part.
+- `timeout` (`{ bars, goTo }`): after `bars` bars of looping with no signal,
+  move on by itself, to `goTo` if given (kiosk mode).
+
+A signal may carry a part to jump to instead of continuing:
+`sendSignal('go', 'chorus')`. A targeted signal also works outside any wait,
+quantized to the current part's bar line.
+
+```javascript
+definePartStart('intro');
+await intro();
+await waitForSignal('go', { loop: 'part', quantize: 'bar' });
+definePartStart('verse');
+await verse();
+await waitForSignal('go', { timeout: { bars: 16, goTo: 'idle' } });
+definePartStart('chorus');
+```
+
+### Sending signals
+`window.sendSignal(name, goTo?)` from the console or any script; the app's
+signal sources (shader elements, MIDI mappings, the agent's performance
+tools) end up in the same place. State changes arrive as `wasmmusic-signal`
+DOM events on `window`: `{ waiting, loop, timeoutMs }`, `{ jumping, at,
+quantize }`, `{ resumed, goTo }`, `{ performanceMode }`.
+
+`broadcastSend` from another window is a signal too, so `waitForSignal`
+resumes on it like `broadcastWait` does.
+
 ## Song Structure Functions
 
 ### `definePartStart(partName)`
-Marks the start of a named song part.
+Marks the start of a named song part. In performance mode it is also where a
+`loop: 'part'` wait loops from, and what a targeted signal jumps to.
 
 **Parameters:**
 - `partName` (string): Name of the song part

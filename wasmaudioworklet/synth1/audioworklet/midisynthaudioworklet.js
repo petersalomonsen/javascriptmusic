@@ -35,6 +35,24 @@ export function onmidi(data) {
     });
 }
 
+// ---- performance mode: the signal bus ----
+// Every source (a shader element, a MIDI mapping, the agent's performance
+// tools, another window, a timeout) ends up here; the worklet decides what
+// the signal does (docs/plans/performance-mode.md). State changes come back
+// as `wasmmusic-signal` DOM events for the UI and the agent.
+let performanceMode = false;
+export function setPerformanceMode(on) {
+    performanceMode = !!on;
+    if (audioworkletnode) audioworkletnode.port.postMessage({ performanceMode });
+    window.dispatchEvent(new CustomEvent('wasmmusic-signal', { detail: { performanceMode } }));
+}
+export const isPerformanceMode = () => performanceMode;
+export function sendSignal(name, goTo = null) {
+    if (!audioworkletnode) return false;
+    audioworkletnode.port.postMessage({ signal: { name: String(name), goTo: goTo ? String(goTo) : null } });
+    return true;
+}
+
 // Stop path: the processor was told to terminate (it closes its message port),
 // so the node and message handler here are dead. They MUST be released —
 // posting to the closed port can never get a reply, and updateSynth awaiting
@@ -117,6 +135,10 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
                 setSynthState(e.data.synthstate);
                 return;
             }
+            if (e.data.signalState || e.data.signalResult) {
+                window.dispatchEvent(new CustomEvent('wasmmusic-signal', { detail: e.data.signalState || e.data.signalResult }));
+                return;
+            }
             if (typeof e.data.broadcastSend === 'string') {
                 channel.postMessage({ name: e.data.broadcastSend });
             } else if (typeof e.data.broadcastWaiting === 'string' && broadcastWaitingHandler) {
@@ -135,6 +157,7 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         wasm: wasm_synth_bytes,
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay,
+        performanceMode: performanceMode && !(context instanceof (OfflineAudioContext)),
         audio: await Promise.all(addedAudio)
     }, (msg) => msg.wasmloaded);
     toggleSpinner(false);

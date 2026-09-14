@@ -18,6 +18,10 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       // Sequencer fires this from inside onprocess when a SEQ_MSG_BROADCAST_SEND
       // event is hit. Wire it to a port message so the main thread can
       // forward to its BroadcastChannel.
+      // performance mode: waiting / jumping / resumed, for the UI and the agent
+      AudioWorkletGlobalScope.midisequencer.onSignalState = (state) => {
+        this.port.postMessage({ signalState: state });
+      };
       AudioWorkletGlobalScope.midisequencer.broadcastSender = (name) => {
         this.port.postMessage({ broadcastSend: name });
       };
@@ -71,11 +75,32 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
           }
         }
 
-        if (msg.data.broadcastReceived !== undefined) {
-          // Only unblock if we're actually parked on this exact name —
-          // stale signals from before the wait engaged are ignored.
+        if (msg.data.performanceMode !== undefined) {
+          AudioWorkletGlobalScope.midisequencer.setPerformanceMode(msg.data.performanceMode);
+        }
+
+        if (msg.data.signal) {
+          // a performance-mode signal, from any source on the main thread's bus
           const seq = AudioWorkletGlobalScope.midisequencer;
-          if (seq.waitingForSignal === msg.data.broadcastReceived) {
+          const { name, goTo } = msg.data.signal;
+          const result = seq.signal(name, goTo || null);
+          if (result.resumed && !seq.waitingForSignal && !this.playMidiSequence) {
+            this.playMidiSequence = true;   // a 'hold' wait released: play on
+            this.port.postMessage({ broadcastResumed: name });
+          }
+          this.port.postMessage({ signalResult: { name, goTo: goTo || null, ...result } });
+        }
+
+        if (msg.data.broadcastReceived !== undefined) {
+          // Another window's broadcastSend is a signal too. Otherwise only
+          // unblock if we're parked on this exact name — stale signals from
+          // before the wait engaged are ignored.
+          const seq = AudioWorkletGlobalScope.midisequencer;
+          const result = seq.signal(msg.data.broadcastReceived);
+          if (result.resumed && !seq.waitingForSignal) {
+            this.playMidiSequence = true;
+            this.port.postMessage({ broadcastResumed: msg.data.broadcastReceived });
+          } else if (seq.waitingForSignal === msg.data.broadcastReceived) {
             seq.waitingForSignal = null;
             this.playMidiSequence = true;
             this.port.postMessage({ broadcastResumed: msg.data.broadcastReceived });

@@ -1,6 +1,6 @@
-import { resetTick, setBPM, nextTick, currentTime, waitForBeat, waitDuration } from './pattern.js';
+import { resetTick, setBPM, nextTick, currentTime, waitForBeat, waitDuration, bpm } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunctionKeys } from './trackerpattern.js';
-import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT } from './sequenceconstants.js';
+import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT, SEQ_MSG_WAIT_SIGNAL, SEQ_MSG_PART } from './sequenceconstants.js';
 import { setVideoSchedule, setTextSchedule } from '../visualizer/videoscheduler.js';
 import { setVisualParamSchedule } from '../visualizer/visualparams.js';
 import { textToSvgDataUrl } from './textimage.js';
@@ -177,6 +177,45 @@ function broadcastWait(name) {
     });
 }
 
+// ---- performance mode ----
+// Where the current part started (definePartStart), for waitForSignal's loop.
+let currentPartStart = 0;
+const beatMs = () => 60000 / bpm;
+const barMs = () => 4 * beatMs();
+
+// Mark the start of a named part. Also a sequencer event, so a targeted
+// signal ("go to chorus") can seek to it, quantized to this part's bars.
+function definePartStart(partName) {
+    songParts[partName] = { startTime: currentTime() };
+    currentPartStart = currentTime();
+    songmessages.push({ time: currentTime(), message: [SEQ_MSG_PART], name: partName, barMs: barMs() });
+}
+
+// In PERFORMANCE MODE the song parks here until a signal named `name` (or
+// 'any') arrives — looping the current part (`loop: 'part'`, the default) or
+// freezing the clock (`loop: 'hold'`) — and leaves on the next bar
+// (`quantize: 'bar' | 'beat' | 'now'`). A signal may carry a part to jump
+// to instead of continuing. Outside performance mode the wait is inert:
+// `default: 'continue'` (the default) plays on, a part name seeks there — so
+// export, headless rendering and the agent's frames stay deterministic.
+// `timeout: { bars, goTo }` moves on by itself when nobody interacts (kiosk).
+function waitForSignal(name = 'go', options = {}) {
+    const timeout = options.timeout && options.timeout.bars > 0
+        ? { bars: options.timeout.bars, goTo: options.timeout.goTo || null } : null;
+    songmessages.push({
+        time: currentTime(),
+        message: [SEQ_MSG_WAIT_SIGNAL],
+        name,
+        loop: options.loop === 'hold' ? 'hold' : 'part',
+        quantize: ['bar', 'beat', 'now'].includes(options.quantize) ? options.quantize : 'bar',
+        default: typeof options.default === 'string' ? options.default : 'continue',
+        timeout,
+        partStart: currentPartStart,
+        barMs: barMs(),
+        beatMs: beatMs(),
+    });
+}
+
 const noteFunctions = createNoteFunctions();
 const songargs = {
     'output': output,
@@ -212,7 +251,8 @@ const songargs = {
     'hideText': hideText,
     'broadcastSend': broadcastSend,
     'broadcastWait': broadcastWait,
-    'definePartStart': (partName) => songParts[partName] = { startTime: currentTime() },
+    'waitForSignal': waitForSignal,
+    'definePartStart': definePartStart,
     'definePartEnd': (partName) => songParts[partName].endTime = currentTime(),
     'mute': (channel) => muted[channel] = true,
     'solo': (channel) => solo[channel] = true,
@@ -334,6 +374,7 @@ export async function generateSong(songfunc) {
     muted = {};
     solo = {};
     songParts = {};
+    currentPartStart = 0;
 
     resetTick();
 
