@@ -21,6 +21,7 @@ export function AudioWorkletProcessorSequencerModule() {
       this.wait = null;       // the wait we are parked on, or null
       this.jump = null;       // a quantized jump scheduled by a signal: { at, targetTime, wait, goTo }
       this.onSignalState = null;   // processor hook: (state) => post to the main thread
+      this.onJump = null;          // processor hook: the playhead moved (a jump, not a loop wrap) — silence held notes
       // Name the wait is parked on. Set when onprocess encounters a
       // SEQ_MSG_BROADCAST_WAIT event; while non-null, onprocess no-ops so
       // currentFrame freezes. Cleared when a matching broadcast arrives
@@ -148,6 +149,27 @@ export function AudioWorkletProcessorSequencerModule() {
       this.sequenceIndex = part.index + 1;
     }
 
+    // Wrap a looping part to its start. The part's marker usually sits at the
+    // same time as the wait that closed the previous part, so a seek by time
+    // would land on that wait, re-enter it and freeze the clock: seek to the
+    // marker's index instead, like a jump. A loop without a marker at its
+    // start (partStart 0, no definePartStart) still seeks by time.
+    _seekLoopStart(wait) {
+      let marker = null;
+      for (const p of Object.values(this.parts)) {
+        if (p.time === wait.loopStart && (!marker || p.index > marker.index)) marker = p;
+      }
+      if (marker) this._seekToPart(marker);
+      else this._seek(wait.loopStart);
+    }
+
+    // The playhead moved somewhere else (not a loop wrap): notes sounding
+    // across the cut would never see their note-off, so the processor
+    // silences them — the same as after a seek.
+    _jumped() {
+      if (this.onJump) this.onJump();
+    }
+
     // Continue past a wait: the song resumes right after the wait event.
     _continuePast(wait) {
       this._seek(wait.time);
@@ -187,6 +209,7 @@ export function AudioWorkletProcessorSequencerModule() {
       if (j.wait) this.wait = null;
       if (j.target) this._seekToPart(j.target);
       else this._continuePast(j.wait);
+      this._jumped();
       this._notify({ resumed: j.wait ? j.wait.name : null, goTo: j.goTo || null });
     }
 
@@ -204,6 +227,7 @@ export function AudioWorkletProcessorSequencerModule() {
           this.wait = null;
           this.waitingForSignal = null;
           if (target) this._seekToPart(target); else this._continuePast(w);
+          if (target) this._jumped();
           this._notify({ resumed: w.name, goTo: goTo || null });
           return { resumed: true, goTo: goTo || null };
         }
@@ -243,7 +267,7 @@ export function AudioWorkletProcessorSequencerModule() {
         // loop the part: the wait event marks the loop end (a jump due at the
         // loop end lands first, above, since it is never later than this)
         if (currentTime >= this.wait.time) {
-          this._seek(this.wait.loopStart);
+          this._seekLoopStart(this.wait);
           currentTime = this.getCurrentTime();
         }
       }
@@ -297,7 +321,7 @@ export function AudioWorkletProcessorSequencerModule() {
               if (!this.performanceMode) {
                 // inert: the default applies — continue, or go to a part
                 const target = evt.default && evt.default !== 'continue' ? this.parts[evt.default] : null;
-                if (target) { this._seekToPart(target); return; }
+                if (target) { this._seekToPart(target); this._jumped(); return; }
                 break;
               }
               if (!this.wait) {
@@ -315,7 +339,7 @@ export function AudioWorkletProcessorSequencerModule() {
                 return;
               }
               // loop the part from its start; the next pass reaches this wait again
-              this._seek(this.wait.loopStart);
+              this._seekLoopStart(this.wait);
               return;
             }
           }

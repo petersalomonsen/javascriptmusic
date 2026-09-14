@@ -22,6 +22,9 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
       AudioWorkletGlobalScope.midisequencer.onSignalState = (state) => {
         this.port.postMessage({ signalState: state });
       };
+      // a jump (leaving a part, going to a part) cuts across sounding notes:
+      // silence them, as a seek does, or they never get their note-off
+      AudioWorkletGlobalScope.midisequencer.onJump = () => this.allNotesOff();
       AudioWorkletGlobalScope.midisequencer.broadcastSender = (name) => {
         this.port.postMessage({ broadcastSend: name });
       };
