@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { readFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
-import { SDK_PROMPT_SUFFIX, buildProducerPrompt, buildSpecialistPrompt } from './prompt.mjs';
+import { SDK_PROMPT_SUFFIX, buildProducerPrompt, buildSpecialistPrompt, buildPerformancePrompt } from './prompt.mjs';
 import { toolDefsForRole, toolNamesForRole } from '../../wasmaudioworklet/studio-agent/tools-def.js';
 import { SPECIALISTS } from '../../wasmaudioworklet/studio-agent/tools-core.js';
 
@@ -36,6 +36,8 @@ export const ALLOWED_BY_ROLE = {
   producer: new Set([...mcpNames('producer'), 'Read', 'Glob', 'Grep']),
   instrument: new Set([...mcpNames('instrument'), 'Read', 'Glob', 'Grep']),
   mastering: new Set([...mcpNames('mastering'), 'Read', 'Glob', 'Grep']),
+  // On stage: the three signal tools and nothing else — no files, no editing.
+  performance: new Set(mcpNames('performance')),
 };
 // Built-in tools that cause the agent to thrash on this task — keep it focused.
 export const DISALLOWED = ['Bash', 'BashOutput', 'KillShell', 'Agent', 'Task', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
@@ -281,6 +283,30 @@ export const designInstrument = (backend, args, hooks, config) => runSpecialist(
 // ---- One producer turn ------------------------------------------------------
 // Returns the SDK's message stream for the caller to consume (the server
 // forwards it to the browser and logs it; the bench records it).
+// A performance turn: its own (small) session, the stage-hand prompt with
+// the part list and state baked in, the three signal tools, few turns.
+// `config.performanceModel` may pick a faster model than the producer's.
+export function performanceQuery({ prompt, sessionId = null, parts = [], state = '', abortController, backend, hooks = {}, config = {}, maxTurns = 4 }) {
+  const h = withDefaults(hooks);
+  const studio = makeStudioServer(backend, 'performance', h, config);
+  return query({
+    prompt,
+    options: {
+      abortController,
+      resume: sessionId || undefined,
+      model: config.performanceModel || config.model,
+      effort: 'low',
+      cwd: config.cwd,
+      systemPrompt: buildPerformancePrompt({ parts, state }) + SDK_PROMPT_SUFFIX,
+      mcpServers: { studio },
+      allowedTools: [...ALLOWED_BY_ROLE.performance],
+      disallowedTools: [...DISALLOWED, 'Read', 'Glob', 'Grep'],
+      canUseTool: canUse(ALLOWED_BY_ROLE.performance, h.dlog),
+      maxTurns,
+    },
+  });
+}
+
 export function producerQuery({ prompt, sessionId = null, systemPrompt, abortController, backend, hooks = {}, config = {}, maxTurns = 60 }) {
   const h = withDefaults(hooks);
   const studio = makeStudioServer(backend, 'producer', h, config);

@@ -85,6 +85,11 @@ export const TOOL_DEFS = [
     // ---- delegation: mastering runs in a specialist agent ----
     { name: 'master_mix', where: 'agent', role: 'mastering', description: "Delegate MASTERING of the current song to the mastering specialist: a separate agent that measures the compiled mix (probe_mix), wires the Mastering chain (fx/mastering.ts: high-pass, tilt EQ, low-end mono, 3-band compressor, look-ahead limiter) into synth.ts postprocess(), and iterates its settings against the measurements until the mix meets the delivery target — by default streaming & video (-14 LUFS integrated, -1 dBTP true peak). It may also make MIX-level changes (channel volume/pan/reverb control changes in the song) when the measurements call for it, and reports the mix notes it could not resolve. You get back its report AND a probe_mix the tool runs itself: first line OK or FAILED. Use it when the user asks for mastering, loudness, 'make it louder', 'ready for Spotify/YouTube', or an export-ready mix. Run compile first; the song must play something.", parameters: obj({ brief: str("what the user wants from the master, in their words (style, loudness feel, anything to preserve); may be empty"), target: str("delivery target: 'streaming' (default; also video), 'apple', 'club', 'broadcast'"), targetLufs: num('override the integrated loudness target (LUFS)'), truePeakDb: num('override the true-peak ceiling (dBTP)') }) },
 
+    // ---- performance mode (docs/plans/performance-mode.md): the stage tools ----
+    { name: 'list_parts', where: 'browser', description: 'Performance mode: the song\'s parts in order (definePartStart names, with their length in bars and the waits that close them), where the playhead is now, and what signal it is waiting for. Read this only if the prompt\'s part list is missing or stale.', parameters: obj({}) },
+    { name: 'go_to_part', where: 'browser', description: 'Performance mode: jump to a named part — a signal carrying the part, so the song leaves the current part on its next bar line (or at its end) and continues from that part\'s marker. The ONLY way to move the song on stage; never edit the song for this.', parameters: obj({ part: str('the part name exactly as listed') }, ['part']) },
+    { name: 'send_signal', where: 'browser', description: 'Performance mode: send a named signal ("go" moves on to whatever follows the current wait). Use go_to_part when the user names a part.', parameters: obj({ name: str('signal name (default "go")') }) },
+
     // ---- repository files ----
     { name: 'load_synth_from_file', where: 'loadfile', target: 'synth', description: 'Load a repository file DIRECTLY into the synth editor without reading it into context. Use this for large bundles (e.g. examples/dx7/dx7-synth.ts) — pass a repo-relative path.', parameters: obj({ path: str('repo-relative path') }, ['path']) },
     { name: 'load_song_from_file', where: 'loadfile', target: 'song', description: 'Load a repository file DIRECTLY into the song editor without reading it into context — pass a repo-relative path.', parameters: obj({ path: str('repo-relative path') }, ['path']) },
@@ -107,7 +112,10 @@ export const sdkToolNames = () =>
 // on its channel, compile and probe, and repo reading for the guides. Neither
 // list is hand-maintained per provider: both paths derive theirs from here.
 export const ROLES = {
-    producer: { exclude: ['write_faust', 'edit_faust', 'auto_master'] },
+    producer: { exclude: ['write_faust', 'edit_faust', 'auto_master', 'list_parts', 'go_to_part', 'send_signal'] },
+    // The PERFORMANCE role: on stage, no editing at all — the parts and the
+    // signals are the whole instrument (docs/plans/performance-mode.md).
+    performance: { include: ['list_parts', 'go_to_part', 'send_signal'] },
     instrument: { include: ['read_faust', 'list_faust', 'write_faust', 'edit_faust', 'get_synth', 'grep_synth', 'edit_synth', 'compile', 'probe_instrument', 'read_repo_file'] },
     // The MASTERING specialist: the master insert in synth.ts, the mix-level
     // control changes in the song, compile, and the whole-mix measurement.

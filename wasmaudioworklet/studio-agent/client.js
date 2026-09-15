@@ -14,7 +14,9 @@ import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
   playFromHereLine, SPECIALISTS, noteStatesAtTime, fakeNoteStates, parseRenderTimes,
+  partsFromEvents, partAt, matchPerformanceCommand, formatPerformanceState,
 } from './tools-core.js';
+import { buildPerformancePrompt } from './prompt.js';
 import { runAgentScript, formatScriptResult } from './script-sandbox.js';
 import { probeNote, probeNotes, formatProbeReport } from '../audioprobe/instrumentprobe.js';
 import { measureMix } from '../audioprobe/mixprobe.js';
@@ -94,7 +96,63 @@ function shaderWarnings() {
 
 // ---- the tool registry: tool name -> async fn acting on the app -------------
 // Returning an object with `__error` marks a failed tool result.
+// ---- performance mode (docs/plans/performance-mode.md) ----
+// The stage: parts from the compiled song, the sequencer's state from the
+// `wasmmusic-signal` events, and the signals themselves through the app's
+// bus (window.sendSignal, set up in audioworkletnode.js).
+let performanceMode = false;
+let stageWaiting = null;   // { name, loop } while the sequencer is parked on a wait
+const stageParts = () => partsFromEvents(window.lastCompiledEventList || []);
+const stageTimeMs = () => (typeof window.songTimeSeconds === 'function' ? (window.songTimeSeconds() || 0) * 1000 : 0);
+const stagePlaying = () => !!window.audioworkletnode;
+function stageState() {
+  return formatPerformanceState(stageParts(), { timeMs: stageTimeMs(), waiting: stageWaiting, playing: stagePlaying() });
+}
+function stageSignal(name, goTo) {
+  if (typeof window.sendSignal !== 'function' || !stagePlaying()) {
+    return { __error: 'not playing — press play (the sequencer checkbox) first; signals only reach a running song' };
+  }
+  const ok = window.sendSignal(name, goTo || null);
+  if (!ok) return { __error: 'the song is not running — press play first' };
+  const cur = partAt(stageParts(), stageTimeMs());
+  return goTo
+    ? `→ "${goTo}": jumping on the next bar line${cur ? ` (leaving "${cur.name}")` : ''}`
+    : `signal "${name}" sent${stageWaiting ? `: leaving "${stageWaiting.name}" wait on the next bar line` : ' (no wait engaged — it applies when the song reaches one)'}`;
+}
+window.addEventListener('wasmmusic-signal', (e) => {
+  const d = e.detail || {};
+  if (d.performanceMode !== undefined) { setPerformanceUi(d.performanceMode); return; }
+  if (d.waiting) stageWaiting = { name: d.waiting, loop: d.loop };
+  if (d.resumed !== undefined || d.jumping) stageWaiting = d.jumping ? stageWaiting : null;
+  if (performanceMode) setStatus(`performance — ${stageState()}`);
+});
+function setPerformanceUi(on) {
+  performanceMode = !!on;
+  const input = el('studioagentinput');
+  if (input) input.placeholder = on ? 'performance: a part name, "next", or an instruction' : 'ask the studio agent…';
+  setStatus(on ? `performance — ${stageState()}` : (socket && socket.readyState === WebSocket.OPEN ? 'connected' : 'not connected'));
+}
+
 const registry = {
+  // ---- performance mode: the stage tools (role 'performance') ----
+  list_parts: async () => {
+    const parts = stageParts();
+    const lines = parts.map((p, i) => {
+      const next = parts[i + 1];
+      const bars = p.barMs ? Math.round(((next ? next.time : (window.lastCompiledEventList || []).slice(-1)[0]?.time || p.time) - p.time) / p.barMs) : null;
+      const waits = p.waits.map((w) => `wait "${w.name}" (${w.loop})`).join(', ');
+      return `${i + 1}. ${p.name}${bars !== null ? ` — ${bars} bar(s)` : ''}${waits ? `, ${waits}` : ''}`;
+    });
+    return [stageState(), ...lines].join('\n');
+  },
+  go_to_part: async ({ part }) => {
+    const parts = stageParts();
+    const hit = parts.find((p) => p.name === part) || parts.find((p) => p.name.toLowerCase() === String(part || '').toLowerCase());
+    if (!hit) return { __error: `no part "${part}". Parts: ${parts.map((p) => p.name).join(', ') || '(none — the song has no definePartStart() markers)'}` };
+    return stageSignal('go', hit.name);
+  },
+  send_signal: async ({ name }) => stageSignal(name || 'go', null),
+
   get_song: async () => songsourceeditor.doc.getValue(),
   set_song: async ({ source }) => {
     songsourceeditor.doc.setValue(source);
@@ -679,6 +737,11 @@ async function sendChat(text) {
   // conversation (the API key must not be persisted into the OPFS repo).
   if (text.startsWith('/nearai')) { handleNearaiCommand(text); return; }
 
+  // Performance mode: the fast path first. An instruction that names a part
+  // (or says "next") is dispatched right here — no model, no round trip —
+  // and only what the panel cannot read goes to the stage-hand role.
+  if (performanceMode) return sendPerformance(text);
+
   // The agent works inside a project repo only: instruments live in the OPFS
   // faust/ folder, the session is saved to the repo, and the specialist writes
   // .dsp files there. Without a repo half the tools would fail one by one.
@@ -719,6 +782,73 @@ async function sendChat(text) {
   // summary rides along so the server can seed a FRESH session from it when
   // the sessionId can't be resumed (SDK sessions are per-machine).
   socket.send(JSON.stringify({ t: 'chat', text, sessionId, summary: sessionSummary, kit }));
+}
+
+// A performance-mode instruction. The fast path dispatches part names and
+// "next" itself; anything else is one short model turn in the performance
+// role — its own session on the SDK path, a fresh two-message exchange on
+// the NEAR AI path — with the parts and the stage state in the prompt.
+async function sendPerformance(text) {
+  if (turnRunning) { addLine('tool', '— a turn is still running. Press Escape (or Stop) to end it, then send again —'); return false; }
+  const parts = stageParts();
+  addLine('user', text);
+  conversation.push({ role: 'user', text, performance: true });
+  const t0 = performance.now();
+  const hit = matchPerformanceCommand(text, parts);
+  if (hit) {
+    const r = hit.goTo ? await registry.go_to_part({ part: hit.goTo }) : await registry.send_signal({ name: hit.signal });
+    const line = r && r.__error ? `✗ ${r.__error}` : `${r} (${Math.round(performance.now() - t0)} ms, no model)`;
+    addLine(r && r.__error ? 'error' : 'agent', line);
+    conversation.push({ role: 'agent', text: line });
+    saveSession();
+    return;
+  }
+  saveSession();
+  const state = stageState();
+  if (nearaiConfig()) {
+    startAgentMessage(); setBusy(true); startActivity();
+    runNearaiPerformanceTurn(text, parts, state);
+    return;
+  }
+  if (!socket || socket.readyState !== WebSocket.OPEN) { setStatus('not connected'); return false; }
+  startAgentMessage(); setBusy(true); startActivity();
+  socket.send(JSON.stringify({ t: 'chat', mode: 'performance', text, parts: parts.map((p) => ({ name: p.name })), state }));
+}
+
+// NEAR AI on stage: the stage-hand prompt, the three tools, no history — a
+// performance turn is one instruction, and the prompt already holds the state.
+async function runNearaiPerformanceTurn(text, parts, state) {
+  const cfg = nearaiConfig();
+  nearaiAbort = new AbortController();
+  const messages = [
+    { role: 'system', content: buildPerformancePrompt({ parts, state }) + SERVERLESS_PROMPT_SUFFIX },
+    { role: 'user', content: text },
+  ];
+  setPhase(`${cfg.model.split('/').pop()} thinking…`);
+  const t0 = performance.now();
+  try {
+    const { usage } = await runAgentTurn({
+      fetchFn: nearaiFetch(), baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model,
+      tools: toOpenAiTools(toolDefsForRole('performance')),
+      messages,
+      runTool: (name, args) => Promise.resolve(registry[name] ? registry[name](args || {}) : { __error: `unknown tool ${name}` })
+        .then((r) => (r && r.__error ? `ERROR: ${r.__error}` : r)),
+      onText: (t) => { appendAgentText(t); setPhase('responding…'); },
+      onToolCall: (name, args) => { addLine('tool', `⚙ ${name} ${JSON.stringify(args || {})}`); },
+      maxIterations: 4,
+    });
+    const agentText = agentMsgEl ? agentMsgEl.textContent : '';
+    if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }
+    finishAgentMessage();
+    stopActivity(`done ✓ ${((performance.now() - t0) / 1000).toFixed(1)}s (${usage?.total_tokens ?? '?'} tokens)`);
+  } catch (e) {
+    finishAgentMessage();
+    addLine('error', `✗ ${String(e?.message || e)}`);
+    stopActivity('error');
+  } finally {
+    nearaiAbort = null;
+    setBusy(false);
+  }
 }
 
 // ---- NEAR AI serverless provider (no local studio-agent process) ------------

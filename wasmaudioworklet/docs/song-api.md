@@ -556,8 +556,10 @@ definePartStart('chorus');
 
 ### Sending signals
 `window.sendSignal(name, goTo?)` from the console or any script; the app's
-signal sources (shader elements, MIDI mappings, the agent's performance
-tools) end up in the same place. State changes arrive as `wasmmusic-signal`
+signal sources end up in the same place. The **studio agent** is one of them:
+with performance mode on, a part name or "next" typed into its panel is
+dispatched at once without a model, and an instruction like "take it to the
+quiet bit" becomes one tool call of its stage-hand role (a few seconds). State changes arrive as `wasmmusic-signal`
 DOM events on `window`: `{ waiting, loop, timeoutMs }`, `{ jumping, at,
 quantize }`, `{ resumed, goTo }`, `{ performanceMode }`.
 

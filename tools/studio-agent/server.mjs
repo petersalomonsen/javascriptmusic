@@ -22,7 +22,7 @@ import { SDK_PROMPT_SUFFIX, buildProducerPrompt } from './prompt.mjs';
 // Who the agents are — prompts, tool subsets per role, the nested specialist —
 // lives in agent-core.mjs behind a backend interface, so the bench can run the
 // same code against a headless studio. This file is the WebSocket backend.
-import { producerQuery, producerSystemPrompt, abortSpecialists } from './agent-core.mjs';
+import { producerQuery, producerSystemPrompt, abortSpecialists, performanceQuery } from './agent-core.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
@@ -76,6 +76,10 @@ if (process.env.ANTHROPIC_API_KEY) {
 }
 
 const SPECIALIST_MODEL = process.env.STUDIO_AGENT_SPECIALIST_MODEL || undefined;
+// The stage hand (performance mode): a faster model is the natural choice —
+// one tool call per turn, a tiny prompt. Defaults to the producer's model.
+const PERFORMANCE_MODEL = process.env.STUDIO_AGENT_PERFORMANCE_MODEL || undefined;
+let performanceSessionId = null;   // its own SDK session: never the producer's 100k-token history
 const SPECIALIST_MAX_TURNS = Number(process.env.STUDIO_AGENT_SPECIALIST_MAX_TURNS || 40);
 // Built-in tools that cause the agent to thrash on this task — keep it focused.
 const DISALLOWED = ['Bash', 'BashOutput', 'KillShell', 'Agent', 'Task', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
@@ -141,6 +145,50 @@ const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 // of spending a round-trip discovering them. Identical text every turn keeps
 // the cached prefix intact; a changed kit costs one cold turn, as it should.
 // (producerSystemPrompt in agent-core.mjs builds it, so the bench gets the same.)
+
+// A performance-mode instruction the panel could not dispatch itself (exact
+// part names never get here): the stage-hand prompt with the parts and the
+// state, the three signal tools, a few turns, its own session. The producer's
+// session and its sessionId are untouched — no 'session' message goes back.
+async function handlePerformance(ws, { text, parts, state }) {
+  const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
+  const backend = { call: (name, args) => callBrowser(ws, name, args), repoRoot: REPO_ROOT };
+  const hooks = { send, log: logEvent, dlog, isAborted: () => !!currentTurn?.aborted };
+  const config = { model: MODEL, performanceModel: PERFORMANCE_MODEL, cwd: REPO_ROOT };
+  const t0 = Date.now();
+  dlog('performance:', JSON.stringify(text).slice(0, 100), `parts ${(parts || []).length}`, performanceSessionId ? `(resume ${performanceSessionId.slice(0, 8)})` : '(new)');
+  logEvent({ kind: 'chat', mode: 'performance', sessionId: performanceSessionId, text, parts: (parts || []).map((p) => p.name || p), state });
+  const controller = new AbortController();
+  currentTurn = { controller, aborted: false };
+  try {
+    for await (const m of performanceQuery({ prompt: text, sessionId: performanceSessionId, parts, state, abortController: controller, backend, hooks, config })) {
+      if (m.type === 'system' && m.subtype === 'init') {
+        performanceSessionId = m.session_id || performanceSessionId;
+      } else if (m.type === 'assistant') {
+        for (const block of m.message?.content ?? []) {
+          if (block.type === 'text' && block.text) { dlog('text:', block.text.slice(0, 80)); logEvent({ kind: 'text', mode: 'performance', text: block.text }); send({ t: 'text', text: block.text }); }
+          else if (block.type === 'tool_use') { dlog('tool_use →', block.name, JSON.stringify(block.input).slice(0, 80)); logEvent({ kind: 'tool_use', mode: 'performance', name: block.name, input: block.input }); send({ t: 'tool', name: block.name, input: block.input }); }
+        }
+      } else if (m.type === 'result') {
+        const secs = ((Date.now() - t0) / 1000).toFixed(1);
+        dlog('PERFORMANCE RESULT', m.subtype, 'turns:', m.num_turns, 'cost:', m.total_cost_usd, `${secs}s`);
+        logEvent({ kind: 'result', mode: 'performance', subtype: m.subtype, turns: m.num_turns, costUsd: m.total_cost_usd, secs: Number(secs) });
+        send({ t: 'done', subtype: m.subtype, cost: m.total_cost_usd, turns: m.num_turns, secs: Number(secs) });
+      }
+    }
+  } catch (e) {
+    if (currentTurn?.aborted) { send({ t: 'done', subtype: 'aborted' }); }
+    else {
+      // a stale performance session (server restarted, machine changed): start fresh next time
+      performanceSessionId = null;
+      dlog('performance error', e?.message || e);
+      logEvent({ kind: 'error', mode: 'performance', error: String(e?.message || e) });
+      send({ t: 'error', error: String(e?.message || e) });
+    }
+  } finally {
+    currentTurn = null;
+  }
+}
 
 async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false) {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
@@ -320,6 +368,8 @@ wss.on('connection', (ws) => {
     } else if (msg.t === 'tool_started') {
       const p = pending.get(msg.id);
       if (p && typeof p.started === 'function') p.started();
+    } else if (msg.t === 'chat' && msg.mode === 'performance') {
+      chatChain = chatChain.then(() => handlePerformance(ws, msg));
     } else if (msg.t === 'chat') {
       chatChain = chatChain.then(() => handleChat(ws, msg));
     } else if (msg.t === 'abort') {
@@ -337,4 +387,5 @@ console.log(`  repo root:     ${REPO_ROOT}`);
 console.log(`  model:         ${MODEL || '(default)'}`);
 console.log(`  effort:        ${EFFORT}`);
 console.log(`  specialist:    ${SPECIALIST_MODEL || MODEL || '(default)'} model, ≤${SPECIALIST_MAX_TURNS} turns (STUDIO_AGENT_SPECIALIST_MODEL / _MAX_TURNS)`);
+console.log(`  performance:   ${PERFORMANCE_MODEL || MODEL || '(default)'} model, effort low (STUDIO_AGENT_PERFORMANCE_MODEL — a fast model fits the stage)`);
 console.log('  auth:          Claude Code subscription login (no API key)\n');

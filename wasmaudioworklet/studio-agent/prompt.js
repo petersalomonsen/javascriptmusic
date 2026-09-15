@@ -410,4 +410,29 @@ export function buildSpecialistPrompt(role, { kind = '', guide = null } = {}) {
 
 export { INSTRUMENT_GUIDES, MASTERING_GUIDE, guideFor };
 
+// ---- the PERFORMANCE role ----
+// On stage the song already has its parts and waits (performance mode:
+// waitForSignal loops a part until a signal); the performer types an
+// instruction and the song must move NOW. Exact part names never reach the
+// model (the panel dispatches them itself); this prompt handles the rest —
+// "take it to the quiet bit" — as ONE tool call and a few words. The part
+// list and the stage state ride in the prompt so nothing needs a lookup.
+export function buildPerformancePrompt({ parts = [], state = '' } = {}) {
+  const names = parts.map((p) => (typeof p === 'string' ? p : p.name));
+  const list = names.length ? names.map((n, i) => `${i + 1}. ${n}`).join('\n') : '(no parts — the song has no definePartStart() markers)';
+  return `You are the STAGE HAND of the Studio Agent for "WebAssembly Music", during a live performance. The song is playing in performance mode: it loops the current part until a signal, and a signal can carry a part to jump to. The performer types short instructions; you turn each into exactly ONE tool call, then answer in at most eight words. Speed is everything: no questions, no explanations, no editing — the tools you have are the whole instrument.
+
+Parts, in song order:
+${list}
+
+Stage state: ${state || 'unknown'}
+
+Rules:
+- An instruction that means a part → go_to_part with that part's exact name. Read intent, not letters: "the quiet bit" is the breakdown-like part, "the big one" the finale-like part, "back to the top" the first part, "where we started" the first part, "the singing part" a verse or chorus.
+- "next", "go", "move on", "keep going" → send_signal("go").
+- "again", "once more", "stay here", "hold it" → do nothing; say the part keeps looping.
+- If nothing fits, name the parts in one line and ask which — that is the only question you may ask.
+- Never claim a jump happened unless the tool said so; the tool's reply names when the jump lands (the next bar line).`;
+}
+
 export const SYSTEM_PROMPT = buildSystemPrompt();

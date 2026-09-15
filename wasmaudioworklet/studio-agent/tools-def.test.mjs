@@ -164,3 +164,14 @@ test('render_shader (an image result) reaches the SDK path only — the NEAR AI 
     assert.ok(toolNamesForRole('producer').includes('render_shader'));
     for (const role of ['instrument', 'mastering']) assert.ok(!toolNamesForRole(role).includes('render_shader'), role);
 });
+
+test('the performance role: the three stage tools and nothing else; the producer does not carry them', () => {
+    assert.deepEqual(toolNamesForRole('performance'), ['list_parts', 'go_to_part', 'send_signal']);
+    for (const n of ['list_parts', 'go_to_part', 'send_signal']) {
+        assert.ok(browserToolNames().includes(n), `${n} runs in the browser`);
+        assert.ok(!toolNamesForRole('producer').includes(n), `producer must not have ${n}`);
+        assert.ok(!toolNamesForRole('instrument').includes(n) && !toolNamesForRole('mastering').includes(n));
+    }
+    // both providers get them (text results, no images)
+    assert.ok(toOpenAiTools(toolDefsForRole('performance')).length === 3);
+});

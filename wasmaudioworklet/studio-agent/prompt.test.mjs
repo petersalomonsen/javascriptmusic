@@ -140,3 +140,15 @@ test('the producer delegates mastering: it has the tools, not the section', () =
   assert.ok(p.includes('- probe_mix(') && p.includes('- master_mix('));
   assert.ok(/5\. \*\*probe_mix\*\*/.test(p), 'probe_mix has its rung on the assurance ladder');
 });
+
+// ---- the performance (stage hand) prompt ----
+import { buildPerformancePrompt } from './prompt.js';
+
+test('buildPerformancePrompt: short, lists the parts in order with the state, names the three tools and the rules', () => {
+  const p = buildPerformancePrompt({ parts: [{ name: 'intro' }, { name: 'quiet breakdown' }, 'finale'], state: 'Now in "intro", looping until signal "go".' });
+  assert.ok(p.length < 2500, `stage prompt must stay small (${p.length} chars)`);
+  assert.match(p, /1\. intro\n2\. quiet breakdown\n3\. finale/);
+  assert.match(p, /Stage state: Now in "intro"/);
+  for (const t of ['go_to_part', 'send_signal', 'at most eight words', 'no editing']) assert.ok(p.includes(t), t);
+  assert.match(buildPerformancePrompt({}), /no parts/);
+});
