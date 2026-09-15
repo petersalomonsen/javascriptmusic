@@ -541,7 +541,8 @@ In performance mode, parks the song here until a signal named `name` (or
 
 A signal may carry a part to jump to instead of continuing:
 `sendSignal('go', 'chorus')`. A targeted signal also works outside any wait,
-quantized to the current part's bar line.
+quantized to the current part's bar line. Leaving a part or jumping to one
+silences the notes still sounding, as a seek does — a loop wrap does not.
 
 ```javascript
 definePartStart('intro');

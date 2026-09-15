@@ -154,3 +154,45 @@ test('leaving performance mode while looping plays on; a live recompile re-enter
   t.run(4000);
   assert.ok(!t.notes().includes(64), 'looping again after the swap');
 });
+
+test('a part whose marker shares its time with the previous wait loops from the marker, not into that wait', () => {
+  // a | wait | b | wait | c — the docs' pattern: every part after the first
+  // starts at the same time as the wait closing the one before it.
+  const seq = [
+    part('a', 0), on(0, 60), off(400, 60),
+    wait(2000, { partStart: 0 }),
+    part('b', 2000), on(2000, 64), off(2400, 64), on(3000, 65), off(3400, 65),
+    wait(4000, { partStart: 2000 }),
+    part('c', 4000), on(4000, 67), off(4400, 67),
+    { time: 6000, message: [SEQ_MSG_LOOP] },
+  ];
+  const s = makeSeq(seq);
+  s.run(2500);                  // a, then its wait wraps it: 60 twice
+  s.seq.signal('go');           // leave a at its loop end — b starts from its own marker
+  s.run(4500);                  // b plays (64, 65) and wraps: 64 again
+  assert.deepEqual(s.notes(), [60, 60, 64, 65, 64]);
+  assert.ok(s.seq.getCurrentTime() > 2100, 'the clock keeps running while b loops (it froze at the wait before)');
+  assert.ok(!s.notes().includes(67), 'still looping b');
+  s.seq.signal('go');
+  s.run(2500);
+  assert.equal(s.notes().slice(-1)[0], 67);
+});
+
+test('a jump reports itself through onJump (the processor silences held notes); a loop wrap does not', () => {
+  const s = makeSeq(song());
+  let jumps = 0;
+  s.seq.onJump = () => jumps++;
+  s.run(6500);              // pass 1 and a wrap
+  assert.equal(jumps, 0, 'a loop wrap is not a jump');
+  s.seq.signal('go');
+  s.run(2500);              // left a for b at the bar line
+  assert.equal(jumps, 1);
+  s.seq.signal('goto', 'a');   // targeted jump outside a wait
+  s.run(2500);
+  assert.equal(jumps, 2);
+  const d = makeSeq(song({ default: 'c' }), { performance: false });
+  let inertJumps = 0;
+  d.seq.onJump = () => inertJumps++;
+  d.run(4500);
+  assert.equal(inertJumps, 1, 'an inert default-to-part seek is a jump too');
+});
