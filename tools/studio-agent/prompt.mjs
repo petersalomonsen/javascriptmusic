@@ -2,5 +2,5 @@
 // (NEAR AI serverless mode) can import it too — single source of truth.
 export {
   SYSTEM_PROMPT, SDK_PROMPT_SUFFIX, SECTIONS, SECTION_NAMES,
-  buildSystemPrompt, buildProducerPrompt, buildSpecialistPrompt,
+  buildSystemPrompt, buildProducerPrompt, buildSpecialistPrompt, buildPerformanceSection,
 } from '../../wasmaudioworklet/studio-agent/prompt.js';

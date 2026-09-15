@@ -22,7 +22,7 @@ import { SDK_PROMPT_SUFFIX, buildProducerPrompt } from './prompt.mjs';
 // Who the agents are — prompts, tool subsets per role, the nested specialist —
 // lives in agent-core.mjs behind a backend interface, so the bench can run the
 // same code against a headless studio. This file is the WebSocket backend.
-import { producerQuery, producerSystemPrompt, abortSpecialists } from './agent-core.mjs';
+import { producerQuery, producerSystemPrompt, abortSpecialists, performanceSystemPrompt } from './agent-core.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
@@ -76,6 +76,10 @@ if (process.env.ANTHROPIC_API_KEY) {
 }
 
 const SPECIALIST_MODEL = process.env.STUDIO_AGENT_SPECIALIST_MODEL || undefined;
+// The stage hand (performance mode): a faster model is the natural choice —
+// one tool call per turn, a tiny prompt. Defaults to the producer's model.
+const PERFORMANCE_MODEL = process.env.STUDIO_AGENT_PERFORMANCE_MODEL || undefined;
+const PERFORMANCE_EFFORT = process.env.STUDIO_AGENT_PERFORMANCE_EFFORT || 'low';
 const SPECIALIST_MAX_TURNS = Number(process.env.STUDIO_AGENT_SPECIALIST_MAX_TURNS || 40);
 // Built-in tools that cause the agent to thrash on this task — keep it focused.
 const DISALLOWED = ['Bash', 'BashOutput', 'KillShell', 'Agent', 'Task', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
@@ -142,19 +146,29 @@ const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 // the cached prefix intact; a changed kit costs one cold turn, as it should.
 // (producerSystemPrompt in agent-core.mjs builds it, so the bench gets the same.)
 
-async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false) {
+// `mode: 'performance'` (the app's performance checkbox is on): the producer
+// on stage — the same prompt and kit plus the stage section with the parts,
+// the signal tools, low effort, and the SESSION THE PANEL CHOSE (a fresh one:
+// the panel archives the composition session when the checkbox goes on —
+// resuming a 200k-token composition session cost 110 s per edit, a fresh one 14 s).
+// The stage state (where the playhead is) changes every turn, so it rides at
+// the top of the user message rather than in the cached system prompt.
+async function handleChat(ws, { text, sessionId, summary, kit, mode, parts, state }, isRetry = false) {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
-  const systemPrompt = producerSystemPrompt(kit);
+  const onStage = mode === 'performance';
+  const role = onStage ? 'performance' : 'producer';
+  const systemPrompt = onStage ? performanceSystemPrompt(kit, parts || []) : producerSystemPrompt(kit);
+  if (onStage && state) text = `[stage] ${state}\n\n${text}`;
   // The studio the agents act on, as agent-core sees it: every tool call goes
   // to the browser over this socket; file loads read the repo here first.
   const backend = { call: (name, args) => callBrowser(ws, name, args), repoRoot: REPO_ROOT };
   const hooks = { send, log: logEvent, dlog, isAborted: () => !!currentTurn?.aborted };
-  const config = { model: MODEL, effort: EFFORT, cwd: REPO_ROOT, specialistModel: SPECIALIST_MODEL, specialistMaxTurns: SPECIALIST_MAX_TURNS };
+  const config = { model: MODEL, effort: EFFORT, cwd: REPO_ROOT, specialistModel: SPECIALIST_MODEL, specialistMaxTurns: SPECIALIST_MAX_TURNS, performanceModel: PERFORMANCE_MODEL, performanceEffort: PERFORMANCE_EFFORT };
   let sid = sessionId || null;
   let contextTokens = 0; // last model call's input size (fresh + cached)
-  dlog('chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)',
+  dlog(onStage ? 'stage:' : 'chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)',
     kit ? `kit ${kit.length} chars` : 'NO KIT');
-  logEvent({ kind: 'chat', sessionId: sid, resumed: !!sessionId, text, kitChars: kit ? kit.length : 0 });
+  logEvent({ kind: 'chat', mode: onStage ? 'performance' : undefined, sessionId: sid, resumed: !!sessionId, text, kitChars: kit ? kit.length : 0 });
 
   // One controller per turn; the stop button aborts through it. A retry reuses
   // the same slot, so an abort during the retry still lands.
@@ -163,7 +177,7 @@ async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false
 
   try {
     for await (const m of producerQuery({
-      prompt: text, sessionId, systemPrompt, abortController: controller, backend, hooks, config, maxTurns: 60,
+      prompt: text, sessionId, systemPrompt, abortController: controller, backend, hooks, config, maxTurns: 60, role,
     })) {
       if (m.type === 'system' && m.subtype === 'init') {
         sid = m.session_id || sid;
@@ -337,4 +351,5 @@ console.log(`  repo root:     ${REPO_ROOT}`);
 console.log(`  model:         ${MODEL || '(default)'}`);
 console.log(`  effort:        ${EFFORT}`);
 console.log(`  specialist:    ${SPECIALIST_MODEL || MODEL || '(default)'} model, ≤${SPECIALIST_MAX_TURNS} turns (STUDIO_AGENT_SPECIALIST_MODEL / _MAX_TURNS)`);
+console.log(`  performance:   ${PERFORMANCE_MODEL || MODEL || '(default)'} model, effort ${PERFORMANCE_EFFORT} (STUDIO_AGENT_PERFORMANCE_MODEL / _EFFORT)`);
 console.log('  auth:          Claude Code subscription login (no API key)\n');

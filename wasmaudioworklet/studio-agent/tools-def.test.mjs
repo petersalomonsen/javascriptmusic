@@ -164,3 +164,19 @@ test('render_shader (an image result) reaches the SDK path only — the NEAR AI 
     assert.ok(toolNamesForRole('producer').includes('render_shader'));
     for (const role of ['instrument', 'mastering']) assert.ok(!toolNamesForRole(role).includes('render_shader'), role);
 });
+
+test('the performance role: the producer on stage — its tools plus the three stage tools; the producer itself does not carry them', () => {
+    const stage = toolNamesForRole('performance');
+    const producer = toolNamesForRole('producer');
+    for (const n of ['list_parts', 'go_to_part', 'send_signal']) {
+        assert.ok(browserToolNames().includes(n), `${n} runs in the browser`);
+        assert.ok(stage.includes(n), `performance lacks ${n}`);
+        assert.ok(!producer.includes(n), `producer must not have ${n}`);
+        assert.ok(!toolNamesForRole('instrument').includes(n) && !toolNamesForRole('mastering').includes(n));
+    }
+    // composing goes on during a performance: everything the producer has...
+    for (const n of producer) assert.ok(stage.includes(n), `performance lacks the producer's ${n}`);
+    // ...and still never a .dsp writer
+    for (const n of ['write_faust', 'edit_faust', 'auto_master']) assert.ok(!stage.includes(n), `performance must not have ${n}`);
+    assert.equal(stage.length, producer.length + 3);
+});
