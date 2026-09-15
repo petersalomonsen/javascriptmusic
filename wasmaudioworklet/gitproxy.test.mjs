@@ -54,8 +54,10 @@ test('GET info/refs → forwards to GitHub, Bearer→Basic, CORS + content-type 
 
 test('POST git-receive-pack (push) is allowed and forwarded', async () => {
   let method;
-  globalThis.fetch = async (_url, opts) => { method = opts.method; return new Response('ok', { status: 200 }); };
+  let duplex;
+  globalThis.fetch = async (_url, opts) => { method = opts.method; duplex = opts.duplex; return new Response('ok', { status: 200 }); };
   const res = await onRequest(ctx('POST', '/gitproxy/github.com/u/r.git/git-receive-pack', { 'content-type': 'application/x-git-receive-pack-request' }));
+  assert.equal(duplex, 'half', "a forwarded body stream needs duplex: 'half' (Node's fetch refuses it otherwise)");
   assert.equal(res.status, 200);
   assert.equal(method, 'POST');
 });
@@ -145,4 +147,11 @@ test('JWT: tampered payload is rejected', async () => {
 test('JWT: expired token is rejected (server-decided window)', async () => {
   const jwt = await jwtSign({ sub: 'alice.near' }, 'secret-key');
   await assert.rejects(jwtVerify(jwt, 'secret-key', { maxAgeMs: -1 }), /expired/);
+});
+
+test("a 401's Basic challenge is forwarded as Bearer: the app still sees the 401, the browser shows no login popup", async () => {
+  globalThis.fetch = async () => new Response('', { status: 401, headers: { 'WWW-Authenticate': 'Basic realm="GitHub"' } });
+  const res = await onRequest(ctx('GET', '/gitproxy/github.com/u/private.git/info/refs?service=git-upload-pack'));
+  assert.equal(res.status, 401);
+  assert.equal(res.headers.get('WWW-Authenticate'), 'Bearer realm="GitHub"');
 });
