@@ -134,9 +134,13 @@ test.describe('studio-agent performance mode (local repo)', () => {
 
         // /sessions lists the archive; /resume brings it back (archiving "sketches" — empty, so nothing written).
         await typeIntoAgentChat(page, '/sessions');
-        await page.waitForFunction(() => true);
-        const log1 = await chatLog(page);
-        expect(log1.some((l) => l.includes(`${today}-composition: 2 messages, composition`))).toBe(true);
+        // the listing reads every archived file through the git worker: poll for it
+        await page.waitForFunction((needle) => {
+            const app = document.querySelector('app-javascriptmusic');
+            const roots = [app.shadowRoot, ...[...app.shadowRoot.querySelectorAll('*')].map((e) => e.shadowRoot).filter(Boolean)];
+            for (const r of roots) { const l = r.getElementById && r.getElementById('studioagentlog'); if (l) return [...l.children].some((c) => c.textContent.includes(needle)); }
+            return false;
+        }, `${today}-composition: 2 messages, composition`, { timeout: 15000 });
         await typeIntoAgentChat(page, `/resume ${today}-composition`);
         await waitForSession(page, "d.conversation.length === 2 && d.label === 'composition'");
 
