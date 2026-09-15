@@ -141,14 +141,14 @@ test('the producer delegates mastering: it has the tools, not the section', () =
   assert.ok(/5\. \*\*probe_mix\*\*/.test(p), 'probe_mix has its rung on the assurance ladder');
 });
 
-// ---- the performance (stage hand) prompt ----
-import { buildPerformancePrompt } from './prompt.js';
+// ---- the performance section (the producer on stage) ----
+import { buildPerformanceSection } from './prompt.js';
 
-test('buildPerformancePrompt: short, lists the parts in order with the state, names the three tools and the rules', () => {
-  const p = buildPerformancePrompt({ parts: [{ name: 'intro' }, { name: 'quiet breakdown' }, 'finale'], state: 'Now in "intro", looping until signal "go".' });
-  assert.ok(p.length < 2500, `stage prompt must stay small (${p.length} chars)`);
-  assert.match(p, /1\. intro\n2\. quiet breakdown\n3\. finale/);
-  assert.match(p, /Stage state: Now in "intro"/);
-  for (const t of ['go_to_part', 'send_signal', 'at most eight words', 'no editing']) assert.ok(p.includes(t), t);
-  assert.match(buildPerformancePrompt({}), /no parts/);
+test('buildPerformanceSection: a short section on the producer prompt — the parts in order, the stage rules, the signal tools', () => {
+  const p = buildPerformanceSection({ parts: [{ name: 'intro' }, { name: 'quiet breakdown' }, 'finale'] });
+  assert.ok(p.length < 2500, `stage section must stay small (${p.length} chars)`);
+  assert.match(p, /^\n\n## On stage/);
+  assert.ok(p.includes('Parts, in song order: intro, quiet breakdown, finale.'));
+  for (const t of ['go_to_part', 'send_signal', 'One edit, one compile', 'Never design a new instrument', '[stage] line', 'startRecording()']) assert.ok(p.includes(t), t);
+  assert.match(buildPerformanceSection({}), /no parts/);
 });

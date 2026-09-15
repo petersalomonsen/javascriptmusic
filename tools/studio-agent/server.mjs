@@ -22,7 +22,7 @@ import { SDK_PROMPT_SUFFIX, buildProducerPrompt } from './prompt.mjs';
 // Who the agents are — prompts, tool subsets per role, the nested specialist —
 // lives in agent-core.mjs behind a backend interface, so the bench can run the
 // same code against a headless studio. This file is the WebSocket backend.
-import { producerQuery, producerSystemPrompt, abortSpecialists, performanceQuery } from './agent-core.mjs';
+import { producerQuery, producerSystemPrompt, abortSpecialists, performanceSystemPrompt } from './agent-core.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..'); // tools/studio-agent -> repo root
@@ -79,7 +79,7 @@ const SPECIALIST_MODEL = process.env.STUDIO_AGENT_SPECIALIST_MODEL || undefined;
 // The stage hand (performance mode): a faster model is the natural choice —
 // one tool call per turn, a tiny prompt. Defaults to the producer's model.
 const PERFORMANCE_MODEL = process.env.STUDIO_AGENT_PERFORMANCE_MODEL || undefined;
-let performanceSessionId = null;   // its own SDK session: never the producer's 100k-token history
+const PERFORMANCE_EFFORT = process.env.STUDIO_AGENT_PERFORMANCE_EFFORT || 'low';
 const SPECIALIST_MAX_TURNS = Number(process.env.STUDIO_AGENT_SPECIALIST_MAX_TURNS || 40);
 // Built-in tools that cause the agent to thrash on this task — keep it focused.
 const DISALLOWED = ['Bash', 'BashOutput', 'KillShell', 'Agent', 'Task', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
@@ -146,63 +146,29 @@ const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 // the cached prefix intact; a changed kit costs one cold turn, as it should.
 // (producerSystemPrompt in agent-core.mjs builds it, so the bench gets the same.)
 
-// A performance-mode instruction the panel could not dispatch itself (exact
-// part names never get here): the stage-hand prompt with the parts and the
-// state, the three signal tools, a few turns, its own session. The producer's
-// session and its sessionId are untouched — no 'session' message goes back.
-async function handlePerformance(ws, { text, parts, state }) {
+// `mode: 'performance'` (the app's performance checkbox is on): the producer
+// on stage — the same prompt and kit plus the stage section with the parts,
+// the signal tools, low effort, and the SESSION THE PANEL CHOSE (a fresh one:
+// the panel archives the composition session when the checkbox goes on —
+// resuming a 200k-token composition session cost 110 s per edit, a fresh one 14 s).
+// The stage state (where the playhead is) changes every turn, so it rides at
+// the top of the user message rather than in the cached system prompt.
+async function handleChat(ws, { text, sessionId, summary, kit, mode, parts, state }, isRetry = false) {
   const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
-  const backend = { call: (name, args) => callBrowser(ws, name, args), repoRoot: REPO_ROOT };
-  const hooks = { send, log: logEvent, dlog, isAborted: () => !!currentTurn?.aborted };
-  const config = { model: MODEL, performanceModel: PERFORMANCE_MODEL, cwd: REPO_ROOT };
-  const t0 = Date.now();
-  dlog('performance:', JSON.stringify(text).slice(0, 100), `parts ${(parts || []).length}`, performanceSessionId ? `(resume ${performanceSessionId.slice(0, 8)})` : '(new)');
-  logEvent({ kind: 'chat', mode: 'performance', sessionId: performanceSessionId, text, parts: (parts || []).map((p) => p.name || p), state });
-  const controller = new AbortController();
-  currentTurn = { controller, aborted: false };
-  try {
-    for await (const m of performanceQuery({ prompt: text, sessionId: performanceSessionId, parts, state, abortController: controller, backend, hooks, config })) {
-      if (m.type === 'system' && m.subtype === 'init') {
-        performanceSessionId = m.session_id || performanceSessionId;
-      } else if (m.type === 'assistant') {
-        for (const block of m.message?.content ?? []) {
-          if (block.type === 'text' && block.text) { dlog('text:', block.text.slice(0, 80)); logEvent({ kind: 'text', mode: 'performance', text: block.text }); send({ t: 'text', text: block.text }); }
-          else if (block.type === 'tool_use') { dlog('tool_use →', block.name, JSON.stringify(block.input).slice(0, 80)); logEvent({ kind: 'tool_use', mode: 'performance', name: block.name, input: block.input }); send({ t: 'tool', name: block.name, input: block.input }); }
-        }
-      } else if (m.type === 'result') {
-        const secs = ((Date.now() - t0) / 1000).toFixed(1);
-        dlog('PERFORMANCE RESULT', m.subtype, 'turns:', m.num_turns, 'cost:', m.total_cost_usd, `${secs}s`);
-        logEvent({ kind: 'result', mode: 'performance', subtype: m.subtype, turns: m.num_turns, costUsd: m.total_cost_usd, secs: Number(secs) });
-        send({ t: 'done', subtype: m.subtype, cost: m.total_cost_usd, turns: m.num_turns, secs: Number(secs) });
-      }
-    }
-  } catch (e) {
-    if (currentTurn?.aborted) { send({ t: 'done', subtype: 'aborted' }); }
-    else {
-      // a stale performance session (server restarted, machine changed): start fresh next time
-      performanceSessionId = null;
-      dlog('performance error', e?.message || e);
-      logEvent({ kind: 'error', mode: 'performance', error: String(e?.message || e) });
-      send({ t: 'error', error: String(e?.message || e) });
-    }
-  } finally {
-    currentTurn = null;
-  }
-}
-
-async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false) {
-  const send = (obj) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); };
-  const systemPrompt = producerSystemPrompt(kit);
+  const onStage = mode === 'performance';
+  const role = onStage ? 'performance' : 'producer';
+  const systemPrompt = onStage ? performanceSystemPrompt(kit, parts || []) : producerSystemPrompt(kit);
+  if (onStage && state) text = `[stage] ${state}\n\n${text}`;
   // The studio the agents act on, as agent-core sees it: every tool call goes
   // to the browser over this socket; file loads read the repo here first.
   const backend = { call: (name, args) => callBrowser(ws, name, args), repoRoot: REPO_ROOT };
   const hooks = { send, log: logEvent, dlog, isAborted: () => !!currentTurn?.aborted };
-  const config = { model: MODEL, effort: EFFORT, cwd: REPO_ROOT, specialistModel: SPECIALIST_MODEL, specialistMaxTurns: SPECIALIST_MAX_TURNS };
+  const config = { model: MODEL, effort: EFFORT, cwd: REPO_ROOT, specialistModel: SPECIALIST_MODEL, specialistMaxTurns: SPECIALIST_MAX_TURNS, performanceModel: PERFORMANCE_MODEL, performanceEffort: PERFORMANCE_EFFORT };
   let sid = sessionId || null;
   let contextTokens = 0; // last model call's input size (fresh + cached)
-  dlog('chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)',
+  dlog(onStage ? 'stage:' : 'chat:', JSON.stringify(text).slice(0, 100), sessionId ? `(resume ${sessionId.slice(0, 8)})` : '(new)',
     kit ? `kit ${kit.length} chars` : 'NO KIT');
-  logEvent({ kind: 'chat', sessionId: sid, resumed: !!sessionId, text, kitChars: kit ? kit.length : 0 });
+  logEvent({ kind: 'chat', mode: onStage ? 'performance' : undefined, sessionId: sid, resumed: !!sessionId, text, kitChars: kit ? kit.length : 0 });
 
   // One controller per turn; the stop button aborts through it. A retry reuses
   // the same slot, so an abort during the retry still lands.
@@ -211,7 +177,7 @@ async function handleChat(ws, { text, sessionId, summary, kit }, isRetry = false
 
   try {
     for await (const m of producerQuery({
-      prompt: text, sessionId, systemPrompt, abortController: controller, backend, hooks, config, maxTurns: 60,
+      prompt: text, sessionId, systemPrompt, abortController: controller, backend, hooks, config, maxTurns: 60, role,
     })) {
       if (m.type === 'system' && m.subtype === 'init') {
         sid = m.session_id || sid;
@@ -368,8 +334,6 @@ wss.on('connection', (ws) => {
     } else if (msg.t === 'tool_started') {
       const p = pending.get(msg.id);
       if (p && typeof p.started === 'function') p.started();
-    } else if (msg.t === 'chat' && msg.mode === 'performance') {
-      chatChain = chatChain.then(() => handlePerformance(ws, msg));
     } else if (msg.t === 'chat') {
       chatChain = chatChain.then(() => handleChat(ws, msg));
     } else if (msg.t === 'abort') {
@@ -387,5 +351,5 @@ console.log(`  repo root:     ${REPO_ROOT}`);
 console.log(`  model:         ${MODEL || '(default)'}`);
 console.log(`  effort:        ${EFFORT}`);
 console.log(`  specialist:    ${SPECIALIST_MODEL || MODEL || '(default)'} model, ≤${SPECIALIST_MAX_TURNS} turns (STUDIO_AGENT_SPECIALIST_MODEL / _MAX_TURNS)`);
-console.log(`  performance:   ${PERFORMANCE_MODEL || MODEL || '(default)'} model, effort low (STUDIO_AGENT_PERFORMANCE_MODEL — a fast model fits the stage)`);
+console.log(`  performance:   ${PERFORMANCE_MODEL || MODEL || '(default)'} model, effort ${PERFORMANCE_EFFORT} (STUDIO_AGENT_PERFORMANCE_MODEL / _EFFORT)`);
 console.log('  auth:          Claude Code subscription login (no API key)\n');

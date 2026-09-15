@@ -5,9 +5,11 @@ import { waitForAppReady, waitForStudioAgentTools, clearOPFS, specRepo } from '.
 // The studio agent on stage (docs/plans/performance-mode.md, the agent
 // phase). With performance mode on, the panel dispatches a part name or
 // "next" ITSELF — no model, no round trip — through the app's signal bus;
-// only an instruction it cannot read goes to the server as a performance
-// turn carrying the parts and the stage state. The stage tools answer like
-// client.js does. Own local repo; the "agent server" is a mock in this test.
+// anything else goes to the server as a PRODUCER turn on stage (mode:
+// 'performance', with the kit, the parts and the stage state). The
+// performance checkbox also switches SESSIONS: the composition conversation
+// is archived into sessions/ and a fresh performance session starts. Own
+// local repo; the "agent server" is a mock in this test.
 const REPO = specRepo('studio-agent-performance');
 
 const SONG = `setBPM(120);
@@ -63,6 +65,43 @@ const chatLog = (page) => page.evaluate(() => {
     for (const r of roots) { const l = r.getElementById && r.getElementById('studioagentlog'); if (l) return [...l.children].map((c) => c.textContent); }
     return [];
 });
+// The repo's working tree in OPFS: <repo>.git/… Read from the main thread
+// while the git worker owns the tree can miss for a moment (the worker writes
+// through sync access handles), so a read polls until the file is there.
+const readRepoFile = async (page, name) => {
+    const t0 = Date.now();
+    for (;;) {
+        const text = await page.evaluate(async ({ repo, name }) => {
+            try {
+                const root = await navigator.storage.getDirectory();
+                let dir = await root.getDirectoryHandle(repo + '.git');
+                const segs = name.split('/');
+                for (const s of segs.slice(0, -1)) dir = await dir.getDirectoryHandle(s);
+                return await (await (await dir.getFileHandle(segs[segs.length - 1])).getFile()).text();
+            } catch { return null; }
+        }, { repo: REPO, name });
+        if (text) return text;
+        if (Date.now() - t0 > 15000) throw new Error(`repo file ${name} did not appear`);
+        await page.waitForTimeout(200);
+    }
+};
+const listRepoDir = (page, dirName) => page.evaluate(async ({ repo, dirName }) => {
+    const root = await navigator.storage.getDirectory();
+    try { const dir = await (await root.getDirectoryHandle(repo + '.git')).getDirectoryHandle(dirName); const out = []; for await (const [n] of dir.entries()) out.push(n); return out.sort(); } catch { return []; }
+}, { repo: REPO, dirName });
+// A directory listing from the main thread can lag the worker's write by a
+// moment: wait for the archive to show up rather than asserting at once.
+const waitForRepoDir = async (page, dirName, expected) => {
+    await page.waitForFunction(async ({ repo, dirName, expected }) => {
+        const root = await navigator.storage.getDirectory();
+        try { const dir = await (await root.getDirectoryHandle(repo + '.git')).getDirectoryHandle(dirName); const out = []; for await (const [n] of dir.entries()) out.push(n); return JSON.stringify(out.sort()) === JSON.stringify(expected); } catch { return expected.length === 0; }
+    }, { repo: REPO, dirName, expected }, { timeout: 15000 });
+};
+// Wait until the panel's session file says what we expect (session switches are async).
+const waitForSession = (page, check) => page.waitForFunction(async ({ repo, check }) => {
+    const root = await navigator.storage.getDirectory();
+    try { const t = await (await (await (await root.getDirectoryHandle(repo + '.git')).getFileHandle('studioagent-session.json')).getFile()).text(); const d = JSON.parse(t); return new Function('d', 'return ' + check)(d); } catch { return false; }
+}, { repo: REPO, check }, { timeout: 15000 });
 
 test.describe('studio-agent performance mode (local repo)', () => {
     let mock;
@@ -72,7 +111,47 @@ test.describe('studio-agent performance mode (local repo)', () => {
     });
     test.afterEach(async ({ page }) => { await clearOPFS(page, REPO); await mock.close(); });
 
-    test('a part name or "next" is dispatched by the panel without a model; the rest goes to the stage-hand turn', async ({ page }) => {
+    test('sessions: /new archives into sessions/, /sessions lists, /resume swaps back; the performance checkbox switches by itself', async ({ page }) => {
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+        await page.goto(`http://localhost:8080/?gitrepo=${REPO}`);
+        await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
+        await mock.waitForClient();
+
+        // A composition conversation: one message (the mock answers with a text and done).
+        await typeIntoAgentChat(page, 'give me a beat');
+        await mock.waitForChat(1);
+        mock.send({ t: 'text', text: 'Beat is in.' }); mock.send({ t: 'done', subtype: 'success' });
+        await waitForSession(page, "d.conversation.length === 2 && (d.label || 'composition') === 'composition'");
+        const today = new Date().toISOString().slice(0, 10);
+
+        // /new archives it under sessions/<date>-composition.json and starts fresh.
+        await typeIntoAgentChat(page, '/new sketches');
+        await waitForSession(page, "d.conversation.length === 0 && d.label === 'sketches'");
+        await waitForRepoDir(page, 'sessions', [`${today}-composition.json`]);
+        expect(JSON.parse(await readRepoFile(page, `sessions/${today}-composition.json`)).conversation.map((m) => m.text)).toEqual(['give me a beat', 'Beat is in.']);
+        expect(mock.state.chats.length).toBe(1);   // commands never reach the server
+
+        // /sessions lists the archive; /resume brings it back (archiving "sketches" — empty, so nothing written).
+        await typeIntoAgentChat(page, '/sessions');
+        await page.waitForFunction(() => true);
+        const log1 = await chatLog(page);
+        expect(log1.some((l) => l.includes(`${today}-composition: 2 messages, composition`))).toBe(true);
+        await typeIntoAgentChat(page, `/resume ${today}-composition`);
+        await waitForSession(page, "d.conversation.length === 2 && d.label === 'composition'");
+
+        // The performance checkbox: the composition session is archived, a fresh
+        // "performance" session starts; off again, the composition comes back.
+        await page.evaluate(() => { window.audioworkletnode = {}; window.sendSignal = () => true; window.togglePerformanceMode(true); });
+        await waitForSession(page, "d.label === 'performance' && d.conversation.length === 0");
+        await waitForRepoDir(page, 'sessions', [`${today}-composition.json`]);
+        await page.evaluate(() => window.togglePerformanceMode(false));
+        await waitForSession(page, "d.label === 'composition' && d.conversation.length === 2");
+        // an empty performance session is not archived; a used one would be (next test)
+        await waitForRepoDir(page, 'sessions', [`${today}-composition.json`]);
+    });
+
+    test('a part name or "next" is dispatched by the panel without a model; the rest is a producer turn on stage with kit, parts and state', async ({ page }) => {
         page.on('pageerror', (e) => console.log('[browser-error]', e.message));
         await page.goto(`http://localhost:8080/?gitrepo=${REPO}`);
         await waitForAppReady(page);
@@ -98,6 +177,7 @@ test.describe('studio-agent performance mode (local repo)', () => {
             window.togglePerformanceMode(true);
             window.dispatchEvent(new CustomEvent('wasmmusic-signal', { detail: { waiting: 'go', loop: 'part' } }));
         });
+        await waitForSession(page, "d.label === 'performance'");
         expect(String((await mock.callTool('list_parts', {})).result)).toContain('Now in "verse", looping until signal "go".');
         expect(String((await mock.callTool('list_parts', {})).result)).toContain('1. intro — 4 bar(s), wait "go" (part)');
         const unknown = await mock.callTool('go_to_part', { part: 'bridge' });
@@ -115,23 +195,28 @@ test.describe('studio-agent performance mode (local repo)', () => {
         const log = await chatLog(page);
         expect(log.some((l) => /jumping on the next bar line.*no model/.test(l))).toBe(true);
 
-        // Intent the panel cannot read: one performance turn to the server,
-        // carrying the parts and the state; the model (mocked) answers with a tool call.
-        await typeIntoAgentChat(page, 'take it to the quiet bit');
+        // Intent the panel cannot read: a PRODUCER turn on stage — mode, parts, state,
+        // the kit, and the performance session (fresh: no sessionId).
+        await typeIntoAgentChat(page, 'italo hats in the verse');
         const chat = await mock.waitForChat(1);
         expect(chat.mode).toBe('performance');
         expect(chat.parts.map((p) => p.name)).toEqual(['intro', 'verse', 'quiet breakdown', 'finale']);
         expect(chat.state).toContain('Now in "verse", looping until signal "go"');
-        expect(chat.kit).toBeUndefined();   // no kit, no session: the stage prompt is self-contained
-        const jump = await mock.callTool('go_to_part', { part: 'quiet breakdown' });
-        expect(jump.ok).toBe(true);
-        mock.send({ t: 'text', text: 'Quiet breakdown, next bar.' });
-        mock.send({ t: 'done', subtype: 'success', secs: 1.2 });
-        await page.waitForFunction(() => window.__signals.length >= 5);
-        expect((await page.evaluate(() => window.__signals)).slice(-1)).toEqual([['go', 'quiet breakdown']]);
+        expect(typeof chat.kit).toBe('string');
+        expect(chat.kit.length).toBeGreaterThan(100);   // the default kit: the repo has no AGENT.md
+        expect(chat.sessionId).toBeNull();
+        expect(chat.text).toBe('italo hats in the verse');
+        mock.send({ t: 'text', text: 'Hats swapped, next round.' }); mock.send({ t: 'done', subtype: 'success', secs: 1.2 });
+        await waitForSession(page, "d.label === 'performance' && d.conversation.length >= 2");
 
-        // Off again: the same text is a normal chat to the producer.
+        // Off again: the performance session is archived (it has messages) and the
+        // same text is a normal chat to the producer.
         await page.evaluate(() => window.togglePerformanceMode(false));
+        await waitForSession(page, "(d.label || 'composition') === 'composition'");
+        const today = new Date().toISOString().slice(0, 10);
+        await waitForRepoDir(page, 'sessions', [`${today}-performance.json`]);
+        const perf = JSON.parse(await readRepoFile(page, `sessions/${today}-performance.json`));
+        expect(perf.conversation.map((m) => m.text)[0]).toBe('go to the quiet breakdown');
         await typeIntoAgentChat(page, 'next');
         const normal = await mock.waitForChat(2);
         expect(normal.mode).toBeUndefined();

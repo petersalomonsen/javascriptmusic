@@ -85,7 +85,7 @@ Faust tools, `get_synth`/`grep_synth`/`edit_synth`, `compile` and
 | `edit_synth` / `edit_song` | surgical find-and-replace in place (like Edit) — change a large doc (e.g. the 14k-line DX7 bundle) without rewriting it |
 | `grep_synth` / `grep_song` | regex-search the current in-browser doc for anchors, without dumping the whole file into context |
 | `get_shader` / `set_shader` / `edit_shader` / `grep_shader` | read / replace / surgically edit / search the visualizer shader (GLSL). The song's visuals only reach the screen through uniforms this document declares, so `showText`/`setVisual` work is a shader job as much as a song job — the write tools report back anything the song schedules that the shader still cannot show |
-| `list_parts` / `go_to_part` / `send_signal` (performance role only) | **on stage**: the song's parts and where the playhead is; jump to a part; send a signal. With the app's *performance* checkbox on, the panel dispatches a typed part name or "next" itself (no model), and only an instruction it cannot read becomes a one-tool-call turn of the **stage hand** role — its own small session, `STUDIO_AGENT_PERFORMANCE_MODEL` picks a fast model |
+| `list_parts` / `go_to_part` / `send_signal` (performance role) | **on stage**: the song's parts and where the playhead is; jump to a part; send a signal. With the app's *performance* checkbox on, the panel dispatches a typed part name or "next" itself (no model); anything else is a **producer turn on stage** — the same kit and tools plus these three, a stage section in the prompt, low effort (`STUDIO_AGENT_PERFORMANCE_EFFORT`, `STUDIO_AGENT_PERFORMANCE_MODEL`), in a fresh session (below). Measured on a 14-part song with its kit: 14 s per edit, vs 110 s resuming the composition session |
 | `render_shader` | the agent's eyes: renders the current shader at up to four song times (note uniforms replayed from the compiled song) and returns one labelled contact sheet as an image plus per-frame numbers — the sheet also appears in the chat panel. SDK path only: the NEAR AI tier cannot take images, so it stays blind |
 | `write_faust` / `edit_faust` (specialist only), `read_faust` / `list_faust` | author instruments in **Faust** (`.dsp`) in OPFS `faust/` — `write_faust` also transpiles to AssemblyScript and reports the generated classes |
 | `probe_instrument` / `song_summary` / `run_script` | measure a channel's audio offline; digest what the compiled song plays; compute an edit over note data in the sandbox |
@@ -99,6 +99,10 @@ It also has read-only `Read`/`Glob`/`Grep` over this repo so it can learn from
 
 - `STUDIO_AGENT_PORT` — WebSocket port (default `17891`). The browser side reads
   `window.STUDIO_AGENT_PORT` if you need to override it there too.
+## Sessions: the active one, the archive, the stage
+
+The active conversation lives in the project repo as `studioagent-session.json`; every earlier one is archived under `sessions/<date>-<label>.json`, committed with the project like the rest of its history. In the panel: `/new [label]` archives the current conversation and starts fresh, `/sessions` lists the archive, `/resume <name>` swaps one back in. The **performance** checkbox switches by itself: on, the composition session is archived and today's performance session resumed or started; off, the composition session comes back. The performance session is the record of the show — every prompt typed on stage, in order.
+
 - `STUDIO_AGENT_MODEL` — model override for the speed/depth tradeoff, e.g.
   `STUDIO_AGENT_MODEL=sonnet npm start` for faster replies, or `opus` for deeper
   reasoning. Unset uses the Claude Code default. Shown at startup.

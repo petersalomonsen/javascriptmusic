@@ -410,29 +410,27 @@ export function buildSpecialistPrompt(role, { kind = '', guide = null } = {}) {
 
 export { INSTRUMENT_GUIDES, MASTERING_GUIDE, guideFor };
 
-// ---- the PERFORMANCE role ----
-// On stage the song already has its parts and waits (performance mode:
-// waitForSignal loops a part until a signal); the performer types an
-// instruction and the song must move NOW. Exact part names never reach the
-// model (the panel dispatches them itself); this prompt handles the rest —
-// "take it to the quiet bit" — as ONE tool call and a few words. The part
-// list and the stage state ride in the prompt so nothing needs a lookup.
-export function buildPerformancePrompt({ parts = [], state = '' } = {}) {
+// ---- the PERFORMANCE section ----
+// On stage the producer keeps all its tools (composing goes on: takes, layers,
+// drums) plus the signal tools, in a FRESH session with the project's kit and
+// low effort — that is what makes it fast (measured: 14 s per edit vs 110 s in
+// a resumed 200k-token composition session). This section rides on the
+// producer prompt; the panel dispatches exact part names itself, and every
+// stage message starts with a [stage] line saying where the playhead is.
+export function buildPerformanceSection({ parts = [] } = {}) {
   const names = parts.map((p) => (typeof p === 'string' ? p : p.name));
-  const list = names.length ? names.map((n, i) => `${i + 1}. ${n}`).join('\n') : '(no parts — the song has no definePartStart() markers)';
-  return `You are the STAGE HAND of the Studio Agent for "WebAssembly Music", during a live performance. The song is playing in performance mode: it loops the current part until a signal, and a signal can carry a part to jump to. The performer types short instructions; you turn each into exactly ONE tool call, then answer in at most eight words. Speed is everything: no questions, no explanations, no editing — the tools you have are the whole instrument.
+  const list = names.length ? names.join(', ') : '(no parts — the song has no definePartStart() markers)';
+  return `
 
-Parts, in song order:
-${list}
+## On stage (performance mode)
+The song is PLAYING in performance mode: it loops the current part until a signal, and a signal can carry a part to jump to. The performer types (or speaks) short instructions between and during parts. Parts, in song order: ${list}. Each message begins with a [stage] line: where the playhead is and what it waits for.
 
-Stage state: ${state || 'unknown'}
-
-Rules:
-- An instruction that means a part → go_to_part with that part's exact name. Read intent, not letters: "the quiet bit" is the breakdown-like part, "the big one" the finale-like part, "back to the top" the first part, "where we started" the first part, "the singing part" a verse or chorus.
-- "next", "go", "move on", "keep going" → send_signal("go").
-- "again", "once more", "stay here", "hold it" → do nothing; say the part keeps looping.
-- If nothing fits, name the parts in one line and ask which — that is the only question you may ask.
-- Never claim a jump happened unless the tool said so; the tool's reply names when the jump lands (the next bar line).`;
+- **Seconds, not minutes.** No questions unless two readings are truly different; no plans, no summaries. Answer in ONE short line after acting: what changed and when it is heard ("next round" for the part that is looping).
+- **One edit, one compile.** Use the project kit's palette and recipes: grep for the part or builder name, one edit_song (or run_script), compile. Never read the whole song first.
+- **Never design a new instrument on stage** (design_instrument takes minutes); every voice needed already exists — wire, layer, or swap what is there.
+- **Moving between parts is a signal, not an edit**: go_to_part / send_signal. Exact part names never reach you — the panel dispatches them itself — so a part mentioned in an instruction is where the change goes, not where to jump, unless the instruction says to go there.
+- **Recording**: arm ONE part with startRecording()/stopRecording() (see the kit), compile, say "armed"; after the take, move the inserted block into its part and remove the markers.
+- Keep the captions, the part markers and their waits, the BPM and the shader as they are unless asked.`;
 }
 
 export const SYSTEM_PROMPT = buildSystemPrompt();

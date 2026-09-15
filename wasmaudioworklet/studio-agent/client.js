@@ -16,7 +16,7 @@ import {
   playFromHereLine, SPECIALISTS, noteStatesAtTime, fakeNoteStates, parseRenderTimes,
   partsFromEvents, partAt, matchPerformanceCommand, formatPerformanceState,
 } from './tools-core.js';
-import { buildPerformancePrompt } from './prompt.js';
+import { buildPerformanceSection } from './prompt.js';
 import { runAgentScript, formatScriptResult } from './script-sandbox.js';
 import { probeNote, probeNotes, formatProbeReport } from '../audioprobe/instrumentprobe.js';
 import { measureMix } from '../audioprobe/mixprobe.js';
@@ -57,19 +57,99 @@ let sessionSummary = null;
 // repo so it survives a reload (and travels with the project). The full
 // conversation is kept as project history — it is replay/reference only, so
 // its size costs repo bytes, not model context. No-op when not in ?gitrepo= mode.
+// ---- sessions ----
+// The ACTIVE conversation lives in the root file (SESSION_FILE) — that is what
+// the app has always read — and every earlier one is archived in sessions/
+// as <started-date>-<label>.json, committed with the project like the rest of
+// its history. /new archives and starts fresh, /sessions lists, /resume <name>
+// swaps one back in. Performance mode switches sessions by itself (below):
+// resuming a 200k-token composition session on stage cost 110 s per edit, a
+// fresh one with the kit 14 s.
+const SESSIONS_DIR = 'sessions/';
+let sessionLabel = null;    // 'composition' (default), 'performance', or what /new was given
+let sessionStarted = null;  // ISO date of the session's first message
+let sessionChain = Promise.resolve();   // session switches run one at a time
+
+const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'session';
+const sessionFileName = (label, started) => `${SESSIONS_DIR}${String(started || new Date().toISOString()).slice(0, 10)}-${slug(label)}.json`;
+const sessionRecord = () => ({ sessionId, summary: sessionSummary, conversation, label: sessionLabel || 'composition', started: sessionStarted });
+
 async function saveSession() {
-  try { await writefileandstage(SESSION_FILE, JSON.stringify({ sessionId, summary: sessionSummary, conversation }, null, 1)); }
+  if (!sessionStarted && conversation.length) sessionStarted = new Date().toISOString();
+  try { await writefileandstage(SESSION_FILE, JSON.stringify(sessionRecord(), null, 1)); }
   catch (e) { /* no OPFS repo — in-memory only */ }
 }
+function applySessionData(data) {
+  sessionId = data.sessionId || null;
+  sessionSummary = data.summary || null;
+  conversation = Array.isArray(data.conversation) ? data.conversation : [];
+  sessionLabel = data.label || 'composition';
+  sessionStarted = data.started || null;
+  nearaiMessages = null;   // a different conversation: fresh model context, seeded from its summary
+}
+function renderSession() {
+  const log = el('studioagentlog');
+  if (log) log.innerHTML = '';
+  for (const m of conversation) addLine(m.role === 'user' ? 'user' : 'agent', m.text);
+  if (conversation.length) addLine('tool', `— resumed ${conversation.length} messages (${sessionLabel}) —`);
+}
 async function loadSession() {
-  try {
-    const data = JSON.parse(await readfile(SESSION_FILE));
-    sessionId = data.sessionId || null;
-    sessionSummary = data.summary || null;
-    conversation = Array.isArray(data.conversation) ? data.conversation : [];
-    for (const m of conversation) addLine(m.role === 'user' ? 'user' : 'agent', m.text);
-    if (conversation.length) { addLine('tool', `— resumed ${conversation.length} messages —`); }
-  } catch (e) { /* no saved session yet */ }
+  try { applySessionData(JSON.parse(await readfile(SESSION_FILE))); renderSession(); }
+  catch (e) { /* no saved session yet */ }
+}
+/** Archive the active conversation into sessions/ (if it has any messages). Returns the file name or null. */
+async function archiveSession() {
+  if (!conversation.length) return null;
+  const name = sessionFileName(sessionLabel || 'composition', sessionStarted);
+  try { await writefileandstage(name, JSON.stringify(sessionRecord(), null, 1)); } catch (e) { return null; }
+  return name;
+}
+async function startNewSession(label) {
+  const archived = await archiveSession();
+  applySessionData({ label: label || 'composition' });
+  renderSession();
+  await saveSession();
+  addLine('tool', archived ? `— archived ${archived}; new session "${sessionLabel}" —` : `— new session "${sessionLabel}" —`);
+  return archived;
+}
+async function listSessions() {
+  let files = [];
+  try { files = (await listfiles(SESSIONS_DIR)).filter((n) => n.endsWith('.json')); } catch (e) { return []; }
+  const out = [];
+  for (const file of files.sort()) {
+    const name = file.replace(/^sessions\//, '').replace(/\.json$/, '');
+    try {
+      const d = JSON.parse(await readfile(file.startsWith(SESSIONS_DIR) ? file : SESSIONS_DIR + file));
+      out.push({ name, label: d.label || 'composition', started: d.started || null, messages: Array.isArray(d.conversation) ? d.conversation.length : 0 });
+    } catch (e) { out.push({ name, label: '?', started: null, messages: 0 }); }
+  }
+  return out;
+}
+/** Swap an archived session in (the active one is archived first). `name` is the file name without sessions/ and .json. */
+async function resumeSession(name) {
+  let data;
+  try { data = JSON.parse(await readfile(SESSIONS_DIR + name + '.json')); }
+  catch (e) { addLine('error', `no archived session "${name}" — /sessions lists them`); return false; }
+  await archiveSession();
+  applySessionData(data);
+  renderSession();
+  await saveSession();
+  addLine('tool', `— resumed session "${name}" (${conversation.length} messages) —`);
+  return true;
+}
+async function handleSessionCommand(text) {
+  const [cmd, ...rest] = text.trim().split(/\s+/);
+  const arg = rest.join(' ');
+  if (cmd === '/new') { await startNewSession(arg || 'composition'); return; }
+  if (cmd === '/sessions') {
+    const list = await listSessions();
+    addLine('tool', list.length
+      ? ['— archived sessions (/resume <name>) —', ...list.map((x) => `${x.name}: ${x.messages} messages, ${x.label}${x.started ? ', started ' + x.started.slice(0, 10) : ''}`),
+         `active: "${sessionLabel || 'composition'}", ${conversation.length} messages`].join('\n')
+      : `— no archived sessions; active: "${sessionLabel || 'composition'}", ${conversation.length} messages. /new [label] archives it and starts fresh —`);
+    return;
+  }
+  if (cmd === '/resume') { if (!arg) { addLine('error', 'usage: /resume <name> (see /sessions)'); return; } await resumeSession(arg); return; }
 }
 
 // Editor wrappers around the pure logic in tools-core.js.
@@ -126,11 +206,29 @@ window.addEventListener('wasmmusic-signal', (e) => {
   if (d.resumed !== undefined || d.jumping) stageWaiting = d.jumping ? stageWaiting : null;
   if (performanceMode) setStatus(`performance — ${stageState()}`);
 });
+let sessionBeforePerformance = null;   // the archived composition session to return to
 function setPerformanceUi(on) {
   performanceMode = !!on;
   const input = el('studioagentinput');
   if (input) input.placeholder = on ? 'performance: a part name, "next", or an instruction' : 'ask the studio agent…';
   setStatus(on ? `performance — ${stageState()}` : (socket && socket.readyState === WebSocket.OPEN ? 'connected' : 'not connected'));
+  // The stage gets its own session: the composition session is archived (not
+  // lost — it is the song's provenance) and today's performance session is
+  // resumed or started. Off again, the composition session comes back.
+  sessionChain = sessionChain.then(async () => {
+    if (on && sessionLabel !== 'performance') {
+      sessionBeforePerformance = await archiveSession();
+      const today = sessionFileName('performance', new Date().toISOString()).replace(/^sessions\//, '').replace(/\.json$/, '');
+      let resumed = false;
+      try { await readfile(SESSIONS_DIR + today + '.json'); resumed = await resumeSession(today); } catch (e) { /* none today */ }
+      if (!resumed) { applySessionData({ label: 'performance' }); renderSession(); await saveSession(); addLine('tool', `— performance: fresh session${sessionBeforePerformance ? ` (composition archived as ${sessionBeforePerformance})` : ''} —`); }
+    } else if (!on && sessionLabel === 'performance') {
+      await archiveSession();
+      const back = sessionBeforePerformance ? sessionBeforePerformance.replace(/^sessions\//, '').replace(/\.json$/, '') : null;
+      if (!back || !(await resumeSession(back))) { applySessionData({ label: 'composition' }); renderSession(); await saveSession(); }
+      sessionBeforePerformance = null;
+    }
+  }).catch((e) => addLine('error', `session switch failed: ${String(e?.message || e)}`));
 }
 
 const registry = {
@@ -736,6 +834,7 @@ async function sendChat(text) {
   // /nearai provider commands are handled locally and never enter the
   // conversation (the API key must not be persisted into the OPFS repo).
   if (text.startsWith('/nearai')) { handleNearaiCommand(text); return; }
+  if (/^\/(new|sessions|resume)\b/.test(text)) { await handleSessionCommand(text); return; }
 
   // Performance mode: the fast path first. An instruction that names a part
   // (or says "next") is dispatched right here — no model, no round trip —
@@ -785,14 +884,16 @@ async function sendChat(text) {
 }
 
 // A performance-mode instruction. The fast path dispatches part names and
-// "next" itself; anything else is one short model turn in the performance
-// role — its own session on the SDK path, a fresh two-message exchange on
-// the NEAR AI path — with the parts and the stage state in the prompt.
+// "next" itself; anything else is a PRODUCER turn on stage: the same kit and
+// tools plus the signal tools, the stage section in the prompt, low effort,
+// and the performance session the checkbox switched to. The stage state
+// (where the playhead is) rides with every message.
 async function sendPerformance(text) {
   if (turnRunning) { addLine('tool', '— a turn is still running. Press Escape (or Stop) to end it, then send again —'); return false; }
+  await sessionChain;   // a session switch may still be in flight right after the checkbox
   const parts = stageParts();
   addLine('user', text);
-  conversation.push({ role: 'user', text, performance: true });
+  conversation.push({ role: 'user', text, stage: true });
   const t0 = performance.now();
   const hit = matchPerformanceCommand(text, parts);
   if (hit) {
@@ -807,48 +908,13 @@ async function sendPerformance(text) {
   const state = stageState();
   if (nearaiConfig()) {
     startAgentMessage(); setBusy(true); startActivity();
-    runNearaiPerformanceTurn(text, parts, state);
+    runNearaiTurn(text, { parts, state });
     return;
   }
   if (!socket || socket.readyState !== WebSocket.OPEN) { setStatus('not connected'); return false; }
   startAgentMessage(); setBusy(true); startActivity();
-  socket.send(JSON.stringify({ t: 'chat', mode: 'performance', text, parts: parts.map((p) => ({ name: p.name })), state }));
-}
-
-// NEAR AI on stage: the stage-hand prompt, the three tools, no history — a
-// performance turn is one instruction, and the prompt already holds the state.
-async function runNearaiPerformanceTurn(text, parts, state) {
-  const cfg = nearaiConfig();
-  nearaiAbort = new AbortController();
-  const messages = [
-    { role: 'system', content: buildPerformancePrompt({ parts, state }) + SERVERLESS_PROMPT_SUFFIX },
-    { role: 'user', content: text },
-  ];
-  setPhase(`${cfg.model.split('/').pop()} thinking…`);
-  const t0 = performance.now();
-  try {
-    const { usage } = await runAgentTurn({
-      fetchFn: nearaiFetch(), baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.model,
-      tools: toOpenAiTools(toolDefsForRole('performance')),
-      messages,
-      runTool: (name, args) => Promise.resolve(registry[name] ? registry[name](args || {}) : { __error: `unknown tool ${name}` })
-        .then((r) => (r && r.__error ? `ERROR: ${r.__error}` : r)),
-      onText: (t) => { appendAgentText(t); setPhase('responding…'); },
-      onToolCall: (name, args) => { addLine('tool', `⚙ ${name} ${JSON.stringify(args || {})}`); },
-      maxIterations: 4,
-    });
-    const agentText = agentMsgEl ? agentMsgEl.textContent : '';
-    if (agentText) { conversation.push({ role: 'agent', text: agentText }); saveSession(); }
-    finishAgentMessage();
-    stopActivity(`done ✓ ${((performance.now() - t0) / 1000).toFixed(1)}s (${usage?.total_tokens ?? '?'} tokens)`);
-  } catch (e) {
-    finishAgentMessage();
-    addLine('error', `✗ ${String(e?.message || e)}`);
-    stopActivity('error');
-  } finally {
-    nearaiAbort = null;
-    setBusy(false);
-  }
+  const kit = (await loadKit()).text;
+  socket.send(JSON.stringify({ t: 'chat', mode: 'performance', text, sessionId, summary: sessionSummary, kit, parts: parts.map((p) => ({ name: p.name })), state }));
 }
 
 // ---- NEAR AI serverless provider (no local studio-agent process) ------------
@@ -1115,16 +1181,16 @@ function nearaiFetch() {
   };
 }
 
-async function runNearaiTurn(text) {
+async function runNearaiTurn(text, stage = null) {
   const cfg = nearaiConfig();
   nearaiAbort = new AbortController();
-  let content = text;
+  let content = stage ? `[stage] ${stage.state}\n\n${text}` : text;
   if (!nearaiMessages) {
     // The app owns the system prompt on BOTH paths now: the proxy forwards
     // whatever it is sent (bounded, and still gated by the x402 pass) and only
     // falls back to its own copy when a client sends none. So a prompt fix
     // ships with the app instead of waiting on a Pages redeploy.
-    nearaiMessages = [{ role: 'system', content: buildProducerPrompt() + SERVERLESS_PROMPT_SUFFIX }];
+    nearaiMessages = [{ role: 'system', content: buildProducerPrompt() + (stage ? buildPerformanceSection({ parts: stage.parts }) : '') + SERVERLESS_PROMPT_SUFFIX }];
     // ...and that includes a system message carrying the project kit, so the
     // kit rides in as part of the FIRST user turn instead. That is its honest
     // authority level anyway (repo content is the user talking), and merging
@@ -1166,7 +1232,7 @@ async function runNearaiTurn(text) {
       // The producer's tool set: everything but the .dsp writers, plus
       // design_instrument. The list goes out on every path — the proxy forwards
       // it (bounded) rather than injecting its own.
-      tools: toOpenAiTools(toolDefsForRole('producer')),
+      tools: toOpenAiTools(toolDefsForRole(stage ? 'performance' : 'producer')),
       messages: nearaiMessages,
       runTool: (name, args) => new Promise((resolve, reject) => {
         // reuse the same serialization as WS tool calls; once the tool is

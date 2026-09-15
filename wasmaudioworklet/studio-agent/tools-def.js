@@ -113,9 +113,11 @@ export const sdkToolNames = () =>
 // list is hand-maintained per provider: both paths derive theirs from here.
 export const ROLES = {
     producer: { exclude: ['write_faust', 'edit_faust', 'auto_master', 'list_parts', 'go_to_part', 'send_signal'] },
-    // The PERFORMANCE role: on stage, no editing at all — the parts and the
-    // signals are the whole instrument (docs/plans/performance-mode.md).
-    performance: { include: ['list_parts', 'go_to_part', 'send_signal'] },
+    // The PERFORMANCE role: the producer on stage — everything the producer
+    // has (composing continues during a performance: takes, layers, drums)
+    // plus the three stage tools. What makes it fast is not fewer tools but
+    // a fresh session, the project's kit and low effort (docs/plans/performance-mode.md).
+    performance: { exclude: ['write_faust', 'edit_faust', 'auto_master'] },
     instrument: { include: ['read_faust', 'list_faust', 'write_faust', 'edit_faust', 'get_synth', 'grep_synth', 'edit_synth', 'compile', 'probe_instrument', 'read_repo_file'] },
     // The MASTERING specialist: the master insert in synth.ts, the mix-level
     // control changes in the song, compile, and the whole-mix measurement.

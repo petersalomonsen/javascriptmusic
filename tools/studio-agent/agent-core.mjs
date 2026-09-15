@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { readFile } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
-import { SDK_PROMPT_SUFFIX, buildProducerPrompt, buildSpecialistPrompt, buildPerformancePrompt } from './prompt.mjs';
+import { SDK_PROMPT_SUFFIX, buildProducerPrompt, buildSpecialistPrompt, buildPerformanceSection } from './prompt.mjs';
 import { toolDefsForRole, toolNamesForRole } from '../../wasmaudioworklet/studio-agent/tools-def.js';
 import { SPECIALISTS } from '../../wasmaudioworklet/studio-agent/tools-core.js';
 
@@ -36,8 +36,9 @@ export const ALLOWED_BY_ROLE = {
   producer: new Set([...mcpNames('producer'), 'Read', 'Glob', 'Grep']),
   instrument: new Set([...mcpNames('instrument'), 'Read', 'Glob', 'Grep']),
   mastering: new Set([...mcpNames('mastering'), 'Read', 'Glob', 'Grep']),
-  // On stage: the three signal tools and nothing else — no files, no editing.
-  performance: new Set(mcpNames('performance')),
+  // On stage: the producer's tools plus the signal tools (a fresh session and
+  // low effort are what make it fast, not a smaller tool set).
+  performance: new Set([...mcpNames('performance'), 'Read', 'Glob', 'Grep']),
 };
 // Built-in tools that cause the agent to thrash on this task — keep it focused.
 export const DISALLOWED = ['Bash', 'BashOutput', 'KillShell', 'Agent', 'Task', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebSearch', 'WebFetch', 'AskUserQuestion'];
@@ -283,46 +284,30 @@ export const designInstrument = (backend, args, hooks, config) => runSpecialist(
 // ---- One producer turn ------------------------------------------------------
 // Returns the SDK's message stream for the caller to consume (the server
 // forwards it to the browser and logs it; the bench records it).
-// A performance turn: its own (small) session, the stage-hand prompt with
-// the part list and state baked in, the three signal tools, few turns.
-// `config.performanceModel` may pick a faster model than the producer's.
-export function performanceQuery({ prompt, sessionId = null, parts = [], state = '', abortController, backend, hooks = {}, config = {}, maxTurns = 4 }) {
-  const h = withDefaults(hooks);
-  const studio = makeStudioServer(backend, 'performance', h, config);
-  return query({
-    prompt,
-    options: {
-      abortController,
-      resume: sessionId || undefined,
-      model: config.performanceModel || config.model,
-      effort: 'low',
-      cwd: config.cwd,
-      systemPrompt: buildPerformancePrompt({ parts, state }) + SDK_PROMPT_SUFFIX,
-      mcpServers: { studio },
-      allowedTools: [...ALLOWED_BY_ROLE.performance],
-      disallowedTools: [...DISALLOWED, 'Read', 'Glob', 'Grep'],
-      canUseTool: canUse(ALLOWED_BY_ROLE.performance, h.dlog),
-      maxTurns,
-    },
-  });
+/** The producer's system prompt on stage: the producer prompt + kit + the stage section. */
+export function performanceSystemPrompt(kit, parts = []) {
+  return producerSystemPrompt(kit) + buildPerformanceSection({ parts });
 }
 
-export function producerQuery({ prompt, sessionId = null, systemPrompt, abortController, backend, hooks = {}, config = {}, maxTurns = 60 }) {
+// `role` is 'producer' or 'performance' (the producer on stage: same tools
+// plus the signal tools, its own session, low effort — see server.mjs).
+export function producerQuery({ prompt, sessionId = null, systemPrompt, abortController, backend, hooks = {}, config = {}, maxTurns = 60, role = 'producer' }) {
   const h = withDefaults(hooks);
-  const studio = makeStudioServer(backend, 'producer', h, config);
+  const studio = makeStudioServer(backend, role, h, config);
+  const allowed = ALLOWED_BY_ROLE[role];
   return query({
     prompt,
     options: {
       abortController,
       resume: sessionId || undefined,
-      model: config.model,
-      effort: config.effort,
+      model: role === 'performance' ? (config.performanceModel || config.model) : config.model,
+      effort: role === 'performance' ? (config.performanceEffort || 'low') : config.effort,
       cwd: config.cwd,
       systemPrompt: systemPrompt ?? producerSystemPrompt(''),
       mcpServers: { studio },
-      allowedTools: [...ALLOWED_BY_ROLE.producer],
+      allowedTools: [...allowed],
       disallowedTools: DISALLOWED,
-      canUseTool: canUse(ALLOWED_BY_ROLE.producer, h.dlog),
+      canUseTool: canUse(allowed, h.dlog),
       maxTurns,
     },
   });
