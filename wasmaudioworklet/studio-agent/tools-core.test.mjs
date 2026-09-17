@@ -720,3 +720,59 @@ test('parseRenderTimes: comma/space separated, deduplicated, capped, defaulted',
   assert.throws(() => parseRenderTimes('abc'), /not a song time/);
   assert.throws(() => parseRenderTimes('-1'), /not a song time/);
 });
+
+// ---- performance mode: parts, the fast path, the state line ----
+import { partsFromEvents, partAt, matchPerformanceCommand, formatPerformanceState } from './tools-core.js';
+
+const stageEvents = [
+  { time: 0, message: [-7], name: 'intro', barMs: 2000 }, { time: 0, message: [0x90, 60, 100] },
+  { time: 8000, message: [-6], name: 'go', loop: 'part' },
+  { time: 8000, message: [-7], name: 'verse', barMs: 2000 },
+  { time: 16000, message: [-6], name: 'go', loop: 'hold' },
+  { time: 16000, message: [-7], name: 'chorus', barMs: 2000 },
+  { time: 24000, message: [-7], name: 'quiet breakdown', barMs: 2000 },
+  { time: 32000, message: [-7], name: 'finale', barMs: 2000 },
+];
+const PARTS = partsFromEvents(stageEvents);
+
+test('partsFromEvents: markers in order with the waits that close them; partAt finds the current one', () => {
+  assert.deepEqual(PARTS.map((p) => p.name), ['intro', 'verse', 'chorus', 'quiet breakdown', 'finale']);
+  assert.deepEqual(PARTS[0].waits, [{ name: 'go', time: 8000, loop: 'part' }]);
+  assert.deepEqual(PARTS[1].waits, [{ name: 'go', time: 16000, loop: 'hold' }]);
+  assert.equal(partAt(PARTS, 9000).name, 'verse');
+  assert.equal(partAt(PARTS, 0).name, 'intro');
+  assert.equal(partAt([], 5), null);
+  assert.deepEqual(partsFromEvents(null), []);
+});
+
+test('matchPerformanceCommand: part names and "next" are dispatched without a model; the rest is not', () => {
+  const m = (t) => matchPerformanceCommand(t, PARTS);
+  assert.deepEqual(m('chorus'), { goTo: 'chorus' });
+  assert.deepEqual(m('Chorus!'), { goTo: 'chorus' });
+  assert.deepEqual(m('go to the chorus'), { goTo: 'chorus' });
+  assert.deepEqual(m('jump to verse now'), { goTo: 'verse' });
+  assert.deepEqual(m('play the finale'), { goTo: 'finale' });
+  assert.deepEqual(m('quiet breakdown'), { goTo: 'quiet breakdown' });
+  assert.deepEqual(m('breakdown'), { goTo: 'quiet breakdown' }, 'a word of a multi-word name');
+  assert.deepEqual(m('quiet'), { goTo: 'quiet breakdown' });
+  assert.equal(m('make the quiet part louder'), null, 'mentioning a part is not naming it');
+  assert.deepEqual(m('fin'), { goTo: 'finale' }, 'a unique prefix');
+  assert.deepEqual(m('next'), { signal: 'go' });
+  assert.deepEqual(m('move on'), { signal: 'go' });
+  assert.deepEqual(m('go'), { signal: 'go' });
+  assert.equal(m('take it to the quiet bit'), null, 'intent, not a name: the model reads it');
+  assert.equal(m('make it louder'), null);
+  assert.equal(m(''), null);
+  // ambiguity never dispatches: two parts share the prefix "c"? no — but "e" would match none uniquely
+  const two = partsFromEvents([{ time: 0, message: [-7], name: 'verse 1' }, { time: 1, message: [-7], name: 'verse 2' }]);
+  assert.equal(matchPerformanceCommand('verse', two), null, 'ambiguous word: ask the model');
+  assert.deepEqual(matchPerformanceCommand('verse 2', two), { goTo: 'verse 2' });
+});
+
+test('formatPerformanceState: one line the prompt and list_parts share', () => {
+  assert.match(formatPerformanceState([], {}), /no parts/);
+  assert.match(formatPerformanceState(PARTS, { playing: false }), /Not playing yet/);
+  const s = formatPerformanceState(PARTS, { playing: true, timeMs: 9000, waiting: { name: 'go', loop: 'part' } });
+  assert.equal(s, 'parts in order: intro, verse, chorus, quiet breakdown, finale. Now in "verse", looping until signal "go".');
+  assert.match(formatPerformanceState(PARTS, { playing: true, timeMs: 17000, waiting: null }), /in "chorus", playing on/);
+});

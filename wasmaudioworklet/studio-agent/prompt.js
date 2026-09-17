@@ -410,4 +410,27 @@ export function buildSpecialistPrompt(role, { kind = '', guide = null } = {}) {
 
 export { INSTRUMENT_GUIDES, MASTERING_GUIDE, guideFor };
 
+// ---- the PERFORMANCE section ----
+// On stage the producer keeps all its tools (composing goes on: takes, layers,
+// drums) plus the signal tools, in a FRESH session with the project's kit and
+// low effort — that is what makes it fast (measured: 14 s per edit vs 110 s in
+// a resumed 200k-token composition session). This section rides on the
+// producer prompt; the panel dispatches exact part names itself, and every
+// stage message starts with a [stage] line saying where the playhead is.
+export function buildPerformanceSection({ parts = [] } = {}) {
+  const names = parts.map((p) => (typeof p === 'string' ? p : p.name));
+  const list = names.length ? names.join(', ') : '(no parts — the song has no definePartStart() markers)';
+  return `
+
+## On stage (performance mode)
+The song is PLAYING in performance mode: it loops the current part until a signal, and a signal can carry a part to jump to. The performer types (or speaks) short instructions between and during parts. Parts, in song order: ${list}. Each message begins with a [stage] line: where the playhead is and what it waits for.
+
+- **Seconds, not minutes.** No questions unless two readings are truly different; no plans, no summaries. Answer in ONE short line after acting: what changed and when it is heard ("next round" for the part that is looping).
+- **One edit, one compile.** Use the project kit's palette and recipes: grep for the part or builder name, one edit_song (or run_script), compile. Never read the whole song first.
+- **Never design a new instrument on stage** (design_instrument takes minutes); every voice needed already exists — wire, layer, or swap what is there.
+- **Moving between parts is a signal, not an edit**: go_to_part / send_signal. Exact part names never reach you — the panel dispatches them itself — so a part mentioned in an instruction is where the change goes, not where to jump, unless the instruction says to go there.
+- **Recording**: arm ONE part with startRecording()/stopRecording() (see the kit), compile, say "armed"; after the take, move the inserted block into its part and remove the markers.
+- Keep the captions, the part markers and their waits, the BPM and the shader as they are unless asked.`;
+}
+
 export const SYSTEM_PROMPT = buildSystemPrompt();

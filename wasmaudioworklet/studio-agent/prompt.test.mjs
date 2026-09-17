@@ -140,3 +140,15 @@ test('the producer delegates mastering: it has the tools, not the section', () =
   assert.ok(p.includes('- probe_mix(') && p.includes('- master_mix('));
   assert.ok(/5\. \*\*probe_mix\*\*/.test(p), 'probe_mix has its rung on the assurance ladder');
 });
+
+// ---- the performance section (the producer on stage) ----
+import { buildPerformanceSection } from './prompt.js';
+
+test('buildPerformanceSection: a short section on the producer prompt — the parts in order, the stage rules, the signal tools', () => {
+  const p = buildPerformanceSection({ parts: [{ name: 'intro' }, { name: 'quiet breakdown' }, 'finale'] });
+  assert.ok(p.length < 2500, `stage section must stay small (${p.length} chars)`);
+  assert.match(p, /^\n\n## On stage/);
+  assert.ok(p.includes('Parts, in song order: intro, quiet breakdown, finale.'));
+  for (const t of ['go_to_part', 'send_signal', 'One edit, one compile', 'Never design a new instrument', '[stage] line', 'startRecording()']) assert.ok(p.includes(t), t);
+  assert.match(buildPerformanceSection({}), /no parts/);
+});

@@ -53,6 +53,11 @@ And because the collaboration itself is worth keeping, even the AI conversation
 is saved into the repo — so it travels with the project, and you can pick the
 session back up on reload:
 
+One conversation is active at a time (`studioagent-session.json`); earlier ones are
+archived in `sessions/` and committed with the project. `/new`, `/sessions` and
+`/resume <name>` in the agent panel manage them, and the performance checkbox
+switches to a session of its own for the stage.
+
 ![The AI conversation persisted as JSON inside the repo](conversation-in-repo.png)
 
 And the teaser video for this piece? Made the same way. The visuals are a
