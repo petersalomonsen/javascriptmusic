@@ -31,7 +31,7 @@ const WASM_URL = new URL('./faust_wasm_ffi.wasm', import.meta.url);
 // release a module missing the structured diagnostics-v2 exports this file
 // reads (faust_wasm_text_result_diagnostics_ptr/len) or the `--ec --os`
 // execution options the transpiler depends on.
-const COMPILER_MODULE_VERSION = '0.1.1';
+const COMPILER_MODULE_VERSION = '0.2.0';
 const WASM_CDN_URL = `https://cdn.jsdelivr.net/npm/@psalomo/wasm-music-faust@${COMPILER_MODULE_VERSION}/faust-compiler-module.wasm`;
 
 let modulePromise = null;
