@@ -245,8 +245,11 @@ export async function transpileDspSource(dspSource, dspBaseName, libsByPath = {}
         const hasEffect = /^\s*effect\s*=/m.test(dspSource);
         let effectAsSource = null;
         if (hasEffect) {
+            // Compiled under a distinct source name: faust-rs (through 0.8.0)
+            // names table-generator sub-modules after the source, not `-cn`,
+            // and the voice unit above already owns `<leafStem>SIG<n>`.
             effectAsSource = normalizeASSource(generateAuxFiles(
-                leafStem,
+                `${leafStem}_effect`,
                 dspSource,
                 `-lang asc -cn ${clsName}EffectDsp -pn effect --ec --os ${vsArgs} -o /${leafStem}.effect.out.ts`
             ));

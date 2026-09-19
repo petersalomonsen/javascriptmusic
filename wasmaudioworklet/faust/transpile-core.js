@@ -19,7 +19,7 @@
 // Public API:
 //   toClassName(base)                 — derive a PascalCase class name
 //   extractUIFromJSON(asSource)       — parse getJSON() metadata
-//   splitNativeSource(asSource, cls)  — split preamble / class, strip getJSON
+//   splitNativeSource(asSource, cls)  — split preamble / sub-modules / class, strip getJSON
 //   transpileDsp({ asSource, effectAsSource, clsName, sourceFile, options })
 //   transpileEffect({ asSource, clsName, sourceFile, importDepth })
 //   generateNRPNSetParam(lines, ccParams)
@@ -97,10 +97,15 @@ export function extractUIFromJSON(asSource) {
 
 // The native output is: a preamble of module-level math helpers (_fmodf,
 // _rintf, ... — identical for every DSP compiled by the same module) and
-// soundfile @external declarations, followed by one `export class X { ... }`.
+// soundfile @external declarations, then (since faust-rs 0.7.0, where
+// `--table-init runtime` became the default) the DSP's table-generator
+// sub-modules — a `class <module>SIG<n>` plus new/delete/instanceInit/fill
+// helpers per generated table — followed by one `export class X { ... }`.
 //
-// Returns { preamble, classSource } where classSource is the full class
-// with the (potentially very large) getJSON() method stripped.
+// Returns { preamble, subModules, classSource }: `preamble` is the shared
+// helper block (safe to emit once per file), `subModules` the per-DSP
+// sub-module block (must be emitted for every DSP), and classSource the full
+// class with the (potentially very large) getJSON() method stripped.
 export function splitNativeSource(asSource, dspClassName) {
     const marker = `export class ${dspClassName} {`;
     const classStart = asSource.indexOf(marker);
@@ -139,7 +144,18 @@ export function splitNativeSource(asSource, dspClassName) {
         .replace(/@external\("env",\s*"_soundfile\w+"\)\s*\n\s*declare function _soundfile\w+\([^)]*\)\s*:\s*\w+;\s*/g, '')
         .trim();
 
-    return { preamble, classSource };
+    // Table-generator sub-modules are specific to this DSP, so they must not
+    // take part in the bundle-level helper deduplication: two DSPs (or the
+    // voice and effect of one DSP) with different tables would otherwise
+    // either lose a sub-module or emit the shared helpers twice.
+    let subModules = '';
+    const subModuleStart = preamble.search(/^(?:class \w+SIG\d+\s*\{|function (?:new|delete|instanceInit|fill)\w+SIG\d+\()/m);
+    if (subModuleStart !== -1) {
+        subModules = preamble.slice(subModuleStart).trim();
+        preamble = preamble.slice(0, subModuleStart).trim();
+    }
+
+    return { preamble, subModules, classSource };
 }
 
 // ---------------------------------------------------------------------------
@@ -519,12 +535,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
         uiParams,
         voice: {
             preamble: native.preamble,
+            subModules: native.subModules,
             nativeClass: native.classSource,
             classCode: voiceClass,
             channelClass,
         },
         effect: {
             preamble: effectNative ? effectNative.preamble : '',
+            subModules: effectNative ? effectNative.subModules : '',
             nativeClass: effectNative ? effectNative.classSource : '',
         },
     };
@@ -575,6 +593,14 @@ function pushPreambleOnce(out, seen, preamble) {
     out.push('');
 }
 
+// Table-generator sub-modules are per-DSP (see splitNativeSource): always
+// emitted, right before the class that uses them.
+function pushSubModules(out, subModules) {
+    if (!subModules) return;
+    out.push(subModules);
+    out.push('');
+}
+
 function pushChannelDefaults(out, result, channelIndex) {
     if (result.useNRPN && (result.ccParams || []).length > 0) {
         out.push('');
@@ -595,12 +621,14 @@ function pushChannelDefaults(out, result, channelIndex) {
 
 function pushResultSections(out, result, seenPreambles) {
     pushPreambleOnce(out, seenPreambles, result.voice.preamble);
+    pushSubModules(out, result.voice.subModules);
     out.push(result.voice.nativeClass);
     out.push('');
     out.push(...result.voice.classCode);
     out.push('');
     if (result.hasEffect) {
         pushPreambleOnce(out, seenPreambles, result.effect.preamble);
+        pushSubModules(out, result.effect.subModules);
         out.push(result.effect.nativeClass);
         out.push('');
     }
@@ -749,6 +777,7 @@ export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1
 
     out.push(native.preamble);
     out.push('');
+    pushSubModules(out, native.subModules);
     out.push(native.classSource);
     out.push('');
 
