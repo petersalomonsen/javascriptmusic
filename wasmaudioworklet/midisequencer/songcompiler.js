@@ -50,6 +50,9 @@ let songmessages = [];
 export let instrumentNames = [];
 
 export let recordingStartTimeMillis = 0;
+// Where stopRecording() sits (0 = no stop marker): a note still held there -
+// or held across the loop point of a looping recorded part - ends there.
+export let recordingStopTimeMillis = 0;
 let muted = {};
 let solo = {};
 export let addedAudio = [];
@@ -94,6 +97,7 @@ function startRecording() {
 }
 
 function stopRecording() {
+    recordingStopTimeMillis = currentTime();
     output.sendMessage([SEQ_MSG_STOP_RECORDING]);
 }
 
@@ -324,6 +328,7 @@ export async function compileSong(songsource) {
     songmessages = result.events;
     instrumentNames = result.instrumentNames;
     recordingStartTimeMillis = result.recordingStartTimeMillis;
+    recordingStopTimeMillis = result.recordingStopTimeMillis || 0;
     // The song's setBPM() ran inside the sandbox, against the GUEST's copy of
     // pattern.js. Without this the host stays at the 110 default, and
     // insertMidiRecording — which reads `bpm` from the host module — writes a
@@ -384,6 +389,7 @@ export async function generateSong(songfunc) {
     songParts = {};
     currentPartStart = 0;
     beatsPerBar = 4;
+    recordingStopTimeMillis = 0;
 
     resetTick();
 

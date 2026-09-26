@@ -12,6 +12,25 @@ const recorded = [
   ];
 
 describe('recording', function() {    
+    it("keeps a chord held across the loop point: it ends at stopRecording", () => {
+        // 120 BPM, a 16-beat looping part recorded from 0 to its stop at 8 s.
+        // Am pressed at beat 8 (4 s), released 0.5 s into the NEXT pass - the
+        // recorder files that note-off at 0.5 s, before its own note-on.
+        const byPosition = [[0.25, 0x97, 62, 90], [0.5, 0x87, 69, 0], [3.0, 0x87, 62, 0],
+            [4.0, 0x97, 69, 85], [4.0, 0x97, 72, 80], [5.0, 0x87, 72, 0]];
+        const notes = new RecordConverter(byPosition, 120, 0, 8).notesByBeat;
+        const am = notes.find((n) => n[1] === 69);
+        assert.ok(am, 'the held A is kept');
+        assert.equal(am[3], 8);            // starts at beat 8
+        assert.equal(am[4], 8);            // held to the stop at beat 16
+        assert.equal(notes.length, 3);
+    });
+    it("ends a note still held when recording stops at the stop position", () => {
+        const notes = new RecordConverter([[1.0, 0x90, 60, 100]], 60, 0, 3).notesByBeat;
+        assert.deepEqual(notes.map((n) => [n[1], n[3], n[4]]), [[60, 1, 2]]);
+        // without a stop position the old behaviour stands
+        assert.equal(new RecordConverter([[1.0, 0x90, 60, 100]], 60).notesByBeat.length, 0);
+    });
     it("should convert eventlist to list of notes with durations", () => {
         const converted = new RecordConverter(recorded, 80).notesByBeat;        
         const expected = [[ 0, 62, 100, 0.4953590325018897, 0.1934996220710507 ],
