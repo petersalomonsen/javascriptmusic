@@ -25,6 +25,11 @@ You can't see the canvas or hear the audio, so lean on the headless checks:
   that transpiles, registers and compiles perfectly and makes **no sound**
   (usually a missing `gate`). It also answers whether notes map to different
   drums: same spectrum for every note means there is no mapping.
+  To compare two instruments — a port against its original, a redesign against
+  the previous version — use `tools/instrumenttest/compare.mjs a.dsp b.ts:5`:
+  level, pitch (YIN), centroid and decay per note, averaged over many hits
+  through one instance. A single hit of a noise-excited instrument can mislead
+  by 3×; for a sample-exact check drive both with the same deterministic exciter.
 - **Visualizer shaders**: compile + render frames headlessly with
   `tools/shadertest/render.mjs` — see
   [docs/shaders.md](wasmaudioworklet/docs/shaders.md). Always compile-check after
