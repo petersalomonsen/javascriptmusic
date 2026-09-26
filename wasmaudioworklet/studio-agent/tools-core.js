@@ -382,9 +382,23 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, ins
     }
   }
 
+  // The parts, each in its own bars: a part carries its tempo and bar length
+  // (setBPM / setBeatsPerBar when it started), so a 3/4 part is counted in
+  // bars of three whatever the song's first tempo says.
+  const markers = partsFromEvents(eventlist);
+  const endMs = (eventlist || []).reduce((m, e) => Math.max(m, e.time || 0), 0);
+  const parts = markers.map((p, i) => {
+    const end = i + 1 < markers.length ? markers[i + 1].time : endMs;
+    const pBeatMs = p.beatMs || msPerBeat;
+    const beats = (end - p.time) / pBeatMs;
+    const perBar = p.barMs ? Math.round(p.barMs / pBeatMs) : beatsPerBar;
+    return { name: p.name, startBeat: toBeat(p.time), beats, beatsPerBar: perBar, bars: beats / perBar, bpm: 60000 / pBeatMs };
+  });
+
   return {
     bpm,
     beatsPerBar,
+    parts,
     lengthBeats,
     lastSoundBeat,
     totalNotes: sounding.reduce((sum, c) => sum + c.notes, 0),
@@ -513,6 +527,10 @@ export function formatSongSummary(s) {
     `song: ${round(s.lengthBeats)} beats (${barsText(s)}) at ${s.bpm} BPM · ` +
       `${s.sounding.length} sounding channel(s) · ${s.totalNotes} notes`
   ];
+  if (s.parts && s.parts.length) {
+    lines.push('parts: ' + s.parts.map((p) =>
+      `${p.name} (${round(p.bars)} bar${round(p.bars) === 1 ? '' : 's'} of ${p.beatsPerBar}/4 at ${round(p.bpm)} BPM, from beat ${round(p.startBeat)})`).join(' · '));
+  }
   if (s.playFromHereLine) {
     lines.push(`playFromHere() at line ${s.playFromHereLine} — the user's audition marker: this digest covers ONLY what follows it. `
       + 'Earlier parts are absent by design, not lost; leave the marker in place.');
@@ -886,7 +904,7 @@ export function partsFromEvents(eventlist) {
   const parts = [];
   for (const evt of eventlist || []) {
     const [status] = evt.message || [];
-    if (status === -7 && evt.name) parts.push({ name: evt.name, time: evt.time, barMs: evt.barMs || 0, waits: [] });
+    if (status === -7 && evt.name) parts.push({ name: evt.name, time: evt.time, barMs: evt.barMs || 0, beatMs: evt.beatMs || 0, waits: [] });
     else if (status === -6 && parts.length) parts[parts.length - 1].waits.push({ name: evt.name || 'go', time: evt.time, loop: evt.loop || 'part' });
   }
   return parts;

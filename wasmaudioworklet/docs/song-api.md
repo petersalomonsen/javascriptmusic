@@ -208,6 +208,28 @@ Sets the tempo of the song in beats per minute.
 setBPM(120);
 ```
 
+### `setBeatsPerBar(beats)`
+Sets how many beats a bar has from here on (4 until a song says otherwise).
+A part takes its bar length from the value when it starts, as it takes the
+tempo from `setBPM`, so a 3/4 part is `setBeatsPerBar(3)` before its
+`definePartStart`. It is what performance mode counts in: `quantize: 'bar'`,
+a jump to the part, `timeout: { bars }`. Beats stay the unit of everything
+else (`steps`, `play`, recordings).
+
+**Parameters:**
+- `beats` (number): a whole number of beats per bar
+
+**Example:**
+```javascript
+setBPM(90);
+setBeatsPerBar(3);             // a waltz: its part leaves on 3-beat bar lines
+definePartStart('waltz');
+await createTrack(0).steps(1, [c5, fs5, fs5].repeat(7));   // 8 bars of 3/4
+await waitForSignal('go');
+setBeatsPerBar(4);
+definePartStart('march');
+```
+
 ### `waitForBeat(beatNo)`
 Waits until the specified beat number is reached.
 
@@ -532,7 +554,7 @@ In performance mode, parks the song here until a signal named `name` (or
 - `loop` (`'part'` | `'hold'`, default `'part'`): loop the current part
   (from its `definePartStart`) while waiting, or freeze the clock.
 - `quantize` (`'bar'` | `'beat'` | `'now'`, default `'bar'`): when the signal
-  arrives, leave on the next bar line (bars are four beats of the current BPM),
+  arrives, leave on the next bar line (the part's bar: `setBeatsPerBar`, 4 by default),
   the next beat, or at once.
 - `default` (`'continue'` | part name, default `'continue'`): what happens
   outside performance mode — play on, or seek to that part.

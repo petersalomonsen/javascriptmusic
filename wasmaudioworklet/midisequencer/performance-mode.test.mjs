@@ -196,3 +196,27 @@ test('a jump reports itself through onJump (the processor silences held notes); 
   d.run(4500);
   assert.equal(inertJumps, 1, 'an inert default-to-part seek is a jump too');
 });
+
+test('setBeatsPerBar: a part takes its bar length from it, as it takes the tempo', async () => {
+  const { compileSongUnsafe } = await import('./songcompiler.js');
+  const events = await compileSongUnsafe(`
+    setBPM(90);
+    setBeatsPerBar(3);
+    definePartStart('waltz');
+    await createTrack(0).steps(1, [c5, c5, c5].repeat(1));
+    await waitForSignal('go');
+    setBeatsPerBar(4);
+    definePartStart('four');
+    await createTrack(0).steps(1, [c5, c5, c5, c5]);
+    await waitForSignal('go');
+  `);
+  const beat = 60000 / 90;
+  const parts = events.filter(e => e.message[0] === SEQ_MSG_PART);
+  const waits = events.filter(e => e.message[0] === SEQ_MSG_WAIT_SIGNAL);
+  assert.deepEqual(parts.map(p => [p.name, Math.round(p.barMs)]), [['waltz', Math.round(3 * beat)], ['four', Math.round(4 * beat)]]);
+  assert.deepEqual(waits.map(w => Math.round(w.barMs)), [Math.round(3 * beat), Math.round(4 * beat)]);
+  // every compile starts at 4 again
+  const again = await compileSongUnsafe(`setBPM(90); definePartStart('x'); await createTrack(0).steps(1, [c5]);`);
+  assert.equal(Math.round(again.find(e => e.message[0] === SEQ_MSG_PART).barMs), Math.round(4 * beat));
+  await assert.rejects(compileSongUnsafe(`setBeatsPerBar(2.5);`), /whole number/);
+});
