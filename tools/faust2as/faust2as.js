@@ -910,6 +910,11 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     let inLoop = false;
     let loopBraceDepth = 0;
     let afterOutputAssignment = false;
+    // A stereo voice writes output0 and output1; code between them (temporaries
+    // output1 uses) is loop body, and only what follows the LAST output is the
+    // delay-line shifting.
+    const voiceNumOutputs = computeLines.filter(l => l.trim().startsWith('FAUSTFLOAT* output')).length;
+    const lastOutputRe = voiceNumOutputs >= 2 ? /output1\[/ : /output0\[/;
 
     for (let i = 0; i < computeLines.length; i++) {
         const line = computeLines[i];
@@ -940,7 +945,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
             if (trimmed.match(/^for\s*\(\s*[ij]\d+\s*=\s*0/)) continue;
 
             if (trimmed.match(/output[01]\[/)) {
-                afterOutputAssignment = true;
+                if (lastOutputRe.test(trimmed)) afterOutputAssignment = true;
                 // output0 is the voice (left); output1, if present, its right channel
                 loopBodyLines.push(trimmed);
                 continue;
@@ -960,6 +965,11 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     const freqParam = uiParams.find(p => p.name === 'freq');
     const gateParam = uiParams.find(p => p.isButton && p.name === 'gate');
     const gainParam = uiParams.find(p => p.name === 'gain');
+    // Pre-roll: `declare preroll "<seconds>";` plus a `button("preroll")` — see
+    // wasmaudioworklet/faust/transpile-core.js (the app's transpiler) for the contract.
+    const prerollParam = uiParams.find(p => p.isButton && p.name === 'preroll');
+    const prerollMeta = cSource.match(/declare\(m->metaInterface,\s*"preroll",\s*"([^"]*)"\)/);
+    const prerollSeconds = prerollParam && prerollMeta ? Number(prerollMeta[1]) || 0 : 0;
 
     // All other non-button UI params become global variables shared across voices
     const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
@@ -1109,6 +1119,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     }
 
     voiceClass.push(`    private silentSamples: i32 = 0;`);
+    if (prerollSeconds > 0) voiceClass.push('    private prerolling: bool = false;');
     voiceClass.push(`    private releaseSamples: i32 = 0;`);
     voiceClass.push('');
 
@@ -1149,6 +1160,13 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     }
     if (gainParam) {
         voiceClass.push(`        this.${gainParam.field} = <f32>velocity / 127.0;`);
+    }
+    if (prerollSeconds > 0) {
+        voiceClass.push(`        this.${prerollParam.field} = 1.0;`);
+        voiceClass.push('        this.prerolling = true;');
+        voiceClass.push(`        for (let i = 0, n = <i32>(<f32>${prerollSeconds} * SAMPLERATE); i < n; i++) this.nextframe();`);
+        voiceClass.push('        this.prerolling = false;');
+        voiceClass.push(`        this.${prerollParam.field} = 0.0;`);
     }
     if (gateParam) {
         // Force gate 0→1 transition so Faust envelope edge detection retriggers.
@@ -1234,6 +1252,7 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     voiceClass.push('');
     // A stereo voice (two outputs) goes out as left/right at the level a mono
     // voice gets on each side (0.25), so `process = x <: _,_;` sounds as before.
+    if (prerollSeconds > 0) voiceClass.push('        if (this.prerolling) return;');
     voiceClass.push(stereoVoice
         ? '        this.channel.signal.add(output * 0.25, output1 * 0.25);'
         : '        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');

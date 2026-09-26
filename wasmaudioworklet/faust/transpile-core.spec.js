@@ -34,8 +34,8 @@ function fill${module}SIG0(dsp: ${cls}, count: i32, table: StaticArray<f32>): vo
 
 // A native-looking `-lang asc --ec --os` output: header comments, helpers,
 // optional table sub-modules, then the class with its getJSON().
-function nativeSource({ module, cls, withTable, inputs, outputs, ui }) {
-    const json = JSON.stringify({ name: module, inputs, outputs, ui });
+function nativeSource({ module, cls, withTable, inputs, outputs, ui, meta }) {
+    const json = JSON.stringify({ name: module, inputs, outputs, ...(meta ? { meta } : {}), ui });
     const escaped = json.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     return `// Code generated with faust-rs 0.8.0 (https://faust.grame.fr)
 // name: ${module}
@@ -133,6 +133,25 @@ describe('transpile-core: native output split', () => {
         const mono = voice(1);
         assert.include(mono, 'this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
         assert.notInclude(mono, 'output1');
+    });
+
+    it('pre-rolls a voice that declares it, with the preroll button held', () => {
+        const ui = [{ type: 'vgroup', label: 'x', items: [...voiceUI[0].items, { type: 'button', label: 'preroll', varname: 'fButtonP', address: '/x/preroll' }] }];
+        const voice = (meta) => assembleSingleFile(transpileDsp({
+            asSource: nativeSource({ module: 'foo', cls: 'FooDsp', withTable: false, inputs: 0, outputs: 2, ui, meta }),
+            clsName: 'Foo',
+            sourceFile: 'foo.dsp',
+        })).join('\n');
+        const ts = voice([{ preroll: '0.02' }]);
+        const on = ts.slice(ts.indexOf('noteon('), ts.indexOf('noteoff('));
+        assert.include(on, 'this.dsp.fButtonP = 1.0;');
+        assert.include(on, 'for (let i = 0, n = <i32>(<f32>0.02 * SAMPLERATE); i < n; i++) this.dsp.frame(this.fin, this.fout);');
+        // released before the gate opens
+        assert.isBelow(on.indexOf('this.dsp.fButtonP = 0.0;'), on.indexOf('this.dsp.fgate = 1.0;'));
+        // the button is not a channel parameter
+        assert.notInclude(ts, 'typedChannel.preroll');
+        // no declaration, no pre-roll
+        assert.notInclude(voice(undefined), 'fButtonP = 1.0');
     });
 
     it('carries the sub-modules of a standalone stereo effect', () => {

@@ -73,6 +73,23 @@ import { SAMPLERATE } from '../environment';
 
 This is because the web app's AssemblyScript code editor compiles code from the `mixes/` directory context. The generated files can be pasted directly into the editor.
 
+## Pre-roll (an exciter that must already be running)
+
+Some physical models start a note from an exciter that has been running for a
+while (a piano hammer resonator the string only hears after 20 ms). Declare the
+time and a `preroll` button:
+
+```faust
+declare preroll "0.02";
+preroll = button("preroll");
+```
+
+Each note-on then runs the DSP for that long with `preroll` held at 1 and the
+output discarded, before the gate opens. The DSP decides what the pre-roll
+drives: restart the exciter on `preroll`'s rising edge, and keep it away from
+the string until the gate is open. The gate is left as it was during the
+pre-roll. It costs that many samples of DSP time inside the note-on.
+
 ## MIDI CC Parameter Mapping
 
 Tweakable UI parameters (everything except `freq`/`gain`/`gate`) are emitted as module-level global variables prefixed with the DSP name (e.g. `dx7_fHslider0`). These are mapped to MIDI CC numbers sequentially from CC 0, skipping reserved CCs (7=volume, 10=pan, 64=sustain, 91=reverb, 120-127=channel mode).
