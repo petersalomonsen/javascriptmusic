@@ -120,6 +120,21 @@ describe('transpile-core: native output split', () => {
         assert.strictEqual(count(ts, 'class betaSIG0 {'), 1);
     });
 
+    it('sends a two-output voice to left and right, a one-output voice mono', () => {
+        const voice = (outputs) => assembleSingleFile(transpileDsp({
+            asSource: nativeSource({ module: 'foo', cls: 'FooDsp', withTable: false, inputs: 0, outputs, ui: voiceUI }),
+            clsName: 'Foo',
+            sourceFile: 'foo.dsp',
+        })).join('\n');
+        const stereo = voice(2);
+        assert.include(stereo, 'const output1: f32 = this.fout[1];');
+        assert.include(stereo, 'this.channel.signal.add(output * 0.25, output1 * 0.25);');
+        assert.notInclude(stereo, 'addMonoSignal');
+        const mono = voice(1);
+        assert.include(mono, 'this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
+        assert.notInclude(mono, 'output1');
+    });
+
     it('carries the sub-modules of a standalone stereo effect', () => {
         const lines = transpileEffect({
             asSource: nativeSource({ module: 'verb', cls: 'VerbDsp', withTable: true, inputs: 2, outputs: 2, ui: effectUI }),

@@ -374,8 +374,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
 
     voiceClass.push('    nextframe(): void {');
     voiceClass.push('        this.dsp.frame(this.fin, this.fout);');
+    // A stereo voice (two outputs) goes out as left/right at the level a mono
+    // voice gets on each side (0.25), so `process = x <: _,_;` sounds as before.
+    const stereoVoice = numOutputs >= 2;
     voiceClass.push('        const output: f32 = this.fout[0];');
-    voiceClass.push('        if (Mathf.abs(output) < 0.001) {');
+    if (stereoVoice) voiceClass.push('        const output1: f32 = this.fout[1];');
+    voiceClass.push(stereoVoice
+        ? '        if (Mathf.max(Mathf.abs(output), Mathf.abs(output1)) < 0.001) {'
+        : '        if (Mathf.abs(output) < 0.001) {');
     voiceClass.push('            this.silentSamples++;');
     voiceClass.push('        } else {');
     voiceClass.push('            this.silentSamples = 0;');
@@ -383,7 +389,9 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     if (gateParam) {
         voiceClass.push(`        if (this.dsp.${gateParam.field} == 0.0) this.releaseSamples++;`);
     }
-    voiceClass.push('        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
+    voiceClass.push(stereoVoice
+        ? '        this.channel.signal.add(output * 0.25, output1 * 0.25);'
+        : '        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
     voiceClass.push('    }');
     voiceClass.push('}');
 

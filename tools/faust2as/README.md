@@ -60,7 +60,7 @@ For ready-made inputs see the `examples/` folder (e.g. `examples/dx7/dsp/`) or p
 3. Emits an AssemblyScript `MidiVoice` subclass with `noteon()`, `noteoff()`, `isDone()`, and `nextframe()`
 4. Generates `initializeMidiSynth()` and `postprocess()` exports (required by `midisynth.ts`)
 
-The generated voice maps Faust's `freq`/`gain`/`gate` convention to MIDI note-on/note-off events, and writes stereo output into the channel's signal bus.
+The generated voice maps Faust's `freq`/`gain`/`gate` convention to MIDI note-on/note-off events, and writes its output into the channel's signal bus: one output goes to both sides (0.25 each), two outputs are left and right (0.25 each — so `process = x <: _,_;` sounds exactly like `process = x;`).
 
 ## Import Paths
 
@@ -142,8 +142,9 @@ pressed by playing a note, so a DSP built around one is silent even though it
 transpiles, registers and compiles cleanly. The note *number* reaches the DSP
 only as `freq`.
 
-**A drum kit is several .dsp files, not one.** A voice renders the FIRST output
-only, so `process = (kick, hat);` discards the hi-hat. Write `kick.dsp` and
+**A drum kit is several .dsp files, not one.** A voice's outputs are its left
+and right channels (a third is ignored), so `process = (kick, hat);` puts the
+kick left and the hat right — it does not make a kit. Write `kick.dsp` and
 `hihat.dsp`, register each on its own channel, and sequence one track per
 channel. To keep a kit on a single channel, the voice has to branch on `freq`
 (the only carrier of the note number) — and note that the `c3`=kick /
