@@ -776,3 +776,16 @@ test('formatPerformanceState: one line the prompt and list_parts share', () => {
   assert.equal(s, 'parts in order: intro, verse, chorus, quiet breakdown, finale. Now in "verse", looping until signal "go".');
   assert.match(formatPerformanceState(PARTS, { playing: true, timeMs: 17000, waiting: null }), /in "chorus", playing on/);
 });
+
+test('song summary: each part in its own bars, tempo and meter', () => {
+  const beat = 60000 / 90;
+  const ev = [
+    { time: 0, message: [-7], name: 'click', barMs: 4 * beat, beatMs: beat },
+    { time: 0, message: [0x90, 66, 100] }, { time: 100, message: [0x80, 66, 0] },
+    { time: 16 * beat, message: [-7], name: 'waltz', barMs: 3 * beat, beatMs: beat },
+    { time: 16 * beat, message: [0x90, 60, 100] }, { time: 40 * beat, message: [0x80, 60, 0] },
+  ];
+  const s = summarizeSongEvents(ev, 90);
+  assert.deepEqual(s.parts.map((p) => [p.name, p.beatsPerBar, Math.round(p.bars)]), [['click', 4, 4], ['waltz', 3, 8]]);
+  assert.match(formatSongSummary(s), /parts: click \(4 bars of 4\/4 at 90 BPM, from beat 0\) · waltz \(8 bars of 3\/4 at 90 BPM, from beat 16\)/);
+});

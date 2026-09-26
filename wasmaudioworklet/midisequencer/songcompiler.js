@@ -180,15 +180,19 @@ function broadcastWait(name) {
 // ---- performance mode ----
 // Where the current part started (definePartStart), for waitForSignal's loop.
 let currentPartStart = 0;
+// Beats per bar from here on (setBeatsPerBar), 4 unless a song says otherwise:
+// a part takes its bar length - what quantize 'bar', a jump to it and a
+// timeout count in - from the value when it starts, as it takes the tempo.
+let beatsPerBar = 4;
 const beatMs = () => 60000 / bpm;
-const barMs = () => 4 * beatMs();
+const barMs = () => beatsPerBar * beatMs();
 
 // Mark the start of a named part. Also a sequencer event, so a targeted
 // signal ("go to chorus") can seek to it, quantized to this part's bars.
 function definePartStart(partName) {
     songParts[partName] = { startTime: currentTime() };
     currentPartStart = currentTime();
-    songmessages.push({ time: currentTime(), message: [SEQ_MSG_PART], name: partName, barMs: barMs() });
+    songmessages.push({ time: currentTime(), message: [SEQ_MSG_PART], name: partName, barMs: barMs(), beatMs: beatMs() });
 }
 
 // In PERFORMANCE MODE the song parks here until a signal named `name` (or
@@ -220,6 +224,10 @@ const noteFunctions = createNoteFunctions();
 const songargs = {
     'output': output,
     'setBPM': setBPM,
+    'setBeatsPerBar': (n) => {
+        if (!(Number.isInteger(n) && n > 0)) throw new Error(`setBeatsPerBar: a whole number of beats, got ${n}`);
+        beatsPerBar = n;
+    },
     'TrackerPattern': TrackerPattern,
     'createTrack': (channel, stepsperbeat, defaultvelocity) => {
         const trackerPattern = new TrackerPattern({
@@ -375,6 +383,7 @@ export async function generateSong(songfunc) {
     solo = {};
     songParts = {};
     currentPartStart = 0;
+    beatsPerBar = 4;
 
     resetTick();
 
