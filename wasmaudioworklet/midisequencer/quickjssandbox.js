@@ -78,6 +78,7 @@ export async function __runSong() {
     }
     result.instrumentNames = instrumentNames;
     result.recordingStartTimeMillis = recordingStartTimeMillis;
+    result.recordingStopTimeMillis = recordingStopTimeMillis;
     // setBPM() ran in HERE, so the host's copy of pattern.js still holds the
     // default. Anything host-side that reads the tempo — inserting a recorded
     // take is the one that bites — needs it carried back across.

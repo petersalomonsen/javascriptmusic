@@ -1,7 +1,7 @@
 import { getRecordedData as getWAMRecordedData } from '../webaudiomodules/wammanager.js';
 import { getRecordedData as getMidiSynthRecordedData } from '../synth1/audioworklet/midisynthaudioworklet.js';
 import { RecordConverter } from './recording.js';
-import { recordingStartTimeMillis } from './songcompiler.js';
+import { recordingStartTimeMillis, recordingStopTimeMillis } from './songcompiler.js';
 import { bpm } from './pattern.js';
 
 /**
@@ -22,7 +22,8 @@ export async function insertMidiRecording(insertStringIntoEditor, quantizeStepsP
     } else {
         recordedData = await getWAMRecordedData();
     }
-    const converter = new RecordConverter(recordedData, bpm, recordingStartTimeMillis / 1000);
+    const converter = new RecordConverter(recordedData, bpm, recordingStartTimeMillis / 1000,
+        recordingStopTimeMillis > 0 ? recordingStopTimeMillis / 1000 : null);
     if (quantizeStepsPerBeat > 0) converter.quantize(quantizeStepsPerBeat);
     insertStringIntoEditor(converter.trackerPatternData);
 }
