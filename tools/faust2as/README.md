@@ -60,7 +60,7 @@ For ready-made inputs see the `examples/` folder (e.g. `examples/dx7/dsp/`) or p
 3. Emits an AssemblyScript `MidiVoice` subclass with `noteon()`, `noteoff()`, `isDone()`, and `nextframe()`
 4. Generates `initializeMidiSynth()` and `postprocess()` exports (required by `midisynth.ts`)
 
-The generated voice maps Faust's `freq`/`gain`/`gate` convention to MIDI note-on/note-off events, and writes stereo output into the channel's signal bus.
+The generated voice maps Faust's `freq`/`gain`/`gate` convention to MIDI note-on/note-off events, and writes its output into the channel's signal bus: one output goes to both sides (0.25 each), two outputs are left and right (0.25 each — so `process = x <: _,_;` sounds exactly like `process = x;`).
 
 ## Import Paths
 
@@ -72,6 +72,23 @@ import { SAMPLERATE } from '../environment';
 ```
 
 This is because the web app's AssemblyScript code editor compiles code from the `mixes/` directory context. The generated files can be pasted directly into the editor.
+
+## Pre-roll (an exciter that must already be running)
+
+Some physical models start a note from an exciter that has been running for a
+while (a piano hammer resonator the string only hears after 20 ms). Declare the
+time and a `preroll` button:
+
+```faust
+declare preroll "0.02";
+preroll = button("preroll");
+```
+
+Each note-on then runs the DSP for that long with `preroll` held at 1 and the
+output discarded, before the gate opens. The DSP decides what the pre-roll
+drives: restart the exciter on `preroll`'s rising edge, and keep it away from
+the string until the gate is open. The gate is left as it was during the
+pre-roll. It costs that many samples of DSP time inside the note-on.
 
 ## MIDI CC Parameter Mapping
 
@@ -142,8 +159,9 @@ pressed by playing a note, so a DSP built around one is silent even though it
 transpiles, registers and compiles cleanly. The note *number* reaches the DSP
 only as `freq`.
 
-**A drum kit is several .dsp files, not one.** A voice renders the FIRST output
-only, so `process = (kick, hat);` discards the hi-hat. Write `kick.dsp` and
+**A drum kit is several .dsp files, not one.** A voice's outputs are its left
+and right channels (a third is ignored), so `process = (kick, hat);` puts the
+kick left and the hat right — it does not make a kit. Write `kick.dsp` and
 `hihat.dsp`, register each on its own channel, and sequence one track per
 channel. To keep a kit on a single channel, the voice has to branch on `freq`
 (the only carrier of the note number) — and note that the `c3`=kick /

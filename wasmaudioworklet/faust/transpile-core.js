@@ -41,7 +41,7 @@ export function toClassName(base) {
 
 export function extractUIFromJSON(asSource) {
     const getJSONMatch = asSource.match(/getJSON\(\)\s*:\s*string\s*\{[\s\S]*?return\s+"((?:[^"\\]|\\.)*)"\s*;/m);
-    if (!getJSONMatch) return { uiParams: [], numInputs: 0, numOutputs: 0 };
+    if (!getJSONMatch) return { uiParams: [], numInputs: 0, numOutputs: 0, meta: {} };
 
     // Decode escaped string content
     const normalized = getJSONMatch[1].replace(/\\'/g, "'");
@@ -50,7 +50,7 @@ export function extractUIFromJSON(asSource) {
         json = JSON.parse(JSON.parse(`"${normalized}"`));
     } catch (e) {
         console.warn('Warning: Could not parse getJSON() metadata');
-        return { uiParams: [], numInputs: 0, numOutputs: 0 };
+        return { uiParams: [], numInputs: 0, numOutputs: 0, meta: {} };
     }
 
     const numInputs = json.inputs || 0;
@@ -88,7 +88,11 @@ export function extractUIFromJSON(asSource) {
     }
     walkUI(json.ui || []);
 
-    return { uiParams, numInputs, numOutputs };
+    // Top-level `declare key "value";` entries (e.g. `declare preroll "0.02";`)
+    const meta = {};
+    for (const m of json.meta || []) Object.assign(meta, m);
+
+    return { uiParams, numInputs, numOutputs, meta };
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +250,7 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const effectDspClassName = clsName + 'EffectDsp';
     const channelClassName = clsName + 'Channel';
 
-    const { uiParams, numInputs, numOutputs } = extractUIFromJSON(asSource);
+    const { uiParams, numInputs, numOutputs, meta } = extractUIFromJSON(asSource);
     const native = splitNativeSource(asSource, dspClassName);
 
     // === Determine global UI parameters ===
@@ -254,6 +258,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const freqParam = uiParams.find(p => p.name === 'freq' || p.address.endsWith('/freq'));
     const gateParam = uiParams.find(p => p.isButton && (p.name === 'gate' || p.address.endsWith('/gate')));
     const gainParam = uiParams.find(p => p.name === 'gain' || p.address.endsWith('/gain'));
+    // Pre-roll: `declare preroll "<seconds>";` plus a `button("preroll")`. Each
+    // note-on first runs the DSP that long with `preroll` held at 1, output
+    // discarded, before the gate opens — for an exciter that must already be
+    // running when the note starts (a piano hammer). The DSP decides what the
+    // pre-roll drives (restart the exciter on its rising edge, keep it off the
+    // string); the gate is left as it was during it.
+    const prerollParam = uiParams.find(p => p.isButton && (p.name === 'preroll' || p.address.endsWith('/preroll')));
+    const prerollSeconds = prerollParam ? Number(meta?.preroll) || 0 : 0;
 
     const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
     const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
@@ -339,6 +351,12 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     for (const p of ccParams) {
         voiceClass.push(`        this.dsp.${p.field} = this.typedChannel.${p.niceName};`);
     }
+    if (prerollSeconds > 0) {
+        voiceClass.push(`        this.dsp.${prerollParam.field} = 1.0;`);
+        voiceClass.push('        this.dsp.control();');
+        voiceClass.push(`        for (let i = 0, n = <i32>(<f32>${prerollSeconds} * SAMPLERATE); i < n; i++) this.dsp.frame(this.fin, this.fout);`);
+        voiceClass.push(`        this.dsp.${prerollParam.field} = 0.0;`);
+    }
     if (gateParam) {
         // Retrigger: run one silent frame with the gate closed so envelopes
         // restart cleanly when the voice is being reused.
@@ -374,8 +392,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
 
     voiceClass.push('    nextframe(): void {');
     voiceClass.push('        this.dsp.frame(this.fin, this.fout);');
+    // A stereo voice (two outputs) goes out as left/right at the level a mono
+    // voice gets on each side (0.25), so `process = x <: _,_;` sounds as before.
+    const stereoVoice = numOutputs >= 2;
     voiceClass.push('        const output: f32 = this.fout[0];');
-    voiceClass.push('        if (Mathf.abs(output) < 0.001) {');
+    if (stereoVoice) voiceClass.push('        const output1: f32 = this.fout[1];');
+    voiceClass.push(stereoVoice
+        ? '        if (Mathf.max(Mathf.abs(output), Mathf.abs(output1)) < 0.001) {'
+        : '        if (Mathf.abs(output) < 0.001) {');
     voiceClass.push('            this.silentSamples++;');
     voiceClass.push('        } else {');
     voiceClass.push('            this.silentSamples = 0;');
@@ -383,7 +407,9 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     if (gateParam) {
         voiceClass.push(`        if (this.dsp.${gateParam.field} == 0.0) this.releaseSamples++;`);
     }
-    voiceClass.push('        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
+    voiceClass.push(stereoVoice
+        ? '        this.channel.signal.add(output * 0.25, output1 * 0.25);'
+        : '        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
     voiceClass.push('    }');
     voiceClass.push('}');
 
