@@ -6,7 +6,7 @@
 // made a voice+effect file either declare the 14 math helpers twice
 // (TS2300 in asc) or lose a sub-module. Synthetic fixtures — the real shape
 // is exercised end to end by e2e/faust-rs-transpile.spec.js.
-import { splitNativeSource, transpileDsp, assembleSingleFile, assembleBundle, transpileEffect } from './transpile-core.js';
+import { splitNativeSource, transpileDsp, assembleSingleFile, assembleBundle, transpileEffect, uncheckStateAccesses } from './transpile-core.js';
 
 const HELPERS = `function _fmodf(a: f32, b: f32): f32 {
   return a % b;
@@ -152,6 +152,20 @@ describe('transpile-core: native output split', () => {
         assert.notInclude(ts, 'typedChannel.preroll');
         // no declaration, no pre-roll
         assert.notInclude(voice(undefined), 'fButtonP = 1.0');
+    });
+
+    it('marks the generated state accesses unchecked, reads and writes', () => {
+        const u = uncheckStateAccesses;
+        assert.strictEqual(u('this.fRec0[<i32>(0)] = fRecBody17;'), 'unchecked(this.fRec0[<i32>(0)] = fRecBody17);');
+        assert.strictEqual(u('this.fVec[<i32>(1)] = this.fVec[<i32>(0)];'), 'unchecked(this.fVec[<i32>(1)] = unchecked(this.fVec[<i32>(0)]));');
+        assert.strictEqual(u('let t: f32 = this.fRec0[((this.fIOTA - (iTemp11 + <i32>(1))) & <i32>(16383))];'),
+            'let t: f32 = unchecked(this.fRec0[((this.fIOTA - (iTemp11 + <i32>(1))) & <i32>(16383))]);');
+        assert.strictEqual(u('let v = this.ftbl0[this.iRec2[<i32>(0)]];'), 'let v = unchecked(this.ftbl0[unchecked(this.iRec2[<i32>(0)])]);');
+        assert.strictEqual(u('for (let l0: i32 = 0; l0 < 2; l0 = l0 + 1) { this.fRec0[l0] = 0.0; }'),
+            'for (let l0: i32 = 0; l0 < 2; l0 = l0 + 1) { unchecked(this.fRec0[l0] = 0.0); }');
+        assert.strictEqual(u('if (this.fRec0[<i32>(0)] == 1.0) {}'), 'if (unchecked(this.fRec0[<i32>(0)]) == 1.0) {}');
+        // host buffers are not generated state and keep their checks
+        assert.strictEqual(u('outputs[<i32>(0)] = x;'), 'outputs[<i32>(0)] = x;');
     });
 
     it('carries the sub-modules of a standalone stereo effect', () => {

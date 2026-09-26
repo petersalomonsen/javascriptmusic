@@ -159,7 +159,76 @@ export function splitNativeSource(asSource, dspClassName) {
         preamble = preamble.slice(0, subModuleStart).trim();
     }
 
-    return { preamble, subModules, classSource };
+    return { preamble, subModules: uncheckStateAccesses(subModules), classSource: uncheckStateAccesses(classSource) };
+}
+
+// ---------------------------------------------------------------------------
+// Unchecked state accesses
+// ---------------------------------------------------------------------------
+//
+// Faust keeps its state in small member arrays (`this.fRec3[<i32>(1)]`, the
+// masked delay lines `this.fRec0[(this.fIOTA & <i32>(16383))]`, tables), and
+// AssemblyScript bounds-checks every element access. Those checks were the
+// whole of the measured cost of a Faust instrument against the same model
+// hand-written in AssemblyScript (1.6-2.4x; without them the Faust code ran
+// 2-3x faster). The generated indices are in range by construction - constant
+// 0/1 for recursions, a power-of-two mask for delay lines, clamped table
+// reads - so every `this.<field>[...]` access in the generated class is
+// wrapped in unchecked(): a read as `unchecked(this.x[i])`, a write as
+// `unchecked(this.x[i] = value)`.
+export function uncheckStateAccesses(src) {
+    if (!src) return src;
+    const access = /this\.[A-Za-z_$][\w$]*\[/g;
+
+    // index of the `]` matching the `[` at `open`, or -1
+    function closing(text, open) {
+        let depth = 0;
+        for (let i = open; i < text.length; i++) {
+            const c = text[i];
+            if (c === '[') depth++;
+            else if (c === ']' && --depth === 0) return i;
+        }
+        return -1;
+    }
+    // end of the expression starting at `from` (the `;`, `)` or `,` that
+    // closes it at depth 0), for the right-hand side of a write
+    function expressionEnd(text, from) {
+        let depth = 0;
+        for (let i = from; i < text.length; i++) {
+            const c = text[i];
+            if (c === '(' || c === '[' || c === '{') depth++;
+            else if (c === ')' || c === ']' || c === '}') {
+                if (depth === 0) return i;
+                depth--;
+            } else if ((c === ';' || c === ',') && depth === 0) return i;
+        }
+        return text.length;
+    }
+    function rewrite(text) {
+        let out = '';
+        let pos = 0;
+        for (;;) {
+            access.lastIndex = pos;
+            const m = access.exec(text);
+            if (!m) return out + text.slice(pos);
+            const open = m.index + m[0].length - 1;
+            const close = closing(text, open);
+            if (close === -1) return out + text.slice(pos);
+            const target = text.slice(m.index, open + 1) + rewrite(text.slice(open + 1, close)) + ']';
+            out += text.slice(pos, m.index);
+            const assign = /^\s*=(?!=)/.exec(text.slice(close + 1));
+            if (assign) {
+                const rhsStart = close + 1 + assign[0].length;
+                const rhsEnd = expressionEnd(text, rhsStart);
+                out += `unchecked(${target} = ${rewrite(text.slice(rhsStart, rhsEnd)).trim()})`;
+                pos = rhsEnd;
+            } else {
+                out += `unchecked(${target})`;
+                pos = close + 1;
+            }
+        }
+    }
+    return rewrite(src);
 }
 
 // ---------------------------------------------------------------------------
