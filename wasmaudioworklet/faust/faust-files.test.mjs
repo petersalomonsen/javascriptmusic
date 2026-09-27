@@ -3,23 +3,25 @@
 // import it (directly or through another library) and nothing else.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { saveFaustSource, libraryDependents, collectSiblingLibs } from './faust-files.js';
+import { saveFaustSource, libraryDependents, collectSiblingLibs, clearScratch, scratchImports } from './faust-files.js';
 import { normDsp } from '../studio-agent/tools-core.js';
 
 function repo(files) {
     const fs = new Map(Object.entries(files));
     const transpiled = [];
+    const staged = new Set();
     const io = {
         readfile: async (p) => { if (!fs.has(p)) throw Object.assign(new Error('FS error'), { errno: 44 }); return fs.get(p); },
         listfiles: async (prefix) => [...fs.keys()].filter((p) => p.startsWith(prefix)),
-        writefileandstage: async (p, t) => { fs.set(p, t); },
+        writefileandstage: async (p, t, { stage = true } = {}) => { fs.set(p, t); if (stage) staged.add(p); },
+        unlinkfile: async (p) => { fs.delete(p); },
         transpile: async (source, name, libs) => {
             if (source.includes('BROKEN')) throw new Error(`syntax error in ${name}`);
             transpiled.push({ name, libs: Object.keys(libs).sort() });
             return { ts: `// ts of ${name}`, className: name.replace(/\.dsp$/, '') };
         },
     };
-    return { fs, io, transpiled };
+    return { fs, io, transpiled, staged };
 }
 
 const FILES = {
@@ -76,4 +78,36 @@ test('normDsp: .dsp is the default extension, a .lib path stays a library', () =
     assert.equal(normDsp('faust/mpiano.dsp'), 'mpiano.dsp');
     assert.equal(normDsp('monster.lib'), 'monster.lib');
     assert.equal(normDsp('faust/monster.lib'), 'monster.lib');
+});
+
+test('a scratch experiment sees the project files, shadows them with its own, and is never staged', async () => {
+    const { fs, io, transpiled, staged } = repo({ ...FILES, 'faust/scratch/drumkit.lib': 'kit = _;' });
+    await saveFaustSource(io, 'faust/scratch/probe.dsp', 'import("monster.lib");\nprocess = waveguide;', 'faust/');
+    assert.deepEqual(transpiled, [{ name: 'scratch/probe.dsp',
+        libs: ['drumkit.lib', 'mdrums.dsp', 'monster.lib', 'mpiano.dsp', 'scratch/drumkit.lib', 'warmpad.dsp'] }]);
+    const libs = await collectSiblingLibs(io, 'faust/scratch/probe.dsp', 'faust/');
+    assert.equal(libs['drumkit.lib'], 'kit = _;', "scratch/'s own copy wins");
+    assert.equal(fs.get('faust/scratch/probe.ts'), '// ts of scratch/probe.dsp');
+    assert.equal(fs.get('faust/scratch/.gitignore'), '*\n');
+    assert.deepEqual([...staged], [], 'nothing under scratch/ is staged');
+});
+
+test('a library edit does not rebuild scratch experiments; the instruments are still staged', async () => {
+    const { io, transpiled, staged } = repo({ ...FILES, 'faust/scratch/probe.dsp': 'import("monster.lib");\nprocess = waveguide;' });
+    await saveFaustSource(io, 'faust/monster.lib', 'waveguide = _;', 'faust/');
+    assert.deepEqual(transpiled.map((t) => t.name), ['mdrums.dsp', 'mpiano.dsp']);
+    assert.ok(staged.has('faust/monster.lib') && staged.has('faust/mpiano.ts'));
+});
+
+test('clearScratch deletes everything under scratch/ and nothing else', async () => {
+    const { fs, io } = repo({ ...FILES, 'faust/scratch/probe.dsp': 'x', 'faust/scratch/probe.ts': 'y', 'faust/scratch/.gitignore': '*\n' });
+    assert.deepEqual((await clearScratch(io, 'faust/')).sort(), ['faust/scratch/.gitignore', 'faust/scratch/probe.dsp', 'faust/scratch/probe.ts']);
+    assert.deepEqual([...fs.keys()].sort(), Object.keys(FILES).sort());
+    assert.deepEqual(await clearScratch(io, 'faust/'), []);
+});
+
+test('scratchImports finds a synth.ts that still imports an experiment', () => {
+    const synth = "import { Mpiano } from './faust/mpiano';\nimport { Probe } from './faust/scratch/probe';\n";
+    assert.deepEqual(scratchImports(synth), ["import { Probe } from './faust/scratch/probe';"]);
+    assert.deepEqual(scratchImports("import { Mpiano } from './faust/mpiano';"), []);
 });

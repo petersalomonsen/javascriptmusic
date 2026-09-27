@@ -9,7 +9,7 @@ import { toggleSpinner } from './common/ui/progress-spinner.js';
 
 import { readfile, writefileandstage, unlinkfile, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
 import { transpileDspSource } from './faust/faust-rs-transpile.js';
-import { saveFaustSource, isFaustSource, isLibrary } from './faust/faust-files.js';
+import { saveFaustSource, isFaustSource, isLibrary, isScratch } from './faust/faust-files.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal, modalPrompt, modalAlert } from './common/ui/modal.js';
 import { zipRepo, downloadBlob } from './wasmgit/repozip.js';
@@ -204,7 +204,8 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                 for (const f of dspFiles) {
                     const opt = document.createElement('option');
                     opt.value = f;
-                    opt.textContent = f.substring(FAUST_DIR.length) + (isLibrary(f) ? '  (library)' : '');
+                    opt.textContent = f.substring(FAUST_DIR.length)
+                        + (isScratch(f, FAUST_DIR) ? '  (scratch)' : isLibrary(f) ? '  (library)' : '');
                     if (f === currentFaustFilename) opt.selected = true;
                     faustFileSelect.appendChild(opt);
                 }
@@ -257,7 +258,7 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     faustNewFileButton.addEventListener('click', async () => {
         const entered = await modalPrompt(
             'New Faust file',
-            'Basename, with optional sub-folders (e.g. <code>mysynth</code> or <code>mysong/dsp/master</code>). <code>.dsp</code> is added automatically; end it in <code>.lib</code> for a library the instruments can import.',
+            'Basename, with optional sub-folders (e.g. <code>mysynth</code> or <code>mysong/dsp/master</code>). <code>.dsp</code> is added automatically; end it in <code>.lib</code> for a library the instruments can import. Under <code>scratch/</code> it is an experiment: never committed.',
             ''
         );
         if (entered === null) return;
