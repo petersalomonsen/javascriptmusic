@@ -31,9 +31,11 @@ export function grepText(text, { pattern, context = 0 }) {
 }
 
 // Normalize a faust path to a repo-relative .dsp filename.
+// A Faust path relative to faust/: an instrument (.dsp, added when there is
+// no extension) or a library (.lib, kept as is).
 export function normDsp(path) {
   let rel = String(path || '').replace(/^faust\//, '');
-  if (!rel.endsWith('.dsp')) rel += '.dsp';
+  if (!/\.(dsp|lib)$/.test(rel)) rel += '.dsp';
   return rel;
 }
 

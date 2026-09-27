@@ -8,6 +8,7 @@
 import { songsourceeditor, synthsourceeditor, shadersourceeditor } from '../editorcontroller.js';
 import { renderShaderFrames } from '../visualizer/fragmentshader.js';
 import { transpileDspSource } from '../faust/faust-rs-transpile.js';
+import { saveFaustSource, libraryDependents, isFaustSource, isLibrary } from '../faust/faust-files.js';
 import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
 import { readfile, writefileandstage, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
 import {
@@ -300,13 +301,19 @@ const registry = {
   list_faust: async () => {
     try {
       const all = await listfiles(FAUST_DIR);
-      const dsp = all.filter((f) => f.endsWith('.dsp')).map((f) => f.slice(FAUST_DIR.length));
-      return dsp.length ? dsp.join('\n') : '(no .dsp instruments yet)';
+      const lines = [];
+      for (const f of all.filter(isFaustSource)) {
+        const rel = f.slice(FAUST_DIR.length);
+        if (!isLibrary(f)) { lines.push(rel); continue; }
+        const users = (await libraryDependents(faustIO, f, FAUST_DIR)).map((d) => d.slice(FAUST_DIR.length));
+        lines.push(`${rel}  (library${users.length ? `, imported by ${users.join(', ')}` : ''})`);
+      }
+      return lines.length ? lines.join('\n') : '(no .dsp instruments yet)';
     } catch (e) { return faustUnavailable(e); }
   },
   read_faust: async ({ path }) => {
     try { return await readfile(FAUST_DIR + normDsp(path)); }
-    catch (e) { return faustUnavailable(e); }
+    catch (e) { return faustUnavailable(e, FAUST_DIR + normDsp(path)); }
   },
 
   // Surgical .dsp edit. Everything a .dsp change needs — transpile, staging,
@@ -322,7 +329,7 @@ const registry = {
     try {
       current = await readfile(FAUST_DIR + rel);
     } catch (e) {
-      return faustUnavailable(e);
+      return faustUnavailable(e, FAUST_DIR + rel);
     }
     const edited = applyEditToText(current, { old_string, new_string, replace_all });
     if (edited.error) return { __error: `edit_faust ${rel}: ${edited.error}` };
@@ -355,17 +362,20 @@ const registry = {
   // (a hidden tab throttles main-thread work like the faust transpile hard).
   write_faust: async ({ path, source }) => {
     const rel = normDsp(path);
-    const stem = rel.replace(/\.dsp$/, '');
+    const stem = rel.replace(/\.(dsp|lib)$/, '');
     const t0 = performance.now();
     const marks = [`visibility=${document.visibilityState}`];
     let last = t0;
     const mark = (label) => { const now = performance.now(); marks.push(`${label}=${((now - last) / 1000).toFixed(1)}s`); last = now; };
     try {
-      await writefileandstage(FAUST_DIR + rel, source);
-      mark('write-dsp');
       let ts;
+      let saved;
       try {
-        ({ ts } = await transpileDspSource(source, rel, {}));
+        // the same save as the Faust editor: the source first, then the
+        // transpile with its sibling .dsp/.lib files (a .lib re-transpiles
+        // every instrument that imports it)
+        saved = await saveFaustSource(faustIO, FAUST_DIR + rel, source, FAUST_DIR);
+        ts = saved.ts;
       } catch (e) {
         // Structured compiler diagnostics (error-model v2): give the agent
         // the typed projection — stable code, category, exact location,
@@ -376,9 +386,20 @@ const registry = {
         const detail = structured || e?.message || String(e);
         return { __error: `Faust transpile failed for ${rel}:\n${detail}` };
       }
-      mark('transpile');
-      await writefileandstage(FAUST_DIR + stem + '.ts', ts);
-      mark('write-ts');
+      mark('write+transpile');
+      if (saved.kind === 'lib') {
+        if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
+        const names = (list) => list.map((r) => r.path.slice(FAUST_DIR.length)).join(', ');
+        const failed = saved.failed.map((f) => {
+          const e = f.error;
+          const detail = e?.faustDiagnostics ? formatDiagnosticsForAgent(e.faustDiagnostics, e.faustSource ?? '') : (e?.message || String(e));
+          return `${f.path.slice(FAUST_DIR.length)}:\n${detail}`;
+        });
+        const msg = `${rel} saved (library). ` + (saved.rebuilt.length
+          ? `Re-transpiled the instruments that import it: ${names(saved.rebuilt)}. Compile to hear the change.`
+          : 'No instrument imports it yet.');
+        return failed.length ? { __error: `${msg}\nTranspile FAILED for:\n${failed.join('\n\n')}` } : msg;
+      }
       // refresh the app's Faust file dropdown so the user sees the new instrument
       if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
       // and reflect the written .dsp in the editor even when it's the file already
@@ -643,8 +664,16 @@ function songEventAnomalies() {
 }
 
 // Faust file helpers (normDsp is imported from tools-core.js)
-function faustUnavailable(e) {
+// The repo as the shared Faust save logic sees it (faust/faust-files.js):
+// the same save and transpile as the Faust editor.
+const faustIO = { readfile, listfiles, writefileandstage, transpile: transpileDspSource };
+
+function faustUnavailable(e, path = null) {
   const msg = String(e?.message || e);
+  // errno 44 is ENOENT: the repo is there, the file is not
+  if (path && (e?.errno === 44 || /errno"?\s*:?\s*44|ENOENT|no such file/i.test(JSON.stringify(e) + msg))) {
+    return { __error: `${path} does not exist. list_faust shows the Faust files (instruments .dsp and libraries .lib).` };
+  }
   return { __error: `Faust/OPFS not available (${msg}). The app must be opened with a ?gitrepo=… URL so the OPFS git working tree exists.` };
 }
 
