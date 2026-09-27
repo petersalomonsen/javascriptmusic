@@ -76,7 +76,7 @@ if (process.env.ANTHROPIC_API_KEY) {
 }
 
 const SPECIALIST_MODEL = process.env.STUDIO_AGENT_SPECIALIST_MODEL || undefined;
-// The stage hand (performance mode): a faster model is the natural choice —
+// The stage hand (the song playing, with parts): a faster model is the natural choice —
 // one tool call per turn, a tiny prompt. Defaults to the producer's model.
 const PERFORMANCE_MODEL = process.env.STUDIO_AGENT_PERFORMANCE_MODEL || undefined;
 const PERFORMANCE_EFFORT = process.env.STUDIO_AGENT_PERFORMANCE_EFFORT || 'low';
@@ -146,11 +146,10 @@ const dlog = (...a) => console.log(`  [${t0()}]`, ...a);
 // the cached prefix intact; a changed kit costs one cold turn, as it should.
 // (producerSystemPrompt in agent-core.mjs builds it, so the bench gets the same.)
 
-// `mode: 'performance'` (the app's performance checkbox is on): the producer
-// on stage — the same prompt and kit plus the stage section with the parts,
-// the signal tools, low effort, and the SESSION THE PANEL CHOSE (a fresh one:
-// the panel archives the composition session when the checkbox goes on —
-// resuming a 200k-token composition session cost 110 s per edit, a fresh one 14 s).
+// `mode: 'performance'` (the song is playing and has parts): the producer on
+// stage — the same prompt and kit plus the stage section with the parts, low
+// effort, in the panel's current session (start the show with /new: resuming
+// a 200k-token composition session cost 110 s per edit, a fresh one 14 s).
 // The stage state (where the playhead is) changes every turn, so it rides at
 // the top of the user message rather than in the cached system prompt.
 async function handleChat(ws, { text, sessionId, summary, kit, mode, parts, state }, isRetry = false) {

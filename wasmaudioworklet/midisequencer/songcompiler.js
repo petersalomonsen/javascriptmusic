@@ -188,6 +188,10 @@ let currentPartStart = 0;
 // a part takes its bar length - what quantize 'bar', a jump to it and a
 // timeout count in - from the value when it starts, as it takes the tempo.
 let beatsPerBar = 4;
+// loopParts(false): the waits from here on pass straight through (the song
+// plays its arrangement once) - live playback otherwise loops a part at its
+// waitForSignal until a signal. An export always plays straight through.
+let loopPartsOn = true;
 const beatMs = () => 60000 / bpm;
 const barMs = () => beatsPerBar * beatMs();
 
@@ -221,6 +225,7 @@ function waitForSignal(name = 'go', options = {}) {
         partStart: currentPartStart,
         barMs: barMs(),
         beatMs: beatMs(),
+        ...(loopPartsOn ? {} : { inert: true }),
     });
 }
 
@@ -228,6 +233,7 @@ const noteFunctions = createNoteFunctions();
 const songargs = {
     'output': output,
     'setBPM': setBPM,
+    'loopParts': (on = true) => { loopPartsOn = on !== false; },
     'setBeatsPerBar': (n) => {
         if (!(Number.isInteger(n) && n > 0)) throw new Error(`setBeatsPerBar: a whole number of beats, got ${n}`);
         beatsPerBar = n;
@@ -389,6 +395,7 @@ export async function generateSong(songfunc) {
     songParts = {};
     currentPartStart = 0;
     beatsPerBar = 4;
+    loopPartsOn = true;
     recordingStopTimeMillis = 0;
 
     resetTick();

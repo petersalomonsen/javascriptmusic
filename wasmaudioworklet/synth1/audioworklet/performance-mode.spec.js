@@ -2,10 +2,10 @@ import { waitForAppReady } from '../../app.js';
 import { songsourceeditor, synthsourceeditor } from '../../editorcontroller.js';
 import { getCurrentTime } from './midisynthaudioworklet.js';
 
-// Performance mode through the REAL audio worklet: a song with two parts and
-// a waitForSignal between them loops the first part until window.sendSignal,
-// then leaves on the bar line into the second part. Without performance mode
-// the same song plays straight through. The sequencer logic itself is unit
+// Looping parts through the REAL audio worklet: a song with two parts and a
+// waitForSignal between them loops the first part until window.sendSignal,
+// then leaves on the bar line into the second part. With loopParts(false) in
+// the song, the same song plays straight through. (An export never waits.) The sequencer logic itself is unit
 // tested in midisequencer/performance-mode.test.mjs; this pins the wiring —
 // the compiler's events, the worklet messages, the window API and the DOM
 // events the UI and the agent listen to.
@@ -62,22 +62,20 @@ describe('performance mode', function () {
         appElement = document.getElementsByTagName('app-javascriptmusic')[0].shadowRoot;
     });
     this.afterAll(async () => {
-        window.togglePerformanceMode(false);
         window.stopaudio();
         window.audioworkletnode = undefined;
         document.documentElement.removeChild(document.querySelector('app-javascriptmusic'));
     });
 
-    it('loops the part until a signal, then leaves on the bar line; off, the wait is inert', async () => {
+    it('loops the part until a signal, then leaves on the bar line; loopParts(false) plays through', async () => {
         songsourceeditor.doc.setValue(songsource);
         synthsourceeditor.doc.setValue(synthsource);
         const events = [];
         const listener = (e) => events.push(e.detail);
         window.addEventListener('wasmmusic-signal', listener);
 
-        // the checkbox is the UI; togglePerformanceMode is what it calls
-        appElement.querySelector('#performanceModeCheckbox').checked = true;
-        window.togglePerformanceMode(true);
+        // no mode to switch on: the song's wait is what makes the part loop
+        assert.equal(appElement.querySelector('#performanceModeCheckbox'), null, 'there is no performance checkbox');
         appElement.querySelector('#startaudiobutton').click();
         // the synth compiles first — generous, CI runs several spec files at once
         await pollUntil(async () => (await getCurrentTime()) > 500, 30000);
@@ -97,8 +95,8 @@ describe('performance mode', function () {
         await pollUntil(async () => (await getCurrentTime()) > 2000);
         assert.ok(events.some(d => d.resumed === 'go'), 'the UI was told about the resume');
 
-        // off: the song plays straight through (restart from the top)
-        window.togglePerformanceMode(false);
+        // loopParts(false): the song plays straight through (restart from the top)
+        songsourceeditor.doc.setValue('loopParts(false);\n' + songsource);
         window.toggleSongPlay(false);
         await new Promise(r => setTimeout(r, 200));
         window.stopaudio();

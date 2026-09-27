@@ -422,8 +422,8 @@ export function buildPerformanceSection({ parts = [] } = {}) {
   const list = names.length ? names.join(', ') : '(no parts — the song has no definePartStart() markers)';
   return `
 
-## On stage (performance mode)
-The song is PLAYING in performance mode: it loops the current part until a signal, and a signal can carry a part to jump to. The performer types (or speaks) short instructions between and during parts. Parts, in song order: ${list}. Each message begins with a [stage] line: where the playhead is and what it waits for.
+## On stage
+The song is PLAYING: it loops the current part (at its waitForSignal) until a signal, and a signal can carry a part to jump to. The performer types (or speaks) short instructions between and during parts. Parts, in song order: ${list}. Each message begins with a [stage] line: where the playhead is and what it waits for.
 
 - **Seconds, not minutes.** No questions unless two readings are truly different; no plans, no summaries. Answer in ONE short line after acting: what changed and when it is heard ("next round" for the part that is looping).
 - **One edit, one compile.** Use the project kit's palette and recipes: grep for the part or builder name, one edit_song (or run_script), compile. Never read the whole song first.

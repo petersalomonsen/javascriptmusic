@@ -537,18 +537,24 @@ await createTrack(0).steps(4, [
 
 ---
 
-## Performance Mode
+## Performance: looping parts and signals
 
 For a concert, a presentation or an unattended installation: the song holds
 or **loops within a part and moves on when told** — by a signal from a
 shader element, a MIDI mapping, the agent, another window, or a timeout —
-to the next part or to any part by name. Performance mode is a checkbox
-next to the play control (`togglePerformanceMode(on)` in code). Off, the
-waits are inert and the song is the same deterministic score everywhere:
-export, headless rendering and the agent's `render_shader` frames.
+to the next part or to any part by name. The song says where: a part loops
+at its `waitForSignal`. There is no mode to switch on — live playback honours
+the waits; `loopParts(false)` in the song makes them play through. An export
+never waits: it is the same deterministic, straight-through score as
+headless rendering and the agent's `render_shader` frames.
+
+### `loopParts(on = true)`
+Whether the waits from here on loop (the default) or play straight through.
+`loopParts(false)` at the top of a song plays the whole arrangement once, to
+hear it or to share it; take it out (or `loopParts(true)`) to perform.
 
 ### `waitForSignal(name = 'go', options = {})`
-In performance mode, parks the song here until a signal named `name` (or
+In live playback, parks the song here until a signal named `name` (or
 `'any'`) arrives.
 
 - `loop` (`'part'` | `'hold'`, default `'part'`): loop the current part
@@ -557,7 +563,8 @@ In performance mode, parks the song here until a signal named `name` (or
   arrives, leave on the next bar line (the part's bar: `setBeatsPerBar`, 4 by default),
   the next beat, or at once.
 - `default` (`'continue'` | part name, default `'continue'`): what happens
-  outside performance mode — play on, or seek to that part.
+  where the wait does not wait (an export, `loopParts(false)`) — play on, or
+  seek to that part.
 - `timeout` (`{ bars, goTo }`): after `bars` bars of looping with no signal,
   move on by itself, to `goTo` if given (kiosk mode).
 

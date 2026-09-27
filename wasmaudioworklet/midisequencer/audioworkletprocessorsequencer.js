@@ -16,6 +16,9 @@ export function AudioWorkletProcessorSequencerModule() {
       // song is the same deterministic score everywhere. On: reaching the
       // event parks the song — looping its part, or holding the clock — until
       // a signal arrives; a signal may also carry a part to jump to.
+      // Whether waitForSignal() waits: on in live playback, off where the song
+      // must play straight through (an export renders on an OfflineAudioContext).
+      // A wait marked `inert` (loopParts(false) in the song) never waits.
       this.performanceMode = false;
       this.parts = {};        // part name -> { time, barMs }, from SEQ_MSG_PART events
       this.wait = null;       // the wait we are parked on, or null
@@ -235,7 +238,7 @@ export function AudioWorkletProcessorSequencerModule() {
           gridStart: w.loopStart, barMs: w.barMs, beatMs: w.beatMs });
         return { resumed: true, goTo: goTo || null, at: this.jump.at };
       }
-      if (target && this.performanceMode) {
+      if (target) {
         // a targeted jump from anywhere: quantized to the current part's bars
         const part = this._currentPart();
         this._scheduleJump({ target, goTo, wait: null, quantize: part && part.barMs ? 'bar' : 'now',
@@ -318,8 +321,8 @@ export function AudioWorkletProcessorSequencerModule() {
             case SEQ_MSG_WAIT_SIGNAL: {
               const evt = this.sequence[this.sequenceIndex];
               this.sequenceIndex++;
-              if (!this.performanceMode) {
-                // inert: the default applies — continue, or go to a part
+              if (!this.performanceMode || evt.inert) {
+                // inert (export, or loopParts(false)): the default applies — continue, or go to a part
                 const target = evt.default && evt.default !== 'continue' ? this.parts[evt.default] : null;
                 if (target) { this._seekToPart(target); this._jumped(); return; }
                 break;

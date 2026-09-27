@@ -38,7 +38,7 @@ function makeSeq(sequence, { performance = true } = {}) {
   return { seq, fired, states, run, notes: () => fired.map(f => f[1]) };
 }
 
-test('outside performance mode the wait is inert: the song plays straight through', () => {
+test('an export (waits off) plays straight through', () => {
   const s = makeSeq(song(), { performance: false });
   s.run(7000);
   assert.deepEqual(s.notes(), [60, 62, 64, 67]);
@@ -51,7 +51,7 @@ test('a default naming a part makes the inert wait seek there', () => {
   assert.deepEqual(s.notes(), [60, 62, 67]);   // b skipped
 });
 
-test('performance mode loops the part until a signal, then leaves on the next bar', () => {
+test('live playback loops the part until a signal, then leaves on the next bar', () => {
   const s = makeSeq(song());
   s.run(9000);   // more than two passes of part a
   assert.deepEqual(s.notes(), [60, 62, 60, 62, 60], 'part a loops, b never starts');
@@ -219,4 +219,23 @@ test('setBeatsPerBar: a part takes its bar length from it, as it takes the tempo
   const again = await compileSongUnsafe(`setBPM(90); definePartStart('x'); await createTrack(0).steps(1, [c5]);`);
   assert.equal(Math.round(again.find(e => e.message[0] === SEQ_MSG_PART).barMs), Math.round(4 * beat));
   await assert.rejects(compileSongUnsafe(`setBeatsPerBar(2.5);`), /whole number/);
+});
+
+test('loopParts(false): a wait marked inert plays straight through in live playback too', () => {
+  const s = makeSeq(song({ inert: true }));
+  s.run(7000);
+  assert.deepEqual(s.notes(), [60, 62, 64, 67]);
+  assert.equal(s.states.length, 0);
+});
+
+test('loopParts(false) marks the waits after it inert; each compile starts looping again', async () => {
+  const { compileSongUnsafe } = await import('./songcompiler.js');
+  const waits = async (src) => (await compileSongUnsafe(src)).filter(e => e.message[0] === SEQ_MSG_WAIT_SIGNAL).map(e => !!e.inert);
+  assert.deepEqual(await waits(`
+    definePartStart('a'); await createTrack(0).steps(1, [c5]); await waitForSignal('go');
+    loopParts(false);
+    definePartStart('b'); await createTrack(0).steps(1, [c5]); await waitForSignal('go');
+    loopParts(true);
+    definePartStart('c'); await createTrack(0).steps(1, [c5]); await waitForSignal('go');`), [false, true, false]);
+  assert.deepEqual(await waits(`definePartStart('a'); await createTrack(0).steps(1, [c5]); await waitForSignal('go');`), [false]);
 });
