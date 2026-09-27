@@ -206,7 +206,12 @@ With no config file these are auto-detected (first `*.js` → song, first `*.ts`
 Optional folders:
 
 - `faust/**/*.dsp` (+ transpiled `*.ts`) — Faust instruments/effects. The Faust
-  editor lists `faust/**/*.dsp`; the compiler injects `faust/**/*.ts`.
+  editor lists `faust/**/*.dsp` and the `.lib` libraries they import; the
+  compiler injects `faust/**/*.ts`.
+- `faust/scratch/` — experiments and probes. A file there imports the project's
+  `.dsp`/`.lib` as if it sat in `faust/` (a copy of a library there shadows the
+  real one), and a `.gitignore` of `*` keeps the folder out of every commit. The
+  studio agent's `clear_scratch` empties it; `synth.ts` must not import from it.
 - `shaders/*.glsl` — visualizer shaders.
 
 **Import paths.** `synth.ts` is compiled in the engine's `mixes/` context (as

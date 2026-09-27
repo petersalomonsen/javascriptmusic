@@ -63,6 +63,7 @@ export const TOOL_DEFS = [
     { name: 'edit_faust', where: 'browser', description: "Surgically find-and-replace inside a Faust .dsp AND re-transpile it, exactly as write_faust does (a .lib path edits the library and re-transpiles every instrument that imports it — a change there reaches all of them). PREFER THIS over write_faust for any instrument that already exists: write_faust replaces the whole file, so composing one from what you wrote earlier discards any hand edit the user has made since. old_string must match exactly and be unique unless replace_all is true.", parameters: obj({ path: str('instrument name or faust/<name>.dsp'), old_string: str('exact text to find'), new_string: str('replacement text'), replace_all: bool('replace every occurrence instead of requiring a unique match') }, ['path', 'old_string', 'new_string']) },
     { name: 'read_faust', where: 'browser', description: 'Read a Faust source from the browser OPFS faust/ folder: an instrument (.dsp, the default extension) or a library (give the .lib extension, e.g. "monster.lib") that instruments import.', parameters: obj({ path: str('faust file name, e.g. "mpiano" or "monster.lib"') }, ['path']) },
     { name: 'list_faust', where: 'browser', description: 'List the Faust files in the browser OPFS faust/ folder: the instruments (.dsp) and the libraries (.lib) with the instruments that import each.', parameters: obj({}) },
+    { name: 'clear_scratch', where: 'browser', description: 'Delete everything in faust/scratch/ — the folder for experiments and probes (write_faust("scratch/<name>", …)): a file there imports the project\'s .dsp/.lib as if it sat next to them, a copy of a library there shadows the real one, and nothing in it is ever committed. Refuses while synth.ts still imports from scratch/. Clear it when an experiment is done.', parameters: obj({}) },
 
     // ---- git history of the in-browser OPFS repo ----
     { name: 'git_log', where: 'browser', description: 'Show the commit history of the in-browser OPFS repo (the user commits their work here). Use it to find a commit to restore a file from.', parameters: obj({}) },
@@ -119,7 +120,7 @@ export const ROLES = {
     // parts) — the same tools; what makes it fast is the stage prompt, the
     // project's kit and low effort (docs/plans/performance-mode.md).
     performance: { exclude: ['write_faust', 'edit_faust', 'auto_master'] },
-    instrument: { include: ['read_faust', 'list_faust', 'write_faust', 'edit_faust', 'get_synth', 'grep_synth', 'edit_synth', 'compile', 'probe_instrument', 'read_repo_file'] },
+    instrument: { include: ['read_faust', 'list_faust', 'write_faust', 'edit_faust', 'clear_scratch', 'get_synth', 'grep_synth', 'edit_synth', 'compile', 'probe_instrument', 'read_repo_file'] },
     // The MASTERING specialist: the master insert in synth.ts, the mix-level
     // control changes in the song, compile, and the whole-mix measurement.
     mastering: { include: ['get_synth', 'grep_synth', 'edit_synth', 'get_song', 'grep_song', 'edit_song', 'compile', 'probe_mix', 'auto_master', 'song_summary', 'read_repo_file'] },
