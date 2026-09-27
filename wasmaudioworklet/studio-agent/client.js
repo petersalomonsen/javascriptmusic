@@ -8,9 +8,9 @@
 import { songsourceeditor, synthsourceeditor, shadersourceeditor } from '../editorcontroller.js';
 import { renderShaderFrames } from '../visualizer/fragmentshader.js';
 import { transpileDspSource } from '../faust/faust-rs-transpile.js';
-import { saveFaustSource, libraryDependents, isFaustSource, isLibrary } from '../faust/faust-files.js';
+import { saveFaustSource, libraryDependents, isFaustSource, isLibrary, isScratch, clearScratch, scratchImports } from '../faust/faust-files.js';
 import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
-import { readfile, writefileandstage, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
+import { readfile, writefileandstage, unlinkfile, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
@@ -304,11 +304,22 @@ const registry = {
       const lines = [];
       for (const f of all.filter(isFaustSource)) {
         const rel = f.slice(FAUST_DIR.length);
+        if (isScratch(f, FAUST_DIR)) { lines.push(`${rel}  (scratch)`); continue; }
         if (!isLibrary(f)) { lines.push(rel); continue; }
         const users = (await libraryDependents(faustIO, f, FAUST_DIR)).map((d) => d.slice(FAUST_DIR.length));
         lines.push(`${rel}  (library${users.length ? `, imported by ${users.join(', ')}` : ''})`);
       }
       return lines.length ? lines.join('\n') : '(no .dsp instruments yet)';
+    } catch (e) { return faustUnavailable(e); }
+  },
+  clear_scratch: async () => {
+    const users = scratchImports(synthsourceeditor.doc.getValue());
+    if (users.length) return { __error: `synth.ts still imports from scratch/ — remove these lines first (edit_synth), then clear:\n${users.join('\n')}` };
+    try {
+      const gone = await clearScratch(faustIO, FAUST_DIR);
+      if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
+      const names = gone.filter(isFaustSource).map((p) => p.slice(FAUST_DIR.length));
+      return names.length ? `cleared faust/scratch/: ${names.join(', ')}` : 'faust/scratch/ is already empty';
     } catch (e) { return faustUnavailable(e); }
   },
   read_faust: async ({ path }) => {
@@ -666,7 +677,7 @@ function songEventAnomalies() {
 // Faust file helpers (normDsp is imported from tools-core.js)
 // The repo as the shared Faust save logic sees it (faust/faust-files.js):
 // the same save and transpile as the Faust editor.
-const faustIO = { readfile, listfiles, writefileandstage, transpile: transpileDspSource };
+const faustIO = { readfile, listfiles, writefileandstage, unlinkfile, transpile: transpileDspSource };
 
 function faustUnavailable(e, path = null) {
   const msg = String(e?.message || e);
