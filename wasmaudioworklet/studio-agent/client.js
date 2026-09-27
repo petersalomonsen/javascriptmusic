@@ -180,11 +180,14 @@ function shaderWarnings() {
 // The stage: parts from the compiled song, the sequencer's state from the
 // `wasmmusic-signal` events, and the signals themselves through the app's
 // bus (window.sendSignal, set up in audioworkletnode.js).
-let performanceMode = false;
 let stageWaiting = null;   // { name, loop } while the sequencer is parked on a wait
 const stageParts = () => partsFromEvents(window.lastCompiledEventList || []);
 const stageTimeMs = () => (typeof window.songTimeSeconds === 'function' ? (window.songTimeSeconds() || 0) * 1000 : 0);
 const stagePlaying = () => !!window.audioworkletnode;
+// On stage = the song is playing and has parts. Then a part name or "next"
+// jumps at once (no model), other instructions are stage turns (the stage
+// prompt, low effort, the playhead state); stopped, the agent composes.
+const onStage = () => stagePlaying() && stageParts().length > 0;
 function stageState() {
   return formatPerformanceState(stageParts(), { timeMs: stageTimeMs(), waiting: stageWaiting, playing: stagePlaying() });
 }
@@ -201,36 +204,10 @@ function stageSignal(name, goTo) {
 }
 window.addEventListener('wasmmusic-signal', (e) => {
   const d = e.detail || {};
-  if (d.performanceMode !== undefined) { setPerformanceUi(d.performanceMode); return; }
   if (d.waiting) stageWaiting = { name: d.waiting, loop: d.loop };
   if (d.resumed !== undefined || d.jumping) stageWaiting = d.jumping ? stageWaiting : null;
-  if (performanceMode) setStatus(`performance — ${stageState()}`);
+  if (onStage()) setStatus(`on stage — ${stageState()}`);
 });
-let sessionBeforePerformance = null;   // the archived composition session to return to
-function setPerformanceUi(on) {
-  performanceMode = !!on;
-  const input = el('studioagentinput');
-  if (input) input.placeholder = on ? 'performance: a part name, "next", or an instruction' : 'ask the studio agent…';
-  setStatus(on ? `performance — ${stageState()}` : (socket && socket.readyState === WebSocket.OPEN ? 'connected' : 'not connected'));
-  // The stage gets its own session: the composition session is archived (not
-  // lost — it is the song's provenance) and today's performance session is
-  // resumed or started. Off again, the composition session comes back.
-  sessionChain = sessionChain.then(async () => {
-    if (on && sessionLabel !== 'performance') {
-      sessionBeforePerformance = await archiveSession();
-      const today = sessionFileName('performance', new Date().toISOString()).replace(/^sessions\//, '').replace(/\.json$/, '');
-      let resumed = false;
-      try { await readfile(SESSIONS_DIR + today + '.json'); resumed = await resumeSession(today); } catch (e) { /* none today */ }
-      if (!resumed) { applySessionData({ label: 'performance' }); renderSession(); await saveSession(); addLine('tool', `— performance: fresh session${sessionBeforePerformance ? ` (composition archived as ${sessionBeforePerformance})` : ''} —`); }
-    } else if (!on && sessionLabel === 'performance') {
-      await archiveSession();
-      const back = sessionBeforePerformance ? sessionBeforePerformance.replace(/^sessions\//, '').replace(/\.json$/, '') : null;
-      if (!back || !(await resumeSession(back))) { applySessionData({ label: 'composition' }); renderSession(); await saveSession(); }
-      sessionBeforePerformance = null;
-    }
-  }).catch((e) => addLine('error', `session switch failed: ${String(e?.message || e)}`));
-}
-
 const registry = {
   // ---- performance mode: the stage tools (role 'performance') ----
   list_parts: async () => {
@@ -839,7 +816,7 @@ async function sendChat(text) {
   // Performance mode: the fast path first. An instruction that names a part
   // (or says "next") is dispatched right here — no model, no round trip —
   // and only what the panel cannot read goes to the stage-hand role.
-  if (performanceMode) return sendPerformance(text);
+  if (onStage()) return sendPerformance(text);
 
   // The agent works inside a project repo only: instruments live in the OPFS
   // faust/ folder, the session is saved to the repo, and the specialist writes
@@ -883,14 +860,14 @@ async function sendChat(text) {
   socket.send(JSON.stringify({ t: 'chat', text, sessionId, summary: sessionSummary, kit }));
 }
 
-// A performance-mode instruction. The fast path dispatches part names and
-// "next" itself; anything else is a PRODUCER turn on stage: the same kit and
-// tools plus the signal tools, the stage section in the prompt, low effort,
-// and the performance session the checkbox switched to. The stage state
+// An instruction while the song plays. The fast path dispatches part names
+// and "next" itself; anything else is a PRODUCER turn on stage: the same kit
+// and tools, the stage section in the prompt and low effort, in the current
+// session (/new starts a fresh one - worth it before a show). The stage state
 // (where the playhead is) rides with every message.
 async function sendPerformance(text) {
   if (turnRunning) { addLine('tool', '— a turn is still running. Press Escape (or Stop) to end it, then send again —'); return false; }
-  await sessionChain;   // a session switch may still be in flight right after the checkbox
+  await sessionChain;   // a session command may still be in flight
   const parts = stageParts();
   addLine('user', text);
   conversation.push({ role: 'user', text, stage: true });

@@ -40,13 +40,9 @@ export function onmidi(data) {
 // tools, another window, a timeout) ends up here; the worklet decides what
 // the signal does (docs/plans/performance-mode.md). State changes come back
 // as `wasmmusic-signal` DOM events for the UI and the agent.
-let performanceMode = false;
-export function setPerformanceMode(on) {
-    performanceMode = !!on;
-    if (audioworkletnode) audioworkletnode.port.postMessage({ performanceMode });
-    window.dispatchEvent(new CustomEvent('wasmmusic-signal', { detail: { performanceMode } }));
-}
-export const isPerformanceMode = () => performanceMode;
+// The song decides whether a part loops: its waitForSignal() waits in live
+// playback (loopParts(false) in the song plays through). Only an export - an
+// OfflineAudioContext render - ignores the waits and plays straight through.
 export function sendSignal(name, goTo = null) {
     if (!audioworkletnode) return false;
     audioworkletnode.port.postMessage({ signal: { name: String(name), goTo: goTo ? String(goTo) : null } });
@@ -157,7 +153,7 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         wasm: wasm_synth_bytes,
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay,
-        performanceMode: performanceMode && !(context instanceof (OfflineAudioContext)),
+        performanceMode: !(context instanceof (OfflineAudioContext)),
         audio: await Promise.all(addedAudio)
     }, (msg) => msg.wasmloaded);
     toggleSpinner(false);

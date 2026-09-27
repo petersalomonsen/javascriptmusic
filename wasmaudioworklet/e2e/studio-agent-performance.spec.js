@@ -3,13 +3,13 @@ import ws from 'ws';
 import { waitForAppReady, waitForStudioAgentTools, clearOPFS, specRepo } from './near-git-helpers.js';
 
 // The studio agent on stage (docs/plans/performance-mode.md, the agent
-// phase). With performance mode on, the panel dispatches a part name or
-// "next" ITSELF — no model, no round trip — through the app's signal bus;
-// anything else goes to the server as a PRODUCER turn on stage (mode:
-// 'performance', with the kit, the parts and the stage state). The
-// performance checkbox also switches SESSIONS: the composition conversation
-// is archived into sessions/ and a fresh performance session starts. Own
-// local repo; the "agent server" is a mock in this test.
+// phase). While the song plays and has parts, the panel dispatches a part
+// name or "next" ITSELF — no model, no round trip — through the app's signal
+// bus; anything else goes to the server as a PRODUCER turn on stage (mode:
+// 'performance', with the kit, the parts and the stage state). Stopped, the
+// same text is an ordinary chat. There is no mode switch and no automatic
+// session switch (/new starts a fresh session). Own local repo; the "agent
+// server" is a mock in this test.
 const REPO = specRepo('studio-agent-performance');
 
 const SONG = `setBPM(120);
@@ -111,7 +111,7 @@ test.describe('studio-agent performance mode (local repo)', () => {
     });
     test.afterEach(async ({ page }) => { await clearOPFS(page, REPO); await mock.close(); });
 
-    test('sessions: /new archives into sessions/, /sessions lists, /resume swaps back; the performance checkbox switches by itself', async ({ page }) => {
+    test('sessions: /new archives into sessions/, /sessions lists, /resume swaps back', async ({ page }) => {
         page.on('pageerror', (e) => console.log('[browser-error]', e.message));
         await page.goto(`http://localhost:8080/?gitrepo=${REPO}`);
         await waitForAppReady(page);
@@ -143,16 +143,6 @@ test.describe('studio-agent performance mode (local repo)', () => {
         }, `${today}-composition: 2 messages, composition`, { timeout: 15000 });
         await typeIntoAgentChat(page, `/resume ${today}-composition`);
         await waitForSession(page, "d.conversation.length === 2 && d.label === 'composition'");
-
-        // The performance checkbox: the composition session is archived, a fresh
-        // "performance" session starts; off again, the composition comes back.
-        await page.evaluate(() => { window.audioworkletnode = {}; window.sendSignal = () => true; window.togglePerformanceMode(true); });
-        await waitForSession(page, "d.label === 'performance' && d.conversation.length === 0");
-        await waitForRepoDir(page, 'sessions', [`${today}-composition.json`]);
-        await page.evaluate(() => window.togglePerformanceMode(false));
-        await waitForSession(page, "d.label === 'composition' && d.conversation.length === 2");
-        // an empty performance session is not archived; a used one would be (next test)
-        await waitForRepoDir(page, 'sessions', [`${today}-composition.json`]);
     });
 
     test('a part name or "next" is dispatched by the panel without a model; the rest is a producer turn on stage with kit, parts and state', async ({ page }) => {
@@ -178,10 +168,8 @@ test.describe('studio-agent performance mode (local repo)', () => {
             window.audioworkletnode = {};
             window.sendSignal = (name, goTo) => { window.__signals.push([name, goTo]); return true; };
             window.songTimeSeconds = () => 9;   // in "verse"
-            window.togglePerformanceMode(true);
             window.dispatchEvent(new CustomEvent('wasmmusic-signal', { detail: { waiting: 'go', loop: 'part' } }));
         });
-        await waitForSession(page, "d.label === 'performance'");
         expect(String((await mock.callTool('list_parts', {})).result)).toContain('Now in "verse", looping until signal "go".');
         expect(String((await mock.callTool('list_parts', {})).result)).toContain('1. intro — 4 bar(s), wait "go" (part)');
         const unknown = await mock.callTool('go_to_part', { part: 'bridge' });
@@ -200,7 +188,7 @@ test.describe('studio-agent performance mode (local repo)', () => {
         expect(log.some((l) => /jumping on the next bar line.*no model/.test(l))).toBe(true);
 
         // Intent the panel cannot read: a PRODUCER turn on stage — mode, parts, state,
-        // the kit, and the performance session (fresh: no sessionId).
+        // the kit, in the current session (no sessionId yet in this repo).
         await typeIntoAgentChat(page, 'italo hats in the verse');
         const chat = await mock.waitForChat(1);
         expect(chat.mode).toBe('performance');
@@ -211,16 +199,10 @@ test.describe('studio-agent performance mode (local repo)', () => {
         expect(chat.sessionId).toBeNull();
         expect(chat.text).toBe('italo hats in the verse');
         mock.send({ t: 'text', text: 'Hats swapped, next round.' }); mock.send({ t: 'done', subtype: 'success', secs: 1.2 });
-        await waitForSession(page, "d.label === 'performance' && d.conversation.length >= 2");
+        await waitForSession(page, "d.conversation.some((m) => m.text === 'Hats swapped, next round.')");
 
-        // Off again: the performance session is archived (it has messages) and the
-        // same text is a normal chat to the producer.
-        await page.evaluate(() => window.togglePerformanceMode(false));
-        await waitForSession(page, "(d.label || 'composition') === 'composition'");
-        const today = new Date().toISOString().slice(0, 10);
-        await waitForRepoDir(page, 'sessions', [`${today}-performance.json`]);
-        const perf = JSON.parse(await readRepoFile(page, `sessions/${today}-performance.json`));
-        expect(perf.conversation.map((m) => m.text)[0]).toBe('go to the quiet breakdown');
+        // Stopped: the same text is an ordinary chat to the producer (no stage).
+        await page.evaluate(() => { window.audioworkletnode = undefined; });
         await typeIntoAgentChat(page, 'next');
         const normal = await mock.waitForChat(2);
         expect(normal.mode).toBeUndefined();
