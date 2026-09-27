@@ -190,12 +190,27 @@ export function AudioWorkletProcessorSequencerModule() {
       return best;
     }
 
-    // Schedule the jump on the quantize grid: 'bar'/'beat' from gridStart, 'now' at once.
-    _scheduleJump({ target, goTo, wait, quantize, gridStart, barMs, beatMs }) {
+    // Where a part ends: the next part's marker, else the song's loop point
+    // (Infinity when neither exists).
+    _partEnd(part) {
+      let end = Infinity;
+      for (const p of Object.values(this.parts)) if (p.time > part.time && p.time < end) end = p.time;
+      if (end === Infinity) {
+        const loop = this.sequence.find((e) => e && e.message && e.message[0] === SEQ_MSG_LOOP);
+        if (loop) end = loop.time;
+      }
+      return end;
+    }
+
+    // Schedule the jump: 'part' at partEnd (the part plays out), 'bar'/'beat'
+    // on that grid from gridStart, 'now' at once.
+    _scheduleJump({ target, goTo, wait, quantize, gridStart, barMs, beatMs, partEnd = Infinity }) {
       const now = this.getCurrentTime();
       const q = quantize === 'bar' ? barMs : quantize === 'beat' ? beatMs : 0;
       let at = now;
-      if (q > 0) {
+      if (quantize === 'part') {
+        at = Math.max(now, partEnd);
+      } else if (q > 0) {
         const k = Math.ceil((now - gridStart) / q - 1e-9);
         at = gridStart + Math.max(0, k) * q;
       }
@@ -235,14 +250,16 @@ export function AudioWorkletProcessorSequencerModule() {
           return { resumed: true, goTo: goTo || null };
         }
         this._scheduleJump({ target, goTo, wait: w, quantize: w.quantize,
-          gridStart: w.loopStart, barMs: w.barMs, beatMs: w.beatMs });
+          gridStart: w.loopStart, barMs: w.barMs, beatMs: w.beatMs, partEnd: w.time });
         return { resumed: true, goTo: goTo || null, at: this.jump.at };
       }
       if (target) {
-        // a targeted jump from anywhere: quantized to the current part's bars
+        // a targeted jump from anywhere: when the current part ends, else on its bars
         const part = this._currentPart();
-        this._scheduleJump({ target, goTo, wait: null, quantize: part && part.barMs ? 'bar' : 'now',
-          gridStart: part ? part.time : 0, barMs: part ? part.barMs : 0, beatMs: 0 });
+        const partEnd = part ? this._partEnd(part) : Infinity;
+        this._scheduleJump({ target, goTo, wait: null,
+          quantize: partEnd < Infinity ? 'part' : part && part.barMs ? 'bar' : 'now',
+          gridStart: part ? part.time : 0, barMs: part ? part.barMs : 0, beatMs: 0, partEnd });
         return { resumed: false, goTo, at: this.jump.at };
       }
       return { resumed: false, ignored: true };
@@ -329,7 +346,7 @@ export function AudioWorkletProcessorSequencerModule() {
               }
               if (!this.wait) {
                 this.wait = {
-                  evt, name: evt.name || 'go', loop: evt.loop || 'part', quantize: evt.quantize || 'bar',
+                  evt, name: evt.name || 'go', loop: evt.loop || 'part', quantize: evt.quantize || 'part',
                   time: evt.time, loopStart: evt.partStart || 0, barMs: evt.barMs || 0, beatMs: evt.beatMs || 0,
                   timeoutMs: evt.timeout && evt.timeout.bars > 0 ? evt.timeout.bars * (evt.barMs || 0) : 0,
                   timeoutGoTo: evt.timeout ? evt.timeout.goTo || null : null,

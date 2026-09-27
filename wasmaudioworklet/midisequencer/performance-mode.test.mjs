@@ -131,14 +131,36 @@ test('kiosk timeout: after `bars` of looping the wait signals itself, to its goT
   assert.deepEqual(s.notes(), [60, 62, 60, 67]);
 });
 
-test('a targeted signal outside any wait jumps at the current part\'s next bar line', () => {
+test('a targeted signal outside any wait lets the current part play out, then jumps', () => {
   const s = makeSeq(song());
-  s.run(700);    // in part a, bar 1
-  const r = s.seq.signal('goto', 'b');
-  assert.equal(r.at, 2000);
-  s.run(1500);
-  assert.deepEqual(s.notes(), [60, 64]);
+  s.run(700);    // in part a (0-4000), bar 1
+  const r = s.seq.signal('goto', 'c');
+  assert.equal(r.at, 4000, "at part a's end (the next marker), not its next bar line");
+  s.run(3500);
+  assert.deepEqual(s.notes(), [60, 62, 67], 'a plays out, b is skipped');
   assert.deepEqual(s.seq.signal('goto', 'zzz'), { unknownPart: 'zzz' });
+});
+
+test('from the last part a jump waits for the loop point', () => {
+  const s = makeSeq(song(), { performance: false });   // plays through to c
+  s.run(6500);
+  assert.equal(s.seq.signal('goto', 'b').at, 8000);
+  s.run(2000);
+  assert.deepEqual(s.notes(), [60, 62, 64, 67, 64], 'c plays out, then b (not a from the wrap)');
+});
+
+test("a looping part leaves when it has played out by default (quantize 'part')", () => {
+  const s = makeSeq(song({ quantize: undefined }));
+  s.run(4700);   // looping, ~700 ms into pass 2
+  assert.equal(s.seq.signal('go', 'c').at, 4000, 'the end of the pass, not the bar line at 2000');
+  s.run(3500);
+  assert.deepEqual(s.notes(), [60, 62, 60, 62, 67]);
+});
+
+test("a song that asks for quantize 'bar' still leaves on the next bar line", () => {
+  const s = makeSeq(song());   // the fixture's wait says quantize: 'bar'
+  s.run(4700);
+  assert.equal(s.seq.signal('go', 'c').at, 2000);
 });
 
 test('leaving performance mode while looping plays on; a live recompile re-enters the wait when reached', () => {
@@ -238,4 +260,14 @@ test('loopParts(false) marks the waits after it inert; each compile starts loopi
     loopParts(true);
     definePartStart('c'); await createTrack(0).steps(1, [c5]); await waitForSignal('go');`), [false, true, false]);
   assert.deepEqual(await waits(`definePartStart('a'); await createTrack(0).steps(1, [c5]); await waitForSignal('go');`), [false]);
+});
+
+test("waitForSignal leaves at the part's end unless it asks for a grid", async () => {
+  const { compileSongUnsafe } = await import('./songcompiler.js');
+  const quantize = async (opts) => (await compileSongUnsafe(`definePartStart('a'); await createTrack(0).steps(1, [c5]); await waitForSignal('go'${opts});`))
+    .find(e => e.message[0] === SEQ_MSG_WAIT_SIGNAL).quantize;
+  assert.equal(await quantize(''), 'part');
+  assert.equal(await quantize(", { loop: 'part' }"), 'part');
+  assert.equal(await quantize(", { quantize: 'bar' }"), 'bar');
+  assert.equal(await quantize(", { quantize: 'bogus' }"), 'part');
 });

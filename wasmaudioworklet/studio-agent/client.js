@@ -200,8 +200,8 @@ function stageSignal(name, goTo) {
   if (!ok) return { __error: 'the song is not running — press play first' };
   const cur = partAt(stageParts(), stageTimeMs());
   return goTo
-    ? `→ "${goTo}": jumping on the next bar line${cur ? ` (leaving "${cur.name}")` : ''}`
-    : `signal "${name}" sent${stageWaiting ? `: leaving "${stageWaiting.name}" wait on the next bar line` : ' (no wait engaged — it applies when the song reaches one)'}`;
+    ? `→ "${goTo}": ${cur ? `when "${cur.name}" has played out` : 'at the end of the current part'}`
+    : `signal "${name}" sent${stageWaiting ? `: leaving the "${stageWaiting.name}" wait when the part has played out` : ' (no wait engaged — it applies when the song reaches one)'}`;
 }
 window.addEventListener('wasmmusic-signal', (e) => {
   const d = e.detail || {};

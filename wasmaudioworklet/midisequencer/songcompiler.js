@@ -205,8 +205,9 @@ function definePartStart(partName) {
 
 // In PERFORMANCE MODE the song parks here until a signal named `name` (or
 // 'any') arrives — looping the current part (`loop: 'part'`, the default) or
-// freezing the clock (`loop: 'hold'`) — and leaves on the next bar
-// (`quantize: 'bar' | 'beat' | 'now'`). A signal may carry a part to jump
+// freezing the clock (`loop: 'hold'`) — and leaves when the part has played
+// out (`quantize: 'part'`, the default), or on the next 'bar' / 'beat', or
+// 'now'. A signal may carry a part to jump
 // to instead of continuing. Outside performance mode the wait is inert:
 // `default: 'continue'` (the default) plays on, a part name seeks there — so
 // export, headless rendering and the agent's frames stay deterministic.
@@ -219,7 +220,7 @@ function waitForSignal(name = 'go', options = {}) {
         message: [SEQ_MSG_WAIT_SIGNAL],
         name,
         loop: options.loop === 'hold' ? 'hold' : 'part',
-        quantize: ['bar', 'beat', 'now'].includes(options.quantize) ? options.quantize : 'bar',
+        quantize: ['part', 'bar', 'beat', 'now'].includes(options.quantize) ? options.quantize : 'part',
         default: typeof options.default === 'string' ? options.default : 'continue',
         timeout,
         partStart: currentPartStart,

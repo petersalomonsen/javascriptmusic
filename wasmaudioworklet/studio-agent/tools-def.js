@@ -88,7 +88,7 @@ export const TOOL_DEFS = [
 
     // ---- the stage tools (docs/plans/performance-mode.md): navigate a song's parts ----
     { name: 'list_parts', where: 'browser', description: 'Performance mode: the song\'s parts in order (definePartStart names, with their length in bars and the waits that close them), where the playhead is now, and what signal it is waiting for. Read this only if the prompt\'s part list is missing or stale.', parameters: obj({}) },
-    { name: 'go_to_part', where: 'browser', description: 'Performance mode: jump to a named part — a signal carrying the part, so the song leaves the current part on its next bar line (or at its end) and continues from that part\'s marker. The ONLY way to move the song on stage; never edit the song for this.', parameters: obj({ part: str('the part name exactly as listed') }, ['part']) },
+    { name: 'go_to_part', where: 'browser', description: 'Performance mode: jump to a named part — a signal carrying the part, so the current part plays out and the song continues from that part\'s marker. The ONLY way to move the song on stage; never edit the song for this.', parameters: obj({ part: str('the part name exactly as listed') }, ['part']) },
     { name: 'send_signal', where: 'browser', description: 'Performance mode: send a named signal ("go" moves on to whatever follows the current wait). Use go_to_part when the user names a part.', parameters: obj({ name: str('signal name (default "go")') }) },
 
     // ---- repository files ----

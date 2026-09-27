@@ -213,7 +213,7 @@ Sets how many beats a bar has from here on (4 until a song says otherwise).
 A part takes its bar length from the value when it starts, as it takes the
 tempo from `setBPM`, so a 3/4 part is `setBeatsPerBar(3)` before its
 `definePartStart`. It is what performance mode counts in: `quantize: 'bar'`,
-a jump to the part, `timeout: { bars }`. Beats stay the unit of everything
+`timeout: { bars }`. Beats stay the unit of everything
 else (`steps`, `play`, recordings).
 
 **Parameters:**
@@ -559,9 +559,10 @@ In live playback, parks the song here until a signal named `name` (or
 
 - `loop` (`'part'` | `'hold'`, default `'part'`): loop the current part
   (from its `definePartStart`) while waiting, or freeze the clock.
-- `quantize` (`'bar'` | `'beat'` | `'now'`, default `'bar'`): when the signal
-  arrives, leave on the next bar line (the part's bar: `setBeatsPerBar`, 4 by default),
-  the next beat, or at once.
+- `quantize` (`'part'` | `'bar'` | `'beat'` | `'now'`, default `'part'`): when
+  the signal arrives, let the part play out and leave at its end, or leave on
+  the next bar line (the part's bar: `setBeatsPerBar`, 4 by default), the next
+  beat, or at once.
 - `default` (`'continue'` | part name, default `'continue'`): what happens
   where the wait does not wait (an export, `loopParts(false)`) — play on, or
   seek to that part.
@@ -569,14 +570,16 @@ In live playback, parks the song here until a signal named `name` (or
   move on by itself, to `goTo` if given (kiosk mode).
 
 A signal may carry a part to jump to instead of continuing:
-`sendSignal('go', 'chorus')`. A targeted signal also works outside any wait,
-quantized to the current part's bar line. Leaving a part or jumping to one
+`sendSignal('go', 'chorus')`. A targeted signal also works outside any wait
+(a song playing through with `loopParts(false)`): the current part plays out
+and the jump happens at its end — the next part's marker, or the loop point
+for the last part. Leaving a part or jumping to one
 silences the notes still sounding, as a seek does — a loop wrap does not.
 
 ```javascript
 definePartStart('intro');
 await intro();
-await waitForSignal('go', { loop: 'part', quantize: 'bar' });
+await waitForSignal('go', { quantize: 'bar' });   // leave on the next bar line, not at the part's end
 definePartStart('verse');
 await verse();
 await waitForSignal('go', { timeout: { bars: 16, goTo: 'idle' } });
