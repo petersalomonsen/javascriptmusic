@@ -175,7 +175,7 @@ test.describe('studio-agent performance mode (local repo)', () => {
         const unknown = await mock.callTool('go_to_part', { part: 'bridge' });
         expect(unknown.ok).toBe(false);
         expect(String(unknown.result)).toContain('no part "bridge". Parts: intro, verse, quiet breakdown, finale');
-        expect(String((await mock.callTool('go_to_part', { part: 'Finale' })).result)).toContain('→ "finale": jumping on the next bar line (leaving "verse")');
+        expect(String((await mock.callTool('go_to_part', { part: 'Finale' })).result)).toContain('→ "finale": when "verse" has played out');
 
         // The fast path: typed part names and "next" never reach the server.
         await typeIntoAgentChat(page, 'go to the quiet breakdown');
@@ -185,7 +185,7 @@ test.describe('studio-agent performance mode (local repo)', () => {
         expect(await page.evaluate(() => window.__signals)).toEqual([['go', 'finale'], ['go', 'quiet breakdown'], ['go', null], ['go', 'finale']]);
         expect(mock.state.chats.length).toBe(0);
         const log = await chatLog(page);
-        expect(log.some((l) => /jumping on the next bar line.*no model/.test(l))).toBe(true);
+        expect(log.some((l) => /has played out.*no model/.test(l))).toBe(true);
 
         // Intent the panel cannot read: a PRODUCER turn on stage — mode, parts, state,
         // the kit, in the current session (no sessionId yet in this repo).
