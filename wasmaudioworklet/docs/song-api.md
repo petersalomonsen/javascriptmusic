@@ -208,6 +208,28 @@ Sets the tempo of the song in beats per minute.
 setBPM(120);
 ```
 
+### `setBeatsPerBar(beats)`
+Sets how many beats a bar has from here on (4 until a song says otherwise).
+A part takes its bar length from the value when it starts, as it takes the
+tempo from `setBPM`, so a 3/4 part is `setBeatsPerBar(3)` before its
+`definePartStart`. It is what performance mode counts in: `quantize: 'bar'`,
+`timeout: { bars }`. Beats stay the unit of everything
+else (`steps`, `play`, recordings).
+
+**Parameters:**
+- `beats` (number): a whole number of beats per bar
+
+**Example:**
+```javascript
+setBPM(90);
+setBeatsPerBar(3);             // a waltz: its part leaves on 3-beat bar lines
+definePartStart('waltz');
+await createTrack(0).steps(1, [c5, fs5, fs5].repeat(7));   // 8 bars of 3/4
+await waitForSignal('go');
+setBeatsPerBar(4);
+definePartStart('march');
+```
+
 ### `waitForBeat(beatNo)`
 Waits until the specified beat number is reached.
 
@@ -515,10 +537,72 @@ await createTrack(0).steps(4, [
 
 ---
 
+## Performance: looping parts and signals
+
+For a concert, a presentation or an unattended installation: the song holds
+or **loops within a part and moves on when told** — by a signal from a
+shader element, a MIDI mapping, the agent, another window, or a timeout —
+to the next part or to any part by name. The song says where: a part loops
+at its `waitForSignal`. There is no mode to switch on — live playback honours
+the waits; `loopParts(false)` in the song makes them play through. An export
+never waits: it is the same deterministic, straight-through score as
+headless rendering and the agent's `render_shader` frames.
+
+### `loopParts(on = true)`
+Whether the waits from here on loop (the default) or play straight through.
+`loopParts(false)` at the top of a song plays the whole arrangement once, to
+hear it or to share it; take it out (or `loopParts(true)`) to perform.
+
+### `waitForSignal(name = 'go', options = {})`
+In live playback, parks the song here until a signal named `name` (or
+`'any'`) arrives.
+
+- `loop` (`'part'` | `'hold'`, default `'part'`): loop the current part
+  (from its `definePartStart`) while waiting, or freeze the clock.
+- `quantize` (`'part'` | `'bar'` | `'beat'` | `'now'`, default `'part'`): when
+  the signal arrives, let the part play out and leave at its end, or leave on
+  the next bar line (the part's bar: `setBeatsPerBar`, 4 by default), the next
+  beat, or at once.
+- `default` (`'continue'` | part name, default `'continue'`): what happens
+  where the wait does not wait (an export, `loopParts(false)`) — play on, or
+  seek to that part.
+- `timeout` (`{ bars, goTo }`): after `bars` bars of looping with no signal,
+  move on by itself, to `goTo` if given (kiosk mode).
+
+A signal may carry a part to jump to instead of continuing:
+`sendSignal('go', 'chorus')`. A targeted signal also works outside any wait
+(a song playing through with `loopParts(false)`): the current part plays out
+and the jump happens at its end — the next part's marker, or the loop point
+for the last part. Leaving a part or jumping to one
+silences the notes still sounding, as a seek does — a loop wrap does not.
+
+```javascript
+definePartStart('intro');
+await intro();
+await waitForSignal('go', { quantize: 'bar' });   // leave on the next bar line, not at the part's end
+definePartStart('verse');
+await verse();
+await waitForSignal('go', { timeout: { bars: 16, goTo: 'idle' } });
+definePartStart('chorus');
+```
+
+### Sending signals
+`window.sendSignal(name, goTo?)` from the console or any script; the app's
+signal sources end up in the same place. The **studio agent** is one of them:
+with performance mode on, a part name or "next" typed into its panel is
+dispatched at once without a model, and an instruction like "take it to the
+quiet bit" becomes one tool call of its stage-hand role (a few seconds). State changes arrive as `wasmmusic-signal`
+DOM events on `window`: `{ waiting, loop, timeoutMs }`, `{ jumping, at,
+quantize }`, `{ resumed, goTo }`, `{ performanceMode }`.
+
+`broadcastSend` from another window is a signal too, so `waitForSignal`
+resumes on it like `broadcastWait` does.
+
 ## Song Structure Functions
 
 ### `definePartStart(partName)`
-Marks the start of a named song part.
+Marks the start of a named song part. In performance mode it is also where a
+`loop: 'part'` wait loops from, and what a targeted signal jumps to.
 
 **Parameters:**
 - `partName` (string): Name of the song part

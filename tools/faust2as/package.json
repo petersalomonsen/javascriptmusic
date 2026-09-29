@@ -5,6 +5,6 @@
   "description": "Faust DSP → AssemblyScript MidiVoice transpilers used by examples/",
   "type": "module",
   "dependencies": {
-    "@psalomo/wasm-music-faust": "^0.1.1"
+    "@psalomo/wasm-music-faust": "^0.2.0"
   }
 }

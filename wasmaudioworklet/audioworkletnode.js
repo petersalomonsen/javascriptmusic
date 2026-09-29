@@ -1,5 +1,5 @@
 import { startWAM, postSong as wamPostSong, pauseWAMSong, onMidi as wamOnMidi, wamsynth, resumeWAMSong } from './webaudiomodules/wammanager.js';
-import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi, setBroadcastUiHandlers, releaseAudioWorklet } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { createAudioWorklet as createMidiSynthAudioWorklet, onmidi as midiSynthOnMidi, setBroadcastUiHandlers, releaseAudioWorklet, sendSignal } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { visualizeNoteOn, clearVisualization, setUseDefaultVisualizer, getCurrentTimeSeconds } from './visualizer/defaultvisualizer.js';
 import { setPaused } from './visualizer/midieventlistvisualizer.js';
 import { attachSeek, detachSeek } from './app.js';
@@ -208,6 +208,11 @@ export function initAudioWorkletNode(componentRoot) {
             }
         }
     };
+
+    // waitForSignal() in the song parks the sequencer until a signal (the song
+    // decides: loopParts(false) plays through); sendSignal is the bus every
+    // source posts to — the agent, the console and tests included.
+    window.sendSignal = (name, goTo) => sendSignal(name, goTo);
 
     window.toggleCapture = (status) => {
         if (status) {

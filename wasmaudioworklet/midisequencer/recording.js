@@ -4,7 +4,11 @@ const noteNumberArray = new Array(128).fill(null).map((v, ndx) =>
 
 const NOTEARRAY_CONTROL_CHANGE = -1;
 
-export function extractNotes(data) {
+// `endTime` (seconds, same clock as the data): where the recording stops. A
+// note with no note-off before it - still held at stopRecording(), or held
+// across the loop point of a looping part (its note-off lands at the start of
+// the loop, before its own note-on) - ends there instead of being dropped.
+export function extractNotes(data, endTime = null) {
     const notes = [];
     const ongoingNoteMap = {};
     const notekey = (msg) => ((msg[0] & 0x0f) << 8) + msg[1];
@@ -39,6 +43,12 @@ export function extractNotes(data) {
             notes.push([channel, NOTEARRAY_CONTROL_CHANGE, controlValue, currentTime, controlNumber]);
         }
     });
+    if (endTime !== null) {
+        for (const [key, startMsg] of Object.entries(ongoingNoteMap)) {
+            if (endTime <= startMsg.startTime) continue;
+            notes.push([(key & 0xf00) >> 8, key & 0xff, startMsg.velocity, startMsg.startTime, endTime - startMsg.startTime]);
+        }
+    }
     return notes;
 }
 
@@ -77,9 +87,10 @@ function toTrackerPattern(notes) {
 }
 
 export class RecordConverter {
-    constructor(recordeddata, bpm, recordingStartTime = 0) {
+    constructor(recordeddata, bpm, recordingStartTime = 0, recordingStopTime = null) {
         this.recordeddata = recordeddata.map(event => [event[0] - recordingStartTime].concat(event.slice(1)));
-        this.notes = extractNotes(this.recordeddata);
+        this.notes = extractNotes(this.recordeddata,
+            recordingStopTime !== null && recordingStopTime > recordingStartTime ? recordingStopTime - recordingStartTime : null);
         this.notesByBeat = convertToBeats(this.notes, bpm);
         this.trackerPatternData = toTrackerPattern(this.notesByBeat);
     }

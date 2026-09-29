@@ -9,13 +9,14 @@ import { toggleSpinner } from './common/ui/progress-spinner.js';
 
 import { readfile, writefileandstage, unlinkfile, initWASMGitClient, addRemoteSyncListener, getConfig, listfiles } from './wasmgit/wasmgitclient.js';
 import { transpileDspSource } from './faust/faust-rs-transpile.js';
+import { saveFaustSource, isFaustSource, isLibrary, isScratch } from './faust/faust-files.js';
 import { createPatternToolsGlobal } from './pattern_tools.js';
 import { modal, modalPrompt, modalAlert } from './common/ui/modal.js';
 import { zipRepo, downloadBlob } from './wasmgit/repozip.js';
-import { updateSong, updateSynth, exportToWav } from './synth1/audioworklet/midisynthaudioworklet.js';
+import { updateSong, updateSynth, exportToWav, renderSongOffline, confirmClipping } from './synth1/audioworklet/midisynthaudioworklet.js';
 import { compileWebAssemblySynth } from './synth1/browsersynthcompiler.js';
 
-import { exportVideo, setupWebGL } from './visualizer/fragmentshader.js';
+import { exportVideo, pickVideoFile, setupWebGL } from './visualizer/fragmentshader.js';
 import { hasScheduledText } from './visualizer/videoscheduler.js';
 import { getVisualParamNames } from './visualizer/visualparams.js';
 import { visualWarnings } from './visualizer/visualwarnings.js';
@@ -191,7 +192,8 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         if (!gitrepoconfig) return;
         try {
             const all = await listfiles(FAUST_DIR);
-            const dspFiles = all.filter(f => f.endsWith('.dsp'));
+            // instruments (.dsp) and the libraries they import (.lib)
+            const dspFiles = all.filter(isFaustSource);
             faustFileSelect.innerHTML = '';
             if (dspFiles.length === 0) {
                 const opt = document.createElement('option');
@@ -202,7 +204,8 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                 for (const f of dspFiles) {
                     const opt = document.createElement('option');
                     opt.value = f;
-                    opt.textContent = f.substring(FAUST_DIR.length);
+                    opt.textContent = f.substring(FAUST_DIR.length)
+                        + (isScratch(f, FAUST_DIR) ? '  (scratch)' : isLibrary(f) ? '  (library)' : '');
                     if (f === currentFaustFilename) opt.selected = true;
                     faustFileSelect.appendChild(opt);
                 }
@@ -255,21 +258,21 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
     faustNewFileButton.addEventListener('click', async () => {
         const entered = await modalPrompt(
             'New Faust file',
-            'Basename, with optional sub-folders (e.g. <code>mysynth</code> or <code>mysong/dsp/master</code>). <code>.dsp</code> is added automatically.',
+            'Basename, with optional sub-folders (e.g. <code>mysynth</code> or <code>mysong/dsp/master</code>). <code>.dsp</code> is added automatically; end it in <code>.lib</code> for a library the instruments can import. Under <code>scratch/</code> it is an experiment: never committed.',
             ''
         );
         if (entered === null) return;
         const raw = entered.trim();
         if (!raw) return;
-        const basename = raw.endsWith('.dsp') ? raw : raw + '.dsp';
+        const basename = isFaustSource(raw) ? raw : raw + '.dsp';
         // Accept sub-folders (segments separated by /), each segment alphanumeric/_/-.
-        if (!/^([A-Za-z0-9_\-]+\/)*[A-Za-z0-9_\-]+\.dsp$/.test(basename)) {
-            displayFaustError('Faust filename must be alphanumeric segments separated by slashes, e.g. mysynth.dsp or mysong/dsp/master.dsp');
+        if (!/^([A-Za-z0-9_\-]+\/)*[A-Za-z0-9_\-]+\.(dsp|lib)$/.test(basename)) {
+            displayFaustError('Faust filename must be alphanumeric segments separated by slashes, e.g. mysynth.dsp, mysong/dsp/master.dsp or shared.lib');
             return;
         }
         const fullPath = FAUST_DIR + basename;
         try {
-            await writefileandstage(fullPath, FAUST_STUB);
+            await writefileandstage(fullPath, isLibrary(basename) ? 'import("stdfaust.lib");\n' : FAUST_STUB);
             currentFaustFilename = fullPath;
             await refreshFaustFileList();
             faustFileSelect.value = fullPath;
@@ -285,63 +288,57 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         }
     });
 
-    // Walk the source file's directory in wasm-git and gather every .dsp/.lib
-    // file *except the source itself* into a map keyed by its path relative
-    // to that directory — so `library("lib/ebur128.dsp")` and
-    // `library("expanders.lib")` resolve via the libfaust virtual FS.
-    async function collectSiblingLibs(sourcePath) {
-        const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/') + 1);
-        const all = await listfiles(sourceDir);
-        const libs = {};
-        await Promise.all(all.map(async (p) => {
-            if (p === sourcePath) return;
-            if (!/\.(dsp|lib)$/.test(p)) return;
-            const relPath = p.substring(sourceDir.length);
-            try { libs[relPath] = await readfile(p); } catch (_) { /* skip */ }
-        }));
-        return libs;
-    }
+    // The repo as the shared Faust save logic (faust/faust-files.js) sees it:
+    // the editor and the studio agent save and transpile the same way.
+    const faustIO = { readfile, listfiles, writefileandstage, transpile: transpileDspSource };
 
     // Save callback used by both the save button and CodeMirror's Cmd-S.
     // Returns true when a save+transpile actually happened (so the caller
     // can decide to also kick off an AS recompile so the new module is
-    // picked up immediately).
+    // picked up immediately). A .dsp is written and transpiled with its
+    // siblings; a .lib is written and every instrument that imports it
+    // (directly or through another library) is re-transpiled. The source is
+    // always written first, so a transpile error never loses the edit.
     async function saveFaustIfChanged() {
         if (!gitrepoconfig || !currentFaustFilename) return false;
         const source = faustsourceeditor.doc.getValue();
         if (source === lastSavedFaustSource && lastFaustTranspileOk) return false;
         const basename = currentFaustFilename.substring(FAUST_DIR.length);
-        const stem = basename.replace(/\.dsp$/, '');
-        // Persist the .dsp source FIRST, before transpiling. Transpilation can
-        // throw (e.g. a library/instrument that references a sibling file not
-        // saved yet), and the user's edits must never be lost to a compile
-        // error — the source has to survive so the sibling can be added and the
-        // file re-saved. The .ts is generated separately below.
-        await writefileandstage(currentFaustFilename, source);
-        lastSavedFaustSource = source;
+        const stem = basename.replace(/\.(dsp|lib)$/, '');
+        faustSaveStatus.textContent = 'Transpiling...';
+        let result;
         try {
-            faustSaveStatus.textContent = 'Transpiling...';
-            const libs = await collectSiblingLibs(currentFaustFilename);
-            const { ts, className } = await transpileDspSource(source, basename, libs);
-            const tsPath = currentFaustFilename.replace(/\.dsp$/, '.ts');
-            await writefileandstage(tsPath, ts);
-            lastFaustTranspileOk = true;
-            // Surface the ready-to-paste import line — works regardless of
-            // how deep the .dsp lives under faust/.
-            const importPath = '../faust/' + stem;
-            const libsCount = Object.keys(libs).length;
-            faustSaveStatus.textContent =
-                `Saved ${basename}` +
-                (libsCount ? ` (+${libsCount} sibling lib${libsCount === 1 ? '' : 's'})` : '') +
-                `  →  import { ${className} } from '${importPath}';`;
-            return true;
+            result = await saveFaustSource(faustIO, currentFaustFilename, source, FAUST_DIR);
         } catch (e) {
-            // Source is already saved above; only the .ts is missing. Tell the
+            // Source is already saved; only the .ts is missing. Tell the
             // user the source is safe so they don't lose work to the error.
+            lastSavedFaustSource = source;
             faustSaveStatus.textContent = `Saved ${basename} (transpile failed)`;
             displayFaustError('Faust transpile failed: ' + (e && e.message ? e.message : e));
             throw e;
         }
+        lastSavedFaustSource = source;
+        if (result.kind === 'lib') {
+            const names = (list) => list.map((r) => r.path.substring(FAUST_DIR.length)).join(', ');
+            lastFaustTranspileOk = result.failed.length === 0;
+            faustSaveStatus.textContent = `Saved ${basename}` + (result.rebuilt.length
+                ? `  →  re-transpiled ${result.rebuilt.length}: ${names(result.rebuilt)}`
+                : '  (no instrument imports it yet)');
+            if (result.failed.length) {
+                faustSaveStatus.textContent += `  ·  FAILED: ${names(result.failed)}`;
+                displayFaustError(result.failed.map((f) => `${f.path}: ${f.error && f.error.message ? f.error.message : f.error}`).join('\n\n'));
+            }
+            return result.rebuilt.length > 0;
+        }
+        lastFaustTranspileOk = true;
+        // Surface the ready-to-paste import line — works regardless of
+        // how deep the .dsp lives under faust/.
+        const importPath = '../faust/' + stem;
+        faustSaveStatus.textContent =
+            `Saved ${basename}` +
+            (result.libsCount ? ` (+${result.libsCount} sibling lib${result.libsCount === 1 ? '' : 's'})` : '') +
+            `  →  import { ${result.className} } from '${importPath}';`;
+        return true;
     }
     // Expose so compileAndPostSong (defined below) can call it.
     window.__saveFaustIfChanged = saveFaustIfChanged;
@@ -516,7 +513,8 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                         const EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG = 'midimultipartmodulepng';
                         const EXPORT_MODE_MIDIPARTS_JSON = 'midipartsjson';
 
-                        exportProject = await modal(`
+                        // `true` (the export button) asks; a mode name (tests, scripts) goes straight to it
+                        if (exportProject === true) exportProject = await modal(`
                             <h3>Select export</h3>
                             <p>
                                 <form>
@@ -527,6 +525,7 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDISYNTH_MULTIPART_WASM_LIB_PNG}">PNG compressed WASM midi-multipart module</label><br />
                                     <label><input type="radio" name="exporttype" value="${EXPORT_MODE_MIDIPARTS_JSON}">MIDI parts as JSON</label><br />
                                     <label><input type="radio" name="exporttype" value="pngsources">source code as PNG image</label><br />
+                                    <label><input type="radio" name="exporttype" value="videoaudio">Shader video with sound (WebM: VP9 + Opus 48kHz)</label><br />
                                     <label><input type="radio" name="exporttype" value="video">Shader video (without sound)</label><br />
                                     <label><input type="radio" name="exporttype" value="repozip">Project repository as ZIP (with git history)</label><br />
                                 </form>
@@ -613,6 +612,21 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
                             triggerDownload(encodeBufferAsPNG(sourcesbytes), 'wasmstuff.png');
                         } else if (exportProject === 'video') {
                             await exportVideo(shadersource, eventlist);
+                        } else if (exportProject === 'videoaudio') {
+                            // one file: the song rendered offline at 48 kHz (what Opus
+                            // wants) becomes the WebM's audio track, then the frames.
+                            // The save dialog needs the click's user gesture, which the
+                            // render (minutes for a long song) would use up: ask FIRST.
+                            toggleSpinner(false);
+                            const fileHandle = await pickVideoFile();
+                            toggleSpinner(true);
+                            const wasmBytes = await compileWebAssemblySynth(synthsource + '\n', undefined, 48000, false, faustSources);
+                            const { renderedBuffer, clips } = await renderSongOffline(eventlist, wasmBytes, 48000);
+                            if (clips.length) toggleSpinner(false);   // the dialog must not sit under the spinner
+                            if (await confirmClipping(clips)) {
+                                toggleSpinner(true);
+                                await exportVideo(shadersource, eventlist, { audioBuffer: renderedBuffer, fileHandle });
+                            }
                         } else if (exportProject === EXPORT_MODE_MIDIPARTS_JSON) {
                             const songParts = getSongParts();
                             triggerDownload(URL.createObjectURL(new Blob([JSON.stringify(songParts)],

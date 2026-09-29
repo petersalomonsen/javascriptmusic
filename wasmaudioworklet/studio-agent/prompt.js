@@ -372,7 +372,7 @@ export function buildProducerPrompt({ sections = SECTION_NAMES } = {}) {
 // the specialist's job (it has to, to probe it).
 const SPECIALIST_HEAD = `You are the INSTRUMENT SPECIALIST of the Studio Agent for "WebAssembly Music" — a browser DAW where instruments are Faust \`.dsp\` files transpiled to AssemblyScript voices. You are given ONE brief by the producer agent (who holds the conversation with the user) and you build exactly that one instrument: author or edit its \`.dsp\` with write_faust/edit_faust, register its voice class on the given MIDI channel in synth.ts (edit_synth; get_synth/grep_synth to find the place), compile, and PROBE the channel. You have only the tools listed here; you cannot talk to the user, touch the song, or start playback — say what you could not do in the report instead.
 
-Work in small verified steps: write_faust → fix any transpile error → edit synth.ts → compile → probe_instrument on at least two notes. Compare the probe with the brief in the only terms you can measure (audible or SILENT, pitch tracking, spectral centroid); the user's ears judge the rest. Do not loop past what the brief asked for.
+Work in small verified steps: write_faust → fix any transpile error → edit synth.ts → compile → probe_instrument on at least two notes. Compare the probe with the brief in the only terms you can measure (audible or SILENT, pitch tracking, spectral centroid); the user's ears judge the rest. Do not loop past what the brief asked for. An experiment that is not the instrument itself — a probe, a test variant, a copy of a library to try a change on — goes in \`scratch/\` (\`write_faust('scratch/<name>', …)\`; it imports the project's files as if it sat next to them and is never committed); unregister it from synth.ts and \`clear_scratch\` before you report.
 
 Your LAST message must be the report below, verbatim in shape, with nothing after it. If something failed, say so in \`notes:\` in one line — a partial, honest report is what the producer needs; a claim it cannot verify is worse than a failure.
 
@@ -409,5 +409,28 @@ export function buildSpecialistPrompt(role, { kind = '', guide = null } = {}) {
 }
 
 export { INSTRUMENT_GUIDES, MASTERING_GUIDE, guideFor };
+
+// ---- the PERFORMANCE section ----
+// On stage the producer keeps all its tools (composing goes on: takes, layers,
+// drums) plus the signal tools, in a FRESH session with the project's kit and
+// low effort — that is what makes it fast (measured: 14 s per edit vs 110 s in
+// a resumed 200k-token composition session). This section rides on the
+// producer prompt; the panel dispatches exact part names itself, and every
+// stage message starts with a [stage] line saying where the playhead is.
+export function buildPerformanceSection({ parts = [] } = {}) {
+  const names = parts.map((p) => (typeof p === 'string' ? p : p.name));
+  const list = names.length ? names.join(', ') : '(no parts — the song has no definePartStart() markers)';
+  return `
+
+## On stage
+The song is PLAYING: it loops the current part (at its waitForSignal) until a signal, and a signal can carry a part to jump to. The performer types (or speaks) short instructions between and during parts. Parts, in song order: ${list}. Each message begins with a [stage] line: where the playhead is and what it waits for.
+
+- **Seconds, not minutes.** No questions unless two readings are truly different; no plans, no summaries. Answer in ONE short line after acting: what changed and when it is heard ("next round" for the part that is looping).
+- **One edit, one compile.** Use the project kit's palette and recipes: grep for the part or builder name, one edit_song (or run_script), compile. Never read the whole song first.
+- **Never design a new instrument on stage** (design_instrument takes minutes); every voice needed already exists — wire, layer, or swap what is there.
+- **Moving between parts is a signal, not an edit**: go_to_part / send_signal. Exact part names never reach you — the panel dispatches them itself — so a part mentioned in an instruction is where the change goes, not where to jump, unless the instruction says to go there.
+- **Recording**: arm ONE part with startRecording()/stopRecording() (see the kit), compile, say "armed"; after the take, move the inserted block into its part and remove the markers.
+- Keep the captions, the part markers and their waits, the BPM and the shader as they are unless asked.`;
+}
 
 export const SYSTEM_PROMPT = buildSystemPrompt();

@@ -1,4 +1,4 @@
-import { exportVideo, setupWebGL } from './fragmentshader.js';
+import { exportVideo, setupWebGL, createOpusAudioTrack } from './fragmentshader.js';
 import { setVisualParamSchedule } from './visualparams.js';
 import { getGLContext, isWebGL2 } from './glcontext.js';
 import { setTextSchedule } from './videoscheduler.js';
@@ -92,6 +92,37 @@ void main() {
         expect(px[0]).to.equal(255);
         expect(px[1]).to.be.closeTo(64, 2);   // 0.5 * time(0.5)
         document.documentElement.removeChild(canvaselement);
+    });
+    it('encodes an AudioBuffer as Opus chunks in time order, interleavable with video frames', async function () {
+        if (typeof AudioEncoder === 'undefined') this.skip();   // WebCodecs audio: Chromium, recent Firefox
+        // 1.5 s of stereo at 48 kHz (what Opus wants): a tone left, silence right
+        const sampleRate = 48000, seconds = 1.5;
+        const ctx = new OfflineAudioContext(2, sampleRate * seconds, sampleRate);
+        const buffer = ctx.createBuffer(2, sampleRate * seconds, sampleRate);
+        const left = buffer.getChannelData(0);
+        for (let i = 0; i < left.length; i++) left[i] = 0.5 * Math.sin(2 * Math.PI * 440 * i / sampleRate);
+
+        const chunks = [];
+        const track = createOpusAudioTrack(buffer, (chunk, meta) => chunks.push({ timestamp: chunk.timestamp, bytes: chunk.byteLength, meta }));
+        expect(track.sampleRate).to.equal(48000);
+        expect(track.numberOfChannels).to.equal(2);
+
+        // the frame loop pushes audio up to each frame's time: nothing beyond it is encoded yet
+        track.pushUntil(0.5);
+        await new Promise(r => setTimeout(r, 50));
+        const firstBatch = chunks.length;
+        expect(firstBatch).to.be.greaterThan(0);
+        expect(Math.max(...chunks.map(c => c.timestamp))).to.be.lessThan(0.6 * 1e6);   // ≤ one 100 ms chunk ahead
+
+        await track.finish();
+        expect(chunks.length).to.be.greaterThan(firstBatch);
+        // chunks arrive in time order, start at 0, and cover the whole buffer
+        for (let i = 1; i < chunks.length; i++) expect(chunks[i].timestamp).to.be.greaterThan(chunks[i - 1].timestamp);
+        expect(chunks[0].timestamp).to.equal(0);
+        expect(chunks[chunks.length - 1].timestamp).to.be.greaterThan((seconds - 0.05) * 1e6);
+        // the decoder config the muxer needs rides on the first chunk's metadata
+        expect(chunks[0].meta.decoderConfig.codec).to.equal('opus');
+        expect(chunks.every(c => c.bytes > 0)).to.equal(true);
     });
     it('should render text scheduled by showText into the uText layer', async () => {
         const canvaselement = document.createElement('canvas');

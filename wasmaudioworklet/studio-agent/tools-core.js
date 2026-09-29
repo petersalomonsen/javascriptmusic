@@ -31,9 +31,11 @@ export function grepText(text, { pattern, context = 0 }) {
 }
 
 // Normalize a faust path to a repo-relative .dsp filename.
+// A Faust path relative to faust/: an instrument (.dsp, added when there is
+// no extension) or a library (.lib, kept as is).
 export function normDsp(path) {
   let rel = String(path || '').replace(/^faust\//, '');
-  if (!rel.endsWith('.dsp')) rel += '.dsp';
+  if (!/\.(dsp|lib)$/.test(rel)) rel += '.dsp';
   return rel;
 }
 
@@ -382,9 +384,23 @@ export function summarizeSongEvents(eventlist, bpm = 110, { beatsPerBar = 4, ins
     }
   }
 
+  // The parts, each in its own bars: a part carries its tempo and bar length
+  // (setBPM / setBeatsPerBar when it started), so a 3/4 part is counted in
+  // bars of three whatever the song's first tempo says.
+  const markers = partsFromEvents(eventlist);
+  const endMs = (eventlist || []).reduce((m, e) => Math.max(m, e.time || 0), 0);
+  const parts = markers.map((p, i) => {
+    const end = i + 1 < markers.length ? markers[i + 1].time : endMs;
+    const pBeatMs = p.beatMs || msPerBeat;
+    const beats = (end - p.time) / pBeatMs;
+    const perBar = p.barMs ? Math.round(p.barMs / pBeatMs) : beatsPerBar;
+    return { name: p.name, startBeat: toBeat(p.time), beats, beatsPerBar: perBar, bars: beats / perBar, bpm: 60000 / pBeatMs };
+  });
+
   return {
     bpm,
     beatsPerBar,
+    parts,
     lengthBeats,
     lastSoundBeat,
     totalNotes: sounding.reduce((sum, c) => sum + c.notes, 0),
@@ -513,6 +529,10 @@ export function formatSongSummary(s) {
     `song: ${round(s.lengthBeats)} beats (${barsText(s)}) at ${s.bpm} BPM · ` +
       `${s.sounding.length} sounding channel(s) · ${s.totalNotes} notes`
   ];
+  if (s.parts && s.parts.length) {
+    lines.push('parts: ' + s.parts.map((p) =>
+      `${p.name} (${round(p.bars)} bar${round(p.bars) === 1 ? '' : 's'} of ${p.beatsPerBar}/4 at ${round(p.bpm)} BPM, from beat ${round(p.startBeat)})`).join(' · '));
+  }
   if (s.playFromHereLine) {
     lines.push(`playFromHere() at line ${s.playFromHereLine} — the user's audition marker: this digest covers ONLY what follows it. `
       + 'Earlier parts are absent by design, not lost; leave the marker in place.');
@@ -877,4 +897,68 @@ export function parseRenderTimes(times, { max = 4, fallback = [4] } = {}) {
   if (!out.length) return fallback;
   if (out.length > max) throw new Error(`render_shader: at most ${max} frames per call (got ${out.length}) — pick the moments that matter`);
   return out;
+}
+
+// ---- performance mode: parts, the fast path, the state line ----
+// The sequencer's part markers and waits, from the compiled event list
+// (sequenceconstants: SEQ_MSG_PART = -7, SEQ_MSG_WAIT_SIGNAL = -6).
+export function partsFromEvents(eventlist) {
+  const parts = [];
+  for (const evt of eventlist || []) {
+    const [status] = evt.message || [];
+    if (status === -7 && evt.name) parts.push({ name: evt.name, time: evt.time, barMs: evt.barMs || 0, beatMs: evt.beatMs || 0, waits: [] });
+    else if (status === -6 && parts.length) parts[parts.length - 1].waits.push({ name: evt.name || 'go', time: evt.time, loop: evt.loop || 'part' });
+  }
+  return parts;
+}
+
+/** The part the playhead is in: the last marker at or before `timeMs`, or null. */
+export function partAt(parts, timeMs) {
+  let best = null;
+  for (const p of parts) if (p.time <= timeMs && (!best || p.time >= best.time)) best = p;
+  return best;
+}
+
+const normalize = (t) => String(t || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+const LEADING = /^(?:please |now |ok |okay |and )*(?:go to|goto|jump to|jump|switch to|move to|move on to|take it to|take us to|play|start|the|part|section|to)\s+/;
+const NEXT = new Set(['next', 'go', 'continue', 'move on', 'next part', 'next section', 'onwards', 'carry on']);
+
+// The stage fast path: an instruction that names a part (or says "next") is
+// dispatched without a model turn. Returns { goTo } for a part, { signal }
+// for "next", or null when the model should read it. A part matches by full
+// name, then by a unique prefix, then by its own words — never ambiguously,
+// and never from a sentence that merely mentions a part.
+export function matchPerformanceCommand(text, parts) {
+  let t = normalize(text);
+  if (!t) return null;
+  for (let i = 0; i < 4; i++) { const u = t.replace(LEADING, ''); if (u === t) break; t = u; }
+  t = t.replace(/\s+(?:now|please)$/, '');
+  if (NEXT.has(t)) return { signal: 'go' };
+  const names = (parts || []).map((p) => (typeof p === 'string' ? p : p.name));
+  const lower = names.map((n) => n.toLowerCase());
+  const exact = lower.indexOf(t);
+  if (exact >= 0) return { goTo: names[exact] };
+  const prefix = lower.map((n, i) => (n.startsWith(t) ? i : -1)).filter((i) => i >= 0);
+  if (prefix.length === 1) return { goTo: names[prefix[0]] };
+  // words of the name, in any subset ("breakdown" for "quiet breakdown") —
+  // but EVERY typed word must belong to the name, so "the quiet bit" or
+  // "make the quiet part louder" go to the model instead of jumping
+  const words = t.split(' ');
+  const word = lower.map((n, i) => {
+    const own = n.split(/[\s_-]+/);
+    return words.every((w) => own.includes(w)) && words.some((w) => w.length >= 3) ? i : -1;
+  }).filter((i) => i >= 0);
+  if (word.length === 1) return { goTo: names[word[0]] };
+  return null;
+}
+
+/** One line of stage state for the prompt and list_parts: where we are, what we wait for. */
+export function formatPerformanceState(parts, { timeMs = null, waiting = null, playing = false } = {}) {
+  if (!parts.length) return 'no parts: the song has no definePartStart() markers, so there is nothing to jump to';
+  const names = parts.map((p) => p.name).join(', ');
+  if (!playing) return `parts in order: ${names}. Not playing yet — press play (the sequencer checkbox) before signals can do anything.`;
+  const cur = timeMs === null ? null : partAt(parts, timeMs);
+  const where = cur ? `in "${cur.name}"` : 'before the first part';
+  const wait = waiting ? `, ${waiting.loop === 'hold' ? 'holding' : 'looping'} until signal "${waiting.name}"` : ', playing on (no wait engaged)';
+  return `parts in order: ${names}. Now ${where}${wait}.`;
 }

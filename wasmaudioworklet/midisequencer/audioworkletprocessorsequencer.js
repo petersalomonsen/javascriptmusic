@@ -4,11 +4,27 @@ export function AudioWorkletProcessorSequencerModule() {
   const SEQ_MSG_STOP_RECORDING = -3;
   const SEQ_MSG_BROADCAST_SEND = -4;
   const SEQ_MSG_BROADCAST_WAIT = -5;
+  const SEQ_MSG_WAIT_SIGNAL = -6;
+  const SEQ_MSG_PART = -7;
 
   class MidiSequencer {
     constructor() {
       this.sequence = [];
       this.recorded = {};
+      // ---- performance mode ----
+      // Off: a waitForSignal() event is inert (its `default` applies), so the
+      // song is the same deterministic score everywhere. On: reaching the
+      // event parks the song — looping its part, or holding the clock — until
+      // a signal arrives; a signal may also carry a part to jump to.
+      // Whether waitForSignal() waits: on in live playback, off where the song
+      // must play straight through (an export renders on an OfflineAudioContext).
+      // A wait marked `inert` (loopParts(false) in the song) never waits.
+      this.performanceMode = false;
+      this.parts = {};        // part name -> { time, barMs }, from SEQ_MSG_PART events
+      this.wait = null;       // the wait we are parked on, or null
+      this.jump = null;       // a quantized jump scheduled by a signal: { at, targetTime, wait, goTo }
+      this.onSignalState = null;   // processor hook: (state) => post to the main thread
+      this.onJump = null;          // processor hook: the playhead moved (a jump, not a loop wrap) — silence held notes
       // Name the wait is parked on. Set when onprocess encounters a
       // SEQ_MSG_BROADCAST_WAIT event; while non-null, onprocess no-ops so
       // currentFrame freezes. Cleared when a matching broadcast arrives
@@ -26,8 +42,17 @@ export function AudioWorkletProcessorSequencerModule() {
 
     setSequenceData(sequencedata) {
       // A new sequence's wait events haven't been encountered yet, so any
-      // pending wait from the old sequence is stale.
+      // pending wait from the old sequence is stale. (A live recompile while
+      // looping a part re-enters the wait when it is reached again.)
       this.waitingForSignal = null;
+      this.wait = null;
+      this.jump = null;
+      this.parts = {};
+      sequencedata.forEach((evt, index) => {
+        if (evt.message && evt.message.length === 1 && evt.message[0] === SEQ_MSG_PART && evt.name) {
+          this.parts[evt.name] = { time: evt.time, barMs: evt.barMs || 0, index };
+        }
+      });
       if (sequencedata.length > 0) {
         // clear recorded data
         this.clearRecording();
@@ -84,10 +109,17 @@ export function AudioWorkletProcessorSequencerModule() {
     }
 
     setCurrentTime(time) {
-      // Explicit seek clears any pending broadcast wait — the user moved
-      // the playhead deliberately, so playback should resume from there.
+      // Explicit seek clears any pending wait — the user moved the
+      // playhead deliberately, so playback should resume from there.
       this.waitingForSignal = null;
-      this.currentFrame = sampleRate * time / 1000;
+      this.wait = null;
+      this.jump = null;
+      this._seek(time);
+    }
+
+    // Move the playhead to `time` (ms): the next event to fire is the first at or after it.
+    _seek(time) {
+      this.currentFrame = Math.round(sampleRate * time / 1000);
       let sequenceIndex = 0;
       while (sequenceIndex < this.sequence.length &&
         this.sequence[sequenceIndex] &&
@@ -97,13 +129,168 @@ export function AudioWorkletProcessorSequencerModule() {
       this.sequenceIndex = sequenceIndex;
     }
 
+    // ---- performance mode ----
+    setPerformanceMode(on) {
+      this.performanceMode = !!on;
+      if (!on) {
+        // leaving performance mode while parked: play on, as the default would
+        if (this.wait && this.wait.loop === 'hold') this.waitingForSignal = null;
+        this.wait = null;
+        this.jump = null;
+      }
+    }
+
+    _notify(state) {
+      if (this.onSignalState) this.onSignalState(state);
+    }
+
+    // Jump to a part: at its marker's INDEX, not merely its time — events at
+    // the same time that precede the marker (the wait that closes the previous
+    // part) must not fire, or the jump would re-enter the old loop.
+    _seekToPart(part) {
+      this.currentFrame = Math.round(sampleRate * part.time / 1000);
+      this.sequenceIndex = part.index + 1;
+    }
+
+    // Wrap a looping part to its start. The part's marker usually sits at the
+    // same time as the wait that closed the previous part, so a seek by time
+    // would land on that wait, re-enter it and freeze the clock: seek to the
+    // marker's index instead, like a jump. A loop without a marker at its
+    // start (partStart 0, no definePartStart) still seeks by time.
+    _seekLoopStart(wait) {
+      let marker = null;
+      for (const p of Object.values(this.parts)) {
+        if (p.time === wait.loopStart && (!marker || p.index > marker.index)) marker = p;
+      }
+      if (marker) this._seekToPart(marker);
+      else this._seek(wait.loopStart);
+    }
+
+    // The playhead moved somewhere else (not a loop wrap): notes sounding
+    // across the cut would never see their note-off, so the processor
+    // silences them — the same as after a seek.
+    _jumped() {
+      if (this.onJump) this.onJump();
+    }
+
+    // Continue past a wait: the song resumes right after the wait event.
+    _continuePast(wait) {
+      this._seek(wait.time);
+      const idx = this.sequence.indexOf(wait.evt);
+      if (idx >= 0) this.sequenceIndex = idx + 1;
+    }
+
+    // The part the playhead is in (latest marker at or before now), for the bar grid.
+    _currentPart() {
+      const now = this.getCurrentTime();
+      let best = null;
+      for (const [name, p] of Object.entries(this.parts)) {
+        if (p.time <= now && (!best || p.time >= best.time)) best = { name, ...p };
+      }
+      return best;
+    }
+
+    // Where a part ends: the next part's marker, else the song's loop point
+    // (Infinity when neither exists).
+    _partEnd(part) {
+      let end = Infinity;
+      for (const p of Object.values(this.parts)) if (p.time > part.time && p.time < end) end = p.time;
+      if (end === Infinity) {
+        const loop = this.sequence.find((e) => e && e.message && e.message[0] === SEQ_MSG_LOOP);
+        if (loop) end = loop.time;
+      }
+      return end;
+    }
+
+    // Schedule the jump: 'part' at partEnd (the part plays out), 'bar'/'beat'
+    // on that grid from gridStart, 'now' at once.
+    _scheduleJump({ target, goTo, wait, quantize, gridStart, barMs, beatMs, partEnd = Infinity }) {
+      const now = this.getCurrentTime();
+      const q = quantize === 'bar' ? barMs : quantize === 'beat' ? beatMs : 0;
+      let at = now;
+      if (quantize === 'part') {
+        at = Math.max(now, partEnd);
+      } else if (q > 0) {
+        const k = Math.ceil((now - gridStart) / q - 1e-9);
+        at = gridStart + Math.max(0, k) * q;
+      }
+      // A looping part that is not a whole number of bars wraps before the
+      // next bar line: leave at the end of the part then, whichever is first.
+      if (wait && wait.loop === 'part' && at > wait.time) at = wait.time;
+      this.jump = { at, target: target || null, goTo, wait };
+      this._notify({ jumping: goTo || 'next', at, quantize });
+    }
+
+    _performJump() {
+      const j = this.jump;
+      this.jump = null;
+      if (j.wait) this.wait = null;
+      if (j.target) this._seekToPart(j.target);
+      else this._continuePast(j.wait);
+      this._jumped();
+      this._notify({ resumed: j.wait ? j.wait.name : null, goTo: j.goTo || null });
+    }
+
+    // A signal arrived (from a shader element, MIDI, the agent, another
+    // window, a timeout). Returns what happened so the processor can flip
+    // playback back on after a hold. `goTo` names a part to jump to.
+    signal(name, goTo = null) {
+      const target = goTo ? this.parts[goTo] : null;
+      if (goTo && !target) return { unknownPart: goTo };
+      const w = this.wait;
+      const matches = w && (w.name === name || w.name === 'any' || name === 'any');
+      if (matches) {
+        if (w.loop === 'hold') {
+          // the clock is frozen: resume at once
+          this.wait = null;
+          this.waitingForSignal = null;
+          if (target) this._seekToPart(target); else this._continuePast(w);
+          if (target) this._jumped();
+          this._notify({ resumed: w.name, goTo: goTo || null });
+          return { resumed: true, goTo: goTo || null };
+        }
+        this._scheduleJump({ target, goTo, wait: w, quantize: w.quantize,
+          gridStart: w.loopStart, barMs: w.barMs, beatMs: w.beatMs, partEnd: w.time });
+        return { resumed: true, goTo: goTo || null, at: this.jump.at };
+      }
+      if (target) {
+        // a targeted jump from anywhere: when the current part ends, else on its bars
+        const part = this._currentPart();
+        const partEnd = part ? this._partEnd(part) : Infinity;
+        this._scheduleJump({ target, goTo, wait: null,
+          quantize: partEnd < Infinity ? 'part' : part && part.barMs ? 'bar' : 'now',
+          gridStart: part ? part.time : 0, barMs: part ? part.barMs : 0, beatMs: 0, partEnd });
+        return { resumed: false, goTo, at: this.jump.at };
+      }
+      return { resumed: false, ignored: true };
+    }
+
     onprocess() {
-      // Parked on a broadcast wait — freeze the clock and skip event
-      // processing entirely. Cleared externally when the matching signal
-      // arrives.
+      // Parked on a broadcast wait or a 'hold' wait — freeze the clock and
+      // skip event processing entirely. Cleared when the signal arrives.
       if (this.waitingForSignal) return;
 
       let currentTime = this.getCurrentTime();
+
+      // A scheduled (quantized) jump lands here, before any event at/after it fires.
+      if (this.jump && currentTime >= this.jump.at) {
+        this._performJump();
+        currentTime = this.getCurrentTime();
+      }
+      if (this.wait && this.wait.loop === 'part') {
+        // kiosk timeout: nobody interacted for `timeout.bars` bars of looping
+        this.wait.waitedFrames += 128;
+        if (this.wait.timeoutMs > 0 && !this.jump && (this.wait.waitedFrames / sampleRate) * 1000 >= this.wait.timeoutMs) {
+          this.wait.timeoutMs = 0;
+          this.signal(this.wait.name, this.wait.timeoutGoTo);
+        }
+        // loop the part: the wait event marks the loop end (a jump due at the
+        // loop end lands first, above, since it is never later than this)
+        if (currentTime >= this.wait.time) {
+          this._seekLoopStart(this.wait);
+          currentTime = this.getCurrentTime();
+        }
+      }
 
       while (this.sequenceIndex < this.sequence.length &&
         this.sequence[this.sequenceIndex] && // sometimes this is undefined for yet unkown reasons
@@ -145,6 +332,36 @@ export function AudioWorkletProcessorSequencerModule() {
               this.waitingForSignal = this.sequence[this.sequenceIndex].name;
               this.sequenceIndex++;
               return;
+            case SEQ_MSG_PART:
+              this.sequenceIndex++;
+              break;
+            case SEQ_MSG_WAIT_SIGNAL: {
+              const evt = this.sequence[this.sequenceIndex];
+              this.sequenceIndex++;
+              if (!this.performanceMode || evt.inert) {
+                // inert (export, or loopParts(false)): the default applies — continue, or go to a part
+                const target = evt.default && evt.default !== 'continue' ? this.parts[evt.default] : null;
+                if (target) { this._seekToPart(target); this._jumped(); return; }
+                break;
+              }
+              if (!this.wait) {
+                this.wait = {
+                  evt, name: evt.name || 'go', loop: evt.loop || 'part', quantize: evt.quantize || 'part',
+                  time: evt.time, loopStart: evt.partStart || 0, barMs: evt.barMs || 0, beatMs: evt.beatMs || 0,
+                  timeoutMs: evt.timeout && evt.timeout.bars > 0 ? evt.timeout.bars * (evt.barMs || 0) : 0,
+                  timeoutGoTo: evt.timeout ? evt.timeout.goTo || null : null,
+                  waitedFrames: 0,
+                };
+                this._notify({ waiting: this.wait.name, loop: this.wait.loop, timeoutMs: this.wait.timeoutMs });
+              }
+              if (this.wait.loop === 'hold') {
+                this.waitingForSignal = this.wait.name;
+                return;
+              }
+              // loop the part from its start; the next pass reaches this wait again
+              this._seekLoopStart(this.wait);
+              return;
+            }
           }
           if (loop) {
             break;

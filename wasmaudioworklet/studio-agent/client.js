@@ -8,13 +8,16 @@
 import { songsourceeditor, synthsourceeditor, shadersourceeditor } from '../editorcontroller.js';
 import { renderShaderFrames } from '../visualizer/fragmentshader.js';
 import { transpileDspSource } from '../faust/faust-rs-transpile.js';
+import { saveFaustSource, libraryDependents, isFaustSource, isLibrary, isScratch, clearScratch, scratchImports } from '../faust/faust-files.js';
 import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
-import { readfile, writefileandstage, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
+import { readfile, writefileandstage, unlinkfile, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
 import {
   applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
   playFromHereLine, SPECIALISTS, noteStatesAtTime, fakeNoteStates, parseRenderTimes,
+  partsFromEvents, partAt, matchPerformanceCommand, formatPerformanceState,
 } from './tools-core.js';
+import { buildPerformanceSection } from './prompt.js';
 import { runAgentScript, formatScriptResult } from './script-sandbox.js';
 import { probeNote, probeNotes, formatProbeReport } from '../audioprobe/instrumentprobe.js';
 import { measureMix } from '../audioprobe/mixprobe.js';
@@ -55,19 +58,99 @@ let sessionSummary = null;
 // repo so it survives a reload (and travels with the project). The full
 // conversation is kept as project history — it is replay/reference only, so
 // its size costs repo bytes, not model context. No-op when not in ?gitrepo= mode.
+// ---- sessions ----
+// The ACTIVE conversation lives in the root file (SESSION_FILE) — that is what
+// the app has always read — and every earlier one is archived in sessions/
+// as <started-date>-<label>.json, committed with the project like the rest of
+// its history. /new archives and starts fresh, /sessions lists, /resume <name>
+// swaps one back in. Performance mode switches sessions by itself (below):
+// resuming a 200k-token composition session on stage cost 110 s per edit, a
+// fresh one with the kit 14 s.
+const SESSIONS_DIR = 'sessions/';
+let sessionLabel = null;    // 'composition' (default), 'performance', or what /new was given
+let sessionStarted = null;  // ISO date of the session's first message
+let sessionChain = Promise.resolve();   // session switches run one at a time
+
+const slug = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'session';
+const sessionFileName = (label, started) => `${SESSIONS_DIR}${String(started || new Date().toISOString()).slice(0, 10)}-${slug(label)}.json`;
+const sessionRecord = () => ({ sessionId, summary: sessionSummary, conversation, label: sessionLabel || 'composition', started: sessionStarted });
+
 async function saveSession() {
-  try { await writefileandstage(SESSION_FILE, JSON.stringify({ sessionId, summary: sessionSummary, conversation }, null, 1)); }
+  if (!sessionStarted && conversation.length) sessionStarted = new Date().toISOString();
+  try { await writefileandstage(SESSION_FILE, JSON.stringify(sessionRecord(), null, 1)); }
   catch (e) { /* no OPFS repo — in-memory only */ }
 }
+function applySessionData(data) {
+  sessionId = data.sessionId || null;
+  sessionSummary = data.summary || null;
+  conversation = Array.isArray(data.conversation) ? data.conversation : [];
+  sessionLabel = data.label || 'composition';
+  sessionStarted = data.started || null;
+  nearaiMessages = null;   // a different conversation: fresh model context, seeded from its summary
+}
+function renderSession() {
+  const log = el('studioagentlog');
+  if (log) log.innerHTML = '';
+  for (const m of conversation) addLine(m.role === 'user' ? 'user' : 'agent', m.text);
+  if (conversation.length) addLine('tool', `— resumed ${conversation.length} messages (${sessionLabel}) —`);
+}
 async function loadSession() {
-  try {
-    const data = JSON.parse(await readfile(SESSION_FILE));
-    sessionId = data.sessionId || null;
-    sessionSummary = data.summary || null;
-    conversation = Array.isArray(data.conversation) ? data.conversation : [];
-    for (const m of conversation) addLine(m.role === 'user' ? 'user' : 'agent', m.text);
-    if (conversation.length) { addLine('tool', `— resumed ${conversation.length} messages —`); }
-  } catch (e) { /* no saved session yet */ }
+  try { applySessionData(JSON.parse(await readfile(SESSION_FILE))); renderSession(); }
+  catch (e) { /* no saved session yet */ }
+}
+/** Archive the active conversation into sessions/ (if it has any messages). Returns the file name or null. */
+async function archiveSession() {
+  if (!conversation.length) return null;
+  const name = sessionFileName(sessionLabel || 'composition', sessionStarted);
+  try { await writefileandstage(name, JSON.stringify(sessionRecord(), null, 1)); } catch (e) { return null; }
+  return name;
+}
+async function startNewSession(label) {
+  const archived = await archiveSession();
+  applySessionData({ label: label || 'composition' });
+  renderSession();
+  await saveSession();
+  addLine('tool', archived ? `— archived ${archived}; new session "${sessionLabel}" —` : `— new session "${sessionLabel}" —`);
+  return archived;
+}
+async function listSessions() {
+  let files = [];
+  try { files = (await listfiles(SESSIONS_DIR)).filter((n) => n.endsWith('.json')); } catch (e) { return []; }
+  const out = [];
+  for (const file of files.sort()) {
+    const name = file.replace(/^sessions\//, '').replace(/\.json$/, '');
+    try {
+      const d = JSON.parse(await readfile(file.startsWith(SESSIONS_DIR) ? file : SESSIONS_DIR + file));
+      out.push({ name, label: d.label || 'composition', started: d.started || null, messages: Array.isArray(d.conversation) ? d.conversation.length : 0 });
+    } catch (e) { out.push({ name, label: '?', started: null, messages: 0 }); }
+  }
+  return out;
+}
+/** Swap an archived session in (the active one is archived first). `name` is the file name without sessions/ and .json. */
+async function resumeSession(name) {
+  let data;
+  try { data = JSON.parse(await readfile(SESSIONS_DIR + name + '.json')); }
+  catch (e) { addLine('error', `no archived session "${name}" — /sessions lists them`); return false; }
+  await archiveSession();
+  applySessionData(data);
+  renderSession();
+  await saveSession();
+  addLine('tool', `— resumed session "${name}" (${conversation.length} messages) —`);
+  return true;
+}
+async function handleSessionCommand(text) {
+  const [cmd, ...rest] = text.trim().split(/\s+/);
+  const arg = rest.join(' ');
+  if (cmd === '/new') { await startNewSession(arg || 'composition'); return; }
+  if (cmd === '/sessions') {
+    const list = await listSessions();
+    addLine('tool', list.length
+      ? ['— archived sessions (/resume <name>) —', ...list.map((x) => `${x.name}: ${x.messages} messages, ${x.label}${x.started ? ', started ' + x.started.slice(0, 10) : ''}`),
+         `active: "${sessionLabel || 'composition'}", ${conversation.length} messages`].join('\n')
+      : `— no archived sessions; active: "${sessionLabel || 'composition'}", ${conversation.length} messages. /new [label] archives it and starts fresh —`);
+    return;
+  }
+  if (cmd === '/resume') { if (!arg) { addLine('error', 'usage: /resume <name> (see /sessions)'); return; } await resumeSession(arg); return; }
 }
 
 // Editor wrappers around the pure logic in tools-core.js.
@@ -94,7 +177,58 @@ function shaderWarnings() {
 
 // ---- the tool registry: tool name -> async fn acting on the app -------------
 // Returning an object with `__error` marks a failed tool result.
+// ---- performance mode (docs/plans/performance-mode.md) ----
+// The stage: parts from the compiled song, the sequencer's state from the
+// `wasmmusic-signal` events, and the signals themselves through the app's
+// bus (window.sendSignal, set up in audioworkletnode.js).
+let stageWaiting = null;   // { name, loop } while the sequencer is parked on a wait
+const stageParts = () => partsFromEvents(window.lastCompiledEventList || []);
+const stageTimeMs = () => (typeof window.songTimeSeconds === 'function' ? (window.songTimeSeconds() || 0) * 1000 : 0);
+const stagePlaying = () => !!window.audioworkletnode;
+// On stage = the song is playing and has parts. Then a part name or "next"
+// jumps at once (no model), other instructions are stage turns (the stage
+// prompt, low effort, the playhead state); stopped, the agent composes.
+const onStage = () => stagePlaying() && stageParts().length > 0;
+function stageState() {
+  return formatPerformanceState(stageParts(), { timeMs: stageTimeMs(), waiting: stageWaiting, playing: stagePlaying() });
+}
+function stageSignal(name, goTo) {
+  if (typeof window.sendSignal !== 'function' || !stagePlaying()) {
+    return { __error: 'not playing — press play (the sequencer checkbox) first; signals only reach a running song' };
+  }
+  const ok = window.sendSignal(name, goTo || null);
+  if (!ok) return { __error: 'the song is not running — press play first' };
+  const cur = partAt(stageParts(), stageTimeMs());
+  return goTo
+    ? `→ "${goTo}": ${cur ? `when "${cur.name}" has played out` : 'at the end of the current part'}`
+    : `signal "${name}" sent${stageWaiting ? `: leaving the "${stageWaiting.name}" wait when the part has played out` : ' (no wait engaged — it applies when the song reaches one)'}`;
+}
+window.addEventListener('wasmmusic-signal', (e) => {
+  const d = e.detail || {};
+  if (d.waiting) stageWaiting = { name: d.waiting, loop: d.loop };
+  if (d.resumed !== undefined || d.jumping) stageWaiting = d.jumping ? stageWaiting : null;
+  if (onStage()) setStatus(`on stage — ${stageState()}`);
+});
 const registry = {
+  // ---- performance mode: the stage tools (role 'performance') ----
+  list_parts: async () => {
+    const parts = stageParts();
+    const lines = parts.map((p, i) => {
+      const next = parts[i + 1];
+      const bars = p.barMs ? Math.round(((next ? next.time : (window.lastCompiledEventList || []).slice(-1)[0]?.time || p.time) - p.time) / p.barMs) : null;
+      const waits = p.waits.map((w) => `wait "${w.name}" (${w.loop})`).join(', ');
+      return `${i + 1}. ${p.name}${bars !== null ? ` — ${bars} bar(s)` : ''}${waits ? `, ${waits}` : ''}`;
+    });
+    return [stageState(), ...lines].join('\n');
+  },
+  go_to_part: async ({ part }) => {
+    const parts = stageParts();
+    const hit = parts.find((p) => p.name === part) || parts.find((p) => p.name.toLowerCase() === String(part || '').toLowerCase());
+    if (!hit) return { __error: `no part "${part}". Parts: ${parts.map((p) => p.name).join(', ') || '(none — the song has no definePartStart() markers)'}` };
+    return stageSignal('go', hit.name);
+  },
+  send_signal: async ({ name }) => stageSignal(name || 'go', null),
+
   get_song: async () => songsourceeditor.doc.getValue(),
   set_song: async ({ source }) => {
     songsourceeditor.doc.setValue(source);
@@ -167,13 +301,30 @@ const registry = {
   list_faust: async () => {
     try {
       const all = await listfiles(FAUST_DIR);
-      const dsp = all.filter((f) => f.endsWith('.dsp')).map((f) => f.slice(FAUST_DIR.length));
-      return dsp.length ? dsp.join('\n') : '(no .dsp instruments yet)';
+      const lines = [];
+      for (const f of all.filter(isFaustSource)) {
+        const rel = f.slice(FAUST_DIR.length);
+        if (isScratch(f, FAUST_DIR)) { lines.push(`${rel}  (scratch)`); continue; }
+        if (!isLibrary(f)) { lines.push(rel); continue; }
+        const users = (await libraryDependents(faustIO, f, FAUST_DIR)).map((d) => d.slice(FAUST_DIR.length));
+        lines.push(`${rel}  (library${users.length ? `, imported by ${users.join(', ')}` : ''})`);
+      }
+      return lines.length ? lines.join('\n') : '(no .dsp instruments yet)';
+    } catch (e) { return faustUnavailable(e); }
+  },
+  clear_scratch: async () => {
+    const users = scratchImports(synthsourceeditor.doc.getValue());
+    if (users.length) return { __error: `synth.ts still imports from scratch/ — remove these lines first (edit_synth), then clear:\n${users.join('\n')}` };
+    try {
+      const gone = await clearScratch(faustIO, FAUST_DIR);
+      if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
+      const names = gone.filter(isFaustSource).map((p) => p.slice(FAUST_DIR.length));
+      return names.length ? `cleared faust/scratch/: ${names.join(', ')}` : 'faust/scratch/ is already empty';
     } catch (e) { return faustUnavailable(e); }
   },
   read_faust: async ({ path }) => {
     try { return await readfile(FAUST_DIR + normDsp(path)); }
-    catch (e) { return faustUnavailable(e); }
+    catch (e) { return faustUnavailable(e, FAUST_DIR + normDsp(path)); }
   },
 
   // Surgical .dsp edit. Everything a .dsp change needs — transpile, staging,
@@ -189,7 +340,7 @@ const registry = {
     try {
       current = await readfile(FAUST_DIR + rel);
     } catch (e) {
-      return faustUnavailable(e);
+      return faustUnavailable(e, FAUST_DIR + rel);
     }
     const edited = applyEditToText(current, { old_string, new_string, replace_all });
     if (edited.error) return { __error: `edit_faust ${rel}: ${edited.error}` };
@@ -222,17 +373,20 @@ const registry = {
   // (a hidden tab throttles main-thread work like the faust transpile hard).
   write_faust: async ({ path, source }) => {
     const rel = normDsp(path);
-    const stem = rel.replace(/\.dsp$/, '');
+    const stem = rel.replace(/\.(dsp|lib)$/, '');
     const t0 = performance.now();
     const marks = [`visibility=${document.visibilityState}`];
     let last = t0;
     const mark = (label) => { const now = performance.now(); marks.push(`${label}=${((now - last) / 1000).toFixed(1)}s`); last = now; };
     try {
-      await writefileandstage(FAUST_DIR + rel, source);
-      mark('write-dsp');
       let ts;
+      let saved;
       try {
-        ({ ts } = await transpileDspSource(source, rel, {}));
+        // the same save as the Faust editor: the source first, then the
+        // transpile with its sibling .dsp/.lib files (a .lib re-transpiles
+        // every instrument that imports it)
+        saved = await saveFaustSource(faustIO, FAUST_DIR + rel, source, FAUST_DIR);
+        ts = saved.ts;
       } catch (e) {
         // Structured compiler diagnostics (error-model v2): give the agent
         // the typed projection — stable code, category, exact location,
@@ -243,9 +397,20 @@ const registry = {
         const detail = structured || e?.message || String(e);
         return { __error: `Faust transpile failed for ${rel}:\n${detail}` };
       }
-      mark('transpile');
-      await writefileandstage(FAUST_DIR + stem + '.ts', ts);
-      mark('write-ts');
+      mark('write+transpile');
+      if (saved.kind === 'lib') {
+        if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
+        const names = (list) => list.map((r) => r.path.slice(FAUST_DIR.length)).join(', ');
+        const failed = saved.failed.map((f) => {
+          const e = f.error;
+          const detail = e?.faustDiagnostics ? formatDiagnosticsForAgent(e.faustDiagnostics, e.faustSource ?? '') : (e?.message || String(e));
+          return `${f.path.slice(FAUST_DIR.length)}:\n${detail}`;
+        });
+        const msg = `${rel} saved (library). ` + (saved.rebuilt.length
+          ? `Re-transpiled the instruments that import it: ${names(saved.rebuilt)}. Compile to hear the change.`
+          : 'No instrument imports it yet.');
+        return failed.length ? { __error: `${msg}\nTranspile FAILED for:\n${failed.join('\n\n')}` } : msg;
+      }
       // refresh the app's Faust file dropdown so the user sees the new instrument
       if (typeof window.refreshFaustFileList === 'function') { try { await window.refreshFaustFileList(); } catch { /* non-fatal */ } }
       // and reflect the written .dsp in the editor even when it's the file already
@@ -510,8 +675,16 @@ function songEventAnomalies() {
 }
 
 // Faust file helpers (normDsp is imported from tools-core.js)
-function faustUnavailable(e) {
+// The repo as the shared Faust save logic sees it (faust/faust-files.js):
+// the same save and transpile as the Faust editor.
+const faustIO = { readfile, listfiles, writefileandstage, unlinkfile, transpile: transpileDspSource };
+
+function faustUnavailable(e, path = null) {
   const msg = String(e?.message || e);
+  // errno 44 is ENOENT: the repo is there, the file is not
+  if (path && (e?.errno === 44 || /errno"?\s*:?\s*44|ENOENT|no such file/i.test(JSON.stringify(e) + msg))) {
+    return { __error: `${path} does not exist. list_faust shows the Faust files (instruments .dsp and libraries .lib).` };
+  }
   return { __error: `Faust/OPFS not available (${msg}). The app must be opened with a ?gitrepo=… URL so the OPFS git working tree exists.` };
 }
 
@@ -678,6 +851,12 @@ async function sendChat(text) {
   // /nearai provider commands are handled locally and never enter the
   // conversation (the API key must not be persisted into the OPFS repo).
   if (text.startsWith('/nearai')) { handleNearaiCommand(text); return; }
+  if (/^\/(new|sessions|resume)\b/.test(text)) { await handleSessionCommand(text); return; }
+
+  // Performance mode: the fast path first. An instruction that names a part
+  // (or says "next") is dispatched right here — no model, no round trip —
+  // and only what the panel cannot read goes to the stage-hand role.
+  if (onStage()) return sendPerformance(text);
 
   // The agent works inside a project repo only: instruments live in the OPFS
   // faust/ folder, the session is saved to the repo, and the specialist writes
@@ -719,6 +898,40 @@ async function sendChat(text) {
   // summary rides along so the server can seed a FRESH session from it when
   // the sessionId can't be resumed (SDK sessions are per-machine).
   socket.send(JSON.stringify({ t: 'chat', text, sessionId, summary: sessionSummary, kit }));
+}
+
+// An instruction while the song plays. The fast path dispatches part names
+// and "next" itself; anything else is a PRODUCER turn on stage: the same kit
+// and tools, the stage section in the prompt and low effort, in the current
+// session (/new starts a fresh one - worth it before a show). The stage state
+// (where the playhead is) rides with every message.
+async function sendPerformance(text) {
+  if (turnRunning) { addLine('tool', '— a turn is still running. Press Escape (or Stop) to end it, then send again —'); return false; }
+  await sessionChain;   // a session command may still be in flight
+  const parts = stageParts();
+  addLine('user', text);
+  conversation.push({ role: 'user', text, stage: true });
+  const t0 = performance.now();
+  const hit = matchPerformanceCommand(text, parts);
+  if (hit) {
+    const r = hit.goTo ? await registry.go_to_part({ part: hit.goTo }) : await registry.send_signal({ name: hit.signal });
+    const line = r && r.__error ? `✗ ${r.__error}` : `${r} (${Math.round(performance.now() - t0)} ms, no model)`;
+    addLine(r && r.__error ? 'error' : 'agent', line);
+    conversation.push({ role: 'agent', text: line });
+    saveSession();
+    return;
+  }
+  saveSession();
+  const state = stageState();
+  if (nearaiConfig()) {
+    startAgentMessage(); setBusy(true); startActivity();
+    runNearaiTurn(text, { parts, state });
+    return;
+  }
+  if (!socket || socket.readyState !== WebSocket.OPEN) { setStatus('not connected'); return false; }
+  startAgentMessage(); setBusy(true); startActivity();
+  const kit = (await loadKit()).text;
+  socket.send(JSON.stringify({ t: 'chat', mode: 'performance', text, sessionId, summary: sessionSummary, kit, parts: parts.map((p) => ({ name: p.name })), state }));
 }
 
 // ---- NEAR AI serverless provider (no local studio-agent process) ------------
@@ -985,16 +1198,16 @@ function nearaiFetch() {
   };
 }
 
-async function runNearaiTurn(text) {
+async function runNearaiTurn(text, stage = null) {
   const cfg = nearaiConfig();
   nearaiAbort = new AbortController();
-  let content = text;
+  let content = stage ? `[stage] ${stage.state}\n\n${text}` : text;
   if (!nearaiMessages) {
     // The app owns the system prompt on BOTH paths now: the proxy forwards
     // whatever it is sent (bounded, and still gated by the x402 pass) and only
     // falls back to its own copy when a client sends none. So a prompt fix
     // ships with the app instead of waiting on a Pages redeploy.
-    nearaiMessages = [{ role: 'system', content: buildProducerPrompt() + SERVERLESS_PROMPT_SUFFIX }];
+    nearaiMessages = [{ role: 'system', content: buildProducerPrompt() + (stage ? buildPerformanceSection({ parts: stage.parts }) : '') + SERVERLESS_PROMPT_SUFFIX }];
     // ...and that includes a system message carrying the project kit, so the
     // kit rides in as part of the FIRST user turn instead. That is its honest
     // authority level anyway (repo content is the user talking), and merging
@@ -1036,7 +1249,7 @@ async function runNearaiTurn(text) {
       // The producer's tool set: everything but the .dsp writers, plus
       // design_instrument. The list goes out on every path — the proxy forwards
       // it (bounded) rather than injecting its own.
-      tools: toOpenAiTools(toolDefsForRole('producer')),
+      tools: toOpenAiTools(toolDefsForRole(stage ? 'performance' : 'producer')),
       messages: nearaiMessages,
       runTool: (name, args) => new Promise((resolve, reject) => {
         // reuse the same serialization as WS tool calls; once the tool is

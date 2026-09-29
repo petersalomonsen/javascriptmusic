@@ -19,7 +19,7 @@
 // Public API:
 //   toClassName(base)                 — derive a PascalCase class name
 //   extractUIFromJSON(asSource)       — parse getJSON() metadata
-//   splitNativeSource(asSource, cls)  — split preamble / class, strip getJSON
+//   splitNativeSource(asSource, cls)  — split preamble / sub-modules / class, strip getJSON
 //   transpileDsp({ asSource, effectAsSource, clsName, sourceFile, options })
 //   transpileEffect({ asSource, clsName, sourceFile, importDepth })
 //   generateNRPNSetParam(lines, ccParams)
@@ -41,7 +41,7 @@ export function toClassName(base) {
 
 export function extractUIFromJSON(asSource) {
     const getJSONMatch = asSource.match(/getJSON\(\)\s*:\s*string\s*\{[\s\S]*?return\s+"((?:[^"\\]|\\.)*)"\s*;/m);
-    if (!getJSONMatch) return { uiParams: [], numInputs: 0, numOutputs: 0 };
+    if (!getJSONMatch) return { uiParams: [], numInputs: 0, numOutputs: 0, meta: {} };
 
     // Decode escaped string content
     const normalized = getJSONMatch[1].replace(/\\'/g, "'");
@@ -50,7 +50,7 @@ export function extractUIFromJSON(asSource) {
         json = JSON.parse(JSON.parse(`"${normalized}"`));
     } catch (e) {
         console.warn('Warning: Could not parse getJSON() metadata');
-        return { uiParams: [], numInputs: 0, numOutputs: 0 };
+        return { uiParams: [], numInputs: 0, numOutputs: 0, meta: {} };
     }
 
     const numInputs = json.inputs || 0;
@@ -88,7 +88,11 @@ export function extractUIFromJSON(asSource) {
     }
     walkUI(json.ui || []);
 
-    return { uiParams, numInputs, numOutputs };
+    // Top-level `declare key "value";` entries (e.g. `declare preroll "0.02";`)
+    const meta = {};
+    for (const m of json.meta || []) Object.assign(meta, m);
+
+    return { uiParams, numInputs, numOutputs, meta };
 }
 
 // ---------------------------------------------------------------------------
@@ -97,10 +101,15 @@ export function extractUIFromJSON(asSource) {
 
 // The native output is: a preamble of module-level math helpers (_fmodf,
 // _rintf, ... — identical for every DSP compiled by the same module) and
-// soundfile @external declarations, followed by one `export class X { ... }`.
+// soundfile @external declarations, then (since faust-rs 0.7.0, where
+// `--table-init runtime` became the default) the DSP's table-generator
+// sub-modules — a `class <module>SIG<n>` plus new/delete/instanceInit/fill
+// helpers per generated table — followed by one `export class X { ... }`.
 //
-// Returns { preamble, classSource } where classSource is the full class
-// with the (potentially very large) getJSON() method stripped.
+// Returns { preamble, subModules, classSource }: `preamble` is the shared
+// helper block (safe to emit once per file), `subModules` the per-DSP
+// sub-module block (must be emitted for every DSP), and classSource the full
+// class with the (potentially very large) getJSON() method stripped.
 export function splitNativeSource(asSource, dspClassName) {
     const marker = `export class ${dspClassName} {`;
     const classStart = asSource.indexOf(marker);
@@ -139,7 +148,87 @@ export function splitNativeSource(asSource, dspClassName) {
         .replace(/@external\("env",\s*"_soundfile\w+"\)\s*\n\s*declare function _soundfile\w+\([^)]*\)\s*:\s*\w+;\s*/g, '')
         .trim();
 
-    return { preamble, classSource };
+    // Table-generator sub-modules are specific to this DSP, so they must not
+    // take part in the bundle-level helper deduplication: two DSPs (or the
+    // voice and effect of one DSP) with different tables would otherwise
+    // either lose a sub-module or emit the shared helpers twice.
+    let subModules = '';
+    const subModuleStart = preamble.search(/^(?:class \w+SIG\d+\s*\{|function (?:new|delete|instanceInit|fill)\w+SIG\d+\()/m);
+    if (subModuleStart !== -1) {
+        subModules = preamble.slice(subModuleStart).trim();
+        preamble = preamble.slice(0, subModuleStart).trim();
+    }
+
+    return { preamble, subModules: uncheckStateAccesses(subModules), classSource: uncheckStateAccesses(classSource) };
+}
+
+// ---------------------------------------------------------------------------
+// Unchecked state accesses
+// ---------------------------------------------------------------------------
+//
+// Faust keeps its state in small member arrays (`this.fRec3[<i32>(1)]`, the
+// masked delay lines `this.fRec0[(this.fIOTA & <i32>(16383))]`, tables), and
+// AssemblyScript bounds-checks every element access. Those checks were the
+// whole of the measured cost of a Faust instrument against the same model
+// hand-written in AssemblyScript (1.6-2.4x; without them the Faust code ran
+// 2-3x faster). The generated indices are in range by construction - constant
+// 0/1 for recursions, a power-of-two mask for delay lines, clamped table
+// reads - so every `this.<field>[...]` access in the generated class is
+// wrapped in unchecked(): a read as `unchecked(this.x[i])`, a write as
+// `unchecked(this.x[i] = value)`.
+export function uncheckStateAccesses(src) {
+    if (!src) return src;
+    const access = /this\.[A-Za-z_$][\w$]*\[/g;
+
+    // index of the `]` matching the `[` at `open`, or -1
+    function closing(text, open) {
+        let depth = 0;
+        for (let i = open; i < text.length; i++) {
+            const c = text[i];
+            if (c === '[') depth++;
+            else if (c === ']' && --depth === 0) return i;
+        }
+        return -1;
+    }
+    // end of the expression starting at `from` (the `;`, `)` or `,` that
+    // closes it at depth 0), for the right-hand side of a write
+    function expressionEnd(text, from) {
+        let depth = 0;
+        for (let i = from; i < text.length; i++) {
+            const c = text[i];
+            if (c === '(' || c === '[' || c === '{') depth++;
+            else if (c === ')' || c === ']' || c === '}') {
+                if (depth === 0) return i;
+                depth--;
+            } else if ((c === ';' || c === ',') && depth === 0) return i;
+        }
+        return text.length;
+    }
+    function rewrite(text) {
+        let out = '';
+        let pos = 0;
+        for (;;) {
+            access.lastIndex = pos;
+            const m = access.exec(text);
+            if (!m) return out + text.slice(pos);
+            const open = m.index + m[0].length - 1;
+            const close = closing(text, open);
+            if (close === -1) return out + text.slice(pos);
+            const target = text.slice(m.index, open + 1) + rewrite(text.slice(open + 1, close)) + ']';
+            out += text.slice(pos, m.index);
+            const assign = /^\s*=(?!=)/.exec(text.slice(close + 1));
+            if (assign) {
+                const rhsStart = close + 1 + assign[0].length;
+                const rhsEnd = expressionEnd(text, rhsStart);
+                out += `unchecked(${target} = ${rewrite(text.slice(rhsStart, rhsEnd)).trim()})`;
+                pos = rhsEnd;
+            } else {
+                out += `unchecked(${target})`;
+                pos = close + 1;
+            }
+        }
+    }
+    return rewrite(src);
 }
 
 // ---------------------------------------------------------------------------
@@ -230,7 +319,7 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const effectDspClassName = clsName + 'EffectDsp';
     const channelClassName = clsName + 'Channel';
 
-    const { uiParams, numInputs, numOutputs } = extractUIFromJSON(asSource);
+    const { uiParams, numInputs, numOutputs, meta } = extractUIFromJSON(asSource);
     const native = splitNativeSource(asSource, dspClassName);
 
     // === Determine global UI parameters ===
@@ -238,6 +327,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     const freqParam = uiParams.find(p => p.name === 'freq' || p.address.endsWith('/freq'));
     const gateParam = uiParams.find(p => p.isButton && (p.name === 'gate' || p.address.endsWith('/gate')));
     const gainParam = uiParams.find(p => p.name === 'gain' || p.address.endsWith('/gain'));
+    // Pre-roll: `declare preroll "<seconds>";` plus a `button("preroll")`. Each
+    // note-on first runs the DSP that long with `preroll` held at 1, output
+    // discarded, before the gate opens — for an exciter that must already be
+    // running when the note starts (a piano hammer). The DSP decides what the
+    // pre-roll drives (restart the exciter on its rising edge, keep it off the
+    // string); the gate is left as it was during it.
+    const prerollParam = uiParams.find(p => p.isButton && (p.name === 'preroll' || p.address.endsWith('/preroll')));
+    const prerollSeconds = prerollParam ? Number(meta?.preroll) || 0 : 0;
 
     const excludedFields = new Set([freqParam, gateParam, gainParam].filter(Boolean).map(p => p.field));
     const ccParams = uiParams.filter(p => !p.isButton && !excludedFields.has(p.field));
@@ -323,6 +420,12 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     for (const p of ccParams) {
         voiceClass.push(`        this.dsp.${p.field} = this.typedChannel.${p.niceName};`);
     }
+    if (prerollSeconds > 0) {
+        voiceClass.push(`        this.dsp.${prerollParam.field} = 1.0;`);
+        voiceClass.push('        this.dsp.control();');
+        voiceClass.push(`        for (let i = 0, n = <i32>(<f32>${prerollSeconds} * SAMPLERATE); i < n; i++) this.dsp.frame(this.fin, this.fout);`);
+        voiceClass.push(`        this.dsp.${prerollParam.field} = 0.0;`);
+    }
     if (gateParam) {
         // Retrigger: run one silent frame with the gate closed so envelopes
         // restart cleanly when the voice is being reused.
@@ -358,8 +461,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
 
     voiceClass.push('    nextframe(): void {');
     voiceClass.push('        this.dsp.frame(this.fin, this.fout);');
+    // A stereo voice (two outputs) goes out as left/right at the level a mono
+    // voice gets on each side (0.25), so `process = x <: _,_;` sounds as before.
+    const stereoVoice = numOutputs >= 2;
     voiceClass.push('        const output: f32 = this.fout[0];');
-    voiceClass.push('        if (Mathf.abs(output) < 0.001) {');
+    if (stereoVoice) voiceClass.push('        const output1: f32 = this.fout[1];');
+    voiceClass.push(stereoVoice
+        ? '        if (Mathf.max(Mathf.abs(output), Mathf.abs(output1)) < 0.001) {'
+        : '        if (Mathf.abs(output) < 0.001) {');
     voiceClass.push('            this.silentSamples++;');
     voiceClass.push('        } else {');
     voiceClass.push('            this.silentSamples = 0;');
@@ -367,7 +476,9 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
     if (gateParam) {
         voiceClass.push(`        if (this.dsp.${gateParam.field} == 0.0) this.releaseSamples++;`);
     }
-    voiceClass.push('        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
+    voiceClass.push(stereoVoice
+        ? '        this.channel.signal.add(output * 0.25, output1 * 0.25);'
+        : '        this.channel.signal.addMonoSignal(output, 0.5, 0.5);');
     voiceClass.push('    }');
     voiceClass.push('}');
 
@@ -519,12 +630,14 @@ export function transpileDsp({ asSource, effectAsSource = null, clsName, sourceF
         uiParams,
         voice: {
             preamble: native.preamble,
+            subModules: native.subModules,
             nativeClass: native.classSource,
             classCode: voiceClass,
             channelClass,
         },
         effect: {
             preamble: effectNative ? effectNative.preamble : '',
+            subModules: effectNative ? effectNative.subModules : '',
             nativeClass: effectNative ? effectNative.classSource : '',
         },
     };
@@ -575,6 +688,14 @@ function pushPreambleOnce(out, seen, preamble) {
     out.push('');
 }
 
+// Table-generator sub-modules are per-DSP (see splitNativeSource): always
+// emitted, right before the class that uses them.
+function pushSubModules(out, subModules) {
+    if (!subModules) return;
+    out.push(subModules);
+    out.push('');
+}
+
 function pushChannelDefaults(out, result, channelIndex) {
     if (result.useNRPN && (result.ccParams || []).length > 0) {
         out.push('');
@@ -595,12 +716,14 @@ function pushChannelDefaults(out, result, channelIndex) {
 
 function pushResultSections(out, result, seenPreambles) {
     pushPreambleOnce(out, seenPreambles, result.voice.preamble);
+    pushSubModules(out, result.voice.subModules);
     out.push(result.voice.nativeClass);
     out.push('');
     out.push(...result.voice.classCode);
     out.push('');
     if (result.hasEffect) {
         pushPreambleOnce(out, seenPreambles, result.effect.preamble);
+        pushSubModules(out, result.effect.subModules);
         out.push(result.effect.nativeClass);
         out.push('');
     }
@@ -749,6 +872,7 @@ export function transpileEffect({ asSource, clsName, sourceFile, importDepth = 1
 
     out.push(native.preamble);
     out.push('');
+    pushSubModules(out, native.subModules);
     out.push(native.classSource);
     out.push('');
 

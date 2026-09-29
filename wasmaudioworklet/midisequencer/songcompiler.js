@@ -1,6 +1,6 @@
-import { resetTick, setBPM, nextTick, currentTime, waitForBeat, waitDuration } from './pattern.js';
+import { resetTick, setBPM, nextTick, currentTime, waitForBeat, waitDuration, bpm } from './pattern.js';
 import { TrackerPattern, pitchbend, controlchange, createNoteFunctions, noteFunctionKeys } from './trackerpattern.js';
-import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT } from './sequenceconstants.js';
+import { SEQ_MSG_LOOP, SEQ_MSG_START_RECORDING, SEQ_MSG_STOP_RECORDING, SEQ_MSG_BROADCAST_SEND, SEQ_MSG_BROADCAST_WAIT, SEQ_MSG_WAIT_SIGNAL, SEQ_MSG_PART } from './sequenceconstants.js';
 import { setVideoSchedule, setTextSchedule } from '../visualizer/videoscheduler.js';
 import { setVisualParamSchedule } from '../visualizer/visualparams.js';
 import { textToSvgDataUrl } from './textimage.js';
@@ -50,6 +50,9 @@ let songmessages = [];
 export let instrumentNames = [];
 
 export let recordingStartTimeMillis = 0;
+// Where stopRecording() sits (0 = no stop marker): a note still held there -
+// or held across the loop point of a looping recorded part - ends there.
+export let recordingStopTimeMillis = 0;
 let muted = {};
 let solo = {};
 export let addedAudio = [];
@@ -94,6 +97,7 @@ function startRecording() {
 }
 
 function stopRecording() {
+    recordingStopTimeMillis = currentTime();
     output.sendMessage([SEQ_MSG_STOP_RECORDING]);
 }
 
@@ -177,10 +181,64 @@ function broadcastWait(name) {
     });
 }
 
+// ---- performance mode ----
+// Where the current part started (definePartStart), for waitForSignal's loop.
+let currentPartStart = 0;
+// Beats per bar from here on (setBeatsPerBar), 4 unless a song says otherwise:
+// a part takes its bar length - what quantize 'bar', a jump to it and a
+// timeout count in - from the value when it starts, as it takes the tempo.
+let beatsPerBar = 4;
+// loopParts(false): the waits from here on pass straight through (the song
+// plays its arrangement once) - live playback otherwise loops a part at its
+// waitForSignal until a signal. An export always plays straight through.
+let loopPartsOn = true;
+const beatMs = () => 60000 / bpm;
+const barMs = () => beatsPerBar * beatMs();
+
+// Mark the start of a named part. Also a sequencer event, so a targeted
+// signal ("go to chorus") can seek to it, quantized to this part's bars.
+function definePartStart(partName) {
+    songParts[partName] = { startTime: currentTime() };
+    currentPartStart = currentTime();
+    songmessages.push({ time: currentTime(), message: [SEQ_MSG_PART], name: partName, barMs: barMs(), beatMs: beatMs() });
+}
+
+// In PERFORMANCE MODE the song parks here until a signal named `name` (or
+// 'any') arrives — looping the current part (`loop: 'part'`, the default) or
+// freezing the clock (`loop: 'hold'`) — and leaves when the part has played
+// out (`quantize: 'part'`, the default), or on the next 'bar' / 'beat', or
+// 'now'. A signal may carry a part to jump
+// to instead of continuing. Outside performance mode the wait is inert:
+// `default: 'continue'` (the default) plays on, a part name seeks there — so
+// export, headless rendering and the agent's frames stay deterministic.
+// `timeout: { bars, goTo }` moves on by itself when nobody interacts (kiosk).
+function waitForSignal(name = 'go', options = {}) {
+    const timeout = options.timeout && options.timeout.bars > 0
+        ? { bars: options.timeout.bars, goTo: options.timeout.goTo || null } : null;
+    songmessages.push({
+        time: currentTime(),
+        message: [SEQ_MSG_WAIT_SIGNAL],
+        name,
+        loop: options.loop === 'hold' ? 'hold' : 'part',
+        quantize: ['part', 'bar', 'beat', 'now'].includes(options.quantize) ? options.quantize : 'part',
+        default: typeof options.default === 'string' ? options.default : 'continue',
+        timeout,
+        partStart: currentPartStart,
+        barMs: barMs(),
+        beatMs: beatMs(),
+        ...(loopPartsOn ? {} : { inert: true }),
+    });
+}
+
 const noteFunctions = createNoteFunctions();
 const songargs = {
     'output': output,
     'setBPM': setBPM,
+    'loopParts': (on = true) => { loopPartsOn = on !== false; },
+    'setBeatsPerBar': (n) => {
+        if (!(Number.isInteger(n) && n > 0)) throw new Error(`setBeatsPerBar: a whole number of beats, got ${n}`);
+        beatsPerBar = n;
+    },
     'TrackerPattern': TrackerPattern,
     'createTrack': (channel, stepsperbeat, defaultvelocity) => {
         const trackerPattern = new TrackerPattern({
@@ -212,7 +270,8 @@ const songargs = {
     'hideText': hideText,
     'broadcastSend': broadcastSend,
     'broadcastWait': broadcastWait,
-    'definePartStart': (partName) => songParts[partName] = { startTime: currentTime() },
+    'waitForSignal': waitForSignal,
+    'definePartStart': definePartStart,
     'definePartEnd': (partName) => songParts[partName].endTime = currentTime(),
     'mute': (channel) => muted[channel] = true,
     'solo': (channel) => solo[channel] = true,
@@ -276,6 +335,7 @@ export async function compileSong(songsource) {
     songmessages = result.events;
     instrumentNames = result.instrumentNames;
     recordingStartTimeMillis = result.recordingStartTimeMillis;
+    recordingStopTimeMillis = result.recordingStopTimeMillis || 0;
     // The song's setBPM() ran inside the sandbox, against the GUEST's copy of
     // pattern.js. Without this the host stays at the 110 default, and
     // insertMidiRecording — which reads `bpm` from the host module — writes a
@@ -334,6 +394,10 @@ export async function generateSong(songfunc) {
     muted = {};
     solo = {};
     songParts = {};
+    currentPartStart = 0;
+    beatsPerBar = 4;
+    loopPartsOn = true;
+    recordingStopTimeMillis = 0;
 
     resetTick();
 

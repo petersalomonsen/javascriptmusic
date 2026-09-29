@@ -206,14 +206,20 @@ function virtualSourceArgsFor(dspDir) {
 // `--ec --os` execution options, so the class exposes control()/frame()).
 // argsTail carries the per-call options (e.g. "-cn MyClassDsp" or
 // "-cn MyClassEffectDsp -pn effect"). Throws on failure.
-function compileFaustToAS(inputDsp, argsTail) {
+//
+// unitName is the source name handed to the compiler. faust-rs (through
+// 0.8.0) bakes it, not `-cn`, into the names of the table-generator
+// sub-modules (`<name>SIG0`, see transpile-core.js splitNativeSource), so
+// the voice and effect units of one .dsp must be compiled under distinct
+// names or their sub-modules collide in the assembled file.
+function compileFaustToAS(inputDsp, argsTail, unitName = null) {
     const dspPath = path.resolve(inputDsp);
     const dspBase = path.basename(dspPath);
     const dspSource = fs.readFileSync(dspPath, 'utf-8');
     const vsArgs = virtualSourceArgsFor(path.dirname(dspPath));
     try {
         return generateAuxFiles(
-            dspBase.replace(/\.dsp$/, ''),
+            unitName || dspBase.replace(/\.dsp$/, ''),
             dspSource,
             `-lang asc ${argsTail} --ec --os ${vsArgs} -o /${dspBase}.out.ts`
         );
@@ -239,7 +245,11 @@ function transpileDsp(inputDsp, clsName, options = {}) {
     let effectAsSource = null;
     if (hasEffect) {
         console.log(`Compiling ${path.basename(inputDsp)} effect -> ${clsName}EffectDsp (asc)`);
-        effectAsSource = compileFaustToAS(inputDsp, `-cn ${clsName}EffectDsp -pn effect`);
+        effectAsSource = compileFaustToAS(
+            inputDsp,
+            `-cn ${clsName}EffectDsp -pn effect`,
+            path.basename(inputDsp, '.dsp') + '_effect'
+        );
         console.log(`Detected effect declaration — will generate ${clsName}Channel MidiChannel subclass`);
     }
 

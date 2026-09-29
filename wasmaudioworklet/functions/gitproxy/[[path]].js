@@ -238,6 +238,11 @@ export async function onRequest(context) {
     method: request.method,
     headers,
     body: hasBody ? request.body : undefined,
+    // The body is forwarded as a stream; the Fetch spec (and Node's fetch,
+    // which the dev server runs this on) requires `duplex: 'half'` for that.
+    // Without it every clone's pack POST failed locally with a 500 while
+    // production (the Workers runtime) was fine.
+    ...(hasBody ? { duplex: 'half' } : {}),
     redirect: 'manual',
   });
 
@@ -246,8 +251,14 @@ export async function onRequest(context) {
   const outHeaders = new Headers(CORS);
   const ct = resp.headers.get('content-type');
   if (ct) outHeaders.set('Content-Type', ct);
+  // Keep the 401 challenge so the app can tell "private repo, ask for a token"
+  // from "no such repo" — but not as `Basic`: a browser answers a Basic
+  // challenge with its own username/password popup before the app can show
+  // its token dialog. The git worker never negotiates from the challenge (it
+  // sends `Authorization: Bearer` itself once it has a token), so the scheme
+  // name is free to change.
   const www = resp.headers.get('www-authenticate');
-  if (www) outHeaders.set('WWW-Authenticate', www);
+  if (www) outHeaders.set('WWW-Authenticate', www.replace(/^\s*Basic\b/i, 'Bearer'));
 
   return new Response(resp.body, { status: resp.status, headers: outHeaders });
 }

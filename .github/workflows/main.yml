@@ -39,6 +39,8 @@ jobs:
           # Zip writer for the repo export — pure bytes, and checked against
           # the system `unzip` when it is available (it is, on ubuntu-latest).
           npm run test-repozip
+          # The worklet sequencer's performance mode (wait policies, quantized jumps), in Node.
+          npm run test-sequencer
   web-test-runner:
     name: Web Test Runner
     runs-on: ubuntu-latest

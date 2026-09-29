@@ -35,6 +35,20 @@ export function onmidi(data) {
     });
 }
 
+// ---- performance mode: the signal bus ----
+// Every source (a shader element, a MIDI mapping, the agent's performance
+// tools, another window, a timeout) ends up here; the worklet decides what
+// the signal does (docs/plans/performance-mode.md). State changes come back
+// as `wasmmusic-signal` DOM events for the UI and the agent.
+// The song decides whether a part loops: its waitForSignal() waits in live
+// playback (loopParts(false) in the song plays through). Only an export - an
+// OfflineAudioContext render - ignores the waits and plays straight through.
+export function sendSignal(name, goTo = null) {
+    if (!audioworkletnode) return false;
+    audioworkletnode.port.postMessage({ signal: { name: String(name), goTo: goTo ? String(goTo) : null } });
+    return true;
+}
+
 // Stop path: the processor was told to terminate (it closes its message port),
 // so the node and message handler here are dead. They MUST be released —
 // posting to the closed port can never get a reply, and updateSynth awaiting
@@ -117,6 +131,10 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
                 setSynthState(e.data.synthstate);
                 return;
             }
+            if (e.data.signalState || e.data.signalResult) {
+                window.dispatchEvent(new CustomEvent('wasmmusic-signal', { detail: e.data.signalState || e.data.signalResult }));
+                return;
+            }
             if (typeof e.data.broadcastSend === 'string') {
                 channel.postMessage({ name: e.data.broadcastSend });
             } else if (typeof e.data.broadcastWaiting === 'string' && broadcastWaitingHandler) {
@@ -135,6 +153,7 @@ async function connectAudioWorklet(context, wasm_synth_bytes, sequencedata, togg
         wasm: wasm_synth_bytes,
         sequencedata: sequencedata,
         toggleSongPlay: toggleSongPlay,
+        performanceMode: !(context instanceof (OfflineAudioContext)),
         audio: await Promise.all(addedAudio)
     }, (msg) => msg.wasmloaded);
     toggleSpinner(false);
@@ -184,8 +203,10 @@ export async function getCurrentTime() {
     return currentTime;
 }
 
-export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate = 44100) {
-    toggleSpinner(true);
+// Render the whole song offline through the real synth, faster than real
+// time: an AudioBuffer plus the clipping the level analyser saw. Shared by
+// the WAV export and the video export (which muxes this as the audio track).
+export async function renderSongOffline(eventlist, wasm_synth_bytes, renderSampleRate = 44100) {
     const duration = eventlist[eventlist.length - 1].time / 1000;
     const offlineCtx = new OfflineAudioContext(2,
         duration * renderSampleRate,
@@ -210,17 +231,18 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
     updateSpinner();
 
     const renderedBuffer = await offlineCtx.startRendering();
+    rendering = false;
     console.log('finished rendering');
     const exportstats = await statfunc();
 
-    const clips = skipClipsWithinCentiSeconds(exportstats.clips);
-    if (clips.length > 0) {
-        rendering = false;
+    return { renderedBuffer, clips: skipClipsWithinCentiSeconds(exportstats.clips), duration };
+}
 
-        toggleSpinner(false);
-
-        const maxClipsToShow = 1000;
-        if (!await modal(`
+// The clipping warning the exports show; resolves true to go on, false to cancel.
+export async function confirmClipping(clips) {
+    if (!clips.length) return true;
+    const maxClipsToShow = 1000;
+    return !!await modal(`
             <h3>Warning: clipping in exported audio</h3>
             <p>${clips.length} clips ${clips.length > maxClipsToShow ? `, showing the first ${maxClipsToShow}` : ''}</p>
             <div style="height: 80px; overflow: auto">
@@ -236,7 +258,17 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
             <button onclick="getRootNode().result(true)">
                 Save exported file
             </button>
-        `)) {
+        `);
+}
+
+export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate = 44100) {
+    toggleSpinner(true);
+    const { renderedBuffer, clips } = await renderSongOffline(eventlist, wasm_synth_bytes, renderSampleRate);
+
+    if (clips.length > 0) {
+        toggleSpinner(false);
+
+        if (!await confirmClipping(clips)) {
             console.log('export wav cancelled');
             return;
         }
@@ -245,7 +277,6 @@ export async function exportToWav(eventlist, wasm_synth_bytes, renderSampleRate 
         type: "application/octet-stream"
     });
 
-    rendering = false;
     toggleSpinner(false);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
