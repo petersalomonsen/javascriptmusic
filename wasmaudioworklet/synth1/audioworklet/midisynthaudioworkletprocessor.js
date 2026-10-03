@@ -83,10 +83,12 @@ export function AssemblyScriptMidiSynthAudioWorkletProcessorModule() {
         }
 
         if (msg.data.signal) {
-          // a performance-mode signal, from any source on the main thread's bus
+          // a performance-mode signal, from any source on the main thread's bus.
+          // Queued when no wait is engaged yet (e.g. right after a live
+          // recompile): it applies at the next wait it matches.
           const seq = AudioWorkletGlobalScope.midisequencer;
           const { name, goTo } = msg.data.signal;
-          const result = seq.signal(name, goTo || null);
+          const result = seq.signal(name, goTo || null, { queue: true });
           if (result.resumed && !seq.waitingForSignal && !this.playMidiSequence) {
             this.playMidiSequence = true;   // a 'hold' wait released: play on
             this.port.postMessage({ broadcastResumed: name });
