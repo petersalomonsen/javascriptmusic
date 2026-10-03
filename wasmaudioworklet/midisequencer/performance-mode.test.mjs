@@ -271,3 +271,86 @@ test("waitForSignal leaves at the part's end unless it asks for a grid", async (
   assert.equal(await quantize(", { quantize: 'bar' }"), 'bar');
   assert.equal(await quantize(", { quantize: 'bogus' }"), 'part');
 });
+
+// A live recompile (the agent's compile, a save) swaps the sequence while a
+// part loops. Signals sent around it must not be lost: on stage the agent
+// compiles and then signals within seconds, and the performer keeps editing
+// while a jump is pending.
+test('a queued jump survives a live recompile', () => {
+  const s = makeSeq(song({ quantize: undefined }));
+  s.run(4700);                       // looping a, ~700 ms into pass 2
+  assert.equal(s.seq.signal('go', 'c').at, 4000);
+  s.seq.setSequenceData(song({ quantize: undefined }));   // recompile before the jump is due
+  s.run(3500);
+  assert.deepEqual(s.notes(), [60, 62, 60, 62, 67], 'a plays out, then c — the jump was kept');
+  const t = makeSeq(song({ quantize: undefined }));
+  t.run(4700);
+  t.seq.signal('go');                // no target: continue past the wait
+  t.seq.setSequenceData(song({ quantize: undefined }));
+  t.run(3500);
+  assert.deepEqual(t.notes(), [60, 62, 60, 62, 64], 'a plays out, then b');
+});
+
+test('a jump kept across a recompile goes to where the part is NOW', () => {
+  const s = makeSeq(song({ quantize: undefined }));
+  s.run(4700);
+  s.seq.signal('go', 'c');
+  // the recompile inserted a part before c: c moved from 6000 to 8000
+  const moved = [
+    part('a', 0), on(0, 60), off(400, 60), on(2000, 62), off(2400, 62),
+    wait(4000),
+    part('b', 4000), on(4000, 64), off(4400, 64),
+    part('x', 6000), on(6000, 66), off(6400, 66),
+    part('c', 8000), on(8000, 67), off(8400, 67),
+    { time: 10000, message: [SEQ_MSG_LOOP] },
+  ];
+  s.seq.setSequenceData(moved);
+  s.run(3500);
+  assert.deepEqual(s.notes(), [60, 62, 60, 62, 67]);
+  assert.ok(s.seq.getCurrentTime() > 8000, 'landed on c at its new time');
+  const gone = makeSeq(song({ quantize: undefined }));
+  gone.run(4700);
+  gone.seq.signal('go', 'c');
+  gone.seq.setSequenceData(song({ quantize: undefined }).filter(e => e.name !== 'c'));   // c was deleted
+  gone.run(3500);
+  assert.deepEqual(gone.notes(), [60, 62, 60, 62, 60], 'no part to go to: keep looping');
+});
+
+test('a go sent after a recompile, before the wait is reached again, leaves when the part has played out', () => {
+  const s = makeSeq(song({ quantize: undefined }));
+  s.run(4700);
+  s.seq.setSequenceData(song({ quantize: undefined }));   // the wait is re-armed only when reached
+  const r = s.seq.signal('go', null, { queue: true });
+  assert.equal(r.queued, true);
+  s.run(3500);
+  assert.deepEqual(s.notes(), [60, 62, 60, 62, 64], 'left a for b at its end instead of looping');
+  assert.ok(s.states.some(st => st.resumed === 'go'));
+  s.run(2500);
+  assert.deepEqual(s.notes().slice(-1), [67], 'the queued signal was used up: b went on into c');
+});
+
+test('only the signal bus queues: without queue (a broadcast from another window) an early go is ignored', () => {
+  const s = makeSeq(song({ quantize: undefined }));
+  s.run(4700);
+  s.seq.setSequenceData(song({ quantize: undefined }));
+  assert.equal(s.seq.signal('go').ignored, true);
+  s.run(3500);
+  assert.ok(!s.notes().includes(64), 'still looping a');
+});
+
+test('a seek or a targeted jump discards a queued go', () => {
+  const s = makeSeq(song({ quantize: undefined }));
+  s.run(700);
+  s.seq.signal('go', null, { queue: true });   // queued in pass 1, before the wait is engaged
+  s.seq.setCurrentTime(0);                     // the performer moved the playhead
+  s.run(5000);
+  assert.ok(!s.notes().includes(64), 'the seek dropped it: a loops');
+  const t = makeSeq(song({ quantize: undefined }));
+  t.run(700);
+  t.seq.signal('go', null, { queue: true });
+  t.seq.signal('goto', 'c');                   // a later, explicit destination wins
+  t.run(3500);                                 // a plays out → c
+  assert.deepEqual(t.notes(), [60, 62, 67]);
+  t.run(2500);                                 // c reaches the loop point; the stale go must not skip anything
+  assert.deepEqual(t.notes(), [60, 62, 67, 60]);
+});
