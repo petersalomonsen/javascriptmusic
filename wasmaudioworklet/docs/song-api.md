@@ -593,10 +593,19 @@ with performance mode on, a part name or "next" typed into its panel is
 dispatched at once without a model, and an instruction like "take it to the
 quiet bit" becomes one tool call of its stage-hand role (a few seconds). State changes arrive as `wasmmusic-signal`
 DOM events on `window`: `{ waiting, loop, timeoutMs }`, `{ jumping, at,
-quantize }`, `{ resumed, goTo }`, `{ performanceMode }`.
+quantize }`, `{ resumed, goTo }`, `{ queued }`, `{ performanceMode }`.
+
+Editing the song while it plays doesn't lose a signal. A jump that is
+scheduled but not yet due survives a recompile, and lands on the part where the
+new song has it; if that part was removed, the jump is dropped. A plain
+`sendSignal('go')` that arrives before the song has reached its wait — right
+after a recompile, the wait is engaged only when the playhead gets to it again —
+is queued (`{ queued }`) and applies at that wait: the part plays out, then
+moves on. A seek or a later targeted signal discards it.
 
 `broadcastSend` from another window is a signal too, so `waitForSignal`
-resumes on it like `broadcastWait` does.
+resumes on it like `broadcastWait` does, but it is never queued: one that
+arrives before the wait is ignored.
 
 ## Song Structure Functions
 

@@ -23,6 +23,7 @@ export function AudioWorkletProcessorSequencerModule() {
       this.parts = {};        // part name -> { time, barMs }, from SEQ_MSG_PART events
       this.wait = null;       // the wait we are parked on, or null
       this.jump = null;       // a quantized jump scheduled by a signal: { at, targetTime, wait, goTo }
+      this.pendingSignal = null;   // a signal that arrived before its wait was engaged (signal bus only): used at the next matching wait
       this.onSignalState = null;   // processor hook: (state) => post to the main thread
       this.onJump = null;          // processor hook: the playhead moved (a jump, not a loop wrap) — silence held notes
       // Name the wait is parked on. Set when onprocess encounters a
@@ -43,10 +44,16 @@ export function AudioWorkletProcessorSequencerModule() {
     setSequenceData(sequencedata) {
       // A new sequence's wait events haven't been encountered yet, so any
       // pending wait from the old sequence is stale. (A live recompile while
-      // looping a part re-enters the wait when it is reached again.)
+      // looping a part re-enters the wait when it is reached again.) What the
+      // performer ASKED for is not stale: a scheduled jump or a queued signal
+      // is carried over and re-applied against the new sequence below.
+      const carried = this.jump
+        ? { goTo: this.jump.goTo || null, name: this.jump.wait ? this.jump.wait.name : null }
+        : this.pendingSignal ? { goTo: null, name: this.pendingSignal } : null;
       this.waitingForSignal = null;
       this.wait = null;
       this.jump = null;
+      this.pendingSignal = null;
       this.parts = {};
       sequencedata.forEach((evt, index) => {
         if (evt.message && evt.message.length === 1 && evt.message[0] === SEQ_MSG_PART && evt.name) {
@@ -79,6 +86,20 @@ export function AudioWorkletProcessorSequencerModule() {
         this.currentFrame = 0;
       }
       this.sequence = sequencedata;
+      if (carried && this.performanceMode) this._carryOver(carried);
+    }
+
+    // Re-apply a jump or signal the old sequence had not acted on yet. A part
+    // is looked up by NAME, so a jump lands on the part where it is now (a
+    // part inserted before it moved it); a part that no longer exists drops
+    // the jump. A plain signal waits for the wait it was meant for, which the
+    // new sequence engages when the playhead reaches it.
+    _carryOver({ goTo, name }) {
+      if (goTo) {
+        if (this.parts[goTo]) this.signal(name || 'go', goTo);
+      } else if (name) {
+        this.pendingSignal = name;
+      }
     }
 
     addMidiReceiver(midireceiver) {
@@ -114,6 +135,7 @@ export function AudioWorkletProcessorSequencerModule() {
       this.waitingForSignal = null;
       this.wait = null;
       this.jump = null;
+      this.pendingSignal = null;
       this._seek(time);
     }
 
@@ -137,6 +159,7 @@ export function AudioWorkletProcessorSequencerModule() {
         if (this.wait && this.wait.loop === 'hold') this.waitingForSignal = null;
         this.wait = null;
         this.jump = null;
+        this.pendingSignal = null;
       }
     }
 
@@ -218,6 +241,7 @@ export function AudioWorkletProcessorSequencerModule() {
       // next bar line: leave at the end of the part then, whichever is first.
       if (wait && wait.loop === 'part' && at > wait.time) at = wait.time;
       this.jump = { at, target: target || null, goTo, wait };
+      this.pendingSignal = null;   // a scheduled jump supersedes a queued signal
       this._notify({ jumping: goTo || 'next', at, quantize });
     }
 
@@ -234,7 +258,12 @@ export function AudioWorkletProcessorSequencerModule() {
     // A signal arrived (from a shader element, MIDI, the agent, another
     // window, a timeout). Returns what happened so the processor can flip
     // playback back on after a hold. `goTo` names a part to jump to.
-    signal(name, goTo = null) {
+    // `queue`: a signal with no wait engaged yet is kept for the next wait it
+    // matches instead of being ignored. The signal bus asks for that — after a
+    // live recompile the wait is re-engaged only when the playhead reaches it,
+    // and a "go" sent in between means "leave when this part has played out".
+    // A broadcast from another window does not: a stale one must not fire.
+    signal(name, goTo = null, { queue = false } = {}) {
       const target = goTo ? this.parts[goTo] : null;
       if (goTo && !target) return { unknownPart: goTo };
       const w = this.wait;
@@ -261,6 +290,11 @@ export function AudioWorkletProcessorSequencerModule() {
           quantize: partEnd < Infinity ? 'part' : part && part.barMs ? 'bar' : 'now',
           gridStart: part ? part.time : 0, barMs: part ? part.barMs : 0, beatMs: 0, partEnd });
         return { resumed: false, goTo, at: this.jump.at };
+      }
+      if (queue && !w && this.performanceMode) {
+        this.pendingSignal = name;
+        this._notify({ queued: name });
+        return { resumed: false, queued: true };
       }
       return { resumed: false, ignored: true };
     }
@@ -343,6 +377,15 @@ export function AudioWorkletProcessorSequencerModule() {
                 const target = evt.default && evt.default !== 'continue' ? this.parts[evt.default] : null;
                 if (target) { this._seekToPart(target); this._jumped(); return; }
                 break;
+              }
+              if (!this.wait && this.pendingSignal) {
+                const name = evt.name || 'go';
+                if (this.pendingSignal === name || this.pendingSignal === 'any' || name === 'any') {
+                  // the queued signal is for this wait: play on past it, as if it had been waiting
+                  this.pendingSignal = null;
+                  this._notify({ resumed: name, goTo: null });
+                  break;
+                }
               }
               if (!this.wait) {
                 this.wait = {

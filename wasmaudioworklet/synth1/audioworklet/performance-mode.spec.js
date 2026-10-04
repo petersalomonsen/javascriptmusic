@@ -105,4 +105,26 @@ describe('performance mode', function () {
         await pollUntil(async () => (await getCurrentTime()) > 2500, 15000);
         window.removeEventListener('wasmmusic-signal', listener);
     });
+
+    it('a live recompile: the position slider follows the new length, and a go sent right after it is not lost', async () => {
+        songsourceeditor.doc.setValue(songsource);
+        window.stopaudio();
+        window.audioworkletnode = undefined;
+        appElement.querySelector('#startaudiobutton').click();
+        await pollUntil(async () => (await getCurrentTime()) > 500, 30000);
+        const slider = appElement.querySelector('#timeindicator');
+        const before = Number(slider.max);
+
+        // recompile while part a loops — the agent's compile: a third part makes the song longer
+        songsourceeditor.doc.setValue(songsource +
+            `waitForSignal('go', { loop: 'part' });\ndefinePartStart('c');\nawait createTrack(0).steps(1, [ c5, , e5, , g5, , c6, ]);\n`);
+        await window.saveSong();
+        assert.ok(Number(slider.max) > before + 3000, `slider max follows the song: ${before} → ${slider.max}`);
+
+        // The recompile re-engages part a's wait only when the playhead reaches
+        // it again. A go sent now (the agent signals right after compiling) is
+        // queued for that wait instead of being ignored: a plays out, then b.
+        assert.equal(window.sendSignal('go'), true);
+        await pollUntil(async () => (await getCurrentTime()) > 2000, 8000);
+    });
 });

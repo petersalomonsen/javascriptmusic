@@ -93,14 +93,16 @@ export function formatTime(currentTime) {
     padNumber(Math.floor(currentTime % (1000)), 3);
 }
 
+let seekBpm = 120;
+
 export function attachSeek(seekFunc, getCurrentTimeFunc, max, bpm) {
   const timeindicatorelement = componentRoot.querySelector("#timeindicator");
   componentRoot.querySelector("#timeindicator").style.display = 'block';
   componentRoot.querySelector("#timespan").style.display = 'block';
-  timeindicatorelement.max = max;
+  updateSeekRange(max, bpm);
   timeindicatorelement.oninput = () => seekFunc(timeindicatorelement.value);
 
-  const timeToBeat = (time) => (time / (60 * 1000)) * bpm;
+  const timeToBeat = (time) => (time / (60 * 1000)) * seekBpm;
 
   const updateTimeIndicatorLoop = () =>
     requestAnimationFrame(async () => {
@@ -115,6 +117,13 @@ export function attachSeek(seekFunc, getCurrentTimeFunc, max, bpm) {
     });
   seekAttached = true;
   updateTimeIndicatorLoop();
+}
+
+// A live recompile while playing changes the song's length (and maybe its
+// tempo): the position slider and the beat readout follow it.
+export function updateSeekRange(max, bpm) {
+  componentRoot.querySelector("#timeindicator").max = max;
+  if (bpm) seekBpm = bpm;
 }
 
 export function detachSeek() {

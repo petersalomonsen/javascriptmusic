@@ -2,7 +2,7 @@ import { visualizeSong, setGetCurrentTimeFunction, setPaused } from '../../visua
 import { WorkerMessageHandler } from '../../common/workermessagehandler.js';
 import { toggleSpinner } from '../../common/ui/progress-spinner.js';
 import { setProgressbarValue } from '../../common/ui/progress-bar.js';
-import { attachSeek, formatTime } from '../../app.js';
+import { attachSeek, updateSeekRange, formatTime } from '../../app.js';
 import { audioBufferToWav } from '../../common/audiobuffertowav.js';
 import { connectLevelAnalyser, skipClipsWithinCentiSeconds } from '../../analyser/levelanalysernode.js';
 import { modal } from '../../common/ui/modal.js';
@@ -67,6 +67,7 @@ export async function updateSong(sequencedata, toggleSongPlay) {
     });
     setPaused(!toggleSongPlay);
     visualizeSong(sequencedata);
+    updateSeekRange(sequencedata.length ? sequencedata[sequencedata.length - 1].time : 0, bpm);
 }
 
 export async function updateSynth(synthwasm, addedAudio) {
