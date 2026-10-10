@@ -413,7 +413,7 @@ test.describe('studio-agent render_shader (local repo)', () => {
         await waitForStudioAgentTools(page);
         await mock.waitForClient();
 
-        expect((await mock.callTool('set_shader', { source: NOTE_SHADER })).result).toBe('shader updated');
+        expect((await mock.callTool('set_shader', { source: NOTE_SHADER })).result).toMatch(/^shader updated\nlive on the canvas now/);
         expect((await mock.callTool('set_song', { source: ONE_NOTE_SONG })).ok).toBe(true);
         expect(String((await mock.callTool('compile', {})).result)).toContain('compiled OK');
 
@@ -472,5 +472,44 @@ test.describe('studio-agent render_shader (local repo)', () => {
             const gl = cv && (cv.getContext('webgl2') || cv.getContext('webgl'));
             return !!gl && !gl.isContextLost();
         })).toBe(true);
+    });
+
+    // A shader edit used to reach the canvas only with the next compile, so an
+    // edit made after the agent's last compile never showed while the agent
+    // reported it live. Now every agent shader write goes on the canvas at once.
+    test('a shader write goes on the live canvas without a compile; a broken one keeps the previous', async ({ page }) => {
+        page.on('pageerror', (e) => console.log('[browser-error]', e.message));
+        await page.addInitScript((port) => { window.STUDIO_AGENT_PORT = port; }, mock.port());
+        await page.goto(`http://localhost:8080/?gitrepo=${RENDER_REPO}`);
+        await waitForAppReady(page);
+        await waitForStudioAgentTools(page);
+        await mock.waitForClient();
+
+        const solid = (rgb) => `precision highp float;\nvoid main() { gl_FragColor = vec4(${rgb}, 1.0); }\n`;
+        // The colour in the middle of the live canvas, read right after the
+        // visualizer's own frame (the drawing buffer is cleared once composited).
+        const canvasColor = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => {
+            const cv = document.querySelector('app-javascriptmusic').shadowRoot.querySelector('#glCanvas');
+            const gl = cv.getContext('webgl2') || cv.getContext('webgl');
+            const px = new Uint8Array(4);
+            gl.readPixels(Math.floor(gl.drawingBufferWidth / 2), Math.floor(gl.drawingBufferHeight / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            resolve([px[0], px[1], px[2]]);
+        })));
+
+        expect(String((await mock.callTool('set_shader', { source: solid('0.0, 1.0, 0.0') })).result)).toContain('live on the canvas now');
+        await expect.poll(canvasColor).toEqual([0, 255, 0]);
+
+        // An edit and NO compile: the canvas follows anyway.
+        const edit = await mock.callTool('edit_shader', { old_string: 'vec4(0.0, 1.0, 0.0, 1.0)', new_string: 'vec4(1.0, 0.0, 1.0, 1.0)' });
+        expect(String(edit.result)).toContain('live on the canvas now');
+        await expect.poll(canvasColor).toEqual([255, 0, 255]);
+
+        // A broken edit lands in the editor, says so, and the canvas stays magenta.
+        const bad = await mock.callTool('edit_shader', { old_string: 'vec4(1.0, 0.0, 1.0, 1.0)', new_string: 'nope' });
+        expect(bad.ok).toBe(true);
+        expect(String(bad.result)).toContain('ERROR: the shader does not compile, so the canvas keeps the previous one');
+        expect(String(bad.result)).toContain("'nope' : undeclared identifier");
+        await page.waitForTimeout(300);
+        expect(await canvasColor()).toEqual([255, 0, 255]);
     });
 });

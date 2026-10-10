@@ -385,6 +385,22 @@ process = os.sawtooth(freq) * gain * en.adsr(0.01, 0.1, 0.7, 0.2, gate);
         });
     };
 
+    // Put the shader EDITOR's source on the live canvas now. The studio agent
+    // calls this after every shader write: otherwise a shader edit made after
+    // its last compile never reached the canvas, while it told the user the
+    // change was live. A shader that fails to compile throws before it is
+    // switched in, so the previous one keeps running. Returns the error message
+    // or null. compileSong's change check is left alone, so the next compile
+    // still sees the new shader and saves it to the project.
+    window.applyShaderToCanvas = () => {
+        try {
+            setupWebGL(shadersourceeditor.doc.getValue(), componentRoot.querySelector('#glCanvas'));
+            return null;
+        } catch (e) {
+            return e.message || String(e);
+        }
+    };
+
     window.compileSong = async function (exportProject = false) {
         const errorMessagesElement = componentRoot.querySelector('#errormessages');
         const errorMessagesContentElement = errorMessagesElement.querySelector('span');
