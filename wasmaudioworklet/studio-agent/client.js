@@ -12,7 +12,7 @@ import { saveFaustSource, libraryDependents, isFaustSource, isLibrary, isScratch
 import { formatDiagnosticsForAgent } from '../faust/faust-diagnostics.js';
 import { readfile, writefileandstage, unlinkfile, listfiles, gitCommand, gitLog, worker as gitWorker } from '../wasmgit/wasmgitclient.js';
 import {
-  applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
+  applyEditToText, changedSpan, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   summarizeSongEvents, formatSongSummary, songEventWarnings, songBpmFromSource, declaredInstruments,
   playFromHereLine, SPECIALISTS, noteStatesAtTime, fakeNoteStates, parseRenderTimes,
   partsFromEvents, partAt, matchPerformanceCommand, formatPerformanceState,
@@ -153,11 +153,37 @@ async function handleSessionCommand(text) {
   if (cmd === '/resume') { if (!arg) { addLine('error', 'usage: /resume <name> (see /sessions)'); return; } await resumeSession(arg); return; }
 }
 
+// Every agent write lands here. Only the span that changed is replaced (so the
+// editor keeps its scroll position and the undo step is the edit, not the whole
+// document), then the editor scrolls to it and the changed lines flash — so
+// someone watching sees WHERE the agent changed the code, not just that it did.
+const FLASH_MS = 1600;
+const flashes = new WeakMap();   // editor -> { lines, timer } of the current flash
+function writeEditor(editor, text) {
+  const doc = editor.doc;
+  const span = changedSpan(doc.getValue(), text);
+  if (!span) return;
+  const from = doc.posFromIndex(span.start);
+  doc.replaceRange(text.slice(span.start, span.newEnd), from, doc.posFromIndex(span.oldEnd), '+agent');
+  const to = doc.posFromIndex(span.newEnd);
+  const prev = flashes.get(editor);
+  if (prev) { clearTimeout(prev.timer); prev.lines.forEach((l) => editor.removeLineClass(l, 'background', 'agent-edit-flash')); }
+  const lines = [];
+  for (let n = from.line; n <= to.line; n++) lines.push(editor.addLineClass(n, 'background', 'agent-edit-flash'));
+  // line starts, not the changed characters: scrolling to the end of a long
+  // changed line would also scroll sideways and cut off the left of the code
+  editor.scrollIntoView({ from: { line: from.line, ch: 0 }, to: { line: to.line, ch: 0 } }, 60);
+  flashes.set(editor, {
+    lines,
+    timer: setTimeout(() => { lines.forEach((l) => editor.removeLineClass(l, 'background', 'agent-edit-flash')); flashes.delete(editor); }, FLASH_MS),
+  });
+}
+
 // Editor wrappers around the pure logic in tools-core.js.
 function applyEdit(editor, args) {
   const r = applyEditToText(editor.doc.getValue(), args);
   if (r.error) return { __error: r.error };
-  editor.doc.setValue(r.text);
+  writeEditor(editor, r.text);
   return `applied ${r.count} edit(s)`;
 }
 
@@ -231,11 +257,11 @@ const registry = {
 
   get_song: async () => songsourceeditor.doc.getValue(),
   set_song: async ({ source }) => {
-    songsourceeditor.doc.setValue(source);
+    writeEditor(songsourceeditor, source);
     return ['song updated', ...songSourceWarnings(source)].join(' ');
   },
   get_synth: async () => synthsourceeditor.doc.getValue(),
-  set_synth: async ({ source }) => { synthsourceeditor.doc.setValue(source); return 'synth updated'; },
+  set_synth: async ({ source }) => { writeEditor(synthsourceeditor, source); return 'synth updated'; },
   edit_synth: async (args) => applyEdit(synthsourceeditor, args),
   edit_song: async (args) => {
     const result = applyEdit(songsourceeditor, args);
@@ -251,7 +277,7 @@ const registry = {
   // write reports back what the song schedules but the shader can't show.
   get_shader: async () => shadersourceeditor.doc.getValue() || '(no shader — the shader editor is empty)',
   set_shader: async ({ source }) => {
-    shadersourceeditor.doc.setValue(source);
+    writeEditor(shadersourceeditor, source);
     return ['shader updated', ...shaderWarnings()].join('\n');
   },
   edit_shader: async (args) => {
@@ -532,7 +558,7 @@ const registry = {
     }
     let tail = '';
     if (r.final && r.source !== source) {
-      synthsourceeditor.doc.setValue(r.source);
+      writeEditor(synthsourceeditor, r.source);
       try {
         await window.saveSong();
       } catch (e) {
@@ -575,7 +601,7 @@ const registry = {
     const write = async (name, text) => {
       const editor = editors[name];
       const before = editor.doc.getValue().split('\n').length;
-      editor.doc.setValue(text);
+      writeEditor(editor, text);
       const warnings = name === 'song' ? songSourceWarnings(text) : name === 'shader' ? shaderWarnings() : [];
       return { message: `${name} updated (${before} → ${text.split('\n').length} lines)`, warnings };
     };
@@ -1418,6 +1444,18 @@ export function initStudioAgent(shadowRoot) {
   const form = el('studioagentform');
   const input = el('studioagentinput');
 
+  // The prompt box grows with what is typed (a long instruction stays readable
+  // as a whole) up to the CSS max-height, then scrolls.
+  // Never below its rows="2" height: back to that first, and grow only if the
+  // text does not fit in it.
+  const fitInput = () => {
+    input.style.height = '';
+    if (input.scrollHeight > input.clientHeight) {
+      input.style.height = `${input.scrollHeight + input.offsetHeight - input.clientHeight}px`;
+    }
+  };
+  input.addEventListener('input', fitInput);
+
   window.toggleStudioAgent = (checked) => {
     panel.style.display = checked ? 'flex' : 'none';
     if (checked) input.focus();
@@ -1431,6 +1469,7 @@ export function initStudioAgent(shadowRoot) {
     // typed instead of swallowing it.
     if (await sendChat(text) === false) return;
     input.value = '';
+    fitInput();
   });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }

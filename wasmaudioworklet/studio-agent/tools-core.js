@@ -13,6 +13,22 @@ export function applyEditToText(cur, { old_string, new_string, replace_all }) {
   return { text, count: replace_all ? count : 1 };
 }
 
+// The one span that differs between two versions of a document: everything
+// before `start` and after the two ends is shared. Writing only that span into
+// the editor (instead of replacing the whole text) keeps its scroll position
+// and lets the change be shown where it landed. Returns null when unchanged.
+// { start, oldEnd, newEnd } are character offsets; text.slice(start, newEnd)
+// is what replaces old.slice(start, oldEnd).
+export function changedSpan(oldText, newText) {
+  if (oldText === newText) return null;
+  const max = Math.min(oldText.length, newText.length);
+  let start = 0;
+  while (start < max && oldText.charCodeAt(start) === newText.charCodeAt(start)) start++;
+  let oldEnd = oldText.length, newEnd = newText.length;
+  while (oldEnd > start && newEnd > start && oldText.charCodeAt(oldEnd - 1) === newText.charCodeAt(newEnd - 1)) { oldEnd--; newEnd--; }
+  return { start, oldEnd, newEnd };
+}
+
 // Regex-grep over text. Returns "line: content" lines (with optional context),
 // capped at 120 output lines, or { error } on a bad pattern.
 export function grepText(text, { pattern, context = 0 }) {
