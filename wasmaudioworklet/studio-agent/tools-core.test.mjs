@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  applyEditToText, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
+  applyEditToText, changedSpan, grepText, normDsp, faustRegistrationHint, songSourceWarnings,
   stepPatternSpans, summarizeSongEvents, formatSongSummary, songEventWarnings,
   trailingSilence, songBpmFromSource, declaredInstruments, masteringBrief, masteringResult, SPECIALISTS } from './tools-core.js';
 import { spectrum, measureNote, parseNote, noteName } from '../audioprobe/audioanalysis.js';
@@ -21,6 +21,23 @@ test('applyEditToText: replace_all replaces every occurrence', () => {
 });
 test('applyEditToText: identical old/new → error', () => {
   assert.match(applyEditToText('a', { old_string: 'a', new_string: 'a' }).error, /identical/);
+});
+
+test('changedSpan: unchanged → null', () => {
+  assert.equal(changedSpan('abc', 'abc'), null);
+});
+test('changedSpan: a replacement in the middle', () => {
+  const s = changedSpan('a\nkick\nz', 'a\nsnare\nz');
+  assert.deepEqual(s, { start: 2, oldEnd: 6, newEnd: 7 });
+  assert.equal('a\nsnare\nz'.slice(s.start, s.newEnd), 'snare');
+});
+test('changedSpan: insertion and deletion', () => {
+  assert.deepEqual(changedSpan('ac', 'abc'), { start: 1, oldEnd: 1, newEnd: 2 });
+  assert.deepEqual(changedSpan('abc', 'ac'), { start: 1, oldEnd: 2, newEnd: 1 });
+});
+test('changedSpan: repeated text does not let the ends cross', () => {
+  // 'aa' → 'aaa': prefix eats both a's, the suffix must stop at start
+  assert.deepEqual(changedSpan('aa', 'aaa'), { start: 2, oldEnd: 2, newEnd: 3 });
 });
 
 test('grepText: reports 1-indexed line numbers', () => {
