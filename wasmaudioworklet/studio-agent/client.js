@@ -200,6 +200,17 @@ function grepDoc(editor, args) {
 function shaderWarnings() {
   return window.getVisualWarnings ? window.getVisualWarnings(shadersourceeditor.doc.getValue()) : [];
 }
+// After a shader write: put it on the live canvas at once (it used to wait for
+// the next compile, and a shader edited after the last compile never showed).
+// One line for the tool result: live, or the GLSL error with the old shader
+// still running.
+function applyShaderLive() {
+  if (typeof window.applyShaderToCanvas !== 'function') return [];
+  const err = window.applyShaderToCanvas();
+  return [err
+    ? `ERROR: the shader does not compile, so the canvas keeps the previous one:\n${err}`
+    : 'live on the canvas now (compile saves it to the project)'];
+}
 
 // ---- the tool registry: tool name -> async fn acting on the app -------------
 // Returning an object with `__error` marks a failed tool result.
@@ -278,12 +289,12 @@ const registry = {
   get_shader: async () => shadersourceeditor.doc.getValue() || '(no shader — the shader editor is empty)',
   set_shader: async ({ source }) => {
     writeEditor(shadersourceeditor, source);
-    return ['shader updated', ...shaderWarnings()].join('\n');
+    return ['shader updated', ...applyShaderLive(), ...shaderWarnings()].join('\n');
   },
   edit_shader: async (args) => {
     const result = applyEdit(shadersourceeditor, args);
     if (result && result.__error) return result;
-    return [result, ...shaderWarnings()].join('\n');
+    return [result, ...applyShaderLive(), ...shaderWarnings()].join('\n');
   },
   grep_shader: async (args) => grepDoc(shadersourceeditor, args),
   // The agent's eyes: frames of the CURRENT shader at chosen song times, as
@@ -602,7 +613,7 @@ const registry = {
       const editor = editors[name];
       const before = editor.doc.getValue().split('\n').length;
       writeEditor(editor, text);
-      const warnings = name === 'song' ? songSourceWarnings(text) : name === 'shader' ? shaderWarnings() : [];
+      const warnings = name === 'song' ? songSourceWarnings(text) : name === 'shader' ? [...applyShaderLive(), ...shaderWarnings()] : [];
       return { message: `${name} updated (${before} → ${text.split('\n').length} lines)`, warnings };
     };
     let result;
