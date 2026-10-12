@@ -76,7 +76,15 @@ const VIEW_FOR_TOOL = cut.VIEW_FOR_TOOL ?? {
 
 const OUTDIR = argOf('--outdir', path.join(HERE, 'out'));
 const ONLY_BEATS = argOf('--beats', null)?.split(',').map(Number) ?? null;
-const APP_URL = argOf('--url', 'http://localhost:8080/?defaultrepo=1');
+// A cut whose session ran in a real project (e.g. a private `remote=` repo with
+// its own instruments) names that URL itself; --url still overrides it.
+const APP_URL = argOf('--url', cut.APP_URL ?? 'http://localhost:8080/?defaultrepo=1');
+// A private `remote=…/gitproxy/…` repo needs a token to clone. The cut names a
+// FILE holding it (never the token itself), read here and put where the app's
+// git client looks for it, so the clone never stops at the token prompt.
+const GIT_TOKEN = cut.GIT_TOKEN_FILE
+    ? fs.readFileSync(cut.GIT_TOKEN_FILE.replace(/^~(?=\/)/, process.env.HOME), 'utf8').trim()
+    : null;
 
 fs.mkdirSync(OUTDIR, { recursive: true });
 const slug = path.basename(CUT_PATH, '.mjs');
@@ -159,6 +167,9 @@ async function showOnly(page, view) {
         set('editor', 'songeditortogglecheckbox', v === 'song');
         set('assemblyscripteditor', 'syntheditortogglecheckbox', v === 'synth');
         set('fausteditor', 'fausteditortogglecheckbox', v === 'faust');
+        // A project with a shader.glsl opens the shader editor too; it would
+        // share the screen with whatever is being shown.
+        set('shadereditor', 'shadereditortogglecheckbox', v === 'shader');
     }, view);
 }
 
@@ -230,6 +241,15 @@ page.on('console', (m) => { if (m.type() === 'error') console.log('  [page]', m.
 page.on('pageerror', (e) => console.log('  [pageerror]', e.message.slice(0, 200)));
 
 await page.addInitScript((port) => { window.STUDIO_AGENT_PORT = port; }, mock.port());
+if (GIT_TOKEN) {
+    await page.addInitScript((token) => {
+        try {
+            sessionStorage.setItem('git-http-token', JSON.stringify({
+                token, username: 'wasmmusic', useremail: 'wasmmusic@users.noreply.github.com',
+            }));
+        } catch { /* private mode */ }
+    }, GIT_TOKEN);
+}
 await page.goto(APP_URL);
 await page.waitForFunction(() => {
     const app = document.querySelector('app-javascriptmusic');
@@ -246,6 +266,20 @@ await page.evaluate((css) => {
     s.textContent = css;
     sr.appendChild(s);
 }, RECORDING_CSS);
+
+// A real project boots with its saved song AND its saved agent conversation —
+// that loads after the editors exist, so wait for it, then clear the chat panel
+// so the video opens on an empty conversation, not on the previous rehearsal.
+if (cut.CLEAR_CHAT) {
+    await page.waitForFunction(() => document.querySelector('app-javascriptmusic').shadowRoot
+        .querySelector('#editor .CodeMirror').CodeMirror.getValue().trim().length > 0, { timeout: 180000 });
+    await sleep(3000);
+    await page.evaluate(() => {
+        const log = document.querySelector('app-javascriptmusic').shadowRoot.getElementById('studioagentlog');
+        if (log) log.replaceChildren();
+    });
+    log('cleared the restored agent conversation');
+}
 
 // Seed the exact song the session started from, unless the cut says the session
 // began from the app's own default (an empty repo).
@@ -482,7 +516,7 @@ async function quantizeTake(stepsPerBeat) {
 const beats = ONLY_BEATS ? ONLY_BEATS.map((i) => BEATS[i]) : BEATS;
 
 for (const [n, beat] of beats.entries()) {
-    log(`beat ${n + 1}/${beats.length}: ${beat.title}`);
+    log(`beat ${n + 1}/${beats.length}: ${beat.title ?? beat.prompt.slice(0, 50)}`);
     await setView('agent');
     await sleep(700);
 
@@ -525,7 +559,9 @@ for (const [n, beat] of beats.entries()) {
     if (beat.quantizeTake) await quantizeTake(beat.quantizeTake);
 
     if (beat.outro) { await setView('agent'); await streamText(mock, beat.outro + '\n'); }
-    mock.send({ t: 'done' });
+    // A `local` beat is one the app answers itself (on stage, a part name jumps
+    // with no model turn), so there is no agent turn to end.
+    if (!beat.local) mock.send({ t: 'done' });
     await sleep(beat.holdMs ?? 1800);
 }
 
@@ -549,6 +585,9 @@ mock.close();
 execFileSync('ffmpeg', [
     '-y', '-v', 'error',
     '-i', RAW,
+    // Tab capture can deliver its first frame below full size (864x1536), and
+    // x264 takes the output size from the first frame — pin it to 9:16 1080p.
+    '-vf', 'scale=1080:1920:flags=lanczos',
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30',
     '-c:a', 'aac', '-b:a', '192k',
     '-movflags', '+faststart',
