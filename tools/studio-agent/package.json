@@ -13,7 +13,7 @@
     "compare": "node bench/compare.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.296",
     "ws": "^8.18.0",
     "zod": "^4.0.0"
   }
