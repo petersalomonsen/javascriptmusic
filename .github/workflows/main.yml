@@ -103,6 +103,33 @@ jobs:
             cd wasmaudioworklet
             yarn install
             yarn bundle-songcompiler
+  instrument-nft:
+    name: Instrument NFT contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Cache the JS engine toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            contracts/.build
+            binaryen-version_131
+          key: instrument-nft-toolchain-${{ hashFiles('contracts/instrument-nft/build.sh') }}
+      - name: Install Binaryen
+        run: |
+          [ -d binaryen-version_131 ] || curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_131/binaryen-version_131-x86_64-linux.tar.gz | tar -xz
+          echo "$PWD/binaryen-version_131/bin" >> "$GITHUB_PATH"
+      - name: Build the contract
+        run: bash contracts/instrument-nft/build.sh
+      - name: Test against a NEAR sandbox
+        run: |
+          cd contracts/instrument-nft
+          npm ci --no-audit --no-fund
+          npm test
   playwright-e2e:
     name: Playwright E2E tests
     runs-on: ubuntu-24.04
