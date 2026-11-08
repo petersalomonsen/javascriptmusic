@@ -1,15 +1,13 @@
-//! Public Faust instruments and songs as NFTs.
+//! A publisher's catalogue of public Faust instruments and songs, as NFTs.
 //!
-//! The source lives on chain and is readable by anyone, so publishing proves who
-//! published what and when. A token id is derived from the content hash, so exact
-//! copies are refused. Songs name the instruments they use, and a sale through
-//! `buy` credits those instrument tokens: earnings belong to the token, so
-//! whoever owns it at withdrawal collects them.
+//! Each publisher deploys their own copy. Only the contract owner publishes and
+//! posts JavaScript. The source lives on chain and is readable by anyone, so
+//! publishing proves what this publisher put out and when.
 //!
-//! JavaScript customizes policy and never custody. It can propose how a song sale
-//! splits, but only this file moves money, and it checks every proposal. The host
-//! functions JS gets here cannot write storage, so a later `post_javascript`
-//! cannot reach anyone's balance.
+//! Selling happens elsewhere: marketplaces use NEP-178 approvals and ask this
+//! contract who gets paid (NEP-199). The contract holds no sale money, so the
+//! JavaScript has none to reach. It can divide a work's royalty, but Rust caps
+//! that royalty at what the work declared, which keeps the seller's part safe.
 
 use near_contract_standards::non_fungible_token::events::NftMint;
 use near_contract_standards::non_fungible_token::metadata::{
@@ -21,24 +19,22 @@ use near_sdk::collections::LookupMap;
 use near_sdk::json_types::U128;
 use near_sdk::{
     assert_one_yocto, env, near, near_bindgen, require, serde_json, AccountId, BorshStorageKey,
-    NearToken, PanicOnDefault, Promise, PromiseOrValue,
+    PanicOnDefault, Promise, PromiseOrValue,
 };
 use quickjs_rust_near::jslib::{
-    add_function_to_js, compile_js, js_call_function, js_get_string, load_js_bytecode, to_js_string,
+    add_function_to_js, arg_to_str, compile_js, js_call_function, js_get_string, load_js_bytecode,
+    to_js_string,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString};
 
 const JS_BYTECODE_KEY: &[u8] = b"JS";
-const JS_HAS_SPLIT_KEY: &[u8] = b"JS_SPLIT";
+const JS_HAS_PAYOUT_KEY: &[u8] = b"JS_PAYOUT";
 const MAX_SOURCE_BYTES: usize = 64 * 1024;
 const MAX_TITLE_BYTES: usize = 200;
-/// NEP-199 says any payout of 10 or fewer must be accepted: nine instruments and the seller.
-const MAX_INSTRUMENTS: usize = 9;
+/// NEP-199 says any payout of 10 or fewer must be accepted: nine credits and the seller.
+const MAX_CREDITS: usize = 9;
 const BPS: u128 = 10_000;
-/// Paid at publish and kept, so a later listing or balance needs no further deposit
-/// and cannot slowly eat the contract's own storage balance.
-const RESERVED_STORAGE_BYTES: u64 = 200;
 
 #[derive(BorshSerialize, BorshStorageKey)]
 #[borsh(crate = "near_sdk::borsh")]
@@ -49,8 +45,6 @@ enum StorageKey {
     Approval,
     Works,
     Sources,
-    Earnings,
-    Listings,
 }
 
 #[near(serializers = [borsh, json])]
@@ -60,7 +54,18 @@ pub enum WorkKind {
     Song,
 }
 
-/// What was published. The source is stored apart so a sale does not pay to read it.
+/// An instrument a song uses. One in this contract pays its current owner. One in
+/// another contract pays the fixed `payee`, because a view call cannot read that
+/// contract's owner, and nothing here checks that the token exists there.
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Credit {
+    pub token_id: TokenId,
+    pub contract: Option<AccountId>,
+    pub payee: Option<AccountId>,
+}
+
+/// What was published. The source is stored apart so a payout does not pay to read it.
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
 pub struct Work {
@@ -69,15 +74,8 @@ pub struct Work {
     pub sha256: String,
     pub publisher: AccountId,
     pub published_at_ms: u64,
-    pub instruments: Vec<TokenId>,
-    pub instrument_share_bps: u16,
-}
-
-#[near(serializers = [borsh, json])]
-#[derive(Clone)]
-pub struct Listing {
-    pub price: U128,
-    pub seller: AccountId,
+    pub credits: Vec<Credit>,
+    pub royalty_bps: u16,
 }
 
 #[near(serializers = [json])]
@@ -90,10 +88,10 @@ pub struct Payout {
 #[near(serializers = [borsh])]
 pub struct Contract {
     tokens: NonFungibleToken,
+    name: String,
+    symbol: String,
     works: LookupMap<TokenId, Work>,
     sources: LookupMap<TokenId, String>,
-    earnings: LookupMap<TokenId, u128>,
-    listings: LookupMap<TokenId, Listing>,
 }
 
 static mut SALE_CONTEXT: Option<String> = None;
@@ -106,18 +104,14 @@ fn to_hex(bytes: &[u8]) -> String {
 fn emit(event: &str, data: serde_json::Value) {
     env::log_str(&format!(
         "EVENT_JSON:{}",
-        serde_json::json!({ "standard": "wasm-music", "version": "1.0.0", "event": event, "data": [data] })
+        serde_json::json!({ "standard": "wasm-music", "version": "2.0.0", "event": event, "data": [data] })
     ));
-}
-
-fn yocto(amount: u128) -> NearToken {
-    NearToken::from_yoctonear(amount)
 }
 
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn new(owner_id: AccountId) -> Self {
+    pub fn new(owner_id: AccountId, name: String, symbol: String) -> Self {
         Self {
             tokens: NonFungibleToken::new(
                 StorageKey::NonFungibleToken,
@@ -126,45 +120,49 @@ impl Contract {
                 Some(StorageKey::Enumeration),
                 Some(StorageKey::Approval),
             ),
+            name,
+            symbol,
             works: LookupMap::new(StorageKey::Works),
             sources: LookupMap::new(StorageKey::Sources),
-            earnings: LookupMap::new(StorageKey::Earnings),
-            listings: LookupMap::new(StorageKey::Listings),
         }
+    }
+
+    fn assert_owner(&self) {
+        require!(env::predecessor_account_id() == self.tokens.owner_id, "only the contract owner can do this");
     }
 
     // ---- publishing ---------------------------------------------------------
 
-    /// Publish Faust source. The caller becomes publisher and first owner.
-    #[payable]
-    pub fn publish_instrument(&mut self, title: String, source: String) -> TokenId {
-        self.publish(WorkKind::Instrument, "i", title, source, vec![], 0)
+    /// Publish Faust source. The royalty goes to the publisher when it is resold.
+    pub fn publish_instrument(&mut self, title: String, source: String, royalty_bps: u16) -> TokenId {
+        self.publish(WorkKind::Instrument, "i", title, source, vec![], royalty_bps)
     }
 
-    /// Publish a song, naming the instrument tokens it uses and the part of each
-    /// sale they share (in basis points, split equally unless JS says otherwise).
-    #[payable]
-    pub fn publish_song(
-        &mut self,
-        title: String,
-        source: String,
-        instruments: Vec<TokenId>,
-        instrument_share_bps: u16,
-    ) -> TokenId {
-        require!(instruments.len() <= MAX_INSTRUMENTS, "too many instruments");
-        require!(u128::from(instrument_share_bps) <= BPS, "share above 100%");
-        let mut unique = instruments.clone();
-        unique.sort();
-        unique.dedup();
-        require!(unique.len() == instruments.len(), "instrument named twice");
-        for id in &instruments {
-            let work = self.works.get(id);
-            require!(
-                work.map(|w| w.kind) == Some(WorkKind::Instrument),
-                format!("{id} is not a published instrument")
-            );
+    /// Publish a song. Its royalty is shared by the instruments it credits, or
+    /// goes to the publisher if it credits none.
+    pub fn publish_song(&mut self, title: String, source: String, credits: Vec<Credit>, royalty_bps: u16) -> TokenId {
+        require!(credits.len() <= MAX_CREDITS, "too many credits");
+        let here = env::current_account_id();
+        let mut seen = vec![];
+        for credit in &credits {
+            let key = (credit.contract.clone(), credit.token_id.clone());
+            require!(!seen.contains(&key), "instrument credited twice");
+            seen.push(key);
+            match &credit.contract {
+                None => {
+                    require!(credit.payee.is_none(), "an instrument in this contract pays its owner, not a payee");
+                    require!(
+                        self.works.get(&credit.token_id).map(|w| w.kind) == Some(WorkKind::Instrument),
+                        format!("{} is not a published instrument", credit.token_id)
+                    );
+                }
+                Some(contract) => {
+                    require!(*contract != here, "leave out contract for an instrument in this contract");
+                    require!(credit.payee.is_some(), "an instrument in another contract needs a payee");
+                }
+            }
         }
-        self.publish(WorkKind::Song, "s", title, source, instruments, instrument_share_bps)
+        self.publish(WorkKind::Song, "s", title, source, credits, royalty_bps)
     }
 
     fn publish(
@@ -173,25 +171,23 @@ impl Contract {
         prefix: &str,
         title: String,
         source: String,
-        instruments: Vec<TokenId>,
-        instrument_share_bps: u16,
+        credits: Vec<Credit>,
+        royalty_bps: u16,
     ) -> TokenId {
+        self.assert_owner();
         require!(!source.is_empty(), "empty source");
         require!(source.len() <= MAX_SOURCE_BYTES, "source larger than 64 KiB");
         require!(!title.is_empty() && title.len() <= MAX_TITLE_BYTES, "title must be 1-200 bytes");
+        require!(u128::from(royalty_bps) <= BPS, "royalty above 100%");
 
         let sha256 = to_hex(&env::sha256(source.as_bytes()));
         let token_id = format!("{prefix}-{sha256}");
         if let Some(first) = self.works.get(&token_id) {
-            env::panic_str(&format!(
-                "already published by {} at {}",
-                first.publisher, first.published_at_ms
-            ));
+            env::panic_str(&format!("already published by {} at {}", first.publisher, first.published_at_ms));
         }
 
         let publisher = env::predecessor_account_id();
         let published_at_ms = env::block_timestamp_ms();
-        let storage_before = env::storage_usage();
         let metadata = TokenMetadata {
             title: Some(title.clone()),
             description: None,
@@ -206,29 +202,13 @@ impl Contract {
             reference: None,
             reference_hash: None,
         };
+        // The contract's own balance pays this storage, so no deposit to refund.
         self.tokens.internal_mint_with_refund(token_id.clone(), publisher.clone(), Some(metadata), None);
         self.works.insert(
             &token_id,
-            &Work {
-                kind,
-                title,
-                sha256: sha256.clone(),
-                publisher: publisher.clone(),
-                published_at_ms,
-                instruments,
-                instrument_share_bps,
-            },
+            &Work { kind, title, sha256: sha256.clone(), publisher: publisher.clone(), published_at_ms, credits, royalty_bps },
         );
         self.sources.insert(&token_id, &source);
-        self.earnings.insert(&token_id, &0);
-
-        let bytes = env::storage_usage() - storage_before + RESERVED_STORAGE_BYTES;
-        let cost = u128::from(bytes) * env::storage_byte_cost().as_yoctonear();
-        let attached = env::attached_deposit().as_yoctonear();
-        require!(attached >= cost, format!("attach at least {cost} yoctoNEAR for storage"));
-        if attached > cost {
-            Promise::new(publisher.clone()).transfer(yocto(attached - cost));
-        }
 
         NftMint { owner_id: &publisher, token_ids: &[token_id.as_str()], memo: None }.emit();
         emit("publish", serde_json::json!({ "token_id": token_id, "sha256": sha256, "publisher": publisher }));
@@ -244,147 +224,83 @@ impl Contract {
         self.sources.get(&token_id)
     }
 
-    // ---- earnings -----------------------------------------------------------
-
-    pub fn earnings(&self, token_id: TokenId) -> U128 {
-        U128(self.earnings.get(&token_id).unwrap_or(0))
-    }
-
-    /// Send money to a token, e.g. for using an instrument. Its owner collects it.
-    #[payable]
-    pub fn pay_token(&mut self, token_id: TokenId) {
-        let amount = env::attached_deposit().as_yoctonear();
-        require!(amount > 0, "attach an amount");
-        require!(self.works.get(&token_id).is_some(), "no such token");
-        self.credit(&token_id, amount);
-        emit("pay_token", serde_json::json!({ "token_id": token_id, "amount": U128(amount), "from": env::predecessor_account_id() }));
-    }
-
-    /// Collect what a token has earned. Only its current owner can.
-    #[payable]
-    pub fn withdraw_earnings(&mut self, token_id: TokenId) -> U128 {
-        assert_one_yocto();
-        let owner = self.owner_of(&token_id);
-        require!(env::predecessor_account_id() == owner, "only the token owner can withdraw");
-        let amount = self.earnings.get(&token_id).unwrap_or(0);
-        require!(amount > 0, "nothing to withdraw");
-        self.earnings.insert(&token_id, &0);
-        Promise::new(owner.clone()).transfer(yocto(amount));
-        emit("withdraw", serde_json::json!({ "token_id": token_id, "amount": U128(amount), "owner": owner }));
-        U128(amount)
-    }
-
-    fn credit(&mut self, token_id: &TokenId, amount: u128) {
-        let balance = self.earnings.get(token_id).unwrap_or(0);
-        self.earnings.insert(token_id, &balance.checked_add(amount).expect("balance overflow"));
-    }
-
     fn owner_of(&self, token_id: &TokenId) -> AccountId {
         self.tokens.owner_by_id.get(token_id).unwrap_or_else(|| env::panic_str("no such token"))
     }
 
-    // ---- selling ------------------------------------------------------------
+    // ---- royalties ----------------------------------------------------------
 
-    #[payable]
-    pub fn list_for_sale(&mut self, token_id: TokenId, price: U128) {
-        assert_one_yocto();
-        let owner = self.owner_of(&token_id);
-        require!(env::predecessor_account_id() == owner, "only the token owner can list");
-        require!(price.0 > 0, "price must be above zero");
-        self.listings.insert(&token_id, &Listing { price, seller: owner });
-    }
-
-    #[payable]
-    pub fn unlist(&mut self, token_id: TokenId) {
-        assert_one_yocto();
-        require!(env::predecessor_account_id() == self.owner_of(&token_id), "only the token owner can unlist");
-        self.listings.remove(&token_id);
-    }
-
-    /// A listing only stands while the seller still owns the token, so one left
-    /// behind by a plain transfer can never sell the new owner's token.
-    pub fn listing(&self, token_id: TokenId) -> Option<Listing> {
-        let listing = self.listings.get(&token_id)?;
-        (self.tokens.owner_by_id.get(&token_id).as_ref() == Some(&listing.seller)).then_some(listing)
-    }
-
-    /// Buy a listed token. Instrument shares go to their tokens, the rest to the seller.
-    #[payable]
-    pub fn buy(&mut self, token_id: TokenId) {
-        let listing = self.listing(token_id.clone()).unwrap_or_else(|| env::panic_str("not for sale"));
-        let price = listing.price.0;
-        let attached = env::attached_deposit().as_yoctonear();
-        require!(attached >= price, format!("attach at least {price} yoctoNEAR"));
-        let buyer = env::predecessor_account_id();
-
-        let shares = self.split(&token_id, price, &listing.seller);
-        let to_instruments: u128 = shares.values().sum();
-        for (instrument, amount) in &shares {
-            self.credit(instrument, *amount);
+    fn payee_of(&self, credit: &Credit) -> AccountId {
+        match &credit.payee {
+            Some(payee) => payee.clone(),
+            None => self.owner_of(&credit.token_id),
         }
-        self.listings.remove(&token_id);
-        self.tokens.internal_transfer(&listing.seller, &buyer, &token_id, None, None);
-
-        Promise::new(listing.seller.clone()).transfer(yocto(price - to_instruments));
-        if attached > price {
-            Promise::new(buyer.clone()).transfer(yocto(attached - price));
-        }
-        emit("buy", serde_json::json!({
-            "token_id": token_id, "price": listing.price, "seller": listing.seller, "buyer": buyer,
-            "instrument_shares": shares.iter().map(|(k, v)| (k.clone(), U128(*v))).collect::<BTreeMap<_, _>>(),
-        }));
     }
 
-    /// How a sale splits across instrument tokens. JS may propose this, but the
-    /// proposal can only name the song's own instruments and cannot exceed the price.
-    fn split(&self, token_id: &TokenId, price: u128, seller: &AccountId) -> BTreeMap<TokenId, u128> {
+    /// Who shares the royalty, by default or as the posted JS says. Whatever the
+    /// source, it can never add up to more than the work declared.
+    fn royalties(&self, token_id: &TokenId, balance: u128, seller: &AccountId) -> BTreeMap<AccountId, u128> {
         let work = self.works.get(token_id).unwrap_or_else(|| env::panic_str("no such token"));
-        if work.instruments.is_empty() {
-            return BTreeMap::new();
-        }
-        let shares = if env::storage_has_key(JS_HAS_SPLIT_KEY) {
-            self.js_split(token_id, &work, price, seller)
+        let cap = balance
+            .checked_mul(u128::from(work.royalty_bps))
+            .unwrap_or_else(|| env::panic_str("balance too large"))
+            / BPS;
+        let shares = if env::storage_has_key(JS_HAS_PAYOUT_KEY) {
+            self.js_royalties(token_id, &work, balance, cap, seller)
         } else {
-            let pool = price * u128::from(work.instrument_share_bps) / BPS;
-            let each = pool / work.instruments.len() as u128;
-            work.instruments.iter().map(|id| (id.clone(), each)).collect()
+            self.default_royalties(&work, cap)
         };
         let mut total: u128 = 0;
-        for (id, amount) in &shares {
-            require!(work.instruments.contains(id), format!("split names {id}, which the song does not use"));
-            total = total.checked_add(*amount).unwrap_or_else(|| env::panic_str("split overflows"));
+        for amount in shares.values() {
+            total = total.checked_add(*amount).unwrap_or_else(|| env::panic_str("royalties overflow"));
         }
-        require!(total <= price, "split exceeds the price");
+        require!(total <= cap, "royalties exceed what the work declared");
         shares
     }
 
-    fn js_split(&self, token_id: &TokenId, work: &Work, price: u128, seller: &AccountId) -> BTreeMap<TokenId, u128> {
+    fn default_royalties(&self, work: &Work, cap: u128) -> BTreeMap<AccountId, u128> {
+        let mut shares = BTreeMap::new();
+        if work.credits.is_empty() {
+            shares.insert(work.publisher.clone(), cap);
+        } else {
+            let each = cap / work.credits.len() as u128;
+            for credit in &work.credits {
+                *shares.entry(self.payee_of(credit)).or_insert(0) += each;
+            }
+        }
+        shares
+    }
+
+    fn js_royalties(&self, token_id: &TokenId, work: &Work, balance: u128, cap: u128, seller: &AccountId) -> BTreeMap<AccountId, u128> {
+        let credits: Vec<_> = work.credits.iter().map(|credit| serde_json::json!({
+            "token_id": credit.token_id, "contract": credit.contract, "payee": self.payee_of(credit),
+        })).collect();
         let context = serde_json::json!({
-            "token_id": token_id, "price": U128(price), "seller": seller, "publisher": work.publisher,
-            "instruments": work.instruments, "instrument_share_bps": work.instrument_share_bps,
+            "token_id": token_id, "balance": U128(balance), "royalty": U128(cap), "seller": seller,
+            "publisher": work.publisher, "kind": work.kind, "credits": credits, "royalty_bps": work.royalty_bps,
         });
-        let proposed: BTreeMap<TokenId, U128> = unsafe {
+        let proposed: BTreeMap<AccountId, U128> = unsafe {
             #[allow(static_mut_refs)]
             {
                 SALE_CONTEXT = Some(context.to_string());
             }
-            let result = self.run_js("song_split");
+            let result = self.run_js("payout");
             serde_json::from_str(CStr::from_ptr(js_get_string(result) as *const i8).to_str().unwrap())
-                .unwrap_or_else(|_| env::panic_str("song_split must return { tokenId: amount }"))
+                .unwrap_or_else(|_| env::panic_str("payout must return { accountId: amount }"))
         };
-        proposed.into_iter().map(|(id, amount)| (id, amount.0)).collect()
+        proposed.into_iter().map(|(account, amount)| (account, amount.0)).collect()
     }
 
     // ---- JavaScript ---------------------------------------------------------
 
     pub fn post_javascript(&mut self, javascript: String) {
-        require!(env::predecessor_account_id() == self.tokens.owner_id, "Unauthorized");
-        let has_split = javascript.contains("export function song_split");
+        self.assert_owner();
+        let has_payout = javascript.contains("export function payout");
         env::storage_write(JS_BYTECODE_KEY, &compile_js(javascript, Some("main.js".to_string())));
-        if has_split {
-            env::storage_write(JS_HAS_SPLIT_KEY, &[1]);
+        if has_payout {
+            env::storage_write(JS_HAS_PAYOUT_KEY, &[1]);
         } else {
-            env::storage_remove(JS_HAS_SPLIT_KEY);
+            env::storage_remove(JS_HAS_PAYOUT_KEY);
         }
     }
 
@@ -421,7 +337,7 @@ impl Contract {
         add_function_to_js(
             "nft_token",
             |ctx: i32, _this: i64, _argc: i32, argv: i32| -> i64 {
-                let id = quickjs_rust_near::jslib::arg_to_str(ctx, 0, argv);
+                let id = arg_to_str(ctx, 0, argv);
                 to_js_string(ctx, serde_json::to_string(&(*CONTRACT_REF).tokens.nft_token(id)).unwrap())
             },
             1,
@@ -429,7 +345,7 @@ impl Contract {
         add_function_to_js(
             "work",
             |ctx: i32, _this: i64, _argc: i32, argv: i32| -> i64 {
-                let id = quickjs_rust_near::jslib::arg_to_str(ctx, 0, argv);
+                let id = arg_to_str(ctx, 0, argv);
                 to_js_string(ctx, serde_json::to_string(&(*CONTRACT_REF).works.get(&id)).unwrap())
             },
             1,
@@ -437,7 +353,7 @@ impl Contract {
         add_function_to_js(
             "source",
             |ctx: i32, _this: i64, _argc: i32, argv: i32| -> i64 {
-                let id = quickjs_rust_near::jslib::arg_to_str(ctx, 0, argv);
+                let id = arg_to_str(ctx, 0, argv);
                 to_js_string(ctx, (*CONTRACT_REF).sources.get(&id).unwrap_or_default())
             },
             1,
@@ -446,21 +362,21 @@ impl Contract {
 
     // ---- NEP-199 ------------------------------------------------------------
 
-    /// For outside marketplaces. Their plain transfers can't say which token a
-    /// payment is for, so here shares go straight to the instruments' current owners.
+    /// Royalties go straight to their accounts and the seller gets the rest.
     pub fn nft_payout(&self, token_id: String, balance: U128, max_len_payout: Option<u32>) -> Payout {
         let seller = self.owner_of(&token_id);
-        let shares = self.split(&token_id, balance.0, &seller);
+        let shares = self.royalties(&token_id, balance.0, &seller);
+        let to_others: u128 = shares.values().sum();
         let mut payout: HashMap<AccountId, U128> = HashMap::new();
-        let mut to_instruments = 0;
-        for (instrument, amount) in &shares {
-            to_instruments += amount;
-            let owner = self.owner_of(instrument);
-            let held = payout.get(&owner).map_or(0, |v| v.0);
-            payout.insert(owner, U128(held + amount));
+        for (account, amount) in shares {
+            if amount > 0 {
+                payout.insert(account, U128(amount));
+            }
         }
-        let held = payout.get(&seller).map_or(0, |v| v.0);
-        payout.insert(seller, U128(held + balance.0 - to_instruments));
+        if balance.0 > to_others {
+            let held = payout.get(&seller).map_or(0, |v| v.0);
+            payout.insert(seller, U128(held + balance.0 - to_others));
+        }
         if let Some(max) = max_len_payout {
             require!(payout.len() <= max as usize, "payout too long");
         }
@@ -489,8 +405,8 @@ impl NonFungibleTokenMetadataProvider for Contract {
     fn nft_metadata(&self) -> NFTContractMetadata {
         NFTContractMetadata {
             spec: NFT_METADATA_SPEC.to_string(),
-            name: "WebAssembly Music instruments".to_string(),
-            symbol: "WASMMUSIC".to_string(),
+            name: self.name.clone(),
+            symbol: self.symbol.clone(),
             icon: None,
             base_uri: None,
             reference: None,
