@@ -8,18 +8,24 @@
 // tools backed by the jsDelivr CDN instead of local disk.
 
 export const DEFAULT_BASE_URL = 'https://cloud-api.near.ai/v1';
-// ONE model, picked for being the lightest that still does the job. Measured on
-// the drum bench (tools/studio-agent/bench-drums.mjs), 2 runs each:
+// ONE model, picked by what it does across a whole task, not how quickly it
+// answers. Measured with tools/studio-agent/bench on four tasks (drums-basic,
+// session-bass, fm-epiano, drum-kit-scope), TEE models only:
 //
-//   Qwen3.6-35B-A3B   2/2   6.0 tool calls    22-32s     <- this
-//   qwen3.5-397b-a17b 2/2  11.0 tool calls    56-350s
-//   Qwen3.8-27B       1/2   6.5 tool calls    81-113s
+//                               passed  runs  $ per run of the four
+//   Kimi K3                       4/4     1     1.84
+//   DeepSeek V4.1 Flash 1017      6/8     2     0.10    <- this
+//   GLM-5.3-Flash                 6/8     2     0.06
+//   Qwen3.6-35B-A3B               2/8     2     0.34
 //
-// It is a 35B MoE with only ~3B active, which is why it answers in a third of
-// the time of the dense 27B and still passed both runs. Re-run the bench before
-// changing this — the previous default outlived its own catalogue entry and
-// every request 400'd with "Model not found" until someone noticed.
-export const DEFAULT_MODEL = 'Qwen/Qwen3.6-35B-A3B-FP8';
+// Both misses here are one extra specialist call on drum-kit-scope. GLM-5.3-Flash
+// is close, but one of its misses was a kick too bright to pass. Qwen3.6, the
+// previous default, was cheap per token and dearer per task: it won the older
+// drums-only bench by answering fast, then looped and left a silent bass.
+// Re-run the bench before changing this — an earlier default outlived its own
+// catalogue entry and every request 400'd with "Model not found" until someone
+// noticed. The -1017 is a dated snapshot, so it can retire the same way.
+export const DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V4.1-Flash-1017';
 
 // Without a key of the user's own, the deployed app goes through the same-origin
 // Pages Function proxy at /nearai/v1 (functions/nearai/[[path]].js), which holds

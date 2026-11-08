@@ -64,6 +64,53 @@ loopHere();
   await expectVerdict(task, project, [], true, 'known-good beat');
 });
 
+const FIXTURE_DIR = path.join(path.dirname(new URL(import.meta.url).pathname), 'tasks', 'fixtures');
+const sessionBassProject = (dsp) => {
+  const project = taskById('session-bass').project();
+  project.faust = { ...project.faust, bass: dsp };
+  project.synth = project.synth
+    .replace("import { Kick } from '../faust/kick';", "import { Kick } from '../faust/kick';\nimport { Bass } from '../faust/bass';")
+    .replace('new Kick(channel));', 'new Kick(channel));\n    midichannels[1] = new MidiChannel(8, (channel: MidiChannel) => new Bass(channel));');
+  project.song = `setBPM(112);
+
+addInstrument('kick');   // 0
+addInstrument('bass');   // 1
+
+const kick = createTrack(0);
+const bass = createTrack(1);
+
+bass.steps(4, [d2,d3,d2,d3,d2,d3,d2,d3,d2,d3,d2,d3,d2,d3,d2,d3].repeat(7));
+await kick.steps(1, [ c2, c2, c2, c2 ].repeat(7));
+
+loopHere();
+`;
+  return project;
+};
+
+test('session-bass: the default kit bass passes', { timeout: 600000 }, async () => {
+  const dsp = `import("stdfaust.lib");
+freq = hslider("freq", 55, 20, 20000, 0.01);
+gate = button("gate");
+gain = hslider("gain", 0.8, 0, 1, 0.01);
+env = en.adsr(0.005, 0.12, 0.6, 0.12, gate);
+fenv = en.ar(0.005, 0.18, gate);
+osc = os.sawtooth(freq) * 0.7 + os.osc(freq) * 0.5;
+cutoff = 60 + 2200 * fenv;
+sat(x) = x / (1.0 + abs(x));
+process = sat((osc : fi.resonlp(cutoff, 3, 1)) * env * gain * 2.4) * 1.1;
+`;
+  await expectVerdict(taskById('session-bass'), sessionBassProject(dsp), delegated(1), true, 'kit bass');
+});
+
+test('session-bass: the bass the session called ready fails on its sound', { timeout: 600000 }, async () => {
+  const dsp = fs.readFileSync(path.join(FIXTURE_DIR, 'session-bass', 'rejected-bass.dsp'), 'utf8');
+  const v = await expectVerdict(taskById('session-bass'), sessionBassProject(dsp), delegated(1), false, 'session bass');
+  const failed = v.results.filter((r) => !r.ok).map((r) => r.name);
+  assert.ok(failed.some((n) => /audible range/.test(n)), failed.join(', '));
+  assert.ok(failed.some((n) => /within 9 dB/.test(n)), failed.join(', '));
+  assert.ok(!failed.some((n) => /alternates/.test(n)), 'the notes were right; only the sound is wrong');
+});
+
 test('fm-epiano: the shipped e-piano wired to channel 0 passes', { timeout: 600000 }, async () => {
   const task = taskById('fm-epiano');
   const project = task.project();

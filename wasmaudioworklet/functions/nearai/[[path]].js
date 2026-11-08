@@ -79,7 +79,7 @@ const MAX_TOOLS_CHARS = 40000;
 // lever: chat_template_kwargs {enable_thinking:false} scored 0/2 against 1/2,
 // took 22 tool calls against 13, and — because it flails through more turns —
 // spent 311k input tokens against 164k. Cheaper per call, dearer per task.
-// (reasoning_effort is ignored by this model; that knob does nothing.)
+// (reasoning_effort was ignored by the Qwen model this was measured on.)
 const MAX_COMPLETION_TOKENS = 16000;
 
 export const ALLOWED_ORIGINS = [

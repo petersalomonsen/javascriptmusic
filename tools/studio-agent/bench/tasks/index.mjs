@@ -289,6 +289,46 @@ loopHere();
       }),
     ],
   },
+
+  // The session measured a "ready" bass with its strongest component at 18 Hz,
+  // 11 dB under the kick, and a producer that wrote the .dsp itself after the
+  // specialist failed. The notes were right, so only the sound checks catch it.
+  {
+    id: 'session-bass',
+    title: 'bass on semiquavers next to an existing kick',
+    source: 'a live NEAR AI session, 2026-11-08 (the state before its second request)',
+    project: () => fixture('session-bass'),
+    prompt: 'bass on semiquavers d2,d3,d2,d3 etc',
+    checks: [
+      c.compiles(), c.delegations(1), c.producerWroteNoDsp(), c.honest(), c.channelsUnchanged([0]),
+      named('bass alternates d2 and d3 on every semiquaver', ({ notes, summary }) => {
+        if (!notes) return fail('no compiled song');
+        const bass = notes.filter((n) => n.channel !== 0);
+        if (!bass.length) return fail('no bass notes');
+        const channels = new Set(bass.map((n) => n.channel));
+        if (channels.size !== 1) return fail(`spread over channels ${[...channels]}`);
+        if (bass.length !== Math.round(summary.lengthBeats) * 4) return fail(`${bass.length} notes over ${summary.lengthBeats} beats`);
+        const wrong = bass.find((n, i) => Math.abs(n.beat - i / 4) > 0.02 || n.note !== (i % 2 ? 38 : 26));
+        return wrong ? fail(`note ${wrong.note} at beat ${wrong.beat}`) : ok(`${bass.length} notes`);
+      }),
+      named('bass sits in the audible range: strongest component on d2 is 30 Hz or above', async ({ notes, probe }) => {
+        const bass = notes?.find((n) => n.channel !== 0);
+        if (!bass) return fail('no bass notes');
+        const r = (await probe(bass.channel, 'd2'))[0];
+        if (!r || r.silent) return fail(r ? 'SILENT' : 'no probe result');
+        return r.dominantHz >= 30 ? ok(`${r.dominantHz}Hz`) : fail(`${r.dominantHz}Hz`);
+      }),
+      named('bass peak is within 9 dB of the kick', async ({ notes, probe }) => {
+        const bass = notes?.find((n) => n.channel !== 0);
+        if (!bass) return fail('no bass notes');
+        const b = (await probe(bass.channel, 'd2'))[0];
+        const k = (await probe(0, 'c2'))[0];
+        if (!b || b.silent || !k || k.silent) return fail('silent or no probe result');
+        const db = 20 * Math.log10(b.peak / k.peak);
+        return db >= -9 ? ok(`${db.toFixed(1)} dB`) : fail(`${db.toFixed(1)} dB`);
+      }),
+    ],
+  },
 ];
 
 export const taskById = (id) => TASKS.find((t) => t.id === id);
