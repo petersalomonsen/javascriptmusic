@@ -95,6 +95,7 @@ test('the account page checks a pasted key, then the app uses it', async ({ page
         localStorage.setItem('nearai-base-url', '/nearai/v1');
         localStorage.removeItem('nearai-api-key');
     });
+    await page.reload();   // the page decides what to show from storage on load
 
     await page.fill('#key', 'sk-bad');
     await page.click('#keyform button');
