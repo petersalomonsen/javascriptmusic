@@ -52,3 +52,5 @@ Run directly from nodejs, only dependes on the node midi package, and connect to
 # License
 
 This project is licensed under the **GNU General Public License v3.0** — see [LICENSE](LICENSE) for the full text. Bundled third-party components (e.g. [4klang](4klang)) retain their own licenses.
+
+What you make with it is yours: songs, instruments, shaders and other content you create with WebAssembly Music, and the audio, video and WebAssembly produced from them, do not have to be GPL just because they run on this engine — see [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md).
