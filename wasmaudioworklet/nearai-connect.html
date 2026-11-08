@@ -124,6 +124,7 @@ $('signin').onclick = async () => {
     const result = await connectWithWallet(wallet, {
       limitUsd: $('limit').value,
       previous: loadAccount(),
+      site: location.hostname,
       onStatus: (step) => say(steps[step], 'info'),
     });
     storeAccount(result);

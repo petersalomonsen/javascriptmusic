@@ -13,7 +13,6 @@ export const SIGN_IN_MESSAGE = 'Sign in to NEAR AI Cloud';
 export const SIGN_IN_RECIPIENT = 'cloud.near.ai';
 export const DEFAULT_LIMIT_USD = 5;
 
-const KEY_NAME = 'WebAssembly Music';
 const KEY_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
 const STORAGE_KEY = 'nearai-api-key';
 const STORAGE_KEY_ID = 'nearai-key-id';
@@ -25,6 +24,16 @@ export function buildNonce(nowMs = Date.now()) {
   new DataView(nonce.buffer).setBigUint64(0, BigInt(nowMs), false);
   crypto.getRandomValues(nonce.subarray(8));
   return nonce;
+}
+
+/**
+ * NEAR AI refuses a second key with the same name in a workspace, and the old key
+ * can only be replaced once the new one exists. The site and date say where a key
+ * came from when the user is looking at their list at cloud.near.ai.
+ */
+export function keyName(site, nowMs = Date.now()) {
+  const suffix = Array.from(crypto.getRandomValues(new Uint8Array(3)), (b) => b.toString(16).padStart(2, '0')).join('');
+  return `WebAssembly Music ${site} ${new Date(nowMs).toISOString().slice(0, 10)} ${suffix}`;
 }
 
 /** $ to the API's nano-dollar price, without going through a binary fraction. */
@@ -87,7 +96,7 @@ const describeFailure = async (what, res) => {
  * to store. One wallet prompt, no transaction.
  */
 export async function connectWithWallet(wallet, {
-  limitUsd = DEFAULT_LIMIT_USD, previous = null, fetchFn = fetch,
+  limitUsd = DEFAULT_LIMIT_USD, previous = null, site = 'browser', fetchFn = fetch,
   sleepFn = (ms) => new Promise((r) => setTimeout(r, ms)), nowMs = () => Date.now(), onStatus = () => {},
 } = {}) {
   const limit = spendLimit(limitUsd);
@@ -116,7 +125,7 @@ export async function connectWithWallet(wallet, {
     const created = await request(fetchFn, `/v1/workspaces/${workspaceId}/api-keys`, session, {
       method: 'POST',
       body: JSON.stringify({
-        name: KEY_NAME, spendLimit: limit, expires_at: new Date(nowMs() + KEY_LIFETIME_MS).toISOString(),
+        name: keyName(site, nowMs()), spendLimit: limit, expires_at: new Date(nowMs() + KEY_LIFETIME_MS).toISOString(),
       }),
     });
     if (!created.ok) throw await describeFailure('Could not create a key', created);

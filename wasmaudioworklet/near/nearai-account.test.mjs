@@ -99,6 +99,22 @@ test('the previous key is replaced only after the new one exists', async () => {
   assert.equal(failing.routes('DELETE /v1/workspaces/ws1/api-keys/prev').length, 0);
 });
 
+test('signing in again gets a new key name, because NEAR AI refuses duplicates', async () => {
+  const names = new Set();
+  const api = fakeApi({
+    'POST /v1/workspaces/ws1/api-keys': () => {
+      const { name } = api.routes('POST /v1/workspaces/ws1/api-keys').at(-1).body;
+      if (names.has(name)) return json(409, { error: { message: 'API key with this name already exists in this workspace' } });
+      names.add(name);
+      return json(201, { id: 'key1', key: 'sk-new' });
+    },
+  });
+  await connectWithWallet(wallet, options(api, { site: 'example.pages.dev' }));
+  await connectWithWallet(wallet, options(api, { site: 'example.pages.dev' }));
+  assert.equal(names.size, 2);
+  assert.match([...names][0], /^WebAssembly Music example\.pages\.dev 2027-01-15 [0-9a-f]{6}$/);
+});
+
 test('an empty account still connects, and says so', async () => {
   const api = fakeApi({ 'POST /v1/check_api_key': () => json(402, {}) });
   assert.equal((await connectWithWallet(wallet, options(api))).status, 'no-credits');
