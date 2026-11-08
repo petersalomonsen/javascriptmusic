@@ -4,8 +4,10 @@ The in-app AI that edits the song, the synth, the Faust instruments and the
 shader by driving the app's own tools. Two providers share everything here:
 
 - **local Agent SDK** — `tools/studio-agent/server.mjs` over a WebSocket
-- **NEAR AI serverless** — the in-browser loop in `nearai-core.js`, with the
-  Pages Function at `functions/nearai/[[path]].js` injecting the same tool list
+- **NEAR AI serverless** — the in-browser loop in `nearai-core.js`. With the
+  user's own account (`/nearai-connect.html`: wallet sign-in or a pasted key) it
+  talks to NEAR AI directly. Without one it goes through the paid Pages Function
+  at `functions/nearai/[[path]].js`
 
 | file | what it is |
 |---|---|

@@ -1,9 +1,9 @@
 // Cloudflare Pages Function — locked-down same-origin proxy for NEAR AI Cloud.
 //
-// cloud-api.near.ai only CORS-allowlists localhost origins, so the deployed
-// app can't call it browser-direct. This proxy is same-origin with the app
-// (no CORS involved) AND carries the server-side API key — users need no key
-// of their own. That makes it a paid resource, so it is NOT an open relay:
+// A user with their own NEAR AI account talks to cloud-api.near.ai directly from
+// the browser and never comes through here. This proxy is for everyone else: it
+// carries the server-side API key, so users need no key of their own. That makes
+// it a paid resource, so it is NOT an open relay:
 //
 //   • ONLY POST /nearai/v1/chat/completions and POST /nearai/pass;
 //   • the SYSTEM PROMPT and the TOOL LIST are the client's (both bounded in

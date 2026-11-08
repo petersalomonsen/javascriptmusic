@@ -127,6 +127,9 @@ input::placeholder {
     z-index: 50;
     color: #cfc;
 }
+.sa-statusbar { display: flex; align-items: stretch; border-bottom: 1px solid #2a2; }
+.sa-statusbar .sa-status { flex: 1; min-width: 0; border-bottom: none; }
+#studioagentaccount { font-size: 11px; flex: none; margin: 2px 4px; }
 .sa-status {
     padding: 4px 10px;
     font-size: 12px;
