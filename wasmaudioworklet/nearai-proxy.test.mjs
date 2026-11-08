@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { onRequest, MODEL, modelFor } from './functions/nearai/[[path]].js';
-import { resolveDefaultBaseUrl, DEFAULT_BASE_URL, DEFAULT_MODEL, toOpenAiTools } from './studio-agent/nearai-core.js';
+import { resolveDefaultBaseUrl, resolveBaseUrl, DEFAULT_BASE_URL, DEFAULT_MODEL, toOpenAiTools } from './studio-agent/nearai-core.js';
 import { SYSTEM_PROMPT } from './studio-agent/prompt.js';
 import { x402Config, mintPass, HEADER_PASS } from './functions/_x402.js';
 import { runAgentTurn } from './studio-agent/nearai-core.js';
@@ -213,6 +213,13 @@ test('any other path/method → 403', async () => {
 test('foreign origin → 403 (no piggybacking on the server key)', async () => {
   const res = await onRequest(ctx('POST', '/nearai/v1/chat/completions', { Origin: 'https://evil.example' }, '{}'));
   assert.equal(res.status, 403);
+});
+
+test('resolveBaseUrl: a user key goes direct even on the deployed site', () => {
+  const hostname = 'webassemblymusic.pages.dev';
+  assert.equal(resolveBaseUrl({ hostname, apiKey: 'sk-x' }), DEFAULT_BASE_URL);
+  assert.equal(resolveBaseUrl({ hostname }), '/nearai/v1');
+  assert.equal(resolveBaseUrl({ hostname, apiKey: 'sk-x', stored: '/nearai/v1' }), '/nearai/v1');
 });
 
 test('resolveDefaultBaseUrl: direct on localhost, proxy elsewhere', () => {

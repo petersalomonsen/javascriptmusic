@@ -9,7 +9,20 @@
 # Same reason as /login: these pages open a wallet, and COOP would cut
 # window.opener on the cross-origin hop (Meteor reports "User closed the
 # window"). It is why payment lives on its own page rather than in the app.
+# Pages redirects x.html to x, so a rule must name the extensionless URL too.
 /pay.html
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+
+/pay
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+
+/nearai-connect.html
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+
+/nearai-connect
   ! Cross-Origin-Opener-Policy
   ! Cross-Origin-Embedder-Policy
 

@@ -95,7 +95,10 @@ export default /*html*/ `<link rel="stylesheet" href="https://cdnjs.cloudflare.c
   </div>
 
   <div id="studioagentpanel" style="display: none">
-    <div id="studioagentstatus" class="sa-status">agent: connecting…</div>
+    <div class="sa-statusbar">
+      <div id="studioagentstatus" class="sa-status">agent: connecting…</div>
+      <button type="button" id="studioagentaccount" title="use your own NEAR AI account for the studio agent">NEAR AI account</button>
+    </div>
     <div id="studioagentlog" class="sa-log"></div>
     <form id="studioagentform" class="sa-form">
       <textarea id="studioagentinput" rows="2"

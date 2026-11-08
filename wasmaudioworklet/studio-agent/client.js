@@ -25,7 +25,7 @@ import { formatMixReport, resolveTarget } from '../audioprobe/mixanalysis.js';
 import { autoMaster, formatAutoMasterReport } from '../audioprobe/automaster.js';
 import { compileWebAssemblySynth } from '../synth1/browsersynthcompiler.js';
 import { parseNote, noteName } from '../audioprobe/audioanalysis.js';
-import { runAgentTurn, runSpecialistTurn, resolveDefaultBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX,
+import { runAgentTurn, runSpecialistTurn, resolveBaseUrl, DEFAULT_MODEL, SERVERLESS_PROMPT_SUFFIX,
   compactConversation, conversationChars, COMPACT_AT_CHARS, toOpenAiTools } from './nearai-core.js';
 import { toolDefsForRole, toolNamesForRole, specialistRoleForTool } from './tools-def.js';
 import { loadPass, clearPass, passRemainingSeconds, HEADER_PASS } from '../near/x402-client.js';
@@ -921,7 +921,12 @@ async function sendChat(text) {
     return;
   }
 
-  if (!socket || socket.readyState !== WebSocket.OPEN) { setStatus('not connected'); return; }
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    setStatus('not connected');
+    const line = addLine('tool', '— no AI connected. Connect your NEAR AI account, or start the local studio-agent — ');
+    line.appendChild(accountButton());
+    return false;   // keeps what was typed
+  }
   addLine('user', text);
   conversation.push({ role: 'user', text });
   saveSession();
@@ -978,7 +983,7 @@ function nearaiConfig() {
   const apiKey = localStorage.getItem('nearai-api-key');
   const enabled = apiKey || localStorage.getItem('nearai-enabled');
   if (!enabled) return null;
-  const baseUrl = localStorage.getItem('nearai-base-url') || resolveDefaultBaseUrl(location.hostname);
+  const baseUrl = resolveBaseUrl({ stored: localStorage.getItem('nearai-base-url'), apiKey, hostname: location.hostname });
   // The Pages Function proxy holds the API key AND injects the system prompt +
   // tools server-side. Normally it is same-origin (a relative base URL), but an
   // absolute .../nearai/v1 also counts — that lets a locally served app drive a
@@ -1012,6 +1017,8 @@ function handleNearaiCommand(text) {
   } else if (parts[0] === 'model' && parts[1]) {
     localStorage.setItem('nearai-model', parts[1]);
     addLine('tool', `— NEAR AI model set to ${parts[1]} —`);
+  } else if (parts[0] === 'connect') {
+    openNearaiAccount();
   } else if (parts[0] === 'on') {
     // Key-free mode: go through the same-origin Pages Function, which carries
     // the server key and charges for it. Say so explicitly rather than infer
@@ -1032,7 +1039,7 @@ function handleNearaiCommand(text) {
     const cfg = nearaiConfig();
     addLine('tool', cfg
       ? `— NEAR AI mode ON: ${cfg.model} @ ${cfg.baseUrl}${cfg.proxy ? ' (server-side key)' : ''} —`
-      : `— NEAR AI mode off. Usage: /nearai on (server-side key) · /nearai <api-key> [model] · /nearai model <id> · /nearai off —`);
+      : `— NEAR AI mode off. Usage: /nearai connect (your own account) · /nearai on (server-side key) · /nearai <api-key> [model] · /nearai model <id> · /nearai off —`);
   }
 }
 
@@ -1124,7 +1131,8 @@ let nearaiAbort = null;    // AbortController for the turn in flight
 /** Add the pass to a request, if we have one. */
 function withPass(init = {}) {
   const pass = loadPass();
-  if (!pass) return init;
+  // The pass is ours and means nothing to NEAR AI, so it never leaves for them.
+  if (!pass || !nearaiConfig()?.proxy) return init;
   const headers = new Headers(init.headers || {});
   headers.set(HEADER_PASS, pass);
   return { ...init, headers };
@@ -1207,8 +1215,55 @@ function offerPass(onBought) {
     else if (!settled) { btn.disabled = false; btn.textContent = 'Get a session pass'; }
   };
   line.appendChild(btn);
+  line.appendChild(document.createTextNode(' '));
+  line.appendChild(accountButton());
   return line;
 }
+
+// ---- the user's own NEAR AI account ---------------------------------------------
+// Connecting needs a wallet, so like payment it happens on its own page, and the
+// result arrives through localStorage. Their requests then go straight to NEAR AI.
+function openNearaiAccount() {
+  window.open('/nearai-connect.html', 'nearai-connect', 'width=460,height=680');
+}
+
+const OFFER_BUTTON_STYLE = 'font:inherit;padding:.2rem .6rem;border-radius:.3rem;border:1px solid #4a4;background:#1a2a1a;color:#8f8;cursor:pointer';
+
+function accountButton() {
+  const btn = document.createElement('button');
+  btn.textContent = 'Use my NEAR AI account';
+  btn.style.cssText = OFFER_BUTTON_STYLE;
+  btn.onclick = openNearaiAccount;
+  return btn;
+}
+
+function offerNearaiAccount(message, onRetry) {
+  const line = addLine('tool', `— ${message} — `);
+  const manage = accountButton();
+  manage.textContent = 'Manage account';
+  line.appendChild(manage);
+  if (onRetry) {
+    const retry = document.createElement('button');
+    retry.textContent = 'Try again';
+    retry.style.cssText = `${OFFER_BUTTON_STYLE};margin-left:.4rem`;
+    retry.onclick = () => { line.remove(); onRetry(); };
+    line.appendChild(retry);
+  }
+  return line;
+}
+
+window.addEventListener('storage', (e) => {
+  if (e.key !== 'nearai-api-key') return;
+  const cfg = nearaiConfig();
+  if (socket && cfg) { try { socket.onclose = null; socket.close(); } catch { /* */ } socket = null; }
+  if (cfg && !cfg.proxy) {
+    setStatus(`NEAR AI: ${cfg.model}`);
+    addLine('tool', '— using your own NEAR AI account —');
+  } else if (!cfg) {
+    addLine('tool', '— NEAR AI account disconnected —');
+    if (!socket) connect();
+  }
+});
 
 // One fetch for every request of a turn — the producer's and a specialist's
 // alike: the pass rides on each, Stop lands mid-loop through the abort signal,
@@ -1217,6 +1272,14 @@ function offerPass(onBought) {
 function nearaiFetch() {
   return async (url, init) => {
     const res = await fetch(url, { ...withPass(init), signal: nearaiAbort?.signal });
+    // On the user's own account a 402 or 401 is about THEIR account. It says
+    // nothing about our pass, which stays put and could not help anyway.
+    if (!nearaiConfig()?.proxy && (res.status === 402 || res.status === 401)) {
+      const message = res.status === 402
+        ? 'Your NEAR AI account is out of credits, or this key reached its spending limit.'
+        : 'NEAR AI 401: your NEAR AI key was not accepted.';
+      throw Object.assign(new Error(message), { ownAccount: true });
+    }
     // 503 out_of_credits is the shared pool running dry, NOT a pass problem —
     // keep the pass and say so, rather than sending them to claim again.
     if (res.status === 503) {
@@ -1322,6 +1385,15 @@ async function runNearaiTurn(text, stage = null) {
       finishAgentMessage();
       stopActivity('out of credits');
       nearaiAbort = null;
+      return;
+    } else if (e?.ownAccount) {
+      // Fixable without losing the typed message: sort out the account, retry.
+      nearaiMessages.pop();
+      finishAgentMessage();
+      stopActivity('NEAR AI account needs attention');
+      offerNearaiAccount(e.message, () => { setBusy(true); startActivity(); runNearaiTurn(text); });
+      nearaiAbort = null;
+      setBusy(false);
       return;
     } else if (e?.paymentRequired) {
       // Not an error either: the turn is simply waiting to be paid for. The
@@ -1489,6 +1561,7 @@ export function initStudioAgent(shadowRoot) {
     if (e.key === 'Escape') { e.preventDefault(); abortTurn(); }
   });
   el('studioagentstop').addEventListener('click', abortTurn);
+  el('studioagentaccount').addEventListener('click', openNearaiAccount);
 
   loadSession(); // restore prior conversation from the OPFS repo (if any)
   connect();

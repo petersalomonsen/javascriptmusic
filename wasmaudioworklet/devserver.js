@@ -86,7 +86,7 @@ async function handleStatic(req, res) {
     // cross-origin navigation and Meteor's web wallet throws "User closed the
     // window". That is why login lives on its own page rather than inside the
     // app — the app itself needs COOP/COEP.
-    const opensWallet = urlPath.startsWith('/login') || urlPath.startsWith('/pay');
+    const opensWallet = urlPath.startsWith('/login') || urlPath.startsWith('/pay') || urlPath.startsWith('/nearai-connect');
     const headers = opensWallet
       ? { 'Content-Type': contentType }
       : { 'Content-Type': contentType, ...CROSS_ORIGIN_HEADERS };

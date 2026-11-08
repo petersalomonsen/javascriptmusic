@@ -21,13 +21,19 @@ export const DEFAULT_BASE_URL = 'https://cloud-api.near.ai/v1';
 // every request 400'd with "Model not found" until someone noticed.
 export const DEFAULT_MODEL = 'Qwen/Qwen3.6-35B-A3B-FP8';
 
-// cloud-api.near.ai only CORS-allowlists localhost origins — anywhere else
-// (webassemblymusic.pages.dev etc.) goes through the same-origin Pages
-// Function proxy at /nearai/v1 (functions/nearai/[[path]].js).
+// Without a key of the user's own, the deployed app goes through the same-origin
+// Pages Function proxy at /nearai/v1 (functions/nearai/[[path]].js), which holds
+// ours and charges for it.
 export function resolveDefaultBaseUrl(hostname) {
   return hostname === 'localhost' || hostname === '127.0.0.1'
     ? DEFAULT_BASE_URL
     : '/nearai/v1';
+}
+
+// A user's own key always talks to NEAR AI directly: the proxy never uses a
+// client's key, so defaulting to it would silently swap their account for ours.
+export function resolveBaseUrl({ stored, apiKey, hostname }) {
+  return stored || (apiKey ? DEFAULT_BASE_URL : resolveDefaultBaseUrl(hostname));
 }
 
 // The tool set is declared once in tools-def.js and shared with
@@ -240,7 +246,7 @@ export async function runAgentTurn({
         // transient as a 503 and was killing whole turns — the bench lost two
         // long NEAR AI runs to it. Retry it the same way; an abort, a payment
         // or credits error is the caller's business and goes straight through.
-        if (e?.name === 'AbortError' || e?.paymentRequired || e?.outOfCredits || attempt >= maxRetries) throw e;
+        if (e?.name === 'AbortError' || e?.paymentRequired || e?.outOfCredits || e?.ownAccount || attempt >= maxRetries) throw e;
         const delayMs = 1000 * Math.pow(2, attempt);
         onRetry('network', delayMs, attempt + 1);
         await sleepFn(delayMs);

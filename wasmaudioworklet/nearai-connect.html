@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NEAR AI account</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; background: #111; color: #ddd;
+           margin: 0; padding: 1.5rem; display: flex; justify-content: center; }
+    main { max-width: 30rem; width: 100%; }
+    h1 { font-size: 1.2rem; margin: 0 0 .3rem; }
+    h2 { font-size: .95rem; margin: 1.6rem 0 .3rem; }
+    p { font-size: .85rem; line-height: 1.5; color: #999; margin: .3rem 0; }
+    a { color: #8cf; }
+    label { display: block; font-size: .85rem; margin-top: .8rem; color: #aaa; }
+    input { font: inherit; width: 100%; box-sizing: border-box; padding: .6rem; margin-top: .3rem;
+            border-radius: .4rem; border: 1px solid #444; background: #1a1a1a; color: #ddd; }
+    button { font: inherit; width: 100%; padding: .8rem 1rem; border-radius: .5rem;
+             border: 1px solid #4a4; background: #1a2a1a; color: #8f8;
+             cursor: pointer; margin-top: .8rem; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.secondary { border-color: #444; background: #1a1a1a; color: #aaa; }
+    #msg { margin-top: 1rem; padding: .8rem; border-radius: .5rem; font-size: .85rem;
+           line-height: 1.5; display: none; }
+    .info { background: #10203a; color: #9cf; display: block !important; }
+    .ok   { background: #12280f; color: #9f9; display: block !important; }
+    .err  { background: #2c1414; color: #f99; display: block !important; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Your NEAR AI account</h1>
+  <p>The studio agent runs on your own credits and talks to NEAR AI directly from this browser.
+     Your prompts don't pass through our servers.</p>
+
+  <div id="msg" role="status"></div>
+
+  <section id="connected" hidden>
+    <p>Connected in this browser.</p>
+    <button id="close" class="secondary">Back to the studio</button>
+    <button id="change" class="secondary">Use a different account</button>
+    <button id="disconnect" class="secondary">Disconnect</button>
+    <p>Disconnecting removes the key from this browser. To cancel the key itself, delete it at
+       <a href="https://cloud.near.ai" target="_blank" rel="noopener">cloud.near.ai</a>.</p>
+  </section>
+
+  <section id="options">
+  <h2>Sign in with a NEAR wallet</h2>
+  <p>Creates a key for this app with a spending limit. It expires after 90 days. You sign one
+     message, and no transaction is sent.</p>
+  <label>Spending limit (USD)
+    <input id="limit" type="number" min="0.5" step="0.5" value="5">
+  </label>
+  <button id="wallet">Connect NEAR wallet</button>
+  <button id="signin" hidden>Sign in to NEAR AI</button>
+
+  <h2>Or paste an API key</h2>
+  <p>Use this if your NEAR AI account isn't tied to a wallet. Create a key at
+     <a href="https://cloud.near.ai" target="_blank" rel="noopener">cloud.near.ai</a>.
+     It stays in this browser and is never added to your project repo.</p>
+  <form id="keyform">
+    <label>API key
+      <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+    </label>
+    <button type="submit" class="secondary">Use this key</button>
+  </form>
+  </section>
+</main>
+
+<script type="module">
+import { connectWithWallet, checkKey, loadAccount, storeAccount, forgetAccount } from './near/nearai-account.js';
+
+const $ = (id) => document.getElementById(id);
+const say = (text, kind) => {
+  const msg = $('msg');
+  msg.className = kind;
+  msg.textContent = text;
+};
+const CREDITS_HINT = 'This account has no credits yet. Add them at cloud.near.ai, then send your message again in the studio.';
+
+function showConnected() {
+  const connected = Boolean(loadAccount());
+  $('connected').hidden = !connected;
+  $('options').hidden = connected;
+  $('change').hidden = false;
+}
+
+function reportStatus(status) {
+  showConnected();
+  if (status === 'ok') say('Connected. The studio agent will use your account.', 'ok');
+  else if (status === 'no-credits') say(`Connected. ${CREDITS_HINT}`, 'info');
+  else say('Saved, but NEAR AI could not confirm the key right now. Try a message in the studio.', 'info');
+}
+
+let wallet = null;
+
+$('wallet').onclick = async () => {
+  $('wallet').disabled = true;
+  try {
+    say('Opening your wallet…', 'info');
+    const { NearConnector } = await import('https://cdn.jsdelivr.net/npm/@hot-labs/near-connect@0.11.1/+esm');
+    const connector = new NearConnector({ network: 'mainnet', features: { signMessage: true } });
+    connector.on('wallet:signIn', async (event) => {
+      wallet = event.wallet || await connector.wallet();
+      if (typeof wallet?.signMessage !== 'function' || wallet?.manifest?.features?.signMessage === false) {
+        say(`${wallet?.manifest?.name || 'This wallet'} can't sign messages. Choose another wallet, or paste an API key.`, 'err');
+        $('wallet').disabled = false;
+        return;
+      }
+      say(`Connected as ${event.accounts?.[0]?.accountId || 'your account'}.`, 'info');
+      $('wallet').hidden = true;
+      $('signin').hidden = false;   // its own click: wallets block popups without one
+    });
+    await connector.connect();
+  } catch (e) {
+    say(`Could not connect: ${e.message}`, 'err');
+    $('wallet').disabled = false;
+  }
+};
+
+$('signin').onclick = async () => {
+  $('signin').disabled = true;
+  const steps = {
+    signing: 'Approve the message in your wallet…',
+    'signing-in': 'Signing in to NEAR AI…',
+    'creating-key': 'Creating your key…',
+    checking: 'Checking the key…',
+  };
+  try {
+    const result = await connectWithWallet(wallet, {
+      limitUsd: $('limit').value,
+      previous: loadAccount(),
+      site: location.hostname,
+      onStatus: (step) => say(steps[step], 'info'),
+    });
+    storeAccount(result);
+    reportStatus(result.status);
+  } catch (e) {
+    say(e.message, 'err');
+  }
+  $('signin').disabled = false;
+};
+
+$('keyform').onsubmit = async (e) => {
+  e.preventDefault();
+  const key = $('key').value.trim();
+  if (!key) return;
+  say('Checking the key…', 'info');
+  const status = await checkKey(key);
+  if (status === 'invalid') {
+    say('NEAR AI did not accept that key.', 'err');
+    return;
+  }
+  storeAccount({ key });
+  $('key').value = '';
+  reportStatus(status);
+};
+
+$('disconnect').onclick = () => {
+  forgetAccount();
+  showConnected();
+  say('Removed from this browser.', 'ok');
+};
+$('change').onclick = () => { $('change').hidden = true; $('options').hidden = false; };
+$('close').onclick = () => window.close();
+
+showConnected();
+</script>
+</body>
+</html>
