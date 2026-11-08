@@ -104,6 +104,10 @@ test('the account page checks a pasted key, then the app uses it', async ({ page
     await page.fill('#key', 'sk-good');
     await page.click('#keyform button');
     await expect(page.locator('#msg')).toContainText('Connected');
+    // Connected, so the sign-in options step aside until asked for.
+    await expect(page.locator('#options')).toBeHidden();
+    await page.click('#change');
+    await expect(page.locator('#options')).toBeVisible();
     expect(await page.evaluate(() => [
         localStorage.getItem('nearai-api-key'), localStorage.getItem('nearai-base-url'), localStorage.getItem('nearai-enabled'),
     ])).toEqual(['sk-good', null, null]);

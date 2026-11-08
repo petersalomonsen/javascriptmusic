@@ -40,11 +40,13 @@
   <section id="connected" hidden>
     <p>Connected in this browser.</p>
     <button id="close" class="secondary">Back to the studio</button>
+    <button id="change" class="secondary">Use a different account</button>
     <button id="disconnect" class="secondary">Disconnect</button>
     <p>Disconnecting removes the key from this browser. To cancel the key itself, delete it at
        <a href="https://cloud.near.ai" target="_blank" rel="noopener">cloud.near.ai</a>.</p>
   </section>
 
+  <section id="options">
   <h2>Sign in with a NEAR wallet</h2>
   <p>Creates a key for this app with a spending limit. It expires after 90 days. You sign one
      message, and no transaction is sent.</p>
@@ -64,6 +66,7 @@
     </label>
     <button type="submit" class="secondary">Use this key</button>
   </form>
+  </section>
 </main>
 
 <script type="module">
@@ -77,7 +80,12 @@ const say = (text, kind) => {
 };
 const CREDITS_HINT = 'This account has no credits yet. Add them at cloud.near.ai, then send your message again in the studio.';
 
-function showConnected() { $('connected').hidden = !loadAccount(); }
+function showConnected() {
+  const connected = Boolean(loadAccount());
+  $('connected').hidden = !connected;
+  $('options').hidden = connected;
+  $('change').hidden = false;
+}
 
 function reportStatus(status) {
   showConnected();
@@ -155,6 +163,7 @@ $('disconnect').onclick = () => {
   showConnected();
   say('Removed from this browser.', 'ok');
 };
+$('change').onclick = () => { $('change').hidden = true; $('options').hidden = false; };
 $('close').onclick = () => window.close();
 
 showConnected();
