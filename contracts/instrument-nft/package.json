@@ -1,0 +1,7 @@
+{
+  "name": "instrument-nft-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test e2e/contract.test.mjs" },
+  "devDependencies": { "near-workspaces": "5.0.0" }
+}

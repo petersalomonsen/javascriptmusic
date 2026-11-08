@@ -1,0 +1,22 @@
+[package]
+name = "instrument-nft"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+near-sdk = "5.5.0"
+near-contract-standards = "5.5.0"
+# build.sh puts the pinned checkout here.
+quickjs-rust-near = { path = "../.build/quickjs-rust-near", features = ["library"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+debug = false
+opt-level = "z"
+strip = "symbols"
+
+[workspace]

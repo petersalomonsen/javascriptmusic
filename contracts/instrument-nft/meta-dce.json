@@ -1,0 +1,152 @@
+[
+  {
+    "name": "call_js_func",
+    "export": "call_js_func",
+    "root": true
+  },
+  {
+    "name": "post_javascript",
+    "export": "post_javascript",
+    "root": true
+  },
+  {
+    "name": "nft_metadata",
+    "export": "nft_metadata",
+    "root": true
+  },
+  {
+    "name": "new",
+    "export": "new",
+    "root": true
+  },
+  {
+    "name": "web4_get",
+    "export": "web4_get",
+    "root": true
+  },
+  {
+    "name": "nft_transfer",
+    "export": "nft_transfer",
+    "root": true
+  },
+  {
+    "name": "nft_transfer_call",
+    "export": "nft_transfer_call",
+    "root": true
+  },
+  {
+    "name": "nft_token",
+    "export": "nft_token",
+    "root": true
+  },
+  {
+    "name": "nft_resolve_transfer",
+    "export": "nft_resolve_transfer",
+    "root": true
+  },
+  {
+    "name": "nft_approve",
+    "export": "nft_approve",
+    "root": true
+  },
+  {
+    "name": "nft_revoke",
+    "export": "nft_revoke",
+    "root": true
+  },
+  {
+    "name": "nft_revoke_all",
+    "export": "nft_revoke_all",
+    "root": true
+  },
+  {
+    "name": "nft_is_approved",
+    "export": "nft_is_approved",
+    "root": true
+  },
+  {
+    "name": "nft_total_supply",
+    "export": "nft_total_supply",
+    "root": true
+  },
+  {
+    "name": "nft_tokens",
+    "export": "nft_tokens",
+    "root": true
+  },
+  {
+    "name": "nft_supply_for_owner",
+    "export": "nft_supply_for_owner",
+    "root": true
+  },
+  {
+    "name": "nft_tokens_for_owner",
+    "export": "nft_tokens_for_owner",
+    "root": true
+  },
+  {
+    "name": "nft_payout",
+    "export": "nft_payout",
+    "root": true
+  },
+  {
+    "name": "nft_transfer_payout",
+    "export": "nft_transfer_payout",
+    "root": true
+  },
+  {
+    "name": "publish_instrument",
+    "export": "publish_instrument",
+    "root": true
+  },
+  {
+    "name": "publish_song",
+    "export": "publish_song",
+    "root": true
+  },
+  {
+    "name": "work",
+    "export": "work",
+    "root": true
+  },
+  {
+    "name": "source",
+    "export": "source",
+    "root": true
+  },
+  {
+    "name": "earnings",
+    "export": "earnings",
+    "root": true
+  },
+  {
+    "name": "listing",
+    "export": "listing",
+    "root": true
+  },
+  {
+    "name": "list_for_sale",
+    "export": "list_for_sale",
+    "root": true
+  },
+  {
+    "name": "unlist",
+    "export": "unlist",
+    "root": true
+  },
+  {
+    "name": "buy",
+    "export": "buy",
+    "root": true
+  },
+  {
+    "name": "pay_token",
+    "export": "pay_token",
+    "root": true
+  },
+  {
+    "name": "withdraw_earnings",
+    "export": "withdraw_earnings",
+    "root": true
+  }
+]
